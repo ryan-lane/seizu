@@ -1,0 +1,648 @@
+{
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "definitions": {
+        "Dashboard": {
+            "type": "object",
+            "required": [
+                "rows"
+            ],
+            "properties": {
+                "rows": {
+                    "title": "rows",
+                    "type": "array",
+                    "description": "The rows of the dashboard.",
+                    "examples": [
+                        "\n                .. code-block:: yaml\n\n                  rows:\n                    - name: \"CVEs by severity\"\n                      panels:\n                        - cypher: cves-by-severity\n                          details_cypher: cves-by-severity-details\n                          type: count\n                          params:\n                            base_severity: CRITICAL\n                          caption: Critical CVEs\n                          size: 2\n                "
+                    ],
+                    "items": {
+                        "type": "object",
+                        "$ref": "#/definitions/Row"
+                    }
+                }
+            },
+            "additionalProperties": false
+        },
+        "Row": {
+            "type": "object",
+            "required": [
+                "name",
+                "panels"
+            ],
+            "properties": {
+                "name": {
+                    "title": "name",
+                    "type": "string",
+                    "description": "The name of the row; shown as title above the row.",
+                    "examples": [
+                        "CVEs"
+                    ]
+                },
+                "panels": {
+                    "title": "panels",
+                    "type": "array",
+                    "description": "The panels to show in the row.",
+                    "examples": [
+                        "\n                .. code-block:: yaml\n\n                  panels:\n                    - cypher: cves-by-severity\n                      details_cypher: cves-by-severity-details\n                      type: count\n                      params:\n                        base_severity: CRITICAL\n                      caption: Critical CVEs\n                      size: 2\n                "
+                    ],
+                    "items": {
+                        "type": "object",
+                        "$ref": "#/definitions/Panel"
+                    }
+                }
+            },
+            "additionalProperties": false
+        },
+        "Panel": {
+            "type": "object",
+            "required": [
+                "type"
+            ],
+            "properties": {
+                "type": {
+                    "title": "_type",
+                    "type": "string",
+                    "description": "The type of panel to use.",
+                    "examples": [
+                        "table"
+                    ],
+                    "enum": [
+                        "table",
+                        "vertical-table",
+                        "count",
+                        "bar",
+                        "pie",
+                        "progress",
+                        "oncall-table",
+                        "markdown"
+                    ],
+                    "enumNames": []
+                },
+                "bar_settings": {
+                    "type": "object",
+                    "$ref": "#/definitions/BarPanelSettings",
+                    "description": "Settings specific to bar panels.",
+                    "examples": [
+                        "\n                .. code-block:: yaml\n\n                  bar_settings:\n                    legend: column\n                "
+                    ],
+                    "default": {
+                        "legend": null
+                    }
+                },
+                "caption": {
+                    "title": "caption",
+                    "type": [
+                        "string",
+                        "null"
+                    ],
+                    "default": null,
+                    "description": "The caption to use for the panel.",
+                    "examples": [
+                        "Critical CVEs"
+                    ]
+                },
+                "cypher": {
+                    "title": "cypher",
+                    "type": [
+                        "string",
+                        "null"
+                    ],
+                    "default": null,
+                    "description": "A reference to a cypher from the cypher section of the configuration.",
+                    "examples": [
+                        "cves"
+                    ]
+                },
+                "details_cypher": {
+                    "title": "details_cypher",
+                    "type": [
+                        "string",
+                        "null"
+                    ],
+                    "default": null,
+                    "description": "A reference to a cypher from the cypher section of the configuration. Must return ``details``. Used in the details section of the panel, as a table.",
+                    "examples": [
+                        "cves-details"
+                    ]
+                },
+                "markdown": {
+                    "title": "markdown",
+                    "type": [
+                        "string",
+                        "null"
+                    ],
+                    "default": null,
+                    "description": "The markdown to use for the panel. Only used for type ``markdown``.",
+                    "examples": [
+                        "\n                .. code-block:: markdown\n\n                    ## Affects\n\n                    Versions x.x.x - x.x.x\n\n                    ## Recommended action\n\n                    Upgrade to the latest version of the software.\n                "
+                    ]
+                },
+                "metric": {
+                    "title": "metric",
+                    "type": [
+                        "string",
+                        "null"
+                    ],
+                    "default": null,
+                    "description": "The statsd metric to send from the panel data. Only used for ``count`` and ``progress`` panels.",
+                    "examples": [
+                        "cves.severity"
+                    ]
+                },
+                "params": {
+                    "title": "params",
+                    "type": "array",
+                    "description": "A list of parameters to send into the query. The parameters can directly have values, or can be a reference to an input.",
+                    "examples": [
+                        "\n                .. code-block:: yaml\n\n                  params:\n                    - name: severity\n                      input_id: cve_base_severity\n                    - name: integrityImpact\n                      value: HIGH\n                "
+                    ],
+                    "items": {
+                        "type": "object",
+                        "$ref": "#/definitions/PanelParam"
+                    }
+                },
+                "pie_settings": {
+                    "type": "object",
+                    "$ref": "#/definitions/PiePanelSettings",
+                    "description": "Settings specific to pie panels.",
+                    "examples": [
+                        "\n                .. code-block:: yaml\n\n                  pie_settings:\n                    legend: column\n                "
+                    ],
+                    "default": {
+                        "legend": null
+                    }
+                },
+                "size": {
+                    "title": "size",
+                    "type": [
+                        "number",
+                        "null"
+                    ],
+                    "format": "float",
+                    "default": 2.0,
+                    "description": "The size of the panel.",
+                    "examples": [
+                        "2.0"
+                    ]
+                },
+                "table_id": {
+                    "title": "table_id",
+                    "type": [
+                        "string",
+                        "null"
+                    ],
+                    "default": null,
+                    "description": "The cypher attribute to use for the table's unique ID, if using a type of table or vertical-table. If not set, a random ID will be generated. A table_id should be set for ``vertical-table``, or the panel will have a random ID used as the caption.",
+                    "examples": [
+                        "cve_id"
+                    ]
+                },
+                "threshold": {
+                    "title": "threshold",
+                    "type": [
+                        "number",
+                        "null"
+                    ],
+                    "format": "float",
+                    "default": null,
+                    "description": "The size of the panel.",
+                    "examples": [
+                        "70"
+                    ]
+                }
+            },
+            "additionalProperties": false
+        },
+        "BarPanelSettings": {
+            "type": "object",
+            "properties": {
+                "legend": {
+                    "title": "legend",
+                    "type": [
+                        "string",
+                        "null"
+                    ],
+                    "default": null,
+                    "description": "The type of legend to use; ``row`` or ``column``. If unset, then no legend will be used."
+                }
+            },
+            "additionalProperties": false
+        },
+        "PanelParam": {
+            "type": "object",
+            "required": [
+                "name"
+            ],
+            "properties": {
+                "input_id": {
+                    "title": "input_id",
+                    "type": [
+                        "string",
+                        "null"
+                    ],
+                    "default": null,
+                    "description": "Reference to the query in the inputs section.",
+                    "examples": [
+                        "cve_base_severity"
+                    ]
+                },
+                "name": {
+                    "title": "name",
+                    "type": "string",
+                    "description": "The parameter name to use when passing this input into the query.",
+                    "examples": [
+                        "severity"
+                    ]
+                },
+                "value": {
+                    "description": "The parameter value to pass into the query.",
+                    "examples": [
+                        "\n                    .. code-block:: yaml\n\n                      params:\n                        - name: integrityImpact\n                          value: HIGH\n                    "
+                    ]
+                }
+            },
+            "additionalProperties": false
+        },
+        "PiePanelSettings": {
+            "type": "object",
+            "properties": {
+                "legend": {
+                    "title": "legend",
+                    "type": [
+                        "string",
+                        "null"
+                    ],
+                    "default": null,
+                    "description": "The type of legend to use; ``row`` or ``column``. If unset, then no legend will be used, and arc labels will be used instead."
+                }
+            },
+            "additionalProperties": false
+        },
+        "Report": {
+            "type": "object",
+            "required": [
+                "name",
+                "rows"
+            ],
+            "properties": {
+                "inputs": {
+                    "title": "inputs",
+                    "type": "array",
+                    "description": "The inputs to use for the report.",
+                    "examples": [
+                        "\n                .. code-block:: yaml\n\n                  inputs:\n                    - input_id: cve_base_severity\n                      cypher: |-\n                        MATCH (c:CVE)\n                        RETURN c.base_severity AS base_severity\n                      default:\n                        label: (all)\n                        value: .*\n                      label: Base Severity\n                      type: autocomplete\n                      size: 2\n                "
+                    ],
+                    "items": {
+                        "type": "object",
+                        "$ref": "#/definitions/Input"
+                    }
+                },
+                "name": {
+                    "title": "name",
+                    "type": "string",
+                    "description": "The name of the report.",
+                    "examples": [
+                        "CVEs"
+                    ]
+                },
+                "rows": {
+                    "title": "rows",
+                    "type": "array",
+                    "description": "The rows of the report.",
+                    "examples": [
+                        "\n                .. code-block:: yaml\n\n                  rows:\n                    - name: \"CVEs\"\n                      panels:\n                        - cypher: cves\n                          type: table\n                          params:\n                            - name: severity\n                              input_id: cve_base_severity\n                          size: 12\n                "
+                    ],
+                    "items": {
+                        "type": "object",
+                        "$ref": "#/definitions/Row"
+                    }
+                }
+            },
+            "additionalProperties": false
+        },
+        "Input": {
+            "type": "object",
+            "required": [
+                "type",
+                "input_id",
+                "label"
+            ],
+            "properties": {
+                "type": {
+                    "title": "_type",
+                    "type": "string",
+                    "description": "The type of input to use.",
+                    "examples": [
+                        "autocomplete"
+                    ],
+                    "enum": [
+                        "autocomplete",
+                        "text"
+                    ],
+                    "enumNames": []
+                },
+                "cypher": {
+                    "title": "cypher",
+                    "type": [
+                        "string",
+                        "null"
+                    ],
+                    "default": null,
+                    "description": "The Cypher query to execute. Must return ``value``.",
+                    "examples": [
+                        "\n                .. code-block:: cypher\n\n                  MATCH (c:CVE)\n                  RETURN DISTINCT c.base_severity AS value\n                "
+                    ]
+                },
+                "default": {
+                    "type": "object",
+                    "$ref": "#/definitions/InputDefault",
+                    "description": "The default value to set if no value is selected.",
+                    "examples": [
+                        "\n                .. code-block:: yaml\n\n                  label: (all)\n                  value: .*\n                "
+                    ],
+                    "default": {}
+                },
+                "input_id": {
+                    "title": "input_id",
+                    "type": "string",
+                    "description": "Reference to the query in the inputs section.",
+                    "examples": [
+                        "cve_base_severity"
+                    ]
+                },
+                "label": {
+                    "title": "label",
+                    "type": "string",
+                    "description": "The label to use for the select element.",
+                    "examples": [
+                        "CVE base severity"
+                    ]
+                },
+                "size": {
+                    "title": "size",
+                    "type": [
+                        "number",
+                        "null"
+                    ],
+                    "format": "float",
+                    "default": 2.0,
+                    "description": "The size of the input element.",
+                    "examples": [
+                        "2.0"
+                    ]
+                }
+            },
+            "additionalProperties": false
+        },
+        "InputDefault": {
+            "type": "object",
+            "required": [
+                "label",
+                "value"
+            ],
+            "properties": {
+                "label": {
+                    "title": "label",
+                    "type": "string",
+                    "description": "The label for the default."
+                },
+                "value": {
+                    "title": "value",
+                    "type": "string",
+                    "description": "The value for the default."
+                }
+            },
+            "additionalProperties": false
+        },
+        "ScheduledQuery": {
+            "type": "object",
+            "required": [
+                "cypher",
+                "name"
+            ],
+            "properties": {
+                "actions": {
+                    "title": "actions",
+                    "type": "array",
+                    "description": "The actions to perform when the scheduled query is triggered.",
+                    "examples": [
+                        "\n                .. code-block:: yaml\n\n                  actions:\n                    - action_type: slack\n                      title: Recently published HIGH/CRITICAL CVEs\n                      initial_comment: |\n                        The following HIGH/CRITICAL CVEs have been published in the last 24 hours.\n                      channels:\n                        - C0000000000\n                "
+                    ],
+                    "items": {
+                        "type": "object",
+                        "$ref": "#/definitions/ScheduledQueryAction"
+                    }
+                },
+                "cypher": {
+                    "title": "cypher",
+                    "type": "string",
+                    "description": "The cypher to use for the scheduled query.",
+                    "examples": [
+                        "recent-cves"
+                    ]
+                },
+                "enabled": {
+                    "title": "enabled",
+                    "type": [
+                        "boolean",
+                        "null"
+                    ],
+                    "default": true,
+                    "description": "Whether the scheduled query should be enabled. If not set, the scheduled query will be enabled.",
+                    "examples": [
+                        "true"
+                    ]
+                },
+                "frequency": {
+                    "title": "frequency",
+                    "type": [
+                        "integer",
+                        "null"
+                    ],
+                    "default": null,
+                    "description": "The frequency of the scheduled query in minutes. Mutually exclusive with ``watch_scans``.",
+                    "examples": [
+                        "1440"
+                    ]
+                },
+                "name": {
+                    "title": "name",
+                    "type": "string",
+                    "description": "The name of the scheduled query.",
+                    "examples": [
+                        "Recently published HIGH/CRITICAL CVEs"
+                    ]
+                },
+                "params": {
+                    "title": "params",
+                    "type": "array",
+                    "description": "A dictionary of parameters to pass to the cypher query. The keys are the variable names, and the values are the values to pass.",
+                    "examples": [
+                        "\n                .. code-block:: yaml\n\n                  params:\n                    - name: syncedtype\n                      value:\n                        - recent\n                    - name: base_severity\n                      value:\n                        - HIGH\n                        - CRITICAL\n                "
+                    ],
+                    "items": {
+                        "type": "object",
+                        "$ref": "#/definitions/ScheduledQueryParam"
+                    }
+                },
+                "watch_scans": {
+                    "title": "watch_scans",
+                    "type": "array",
+                    "description": "The scans to watch for the scheduled query. Based on SyncMetadata. Query will triger if any of the watched scans listed are updated. Mutually exclusive with ``frequency``.",
+                    "examples": [
+                        "\n                .. code-block:: yaml\n\n                  watch_scans:\n                    - grouptype: CVE\n                      syncedtype: recent\n                    - grouptype: CVE\n                      syncedtype: modified\n                "
+                    ],
+                    "items": {
+                        "type": "object",
+                        "$ref": "#/definitions/ScheduledQueryWatchScan"
+                    }
+                }
+            },
+            "additionalProperties": false
+        },
+        "ScheduledQueryAction": {
+            "type": "object",
+            "required": [
+                "action_config",
+                "action_type"
+            ],
+            "properties": {
+                "action_config": {
+                    "description": "The configuration for the action. See the documentation for the relevant scheduled query module for information about the configuration needed for each action type.",
+                    "examples": [
+                        "\n                    .. code-block:: yaml\n\n                      action_config:\n                        webhook_url: https://hooks.slack.com/services/T00000000/B00000000/XXXXXXXXXXXXXXXXXXXXXXXX\n                        channel: #cve\n                        username: CVE\n                        icon_emoji: :cve:\n                    "
+                    ],
+                    "additionalProperties": {
+                        "title": "action_config"
+                    }
+                },
+                "action_type": {
+                    "title": "action_type",
+                    "type": "string",
+                    "description": "The type of action to perform.",
+                    "examples": [
+                        "slack",
+                        "sqs"
+                    ]
+                }
+            },
+            "additionalProperties": false
+        },
+        "ScheduledQueryParam": {
+            "type": "object",
+            "required": [
+                "name",
+                "value"
+            ],
+            "properties": {
+                "name": {
+                    "title": "name",
+                    "type": "string",
+                    "description": "The parameter name to use when passing this input into the query.",
+                    "examples": [
+                        "severity"
+                    ]
+                },
+                "value": {
+                    "description": "The parameter value to pass into the query.",
+                    "examples": [
+                        "\n                    .. code-block:: yaml\n\n                      params:\n                        - name: integrityImpact\n                          value: HIGH\n                    "
+                    ]
+                }
+            },
+            "additionalProperties": false
+        },
+        "ScheduledQueryWatchScan": {
+            "type": "object",
+            "properties": {
+                "groupid": {
+                    "title": "groupid",
+                    "type": [
+                        "string",
+                        "null"
+                    ],
+                    "default": ".*",
+                    "description": "Match against the groupid attribute of the SyncMetadata node, as a regex. If not set, the query will match against ``.*``.",
+                    "examples": [
+                        "2019"
+                    ]
+                },
+                "grouptype": {
+                    "title": "grouptype",
+                    "type": [
+                        "string",
+                        "null"
+                    ],
+                    "default": ".*",
+                    "description": "Match against the grouptype attribute of the SyncMetadata node, as a regex. If not set, the query will match against ``.*``.",
+                    "examples": [
+                        "CVE"
+                    ]
+                },
+                "syncedtype": {
+                    "title": "syncedtype",
+                    "type": [
+                        "string",
+                        "null"
+                    ],
+                    "default": ".*",
+                    "description": "Match against the syncedtype attribute of the SyncMetadata node, as a regex. If not set, the query will match against ``.*``.",
+                    "examples": [
+                        "year"
+                    ]
+                }
+            },
+            "additionalProperties": false
+        },
+        "ReportingConfig": {
+            "properties": {
+                "queries": {
+                    "title": "queries",
+                    "type": "object",
+                    "description": "The queries to use for the report.",
+                    "examples": [
+                        "\n                .. code-block:: yaml\n\n                  queries:\n                    cves-severity-of-total: |-\n                      MATCH (c:CVE)\n                      WITH COUNT(DISTINCT c.id) AS denominator\n                      MATCH (c:CVE)\n                      WHERE c.base_severity = \"CRITICAL\"\n                      RETURN count(DISTINCT c.id) AS numerator, denominator\n                    cves-by-severity: |-\n                      MATCH (c:CVE)\n                      WHERE c.base_severity = $base_severity\n                      RETURN count(c.id) AS count\n                    cves: |-\n                      MATCH (c:CVE)\n                      WHERE c.base_severity =~ ($base_severity)\n                      RETURN {\n                        cve_id: c.id,\n                        base_severity: c.base_severity,\n                        severity: c.severity,\n                        description: c.description\n                      } AS details\n                      ORDER BY details.severity DESC\n                    recent-cves: |-\n                      MATCH (s:SyncMetadata)\n                      WHERE s.grouptype = \"CVE\" AND s.syncedtype IN $syncedtype\n                      WITH datetime({epochSeconds: s.lastupdated}) - duration({hours: 24}) AS feedupdatetime\n                      MATCH (c:CVE)\n                      WHERE (datetime(c.published_date) > feedupdatetime AND c.base_severity IN $base_severity\n                      RETURN {\n                        id: c.id,\n                        base_severity: c.base_severity,\n                        base_score: c.base_score,\n                        description: c.description_en\n                      } AS details\n                "
+                    ],
+                    "additionalProperties": {
+                        "title": "queries",
+                        "type": "string"
+                    }
+                },
+                "dashboard": {
+                    "type": "object",
+                    "$ref": "#/definitions/Dashboard",
+                    "description": "The dashboard to use for the report.",
+                    "examples": [
+                        "\n                .. code-block:: yaml\n\n                  dashboard:\n                    rows:\n                      - name: CVEs by severity as percentage of total\n                        panels:\n                          - cypher: cves-severity-of-total\n                            type: progress\n                            params:\n                              - name: base_severity\n                                value: CRITICAL\n                            caption: Critical CVEs\n                            size: 2\n                      - name: CVEs by severity\n                        panels:\n                          - cypher: cves-by-severity\n                            type: count\n                            params:\n                              - name: base_severity\n                                value: CRITICAL\n                              caption: Critical CVEs\n                            size: 2\n                          - cypher: cves-by-severity\n                            type: count\n                            params:\n                              - name: base_severity\n                                value: HIGH\n                            caption: High CVEs\n                            size: 2\n                "
+                    ]
+                },
+                "reports": {
+                    "title": "reports",
+                    "type": "object",
+                    "description": "The reports to use for the report.",
+                    "examples": [
+                        "\n                .. code-block:: yaml\n\n                  reports:\n                    cves:\n                      name: CVEs\n                      inputs:\n                        - input_id: cve_base_severity\n                          cypher: |-\n                            MATCH (c:CVE)\n                            RETURN c.base_severity AS base_severity\n                          default:\n                            label: (all)\n                            value: .*\n                          label: Base Severity\n                          type: autocomplete\n                          size: 2\n                      rows:\n                        - name: CVEs\n                          panels:\n                            - cypher: cves\n                              type: table\n                              params:\n                                - name: severity\n                                  input_id: cve_base_severity\n                              size: 12\n                "
+                    ],
+                    "additionalProperties": {
+                        "type": "object",
+                        "$ref": "#/definitions/Report"
+                    }
+                },
+                "scheduled_queries": {
+                    "title": "scheduled_queries",
+                    "type": "object",
+                    "description": "The scheduled queries to use for the report.",
+                    "examples": [
+                        "\n                .. code-block:: yaml\n\n                  scheduled_queries:\n                    cves-by-severity:\n                      name: CVEs by severity\n                      frequency: 1440\n                      watch_scans:\n                        - grouptype: CVE\n                          syncedtype: recent\n                      actions:\n                        - action_type: slack\n                          title: Recently published HIGH/CRITICAL CVEs\n                          initial_comment: |\n                            The following HIGH/CRITICAL CVEs have been published in the last 24 hours.\n                          channels:\n                            - C0000000000\n                "
+                    ],
+                    "additionalProperties": {
+                        "type": "object",
+                        "$ref": "#/definitions/ScheduledQuery"
+                    }
+                }
+            },
+            "type": "object",
+            "additionalProperties": false
+        }
+    },
+    "$ref": "#/definitions/ReportingConfig"
+}

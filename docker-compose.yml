@@ -1,0 +1,237 @@
+version: "3.7"
+networks:
+  database:
+  stats:
+  proxy:
+  credentials:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: "169.254.169.0/24"
+          gateway: "169.254.169.1"
+services:
+  telegraf:
+    image: telegraf
+    volumes:
+      - ./.compose/telegraf/telegraf.conf:/etc/telegraf/telegraf.conf
+    environment:
+      - METRICS_PREFIX=seizu
+    networks:
+      stats:
+  dynamodb:
+    image: amazon/dynamodb-local:latest
+    command: "-Xmx512m -jar DynamoDBLocal.jar -port 8080 -sharedDb"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    networks:
+      database:
+  sqs:
+    image: softwaremill/elasticmq
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9324"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    volumes:
+      - ./.compose/elasticmq/.elasticmq.conf:/opt/elasticmq.conf
+    networks:
+      database:
+  neo4j:
+    image: neo4j:3.5
+    restart: unless-stopped
+    ports:
+      - 7473:7473
+      - 7687:7687
+    volumes:
+      - ./.compose/neo4j/neo4j.conf:/conf/neo4j.conf
+      - ./.compose/neo4j/data:/data
+      - ./.compose/neo4j/import:/import
+      - ./.compose/neo4j/logs:/logs
+      - ./.compose/neo4j/plugins:/plugins
+      - ./.compose/neo4j/ssl/client_policy/revoked:/ssl/client_policy/revoked
+      - ./.compose/neo4j/ssl/client_policy/trusted:/ssl/client_policy/trusted
+      - ~/.minica/localhost/cert.pem:/ssl/client_policy/cert.pem
+      - ~/.minica/localhost/key.pem:/ssl/client_policy/key.pem
+    environment:
+      - NEO4J_PASSWORD
+      - NEO4J_AUTH=neo4j/$NEO4J_PASSWORD
+      # Raise memory limits
+      - NEO4J_dbms_memory_pagecache_size=1G
+      - NEO4J_dbms.memory.heap.initial_size=1G
+      - NEO4J_dbms_memory_heap_max__size=1G
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:7687"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    networks:
+      database:
+  seizu-dashboard-stats:
+    image: paypay/seizu
+    restart: on-failure
+    user: seizu
+    environment:
+      - NEO4J_PASSWORD
+      - NEO4J_USER=neo4j
+      - NEO4J_URI=bolt://neo4j:7687
+      - FLASK_APP=reporting.dashboard_stats
+      - STATSD_HOST=telegraf
+    command: flask worker dashboard-stats
+    volumes:
+      - .:/home/seizu/seizu
+      - ./.compose/seizu/reporting-dashboard.yaml:/reporting-dashboard.conf
+    networks:
+      stats:
+      database:
+  seizu-scheduled-queries:
+    image: paypay/seizu
+    restart: on-failure
+    user: seizu
+    environment:
+      - NEO4J_PASSWORD
+      - NEO4J_USER=neo4j
+      - NEO4J_URI=bolt://neo4j:7687
+      # Set fake credentials for AWS, since we need to talk to local dynamodb and it requires
+      # credentials to be set
+      - AWS_ACCESS_KEY_ID=fake
+      - AWS_SECRET_ACCESS_KEY=fake
+      - AWS_REGION=ap-northeast-1
+      - AWS_DEFAULT_REGION=ap-northeast-1
+      - DYNAMODB_URL=http://dynamodb:8080
+      - "DYNAMODB_CREATE_TABLE=true"
+      - "SQS_CREATE_SCHEDULED_QUERY_QUEUES=true"
+      - SQS_URL=http://sqs:9324
+      - FLASK_APP=reporting.scheduled_queries
+      - SCHEDULED_QUERY_MODULES=reporting.scheduled_query_modules.sqs,reporting.scheduled_query_modules.slack,reporting.scheduled_query_modules.log
+      - SLACK_OAUTH_BOT_TOKEN
+    command: flask worker schedule-queries
+    volumes:
+      - .:/home/seizu/seizu
+      - ./.compose/seizu/reporting-dashboard.yaml:/reporting-dashboard.conf
+    networks:
+      stats:
+      database:
+  reporting-user-watcher:
+    image: paypay/seizu
+    restart: on-failure
+    user: seizu
+    environment:
+      - NEO4J_PASSWORD
+      - NEO4J_USER=neo4j
+      - NEO4J_URI=bolt://neo4j:7687
+      # Set fake credentials for AWS, since we need to talk to local dynamodb and it requires
+      # credentials to be set
+      - AWS_ACCESS_KEY_ID=fake
+      - AWS_SECRET_ACCESS_KEY=fake
+      - AWS_REGION=ap-northeast-1
+      - DYNAMODB_URL=http://dynamodb:8080
+      - "DYNAMODB_CREATE_TABLE=true"
+      - FLASK_APP=reporting.user_watcher
+    command: flask worker watch-users
+    volumes:
+      - .:/home/seizu/seizu
+      - ./.compose/seizu/reporting-dashboard.yaml:/reporting-dashboard.conf
+    networks:
+      stats:
+      database:
+  seizu:
+    image: paypay/seizu
+    build: .
+    user: seizu
+    environment:
+      - HOST=0.0.0.0
+      - PORT=8443
+      # FORWARDED_ALLOW_IPS is needed for X-Forwarded-Proto. Gunicorn/flask will
+      # not correctly identify that SSL is being used otherwise.
+      - "FORWARDED_ALLOW_IPS=*"
+      # Gevent will block on DNS unless ares is set.
+      - GEVENT_RESOLVER=ares
+      - NEO4J_PASSWORD
+      - NEO4J_USER=neo4j
+      - NEO4J_URI=bolt://neo4j:7687
+      # JWT authentication is disabled for development
+      - "DEVELOPMENT_ONLY_REQUIRE_AUTH=false"
+      # This user is being hardcoded for the reporting react UI, and with auto-auth
+      - DEVELOPMENT_ONLY_AUTH_USER_EMAIL=testuser
+      # These JWKS settings can be used to test JWT in development, though first you'll need to enable auth
+      - JWKS_URL=https://token.dev/jwks/keys.json
+      - "JWKS_URL_FOR_ALB=false"
+      # Disable the referer check so node can proxy to the backend
+      - "CSRF_CHECK_REFERER=false"
+      # Set fake credentials for AWS, since we need to talk to local dynamodb and it requires
+      # credentials to be set
+      - AWS_ACCESS_KEY_ID=fake
+      - AWS_SECRET_ACCESS_KEY=fake
+      - AWS_REGION=ap-northeast-1
+      - DYNAMODB_URL=http://dynamodb:8080
+      - "DYNAMODB_CREATE_TABLE=true"
+      - SECRET_KEY=fake
+      - STATSD_EXTERNAL_PREFIX=seizu
+      - STATSD_EXTERNAL_PROVIDER=newrelic
+      - PAGERDUTY_API_KEY
+      - AUTH_MODE
+    healthcheck:
+      test: ["CMD", "curl", "-fk", "https://localhost:8443/healthcheck"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    volumes:
+      - .:/home/seizu/seizu
+      - ./.compose/seizu/reporting-dashboard.yaml:/reporting-dashboard.conf
+      - ~/.minica/localhost/cert.pem:/ssl/cert.pem
+      - ~/.minica/localhost/key.pem:/ssl/key.pem
+    ports:
+      - 8443:8443
+    command: gunicorn --config /home/seizu/seizu/gunicorn.conf reporting.wsgi:app --reload --workers=2 -k gevent --access-logfile=- --error-logfile=- --keyfile=/ssl/key.pem --certfile=/ssl/cert.pem
+    networks:
+      proxy:
+      stats:
+      database:
+  seizu-node:
+    image: node:14
+    user: node
+    environment:
+      - NODE_ENV=development
+      - "HTTPS=true"
+      - SSL_CRT_FILE=/ssl/cert.pem
+      - SSL_KEY_FILE=/ssl/key.pem
+      - PORT=7443
+    working_dir: /home/seizu/seizu
+    volumes:
+      - ~/.config/yarn:/home/node/.cache/yarn
+      - ~/.minica/localhost/cert.pem:/ssl/cert.pem
+      - ~/.minica/localhost/key.pem:/ssl/key.pem
+      - .:/home/seizu/seizu
+    ports:
+      - 7443:7443
+    networks:
+      proxy:
+    command: yarn start
+  cartography:
+    image: lyft/cartography
+    user: cartography
+    init: true
+    # We call cartography directly, so make sure it doesn't try to start on up
+    profiles:
+      - nostart
+    volumes:
+      - ./.compose/cartography/aws-config:/srv/cartography/.aws/config
+      - ./.compose/cartography/permission_relationships.yaml:/etc/cartography/permission_relationships.yaml
+      - ./.compose/cartography/kube.config:/etc/cartography/kube.config
+    environment:
+      - NEO4J_PASSWORD
+      - "STATSD_ENABLED=true"
+      - STATSD_HOST=telegraf
+      - GITHUB_TOKEN
+      - CROWDSTRIKE_CLIENT_ID
+      - CROWDSTRIKE_CLIENT_SECRET
+      - PAGERDUTY_API_KEY
+      - OKTA_API_KEY
+    networks:
+      credentials:
+          ipv4_address: "169.254.169.2"
+      stats:
+      database:

@@ -1,0 +1,141 @@
+queries:
+  cves-total: |-
+    MATCH (c:CVE)
+    RETURN count(c.id) AS total
+  cves-severity-of-total: |-
+    MATCH (c:CVE)
+    WITH COUNT(DISTINCT c.id) AS denominator
+    MATCH (c:CVE)
+    WHERE c.base_severity = $base_severity
+    RETURN count(DISTINCT c.id) AS numerator, denominator
+  cves-severity-of-total-details: |-
+    MATCH (c:CVE)
+    WHERE c.base_severity = $base_severity
+    RETURN c AS details
+  cves-by-severity-as-rows: |-
+    MATCH (c:CVE)
+    RETURN {id: c.base_severity, value: count(c.id)} AS details
+  cves: |-
+    MATCH (c:CVE)
+    WHERE c.base_severity =~ ($base_severity)
+    RETURN DISTINCT {
+      id: c.id,
+      base_severity: c.base_severity,
+      description: c.description_en,
+      published_date: c.published_date
+    } AS details
+    ORDER BY details.severity DESC
+  recent-cves: |-
+    MATCH (s:SyncMetadata)
+    WHERE s.grouptype = "CVE" AND s.syncedtype IN $syncedtype
+    WITH datetime({epochSeconds: s.lastupdated}) - duration({hours: 24}) AS feedupdatetime
+    MATCH (c:CVE)
+    WHERE (datetime(c.published_date)) > feedupdatetime AND c.base_severity IN $base_severity
+    RETURN {id: c.id, base_severity: c.base_severity, base_score: c.base_score, description: c.description_en} AS details
+
+dashboard:
+  rows:
+    - name: CVEs as count and progress panels
+      panels:
+        - cypher: cves-total
+          type: count
+          caption: Total CVEs
+          metric: cve.count
+          size: 2.4
+        - cypher: cves-severity-of-total
+          details_cypher: cves-severity-of-total-details
+          type: progress
+          params:
+            - name: base_severity
+              value: CRITICAL
+          caption: Critical CVEs
+          metric: cve.progress
+          size: 2.4
+          threshold: 0
+        - cypher: cves-severity-of-total
+          details_cypher: cves-severity-of-total-details
+          type: progress
+          params:
+            - name: base_severity
+              value: HIGH
+          caption: High CVEs
+          metric: cve.progress
+          size: 2.4
+          threshold: 0
+        - cypher: cves-severity-of-total
+          details_cypher: cves-severity-of-total-details
+          type: progress
+          params:
+            - name: base_severity
+              value: MEDIUM
+          caption: Medium CVEs
+          metric: cve.progress
+          size: 2.4
+          threshold: 0
+        - cypher: cves-severity-of-total
+          details_cypher: cves-severity-of-total-details
+          type: progress
+          params:
+            - name: base_severity
+              value: LOW
+          caption: Low CVEs
+          metric: cve.progress
+          size: 2.4
+          threshold: 0
+    - name: CVEs as pie, bar panels
+      panels:
+        - cypher: cves-by-severity-as-rows
+          type: pie
+          caption: CVE severities
+          size: 6
+        - cypher: cves-by-severity-as-rows
+          type: bar
+          caption: CVE severities
+          size: 6
+
+reports:
+  cves:
+    name: CVEs
+    inputs:
+      - input_id: cve_base_severity
+        cypher: |-
+          MATCH (c:CVE)
+          RETURN DISTINCT c.base_severity AS value
+        label: Base Severity
+        type: autocomplete
+        size: 2
+    rows:
+      - name: CVEs
+        panels:
+          - cypher: cves
+            type: table
+            params:
+              - name: base_severity
+                input_id: cve_base_severity
+            size: 12
+
+scheduled_queries:
+  recent-cves-by-severity:
+    name: Recently published HIGH/CRITICAL CVEs
+    cypher: recent-cves
+    params:
+      - name: syncedtype
+        value:
+          - recent
+      - name: base_severity
+        value:
+          - HIGH
+          - CRITICAL
+    # every 1 minute, for testing
+    frequency: 1
+    enabled: True
+    actions:
+      - action_type: log
+        action_config:
+          message: Recently published HIGH/CRITICAL CVEs
+          level: info
+          log_attrs:
+            - id
+            - base_severity
+            - base_score
+            - description

@@ -1,0 +1,61 @@
+default_language_version:
+    # force all unspecified python hooks to run python3
+    python: python3
+repos:
+-   repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v3.2.0
+    hooks:
+    -   id: check-docstring-first
+    -   id: check-executables-have-shebangs
+    -   id: check-merge-conflict
+    -   id: check-vcs-permalinks
+    -   id: check-yaml
+        args: [--allow-multiple-documents]
+    -   id: debug-statements
+    -   id: end-of-file-fixer
+    -   id: trailing-whitespace
+-   repo: https://github.com/psf/black
+    rev: 22.3.0
+    hooks:
+    - id: black
+      language_version: python3
+-   repo: https://gitlab.com/pycqa/flake8
+    rev: 3.7.8
+    hooks:
+    -   id: flake8
+-   repo: https://github.com/asottile/pyupgrade
+    rev: v1.25.0
+    hooks:
+    -   id: pyupgrade
+        args: [--py36-plus]
+-   repo: https://github.com/asottile/reorder_python_imports
+    rev: v1.7.0
+    hooks:
+    -   id: reorder-python-imports
+        args: [--py3-plus]
+-   repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v0.812
+    hooks:
+    -   id: mypy
+        additional_dependencies:
+          - pynamodb==5.2.0
+          - marshmallow_dataclass
+-   repo: https://github.com/pre-commit/mirrors-eslint
+    rev: v7.27.0
+    hooks:
+    -   id: eslint
+        verbose: true
+        exclude: ^notebooks/
+        args:
+          - '--fix'
+        additional_dependencies:
+        -   eslint@8.2.0
+        -   "@babel/eslint-parser@7.18.2"
+        -   eslint-config-airbnb@19.0.4
+        -   eslint-config-prettier@8.5.0
+        -   eslint-plugin-import@2.25.3
+        -   eslint-plugin-jsx-a11y@6.5.1
+        -   eslint-plugin-prettier@4.0.0
+        -   eslint-plugin-react@7.28.0
+        -   eslint-plugin-react-hooks@4.3.0
+        -   prettier@2.6.2

@@ -1,0 +1,98 @@
+[[source]]
+url = "https://pypi.python.org/simple"
+verify_ssl = true
+name = "pypi"
+
+[packages]
+# WSGI HTTP Server for UNIX
+# License: MIT
+gunicorn = ">=20.1.0,<21.0.0"
+# A python library adding a json log formatter
+# License: BSD
+# Upstream url: http://github.com/madzak/python-json-logger
+python-json-logger = ">=2.0.2,<3.0.0"
+# Flask service framework
+# License: BSD
+# Upstream url: http://github.com/mitsuhiko/flask/
+Flask = ">=2.0,<3.0"
+# Dispatching system for parties to subscribe to events
+# Supports per-endpoint timing in flask
+# License: MIT
+# Upstream url: https://pypi.python.org/pypi/blinker
+blinker = "1.4"
+# The Datadog Python library
+# License: BSD
+# Upstream url: https://github.com/DataDog/datadogpy
+datadog = ">=0.42.0,<=1.0.0"
+# cryptography is a package which provides cryptographic recipes and primitives to Python developers.
+# License: Apache2
+# Upstream url: https://github.com/pyca/cryptography
+cryptography = ">=36.0.0,<37.0.0"
+# Coroutine-based network library
+# License: MIT
+# Upstream url: http://www.gevent.org/
+gevent = ">=21.12.0,<22.0.0"
+# Lightweight in-process concurrent programming
+# License: MIT
+# Upstream url: https://github.com/python-greenlet/greenlet
+greenlet = ">=1.1.2,<2.0.0"
+# YAML parser and emitter for Python
+# License: MIT
+# Upstream url: http://pyyaml.org/wiki/PyYAML
+PyYAML = ">=6.0.0,<7.0.0"
+# JSON Web Token implementation in Python
+# License: MIT
+# Upstream url: https://github.com/jpadilla/pyjwt
+PyJWT = ">=2.3.0,<=3.0.0"
+# Neo4j Bolt driver for Python
+# License: Apache2
+# Upstream url: https://github.com/neo4j/neo4j-python-driver
+neo4j = ">=4.4.1,<=5.0.0"
+# Neo4j Bolt connector for Python
+# License: Apache2
+# Upstream url: https://github.com/neo4j-drivers/neobolt
+neobolt = ">=1.7.17,<=2.0.0"
+# Python HTTP for Humans.
+# License: Apache2
+# Upstream url: https://github.com/psf/requests
+requests = ">=2.27.1,<3.0.0"
+# A Pythonic Interface to DynamoDB
+# License: MIT
+# Upstream url: https://github.com/pynamodb/PynamoDB
+pynamodb = "5.2.0"
+# HTTP security headers for Flask.
+# License: Apache2
+# Upstream url: https://github.com/GoogleCloudPlatform/flask-talisman
+flask-talisman = ">=0.8.1,<=1.0.0"
+# An updated CSRF extension for Flask.
+# License: BSD
+# Upstream url: https://github.com/maxcountryman/flask-seasurf/
+flask-seasurf = "~=1.1.1"
+pdpyras = ">=4.4.0,<=5.0.0"
+boto3 = ">=1.20.40,<=2.0.0"
+slack-sdk = ">=3.13.0,<4.0.0"
+marshmallow = "~=3.14.0"
+marshmallow-dataclass = "~=8.5.3"
+marshmallow-jsonschema = "~=0.13.0"
+
+[dev-packages]
+# A framework for managing and maintaining multi-language pre-commit hooks.
+# License: MIT
+# Upstream URL: https://github.com/pre-commit/pre-commit
+pre-commit = ">=2.17.0,<3.0.0"
+# Testing library
+# License: MIT
+# Upstream url: https://github.com/pytest-dev/pytest
+pytest = ">=6.2.5,<7.0.0"
+# Code coverage plugin for py.test
+# License: MIT
+# Upstream url: https://github.com/pytest-dev/pytest-cov
+pytest-cov = ">=3.0.0,<4.0.0"
+# Thin-wrapper around the mock package for easier use with py.test
+# License: MIT
+# Upstream url: https://github.com/pytest-dev/pytest-mock/
+pytest-mock = ">=3.6.1,<4.0.0"
+sphinx = "~=4.3.0"
+sphinx-material = "~=0.0.35"
+m2r2 = "~=0.3.2"
+sphinx-jsonschema = "~=1.18.1"
