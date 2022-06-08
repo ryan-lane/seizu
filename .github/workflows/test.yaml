@@ -9,7 +9,7 @@ on:
 
 jobs:
   unit:
-    runs-on: devsecops-runner
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
       - uses: actions/setup-python@v2
@@ -21,7 +21,7 @@ jobs:
         run: |
           make test_unit
   linter:
-    runs-on: devsecops-runner
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
         with:
