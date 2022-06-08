@@ -44,6 +44,12 @@ The UI is also accessible directly through nodejs, which will recompile the UI o
 This is useful for development.
 This version of the UI is accessible at: https://localhost:8443/
 
+It's necessary to install the node modules prior to using the nodejs UI:
+
+```bash
+$> make yarn install
+```
+
 ### Loading CVE data
 
 The quickstart configuration provided by the docker-compose is based around the NIST CVE data, which can be easily loaded via a make target:

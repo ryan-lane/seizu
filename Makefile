@@ -47,7 +47,7 @@ docs: schema
 
 .PHONY: yarn
 yarn:
-	@docker-compose run reporting-node $(call args)
+	@docker-compose run seizu-node yarn $(call args)
 
 .PHONY: add_ssl
 add_ssl:
