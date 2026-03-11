@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import PropTypes from 'prop-types';
 import { Typography } from '@mui/material';
-import Loader from 'react-loader-spinner';
+import { ThreeDots } from 'react-loader-spinner';
 import { useLazyReadCypher } from 'use-neo4j';
 import Error from '@mui/icons-material/Error';
 import OncallTable from 'src/components/reports/OncallTable';
@@ -56,7 +56,7 @@ export default function CypherOncallTable({
   }
 
   if (loading || records === undefined) {
-    return <Loader type="ThreeDots" color="#2BAD60" height="50" width="50" />;
+    return <ThreeDots color="#2BAD60" height="50" width="50" />;
   }
 
   const userIds = [];

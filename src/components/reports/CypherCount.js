@@ -11,7 +11,7 @@ import {
 } from '@mui/material';
 import Info from '@mui/icons-material/Info';
 import Error from '@mui/icons-material/Error';
-import Loader from 'react-loader-spinner';
+import { ThreeDots } from 'react-loader-spinner';
 import { useLazyReadCypher } from 'use-neo4j';
 // eslint-disable-next-line  import/no-extraneous-dependencies
 import neo4j from 'neo4j-driver';
@@ -87,7 +87,7 @@ export default function CypherCount({
   }
 
   if (loading || records === undefined) {
-    return <Loader type="ThreeDots" color="#2BAD60" height="50" width="50" />;
+    return <ThreeDots color="#2BAD60" height="50" width="50" />;
   }
 
   if (first === undefined) {

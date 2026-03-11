@@ -1,10 +1,10 @@
 import { useState, useEffect } from 'react';
 import { Outlet } from 'react-router-dom';
-import { experimentalStyled } from '@mui/material';
+import { styled } from '@mui/material';
 import { Neo4jProvider, createDriver } from 'use-neo4j';
 import { trackPromise, usePromiseTracker } from 'react-promise-tracker';
 import { ConfigContext } from 'src/config.context';
-import Loader from 'react-loader-spinner';
+import { ThreeDots } from 'react-loader-spinner';
 import DashboardNavbar from 'src/components/DashboardNavbar';
 import DashboardSidebar from 'src/components/DashboardSidebar';
 import AuthDialog from 'src/components/AuthDialog';
@@ -22,13 +22,13 @@ function LoadingIndicator() {
           alignItems: 'center'
         }}
       >
-        <Loader type="ThreeDots" color="#2BAD60" height="100" width="100" />
+        <ThreeDots color="#2BAD60" height="100" width="100" />
       </div>
     )
   );
 }
 
-const DashboardLayoutRoot = experimentalStyled('div')(({ theme }) => ({
+const DashboardLayoutRoot = styled('div')(({ theme }) => ({
   backgroundColor: theme.palette.background.default,
   display: 'flex',
   height: '100%',
@@ -36,7 +36,7 @@ const DashboardLayoutRoot = experimentalStyled('div')(({ theme }) => ({
   width: '100%'
 }));
 
-const DashboardLayoutWrapper = experimentalStyled('div')(({ theme }) => ({
+const DashboardLayoutWrapper = styled('div')(({ theme }) => ({
   display: 'flex',
   flex: '1 1 auto',
   overflow: 'hidden',
@@ -46,13 +46,13 @@ const DashboardLayoutWrapper = experimentalStyled('div')(({ theme }) => ({
   }
 }));
 
-const DashboardLayoutContainer = experimentalStyled('div')({
+const DashboardLayoutContainer = styled('div')({
   display: 'flex',
   flex: '1 1 auto',
   overflow: 'hidden'
 });
 
-const DashboardLayoutContent = experimentalStyled('div')({
+const DashboardLayoutContent = styled('div')({
   flex: '1 1 auto',
   height: '100%',
   overflow: 'auto'

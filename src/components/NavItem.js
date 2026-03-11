@@ -6,20 +6,11 @@ import {
 } from 'react-router-dom';
 import ExpandLess from '@mui/icons-material/ExpandLess';
 import ExpandMore from '@mui/icons-material/ExpandMore';
-import { makeStyles } from '@mui/styles';
 import PropTypes from 'prop-types';
 import { Button, Collapse, List, ListItem } from '@mui/material';
 
-const useStyles = makeStyles((theme) => ({
-  nested: {
-    paddingLeft: theme.spacing(2)
-  }
-}));
-
 function NavItem({ href, icon: Icon, title, subItems, ...rest }) {
   const location = useLocation();
-
-  const classes = useStyles();
 
   const [open, setOpen] = React.useState(true);
 
@@ -28,7 +19,7 @@ function NavItem({ href, icon: Icon, title, subItems, ...rest }) {
       ? !!matchPath(
           {
             path: href,
-            exact: true
+            end: true
           },
           location.pathname
         )
@@ -111,7 +102,7 @@ function NavItem({ href, icon: Icon, title, subItems, ...rest }) {
               key={item.title}
               title={item.title}
               icon={item.icon}
-              className={classes.nested}
+              sx={{ pl: 2 }}
             />
           ))}
         </List>

@@ -8,7 +8,7 @@ import {
   Paper,
   Typography
 } from '@mui/material';
-import Loader from 'react-loader-spinner';
+import { ThreeDots } from 'react-loader-spinner';
 import MuiMarkdown from 'mui-markdown';
 
 import { ConfigContext } from 'src/config.context';
@@ -24,7 +24,7 @@ function Dashboard() {
   const { config } = useContext(ConfigContext);
 
   if (config === undefined) {
-    return <Loader type="ThreeDots" color="#2BAD60" height="100" width="100" />;
+    return <ThreeDots color="#2BAD60" height="100" width="100" />;
   }
   const { dashboard, queries } = config.config;
 

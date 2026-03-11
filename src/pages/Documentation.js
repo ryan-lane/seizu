@@ -16,23 +16,14 @@ import {
   TableContainer,
   TableRow
 } from '@mui/material';
-import { makeStyles } from '@mui/styles';
-import Loader from 'react-loader-spinner';
+import { ThreeDots } from 'react-loader-spinner';
 
 import { ConfigContext } from 'src/config.context';
 
-const useStyles = makeStyles(() => ({
-  table: {
-    maxWidth: '50%'
-  }
-}));
-
 function Documentation() {
-  const classes = useStyles();
-
   const { config } = useContext(ConfigContext);
   if (config === undefined) {
-    return <Loader type="ThreeDots" color="#2BAD60" height="100" width="100" />;
+    return <ThreeDots color="#2BAD60" height="100" width="100" />;
   }
 
   const { dashboard, reports } = config.config;
@@ -146,7 +137,7 @@ function Documentation() {
               <TableContainer sx={{ pl: 2, pt: 2 }}>
                 <Table
                   size="small"
-                  className={classes.table}
+                  sx={{ maxWidth: '50%' }}
                   aria-label="configured-metrics"
                 >
                   <TableHead>

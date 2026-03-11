@@ -17,16 +17,10 @@ import {
   Typography
 } from '@mui/material';
 import useMediaQuery from '@mui/material/useMediaQuery';
-import { makeStyles, useTheme } from '@mui/styles';
+import { useTheme } from '@mui/material/styles';
 
 import { ConfigContext } from 'src/config.context';
 import CypherTable from 'src/components/reports/CypherTable';
-
-const useStyles = makeStyles((theme) => ({
-  button: {
-    margin: theme.spacing(1)
-  }
-}));
 
 function TabPanel(props) {
   const { children, value, index, ...other } = props;
@@ -60,7 +54,6 @@ function a11yProps(index) {
 export default function CypherDetails({ details, open, setOpen }) {
   const { config } = useContext(ConfigContext);
   const theme = useTheme();
-  const classes = useStyles();
   const fullScreen = useMediaQuery(theme.breakpoints.down('sm'));
   const handleClose = () => {
     setOpen(false);
@@ -260,7 +253,7 @@ export default function CypherDetails({ details, open, setOpen }) {
         </TabPanel>
         <TabPanel value={value} index={1}>
           <TableContainer component={Paper}>
-            <Table className={classes.table} aria-label="extra-details">
+            <Table aria-label="extra-details">
               <TableBody>
                 {cypherRow}
                 {detailsCypherRow}

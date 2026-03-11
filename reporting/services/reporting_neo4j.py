@@ -8,8 +8,9 @@ from typing import List
 import neo4j.exceptions
 from neo4j import GraphDatabase
 from neo4j.exceptions import TransactionError
-from neo4j.work.result import Result
-from neo4j.work.transaction import Transaction
+from neo4j import Result
+from neo4j import ManagedTransaction
+from neo4j import Transaction
 from pynamodb.exceptions import DoesNotExist
 from pynamodb.exceptions import PutError
 
