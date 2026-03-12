@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import PropTypes from 'prop-types';
 import { Typography, TextField, Autocomplete } from '@mui/material';
-import Loader from 'react-loader-spinner';
+import { ThreeDots } from 'react-loader-spinner';
 import { useReadCypher } from 'use-neo4j';
 import { setQueryStringValue } from 'src/components/QueryString';
 
@@ -27,7 +27,7 @@ export default function CypherAutocomplete({
   }
 
   if (loading || records === undefined) {
-    return <Loader type="ThreeDots" color="#2BAD60" height="50" width="50" />;
+    return <ThreeDots color="#2BAD60" height="50" width="50" />;
   }
 
   const mungedRecords = records.map((record) => {

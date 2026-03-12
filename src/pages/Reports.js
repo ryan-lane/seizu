@@ -9,7 +9,7 @@ import {
   Paper,
   Typography
 } from '@mui/material';
-import Loader from 'react-loader-spinner';
+import { ThreeDots } from 'react-loader-spinner';
 import Error from '@mui/icons-material/Error';
 import MuiMarkdown from 'mui-markdown';
 
@@ -52,7 +52,7 @@ function Reports() {
   const [varData, setVarData] = useState(initialVarState);
 
   if (config === undefined) {
-    return <Loader type="ThreeDots" color="#2BAD60" height="100" width="100" />;
+    return <ThreeDots color="#2BAD60" height="100" width="100" />;
   }
 
   const head = [];

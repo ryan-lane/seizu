@@ -1,6 +1,5 @@
 /* eslint-disable no-underscore-dangle */
 import React, { useState, useContext } from 'react';
-import { makeStyles } from '@mui/styles';
 import { Link } from '@mui/material';
 import Table from '@mui/material/Table';
 import TableBody from '@mui/material/TableBody';
@@ -16,17 +15,7 @@ import Button from '@mui/material/Button';
 
 import { ConfigContext } from 'src/config.context';
 
-const useStyles = makeStyles((theme) => ({
-  button: {
-    margin: theme.spacing(1)
-  },
-  table: {
-    maxWidth: 650
-  }
-}));
-
 export default function Neo4jCredentials() {
-  const classes = useStyles();
   const { config, auth } = useContext(ConfigContext);
   const neo4jUrl = `${config.console_url}/browser/`;
   const [open, setOpen] = useState(false);
@@ -46,7 +35,7 @@ export default function Neo4jCredentials() {
   return (
     <>
       <TableContainer component={Paper}>
-        <Table className={classes.table} aria-label="credentials">
+        <Table sx={{ maxWidth: 650 }} aria-label="credentials">
           <TableBody>
             <TableRow>
               <TableCell>Username</TableCell>
@@ -59,7 +48,7 @@ export default function Neo4jCredentials() {
                   variant="contained"
                   color="primary"
                   size="small"
-                  className={classes.button}
+                  sx={{ margin: 1 }}
                   endIcon={<ContentCopy />}
                   onClick={() => {
                     navigator.clipboard.writeText(auth.password);

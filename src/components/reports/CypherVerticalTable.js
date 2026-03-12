@@ -1,6 +1,5 @@
 import PropTypes from 'prop-types';
 import { useEffect, useState } from 'react';
-import { makeStyles } from '@mui/styles';
 import { useLazyReadCypher } from 'use-neo4j';
 import {
   Button,
@@ -17,20 +16,11 @@ import {
 } from '@mui/material';
 import Info from '@mui/icons-material/Info';
 import Error from '@mui/icons-material/Error';
-import Loader from 'react-loader-spinner';
+import { ThreeDots } from 'react-loader-spinner';
 // eslint-disable-next-line  import/no-extraneous-dependencies
 import neo4j from 'neo4j-driver';
 
 import CypherDetails from 'src/components/reports/CypherDetails';
-
-const useStyles = makeStyles((theme) => ({
-  button: {
-    margin: theme.spacing(1)
-  },
-  table: {
-    maxWidth: '100%'
-  }
-}));
 
 export default function CypherVerticalTable({
   cypher,
@@ -43,7 +33,6 @@ export default function CypherVerticalTable({
   const handleClickOpen = () => {
     setOpen(true);
   };
-  const classes = useStyles();
 
   const [runQuery, { loading, error, records }] = useLazyReadCypher(cypher);
 
@@ -82,7 +71,7 @@ export default function CypherVerticalTable({
   }
 
   if (loading || records === undefined) {
-    return <Loader type="ThreeDots" color="#2BAD60" height="50" width="50" />;
+    return <ThreeDots color="#2BAD60" height="50" width="50" />;
   }
 
   if (records === null || records.length === 0) {
@@ -163,7 +152,7 @@ export default function CypherVerticalTable({
       );
     });
     return (
-      <Table className={classes.table} size="small" sx={{ m: -0.7, ml: -1.9 }}>
+      <Table sx={{ maxWidth: '100%', m: -0.7, ml: -1.9 }} size="small">
         <TableBody>{rows}</TableBody>
       </Table>
     );

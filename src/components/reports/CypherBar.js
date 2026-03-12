@@ -9,10 +9,10 @@ import {
   Grid,
   Typography
 } from '@mui/material';
-import { useTheme } from '@mui/styles';
+import { useTheme } from '@mui/material/styles';
 import Info from '@mui/icons-material/Info';
 import Error from '@mui/icons-material/Error';
-import Loader from 'react-loader-spinner';
+import { ThreeDots } from 'react-loader-spinner';
 import { useLazyReadCypher } from 'use-neo4j';
 import { ResponsiveBar } from '@nivo/bar';
 // eslint-disable-next-line  import/no-extraneous-dependencies
@@ -86,7 +86,7 @@ export default function CypherBar({
   }
 
   if (loading || records === undefined) {
-    return <Loader type="ThreeDots" color="#2BAD60" height="50" width="50" />;
+    return <ThreeDots color="#2BAD60" height="50" width="50" />;
   }
 
   if (first === undefined) {
