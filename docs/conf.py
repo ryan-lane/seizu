@@ -44,7 +44,7 @@ extensions = [
     "sphinx.ext.ifconfig",
     "sphinx.ext.githubpages",
     "sphinx-jsonschema",
-    "m2r2",
+    "myst_parser",
 ]
 
 # Add any paths that contain templates here, relative to this directory.
@@ -92,6 +92,10 @@ language = "en"
 # directories to ignore when looking for source files.
 # This patterns also effect to html_static_path and html_extra_path
 exclude_patterns = ["_build", "_venv", "Thumbs.db", ".DS_Store"]
+
+# myst-parser: suppress xref warnings for relative .html links (intentional
+# HTML output links that myst-parser cannot resolve as source cross-references)
+suppress_warnings = ["myst.xref_missing"]
 
 # The reST default role (used for this markup: `text`) to use for all
 # documents.

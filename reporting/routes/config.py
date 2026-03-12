@@ -35,9 +35,7 @@ def get_config() -> Response:
     :resheader Content-Type: application/json
     :statuscode 200: success
     """
-    config = reporting_config.ReportingConfig.Schema().dump(
-        reporting_config.load_file(settings.REPORTING_CONFIG_FILE)
-    )
+    config = reporting_config.load_file(settings.REPORTING_CONFIG_FILE).model_dump()
     schema = reporting_config.output_json_schema()
     pagerduty_enabled = False
     if settings.PAGERDUTY_API_KEY:
