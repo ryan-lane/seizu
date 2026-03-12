@@ -11,7 +11,7 @@ def test_send_stats_for_panel_no_metric(mocker):
     stats_mock = mocker.patch("reporting.dashboard_stats.statsd.gauge")
     run_query_mock = mocker.patch("reporting.dashboard_stats.run_query_with_retry")
     panel = Panel(
-        cypher="test", params=[{"name": "severity", "value": "HIGH"}], _type="count"
+        cypher="test", params=[{"name": "severity", "value": "HIGH"}], type="count"
     )
     config = mocker.MagicMock()
     dashboard_stats.send_stats_for_panel(panel, [], config)
@@ -31,7 +31,7 @@ def test_send_stats_for_panel_with_input_exception(mocker):
             PanelParam(name="severity", value="HIGH"),
             PanelParam(name="service_name", input_id="service-name-autocomplete-input"),
         ],
-        _type="count",
+        type="count",
         metric="crowdstrike.vulnerabilities",
     )
     config = ReportingConfig(
@@ -44,7 +44,7 @@ def test_send_stats_for_panel_with_input_exception(mocker):
             input_id="service-name-autocomplete-input",
             cypher="test",
             label="Service Name",
-            _type="autocomplete",
+            type="autocomplete",
             size=3,
         ),
     ]
@@ -70,7 +70,7 @@ def test_send_stats_for_panel_with_metric_exception(mocker):
             PanelParam(name="severity", value="HIGH"),
             PanelParam(name="service_name", input_id="service-name-autocomplete-input"),
         ],
-        _type="count",
+        type="count",
         metric="crowdstrike.vulnerabilities",
     )
     config = ReportingConfig(
@@ -83,7 +83,7 @@ def test_send_stats_for_panel_with_metric_exception(mocker):
             input_id="service-name-autocomplete-input",
             cypher="test",
             label="Service Name",
-            _type="autocomplete",
+            type="autocomplete",
             size=3,
         ),
     ]
@@ -110,7 +110,7 @@ def test_send_stats_for_panel_with_input(mocker):
             PanelParam(name="severity", value="HIGH"),
             PanelParam(name="service_name", input_id="service-name-autocomplete-input"),
         ],
-        _type="count",
+        type="count",
         metric="crowdstrike.vulnerabilities",
     )
     config = ReportingConfig(
@@ -123,7 +123,7 @@ def test_send_stats_for_panel_with_input(mocker):
             input_id="service-name-autocomplete-input",
             cypher="test",
             label="Service Name",
-            _type="autocomplete",
+            type="autocomplete",
             size=3,
         ),
     ]
@@ -150,7 +150,7 @@ def test_send_stats_for_panel_with_input_progress(mocker):
             PanelParam(name="severity", value="HIGH"),
             PanelParam(name="service_name", input_id="service-name-autocomplete-input"),
         ],
-        _type="progress",
+        type="progress",
         metric="crowdstrike.vulnerabilities",
     )
     config = ReportingConfig(
@@ -163,7 +163,7 @@ def test_send_stats_for_panel_with_input_progress(mocker):
             input_id="service-name-autocomplete-input",
             cypher="test",
             label="Service Name",
-            _type="autocomplete",
+            type="autocomplete",
             size=3,
         ),
     ]
@@ -184,7 +184,7 @@ def test_send_stats_for_panel_no_input(mocker):
         params=[
             PanelParam(name="severity", value="HIGH"),
         ],
-        _type="count",
+        type="count",
         metric="crowdstrike.vulnerabilities",
     )
     config = ReportingConfig(
@@ -207,7 +207,7 @@ def test_send_stats_for_panel_no_input_progress(mocker):
         params=[
             PanelParam(name="severity", value="HIGH"),
         ],
-        _type="progress",
+        type="progress",
         metric="crowdstrike.vulnerabilities",
     )
     config = ReportingConfig(
@@ -230,7 +230,7 @@ def test_send_stats_for_panel_no_stats(mocker):
         params=[
             PanelParam(name="severity", value="HIGH"),
         ],
-        _type="count",
+        type="count",
         metric="crowdstrike.vulnerabilities",
     )
     config = ReportingConfig(
