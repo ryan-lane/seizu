@@ -190,7 +190,7 @@ services:
       stats:
       database:
   seizu-node:
-    image: node:14
+    image: node:22
     user: node
     environment:
       - NODE_ENV=development

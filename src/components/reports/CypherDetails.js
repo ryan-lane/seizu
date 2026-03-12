@@ -222,7 +222,7 @@ export default function CypherDetails({ details, open, setOpen }) {
     cypherTabPanel = (
       <TabPanel value={value} index={0}>
         <TableContainer component={Paper}>
-          <Table className={classes.table} aria-label="extra-details">
+          <Table aria-label="extra-details">
             <TableBody>
               {cypherRow}
               {detailsCypherRow}
