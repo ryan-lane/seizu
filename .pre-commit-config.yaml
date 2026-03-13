@@ -39,7 +39,7 @@ repos:
     -   id: mypy
         additional_dependencies:
           - pynamodb==5.2.0
-          - marshmallow_dataclass
+          - pydantic
           - types-PyYAML
           - types-requests
 -   repo: https://github.com/pre-commit/mirrors-eslint

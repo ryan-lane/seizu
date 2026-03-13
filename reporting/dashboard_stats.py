@@ -25,7 +25,7 @@ app.cli.add_command(user_cli)
 def send_stats_for_panel(
     panel: Panel, panel_inputs: List[Input], config: ReportingConfig
 ) -> None:
-    if panel._type not in ["progress", "count"]:
+    if panel.type not in ["progress", "count"]:
         return
     metric = panel.metric
     if not metric:
@@ -83,12 +83,12 @@ def send_stats_for_panel(
                 )
                 continue
             for metric_result in metric_results:
-                if panel._type == "progress":
+                if panel.type == "progress":
                     numerator = metric_result["numerator"]
                     denominator = metric_result["denominator"]
                     statsd.gauge(f"{metric}.numerator", numerator, tags=_tags)
                     statsd.gauge(f"{metric}.denominator", denominator, tags=_tags)
-                elif panel._type == "count":
+                elif panel.type == "count":
                     total = metric_result["total"]
                     statsd.gauge(f"{metric}.total", total, tags=_tags)
     else:
@@ -106,12 +106,12 @@ def send_stats_for_panel(
             )
             return
         for metric_result in metric_results:
-            if panel._type == "progress":
+            if panel.type == "progress":
                 numerator = metric_result["numerator"]
                 denominator = metric_result["denominator"]
                 statsd.gauge(f"{metric}.numerator", numerator, tags=tags)
                 statsd.gauge(f"{metric}.denominator", denominator, tags=tags)
-            elif panel._type == "count":
+            elif panel.type == "count":
                 total = metric_result["total"]
                 statsd.gauge(f"{metric}.total", total, tags=tags)
 
