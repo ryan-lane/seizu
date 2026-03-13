@@ -10,8 +10,8 @@ $> make lock
 
 ## Node dependencies
 
-Seizu's node dependencies are managed by yarn. If your system is setup to use yarn directly, you can do so. Otherwise, you can use use docker to manage the node resources:
+Seizu's node dependencies are managed by bun. If your system is setup to use bun directly, you can do so. Otherwise, you can use docker to manage the node resources:
 
 ```bash
-$> make yarn <yarn-commands>
+$> make bun <bun-commands>
 ```

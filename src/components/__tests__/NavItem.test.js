@@ -1,4 +1,4 @@
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { ThemeProvider, createTheme } from '@mui/material/styles';
 import NavItem from '../NavItem';
@@ -24,7 +24,9 @@ describe('NavItem', () => {
   });
 
   it('renders a nav item with an icon', () => {
-    const MockIcon = () => <svg data-testid="mock-icon" />;
+    function MockIcon() {
+      return <svg data-testid="mock-icon" />;
+    }
     render(
       <Wrapper>
         <NavItem href="/reports" title="Reports" icon={MockIcon} />

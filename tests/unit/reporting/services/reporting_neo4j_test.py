@@ -291,9 +291,11 @@ def test_lock_scheduled_query(mocker):
     sq = ScheduledQuery(
         name="test",
         cypher="test",
-        watch_scans=[ScheduledQueryWatchScan(
-            grouptype="test",
-        )],
+        watch_scans=[
+            ScheduledQueryWatchScan(
+                grouptype="test",
+            )
+        ],
         actions=[
             ScheduledQueryAction(
                 action_type="sqs",

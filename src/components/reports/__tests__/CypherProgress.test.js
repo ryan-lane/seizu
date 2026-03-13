@@ -6,10 +6,12 @@ jest.mock('use-neo4j', () => ({
   useLazyReadCypher: jest.fn()
 }));
 
-jest.mock('src/components/reports/CypherDetails', () =>
-  function MockCypherDetails() {
-    return null;
-  }
+jest.mock(
+  'src/components/reports/CypherDetails',
+  () =>
+    function MockCypherDetails() {
+      return null;
+    }
 );
 
 const { useLazyReadCypher } = require('use-neo4j');

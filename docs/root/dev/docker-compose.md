@@ -55,7 +55,7 @@ This version of the UI is accessible at: https://localhost:8443/
 It's necessary to install the node modules prior to using the nodejs UI:
 
 ```bash
-$> make yarn install
+$> make bun install
 ```
 
 ### Loading CVE data

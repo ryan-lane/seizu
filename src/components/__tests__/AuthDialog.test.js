@@ -91,8 +91,6 @@ describe('AuthDialog', () => {
 
     // Wait for the promise rejection to propagate
     await new Promise((resolve) => setTimeout(resolve, 0));
-    expect(
-      screen.getByText(/authentication failed/i)
-    ).toBeInTheDocument();
+    expect(screen.getByText(/authentication failed/i)).toBeInTheDocument();
   });
 });

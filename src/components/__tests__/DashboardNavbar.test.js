@@ -53,7 +53,10 @@ describe('DashboardNavbar', () => {
   it('shows Log Out link when authMode is not auto', () => {
     render(
       <Wrapper contextValue={{ auth: { username: 'alice' } }}>
-        <DashboardNavbar {...defaultProps} neo4jSettings={{ authMode: 'native' }} />
+        <DashboardNavbar
+          {...defaultProps}
+          neo4jSettings={{ authMode: 'native' }}
+        />
       </Wrapper>
     );
     expect(screen.getByText(/log out/i)).toBeInTheDocument();
@@ -62,7 +65,10 @@ describe('DashboardNavbar', () => {
   it('hides Log Out link when authMode is auto', () => {
     render(
       <Wrapper contextValue={{ auth: { username: 'alice' } }}>
-        <DashboardNavbar {...defaultProps} neo4jSettings={{ authMode: 'auto' }} />
+        <DashboardNavbar
+          {...defaultProps}
+          neo4jSettings={{ authMode: 'auto' }}
+        />
       </Wrapper>
     );
     expect(screen.queryByText(/log out/i)).not.toBeInTheDocument();

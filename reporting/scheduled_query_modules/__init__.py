@@ -1,4 +1,5 @@
 from typing import Any
+from typing import cast
 from typing import Dict
 from typing import List
 
@@ -66,7 +67,9 @@ def load_modules(config: ReportingConfig) -> None:
         # fromlist is required here, or the module will not be loaded.
         # The actual valud of fromlist doesn't matter. We're using this rather
         # than importlib to be able to handle the type checking properly.
-        module: ModuleInterface = __import__(module_name, fromlist=["_fake"])
+        module: ModuleInterface = cast(
+            ModuleInterface, __import__(module_name, fromlist=["_fake"])
+        )
         module.setup(config)
         _MODULES[module.action_name()] = module
 

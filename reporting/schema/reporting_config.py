@@ -500,9 +500,7 @@ class ScheduledQuery(BaseModel):
 
     actions: List[ScheduledQueryAction] = Field(
         default_factory=list,
-        description=(
-            "The actions to perform when the scheduled query is triggered."
-        ),
+        description=("The actions to perform when the scheduled query is triggered."),
         examples=[
             """
             .. code-block:: yaml

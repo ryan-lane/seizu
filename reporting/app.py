@@ -18,7 +18,7 @@ elif settings.NEO4J_USER_PROTOCOL == "bolt+s":
     _scheme = "wss"
 else:
     _scheme = settings.NEO4J_USER_PROTOCOL
-_connect_src = f"{_scheme}://{settings.NEO4J_USER_HOSTNAME}:{settings.NEO4J_USER_PORT}"
+_connect_src = f"{_scheme}://{settings.NEO4J_USER_HOSTNAME}:{settings.NEO4J_USER_PORT}"  # noqa: E231
 
 CSP_POLICY = {
     "default-src": ["'self'"],

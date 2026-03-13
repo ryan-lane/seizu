@@ -45,9 +45,9 @@ schema:
 docs: schema
 	@bash docs/build.sh
 
-.PHONY: yarn
-yarn:
-	@docker-compose run seizu-node yarn $(call args)
+.PHONY: bun
+bun:
+	@docker-compose run seizu-node bun $(call args)
 
 .PHONY: add_ssl
 add_ssl:
