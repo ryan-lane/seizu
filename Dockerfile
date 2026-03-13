@@ -4,7 +4,7 @@ ENV INLINE_RUNTIME_CHUNK=false
 
 WORKDIR /home/node/seizu
 
-COPY package*.json bun.lock .eslintrc .prettierrc .prettierignore jsconfig.json .
+COPY package*.json bun.lock .eslintrc .prettierrc .prettierignore tsconfig.json .
 
 RUN bun install
 
