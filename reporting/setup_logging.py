@@ -14,10 +14,10 @@ try:
 except FileNotFoundError:
     logger = logging.getLogger(__name__)
     logger.warning(
-        f"{settings.LOG_CONFIG_FILE} not found; skipping logging configuration",
+        f"{settings.LOG_CONFIG_FILE} not found; skipping logging configuration",  # noqa: E702
     )
 except Exception:
     logger = logging.getLogger(__name__)
     logger.exception(
-        f"Failed to load {settings.LOG_CONFIG_FILE}; skipping logging configuration",
+        f"Failed to load {settings.LOG_CONFIG_FILE}; skipping logging configuration",  # noqa: E702
     )

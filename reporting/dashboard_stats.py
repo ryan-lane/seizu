@@ -40,7 +40,7 @@ def send_stats_for_panel(
     for p in panel.params:
         if p.value:
             params.update({p.name: p.value})
-            tags.append(f"{p.name}:{p.value}")
+            tags.append(f"{p.name}:{p.value}")  # noqa: E231
         elif p.input_id:
             inputs.append(p)
     if len(inputs) == 1:
@@ -72,7 +72,7 @@ def send_stats_for_panel(
             value = input_result["value"]
             _params = {input_ref.name: value}
             _params.update(params)
-            _tags = [f"{input_ref.name}:{value}"]
+            _tags = [f"{input_ref.name}:{value}"]  # noqa: E231
             _tags.extend(tags)
             try:
                 metric_results = run_query_with_retry(cypher, parameters=_params)

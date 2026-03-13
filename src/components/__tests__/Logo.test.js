@@ -6,7 +6,10 @@ describe('Logo', () => {
     render(<Logo />);
     const img = screen.getByAltText('Logo');
     expect(img).toBeInTheDocument();
-    expect(img).toHaveAttribute('src', '/static/images/logo-horizontal-with-text-white.png');
+    expect(img).toHaveAttribute(
+      'src',
+      '/static/images/logo-horizontal-with-text-white.png'
+    );
     expect(img).toHaveAttribute('height', '50');
   });
 

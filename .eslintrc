@@ -51,5 +51,19 @@
     "react/require-default-props": "off",
     "react-hooks/exhaustive-deps": "off",
     "prettier/prettier": "error"
-  }
+  },
+  "overrides": [
+    {
+      "files": ["**/__tests__/**/*.js", "**/*.test.js", "src/setupTests.js"],
+      "env": {
+        "jest": true
+      },
+      "rules": {
+        "react/prop-types": "off",
+        "react/jsx-no-bind": "off",
+        "no-promise-executor-return": "off",
+        "import/no-extraneous-dependencies": ["error", {"devDependencies": true}]
+      }
+    }
+  ]
 }
