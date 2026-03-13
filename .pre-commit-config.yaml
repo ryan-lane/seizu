@@ -48,7 +48,7 @@ repos:
     -   id: eslint
         verbose: true
         exclude: ^notebooks/
-        types_or: [javascript, jsx, ts, tsx]
+        files: \.(js|jsx|ts|tsx)$
         args:
           - '--fix'
         additional_dependencies:

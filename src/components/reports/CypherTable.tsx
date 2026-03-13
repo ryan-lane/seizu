@@ -252,4 +252,3 @@ export default function CypherTable({
     </>
   );
 }
-
