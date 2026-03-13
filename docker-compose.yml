@@ -210,7 +210,7 @@ services:
       proxy:
     command: bun run start
   cartography:
-    image: ghcr.io/lyft/cartography
+    image: ghcr.io/cartography-cncf/cartography
     user: cartography
     init: true
     # We call cartography directly, so make sure it doesn't try to start on up
