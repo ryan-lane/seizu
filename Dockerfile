@@ -1,16 +1,16 @@
-FROM node:14 AS nodebuilder
+FROM oven/bun AS nodebuilder
 
 ENV INLINE_RUNTIME_CHUNK=false
 
 WORKDIR /home/node/seizu
 
-COPY package*.json yarn.lock .eslintrc .prettierrc .prettierignore jsconfig.json .
+COPY package*.json bun.lock .eslintrc .prettierrc .prettierignore jsconfig.json .
 
-RUN yarn install
+RUN bun install
 
 COPY . .
 
-RUN yarn build --production
+RUN bun run build --production
 
 FROM python:3.9-slim
 

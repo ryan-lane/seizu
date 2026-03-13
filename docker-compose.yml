@@ -69,7 +69,7 @@ services:
     networks:
       database:
   seizu-dashboard-stats:
-    image: ghcr.io/paypay/seizu
+    image: ghcr.io/ryan-lane/seizu
     restart: on-failure
     user: seizu
     environment:
@@ -86,7 +86,7 @@ services:
       stats:
       database:
   seizu-scheduled-queries:
-    image: ghcr.io/paypay/seizu
+    image: ghcr.io/ryan-lane/seizu
     restart: on-failure
     user: seizu
     environment:
@@ -114,7 +114,7 @@ services:
       stats:
       database:
   reporting-user-watcher:
-    image: ghcr.io/paypay/seizu
+    image: ghcr.io/ryan-lane/seizu
     restart: on-failure
     user: seizu
     environment:
@@ -137,7 +137,7 @@ services:
       stats:
       database:
   seizu:
-    image: ghcr.io/paypay/seizu
+    image: ghcr.io/ryan-lane/seizu
     build: .
     user: seizu
     environment:
@@ -190,8 +190,8 @@ services:
       stats:
       database:
   seizu-node:
-    image: node:22
-    user: node
+    image: oven/bun
+    user: bun
     environment:
       - NODE_ENV=development
       - "HTTPS=true"
@@ -200,7 +200,7 @@ services:
       - PORT=7443
     working_dir: /home/seizu/seizu
     volumes:
-      - ~/.config/yarn:/home/node/.cache/yarn
+      - ~/.bun:/home/bun/.bun
       - ~/.minica/localhost/cert.pem:/ssl/cert.pem
       - ~/.minica/localhost/key.pem:/ssl/key.pem
       - .:/home/seizu/seizu
@@ -208,7 +208,7 @@ services:
       - 7443:7443
     networks:
       proxy:
-    command: yarn start
+    command: bun run start
   cartography:
     image: ghcr.io/lyft/cartography
     user: cartography
