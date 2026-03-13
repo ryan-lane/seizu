@@ -40,3 +40,15 @@ docker compose run --rm seizu pipenv install <package>
 - Always use `docker compose run --rm <service>` for one-off commands.
 - Use `docker compose up <service>` for long-running services.
 - The `--rm` flag ensures temporary containers are cleaned up after the command completes.
+
+## Keeping Supporting Files Up to Date
+
+When making changes to the codebase, always review and update the following files as needed to reflect those changes:
+
+- **`Makefile`** — add or update targets for any new build, test, or tooling steps
+- **`.github/workflows/`** — update CI jobs to include new test, lint, or type-check steps
+- **`Dockerfile` and `docker-compose.yml`** — update if new files, build steps, services, or environment variables are introduced
+- **`.pre-commit-config.yaml`** — update hooks or dependencies if linting/formatting tooling changes
+- **`.eslintrc`** (or other lint/format configs) — update if new file types, parsers, or plugins are needed
+- **`docs/`** — update documentation if behavior, configuration, or interfaces change
+- **`agents.md`** — update these guidelines if new conventions or tooling patterns are introduced
