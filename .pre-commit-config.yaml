@@ -43,16 +43,18 @@ repos:
           - types-PyYAML
           - types-requests
 -   repo: https://github.com/pre-commit/mirrors-eslint
-    rev: v7.27.0
+    rev: v8.56.0
     hooks:
     -   id: eslint
         verbose: true
         exclude: ^notebooks/
+        types_or: [javascript, jsx, ts, tsx]
         args:
           - '--fix'
         additional_dependencies:
-        -   eslint@8.2.0
-        -   "@babel/eslint-parser@7.18.2"
+        -   eslint@8.56.0
+        -   "@typescript-eslint/eslint-plugin@8.57.0"
+        -   "@typescript-eslint/parser@8.57.0"
         -   eslint-config-airbnb@19.0.4
         -   eslint-config-prettier@8.5.0
         -   eslint-plugin-import@2.25.3

@@ -15,11 +15,15 @@ junit:
 	mkdir -p junit
 
 .PHONY: test
-test: test_unit
+test: test_unit test_frontend
 
 .PHONY: test_unit
 test_unit: clean junit pipenv_install
 	pipenv run pytest --strict --junitxml=coverage/unit.xml --cov=reporting --cov-report=html:coverage/cov_html --cov-report=xml:coverage/cov.xml --cov-report=term --no-cov-on-fail tests/unit
+
+.PHONY: test_frontend
+test_frontend:
+	@docker-compose run --rm seizu-node bun run type-check
 
 .PHONY: lock
 lock:
