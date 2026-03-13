@@ -36,7 +36,7 @@ jobs:
           key: ${{ runner.os }}-modules-${{ hashFiles('**/bun.lock') }}
       - name: Install packages
         run: bun install
-      - uses: pre-commit/action@v2.0.2
-        with:
-          extra_args: --all-files --show-diff-on-failure
-          token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Install pre-commit
+        run: pip install pre-commit
+      - name: Run pre-commit
+        run: pre-commit run --all-files --show-diff-on-failure
