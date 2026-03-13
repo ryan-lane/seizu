@@ -1,26 +1,24 @@
 {
   "root": true,
-  "parser": "@babel/eslint-parser",
+  "parser": "@typescript-eslint/parser",
   "env": {
     "es2021": true,
     "browser": true
   },
   "plugins": [
+    "@typescript-eslint",
     "prettier"
   ],
   "extends": [
     "airbnb",
     "airbnb/hooks",
     "plugin:react/recommended",
+    "plugin:@typescript-eslint/recommended",
     "prettier"
   ],
   "parserOptions": {
-    "emcaVersion": 12,
-    "sourceType": "module",
-    "requireConfigFile": false,
-    "babelOptions": {
-      "presets": ["@babel/preset-react"]
-    }
+    "ecmaVersion": 12,
+    "sourceType": "module"
   },
   "settings": {
     "react": {
@@ -33,7 +31,9 @@
         ],
         "extensions": [
           ".js",
-          ".jsx"
+          ".jsx",
+          ".ts",
+          ".tsx"
         ]
       }
     }
@@ -45,16 +45,22 @@
     "no-console": "off",
     "no-plusplus": "off",
     "react/forbid-prop-types": "off",
-    "react/jsx-filename-extension": "off",
+    "react/jsx-filename-extension": ["error", { "extensions": [".tsx", ".jsx"] }],
     "react/jsx-props-no-spreading": "off",
     "react/react-in-jsx-scope": "off",
     "react/require-default-props": "off",
     "react-hooks/exhaustive-deps": "off",
-    "prettier/prettier": "error"
+    "prettier/prettier": "error",
+    "@typescript-eslint/no-explicit-any": "warn",
+    "import/extensions": [
+      "error",
+      "ignorePackages",
+      { "js": "never", "jsx": "never", "ts": "never", "tsx": "never" }
+    ]
   },
   "overrides": [
     {
-      "files": ["**/__tests__/**/*.js", "**/*.test.js", "src/setupTests.js"],
+      "files": ["**/__tests__/**/*.tsx", "**/*.test.tsx", "src/setupTests.ts"],
       "env": {
         "jest": true
       },
@@ -62,7 +68,8 @@
         "react/prop-types": "off",
         "react/jsx-no-bind": "off",
         "no-promise-executor-return": "off",
-        "import/no-extraneous-dependencies": ["error", {"devDependencies": true}]
+        "import/no-extraneous-dependencies": ["error", {"devDependencies": true}],
+        "@typescript-eslint/no-explicit-any": "off"
       }
     }
   ]
