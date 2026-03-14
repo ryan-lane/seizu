@@ -9,6 +9,7 @@ from reporting import settings
 from reporting.routes import auth
 from reporting.routes import config
 from reporting.routes import pagerduty
+from reporting.routes import query
 from reporting.routes import static
 
 
@@ -53,6 +54,7 @@ def create_app(override_settings: Optional[Dict] = None) -> Flask:
     app.register_blueprint(auth.blueprint)
     app.register_blueprint(config.blueprint)
     app.register_blueprint(pagerduty.blueprint)
+    app.register_blueprint(query.blueprint)
     app.register_blueprint(static.blueprint)
 
     # No CSRF cookie on healthcheck

@@ -138,7 +138,9 @@ services:
       database:
   seizu:
     image: ghcr.io/ryan-lane/seizu
-    build: .
+    build:
+      context: .
+      target: backend
     user: seizu
     environment:
       - HOST=0.0.0.0
