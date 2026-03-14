@@ -12,10 +12,8 @@ import { useTheme } from '@mui/material/styles';
 import Info from '@mui/icons-material/Info';
 import Error from '@mui/icons-material/Error';
 import { ThreeDots } from 'react-loader-spinner';
-import { useLazyReadCypher } from 'use-neo4j';
+import { useLazyCypherQuery, QueryRecord } from 'src/hooks/useCypherQuery';
 import { ResponsiveBar } from '@nivo/bar';
-// eslint-disable-next-line  import/no-extraneous-dependencies
-import neo4j from 'neo4j-driver';
 import CypherDetails from 'src/components/reports/CypherDetails';
 
 interface BarSettings {
@@ -46,7 +44,7 @@ export default function CypherBar({
   };
 
   const [runQuery, { loading, error, records, first }] =
-    useLazyReadCypher(cypher);
+    useLazyCypherQuery(cypher);
 
   useEffect(() => {
     if (needInputs === undefined || needInputs.length === 0) {
@@ -120,18 +118,16 @@ export default function CypherBar({
   const mungedRecords = [];
   for (let i = 0; i < records.length; i++) {
     const data = records[i];
-    let mungedData;
-    const dataDetails = data.get('details');
+    let mungedData: Record<string, unknown>;
+    const dataDetails = data['details'] as QueryRecord & { properties?: QueryRecord };
     if (dataDetails.properties === undefined) {
       mungedData = dataDetails;
     } else {
       mungedData = dataDetails.properties;
     }
     Object.keys(mungedData).forEach((key) => {
-      if (neo4j.isInt(mungedData[key])) {
-        mungedData[key] = neo4j.int(mungedData[key]).toNumber();
-      } else if (Array.isArray(mungedData[key])) {
-        mungedData[key] = mungedData[key].join(', ');
+      if (Array.isArray(mungedData[key])) {
+        mungedData[key] = (mungedData[key] as unknown[]).join(', ');
       }
     });
     mungedRecords.push(mungedData);

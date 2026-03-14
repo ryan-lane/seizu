@@ -2,12 +2,7 @@ from datetime import datetime
 
 import neo4j.exceptions
 import pytest
-from pynamodb.exceptions import DoesNotExist
-from pynamodb.exceptions import PutError
 
-from reporting.exceptions import UserCreationError
-from reporting.exceptions import UserDeletionError
-from reporting.models.user import User
 from reporting.schema.reporting_config import ScheduledQuery
 from reporting.schema.reporting_config import ScheduledQueryAction
 from reporting.schema.reporting_config import ScheduledQueryWatchScan
@@ -27,133 +22,6 @@ def test__get_neo4j_client_with_cache(mocker):
     db_mock = mocker.MagicMock
     mocker.patch.object(reporting_neo4j, "_CLIENT_CACHE", db_mock)
     assert reporting_neo4j._get_neo4j_client() == db_mock
-
-
-def test_get_users(mocker):
-    driver_mock = mocker.MagicMock()
-    session_mock = mocker.MagicMock()
-    session_mock.__enter__.return_value.run.return_value = [{"username": "testuser"}]
-    driver_mock.session.return_value = session_mock
-    mocker.patch(
-        "reporting.services.reporting_neo4j._get_neo4j_client",
-        return_value=driver_mock,
-    )
-    assert reporting_neo4j.get_users() == ["testuser"]
-
-
-def test_create_user(mocker):
-    driver_mock = mocker.MagicMock()
-    session_mock = mocker.MagicMock()
-    session_mock.__enter__.return_value.write_transaction.return_value = None
-    driver_mock.session.return_value = session_mock
-    mocker.patch(
-        "reporting.services.reporting_neo4j._get_neo4j_client",
-        return_value=driver_mock,
-    )
-    mocker.patch("reporting.models.user.User.save")
-    mocker.patch(
-        "reporting.services.reporting_neo4j.secrets.token_hex",
-        return_value="test_secret",
-    )
-    assert reporting_neo4j.create_user("test") == "test_secret"
-
-
-def test_create_user_dynamo_failure(mocker):
-    mocker.patch("reporting.models.user.User.save", side_effect=PutError())
-    with pytest.raises(UserCreationError):
-        reporting_neo4j.create_user("test")
-
-
-def test_create_user_neo4j_failure(mocker):
-    mocker.patch("reporting.models.user.User.save")
-    driver_mock = mocker.MagicMock()
-    session_mock = mocker.MagicMock()
-    session_mock.__enter__.return_value.write_transaction.side_effect = (
-        neo4j.exceptions.ClientError
-    )
-    driver_mock.session.return_value = session_mock
-    mocker.patch(
-        "reporting.services.reporting_neo4j._get_neo4j_client",
-        return_value=driver_mock,
-    )
-    with pytest.raises(UserCreationError):
-        reporting_neo4j.create_user("test")
-
-
-def test_delete_user(mocker):
-    driver_mock = mocker.MagicMock()
-    session_mock = mocker.MagicMock()
-    session_mock.__enter__.return_value.write_transaction.return_value = None
-    driver_mock.session.return_value = session_mock
-    mocker.patch(
-        "reporting.services.reporting_neo4j._get_neo4j_client",
-        return_value=driver_mock,
-    )
-    assert reporting_neo4j.delete_user("test") is None
-
-
-def test_delete_user_neo4j_failure(mocker):
-    driver_mock = mocker.MagicMock()
-    session_mock = mocker.MagicMock()
-    session_mock.__enter__.return_value.write_transaction.side_effect = (
-        neo4j.exceptions.ClientError
-    )
-    driver_mock.session.return_value = session_mock
-    mocker.patch(
-        "reporting.services.reporting_neo4j._get_neo4j_client",
-        return_value=driver_mock,
-    )
-    with pytest.raises(UserDeletionError):
-        reporting_neo4j.delete_user("test")
-
-
-def test_delete_expired_users(mocker):
-    mocker.patch(
-        "reporting.services.reporting_neo4j.get_users",
-        return_value=[
-            "expired_user",
-            "valid_user",
-            "nonexistent_user",
-            "failedtodelete_user",
-            "neo4j",
-        ],
-    )
-    expired_user_mock = mocker.MagicMock()
-    expired_user_mock.is_expired.return_value = True
-    valid_user_mock = mocker.MagicMock()
-    valid_user_mock.is_expired.return_value = False
-    failedtodelete_user_mock = mocker.MagicMock()
-    failedtodelete_user_mock.is_expired.return_value = True
-    user_mock = mocker.patch.object(
-        User,
-        "get",
-        side_effect=[
-            expired_user_mock,
-            valid_user_mock,
-            DoesNotExist,
-            failedtodelete_user_mock,
-        ],
-    )
-    delete_mock = mocker.patch(
-        "reporting.services.reporting_neo4j.delete_user",
-        side_effect=[None, None, UserDeletionError],
-    )
-    reporting_neo4j.delete_expired_users()
-    delete_mock.assert_has_calls(
-        [
-            mocker.call("expired_user"),
-            mocker.call("nonexistent_user"),
-            mocker.call("failedtodelete_user"),
-        ],
-    )
-    user_mock.assert_has_calls(
-        [
-            mocker.call("expired_user"),
-            mocker.call("valid_user"),
-            mocker.call("nonexistent_user"),
-            mocker.call("failedtodelete_user"),
-        ],
-    )
 
 
 def test_run_query(mocker):

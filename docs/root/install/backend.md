@@ -26,14 +26,11 @@ When using the docker image, the defaults should be sufficient for basic configu
 ### Frontend configuration
 
 seizu will pass configuration to the backend via a configuration endpoint.
-It uses this configuration to build the dashboard, reports, and to connect to Neo4j.
+It uses this configuration to build the dashboard and reports.
 When using the docker image, the defaults for the reporting configuration file and schema file should be sufficient, but you will want to bind mount in the configuration file to the location defined in ``REPORTING_CONFIG_FILE``.
 
 * ``REPORTING_CONFIG_FILE``: location to the dashboard configuration; default: ``/reporting-dashboard.conf``
 * ``REPORTING_CONFIG_SCHEMA_FILE``: location to the dashboard configuration jsonschema; default: ``/reporting-dashboard.schema.json``
-* ``NEO4J_USER_PROTOCOL``: The protocol to use, from the frontend, to connect to Neo4j; default: ``bolt+s``
-* ``NEO4J_USER_PORT``: The port to use, from the frontend, to connect to Neo4j; default: ``7687``
-* ``NEO4J_USER_HOSTNAME``: The hostname to use, from the frontend, to connect to Neo4j; default: ``localhost``
 * ``NEO4J_CONSOLE_URL``: The link to the Neo4j console, to provide to users, in the frontend; default: ``https://localhost:7473``
 * ``SECRET_KEY``: Flask session secret key for for sessions and CSRF. Set to some long, random string; default: ``None``
 
@@ -47,32 +44,15 @@ If you wish you use any of the workers, or SSO, it's necessary to configure acce
 
 ### Auth configuration
 
-#### Password auth configuration
-
-If you are managing your own neo4j user credentials, and want to directly authenticate against neo4j, you can adjust the ``AUTH_MODE`` to defer to the client.
-
-* ``AUTH_MODE``: The mode to use for authentication. In this case, ``client`` should be set; default: ``auto``
-
 #### SSO configuration
 
-seizu, when placed behind a load balancer or API gateway that handles OAuth2 and provides a JWT, can automatically create short-lived users in neo4j, and auto-clean them when expired.
-When users access the UI, the UI will fetch Neo4j credentials from the backend.
-This currently requires Dynamodb, to track the users.
+seizu, when placed behind a load balancer or API gateway that handles OAuth2 and provides a JWT, can validate the JWT and pass the user identity to the backend.
 
-* ``GENERATED_PASSWORD_LENGTH``: Length of password in bytes to auto-generate for users; default: ``50``
-* ``PASSWORD_EXPIRATION_TIME``: Time in seconds until generated passwords expire; default: ``86400`` (24 hours)
-* ``USER_SCAN_FREQUENCY``: The frequency in seconds for how often we'll scan for expired users; default: ``10``
-* ``USERS_EXCEMPT_FROM_EXPIRATION``: A comma separated list of users that shouldn't be tracked for expiration (permanent users); default: ``neo4j``
-* ``AWS_DEFAULT_REGION``: Must be set to the region the server is running; default: ``ap-northeast-1``
-* ``DYNAMODB_TABLE``: Name of the dynamodb table used to track user password time expirations; default: ``seizu``
-* ``DYNAMODB_URL``: Override for the default dynamodb (to use local dynamodb in development); default: ``None``
-* ``DYNAMODB_CREATE_TABLE``: Whether or not to auto-create the dynamodb table (for development); default: ``False``
 * ``JWKS_URL``: JWKS location to use to validate JWT. ``{AWS_DEFAULT_REGION}`` and ``{kid}`` can be used as template variables; default: ``https://public-keys.auth.elb.{AWS_DEFAULT_REGION}.amazonaws.com/{kid}``
 * ``JWKS_URL_FOR_ALB``: AWS ALBs use a URL that fetches a KID directly, while other providers use a URL that has a JSON file with a list of keys. If using an ALB, this should be false, if using a standard JSON file with a list of keys, this should be true; default: ``True``
 * ``ALLOWED_JWT_ALGORITHMS``: A comma separated list of algorithms we allow for JWT signing; default: ``ES256,ES512``
 * ``DEVELOPMENT_ONLY_REQUIRE_AUTH``: Whether or not to require authentication. This option should only be changed in development; default: ``True``
 * ``DEVELOPMENT_ONLY_AUTH_USER_EMAIL``: The email address of the fake user when authentication is disabled. This option should only be changed in development; default: ``testuser``
-* ``AUTH_MODE``: The mode to use for authentication. In this case, ``auto`` should be set; default: ``auto``
 
 ### Scheduled queries
 

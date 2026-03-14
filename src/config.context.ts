@@ -1,17 +1,5 @@
 import { createContext } from 'react';
 
-export interface Neo4jSettings {
-  protocol: string;
-  hostname: string;
-  port: number;
-  authMode: string;
-}
-
-export interface AuthInfo {
-  username: string;
-  password: string;
-}
-
 export interface StatsConfig {
   external_prefix: string;
   external_provider: string;
@@ -98,7 +86,6 @@ export interface SeizuConfig {
 
 export interface ConfigContextValue {
   config?: SeizuConfig;
-  auth?: AuthInfo;
 }
 
 // eslint-disable-next-line import/prefer-default-export

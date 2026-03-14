@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import { Typography, TextField, Autocomplete } from '@mui/material';
 import { ThreeDots } from 'react-loader-spinner';
-import { useReadCypher } from 'use-neo4j';
+import { useLazyCypherQuery } from 'src/hooks/useCypherQuery';
 import { setQueryStringValue } from 'src/components/QueryString';
 
 interface AutocompleteOption {
@@ -28,7 +28,7 @@ export default function CypherAutocomplete({
   value,
   setValue
 }: CypherAutocompleteProps) {
-  const { loading, error, records, run } = useReadCypher(cypher, params);
+  const [run, { loading, error, records }] = useLazyCypherQuery(cypher);
 
   useEffect(() => {
     run(params);
@@ -46,12 +46,12 @@ export default function CypherAutocomplete({
 
   const mungedRecords: AutocompleteOption[] = records.map((record) => {
     const val: AutocompleteOption = {};
-    if (record.keys.includes('label')) {
-      val.label = record.get('label');
+    if ('label' in record) {
+      val.label = record['label'] as string;
     } else {
-      val.label = record.get('value');
+      val.label = record['value'] as string;
     }
-    val.value = record.get('value');
+    val.value = record['value'] as string;
     return val;
   });
 

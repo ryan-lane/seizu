@@ -17,16 +17,6 @@ services:
       - METRICS_PREFIX=seizu
     networks:
       stats:
-  dynamodb:
-    image: amazon/dynamodb-local:latest
-    command: "-Xmx512m -jar DynamoDBLocal.jar -port 8080 -sharedDb"
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080"]
-      interval: 30s
-      timeout: 10s
-      retries: 5
-    networks:
-      database:
   sqs:
     image: softwaremill/elasticmq
     healthcheck:
@@ -93,43 +83,16 @@ services:
       - NEO4J_PASSWORD
       - NEO4J_USER=neo4j
       - NEO4J_URI=bolt://neo4j:7687
-      # Set fake credentials for AWS, since we need to talk to local dynamodb and it requires
-      # credentials to be set
       - AWS_ACCESS_KEY_ID=fake
       - AWS_SECRET_ACCESS_KEY=fake
       - AWS_REGION=ap-northeast-1
       - AWS_DEFAULT_REGION=ap-northeast-1
-      - DYNAMODB_URL=http://dynamodb:8080
-      - "DYNAMODB_CREATE_TABLE=true"
       - "SQS_CREATE_SCHEDULED_QUERY_QUEUES=true"
       - SQS_URL=http://sqs:9324
       - FLASK_APP=reporting.scheduled_queries
       - SCHEDULED_QUERY_MODULES=reporting.scheduled_query_modules.sqs,reporting.scheduled_query_modules.slack,reporting.scheduled_query_modules.log
       - SLACK_OAUTH_BOT_TOKEN
     command: flask worker schedule-queries
-    volumes:
-      - .:/home/seizu/seizu
-      - ./.compose/seizu/reporting-dashboard.yaml:/reporting-dashboard.conf
-    networks:
-      stats:
-      database:
-  reporting-user-watcher:
-    image: ghcr.io/ryan-lane/seizu
-    restart: on-failure
-    user: seizu
-    environment:
-      - NEO4J_PASSWORD
-      - NEO4J_USER=neo4j
-      - NEO4J_URI=bolt://neo4j:7687
-      # Set fake credentials for AWS, since we need to talk to local dynamodb and it requires
-      # credentials to be set
-      - AWS_ACCESS_KEY_ID=fake
-      - AWS_SECRET_ACCESS_KEY=fake
-      - AWS_REGION=ap-northeast-1
-      - DYNAMODB_URL=http://dynamodb:8080
-      - "DYNAMODB_CREATE_TABLE=true"
-      - FLASK_APP=reporting.user_watcher
-    command: flask worker watch-users
     volumes:
       - .:/home/seizu/seizu
       - ./.compose/seizu/reporting-dashboard.yaml:/reporting-dashboard.conf
@@ -162,18 +125,10 @@ services:
       - "JWKS_URL_FOR_ALB=false"
       # Disable the referer check so node can proxy to the backend
       - "CSRF_CHECK_REFERER=false"
-      # Set fake credentials for AWS, since we need to talk to local dynamodb and it requires
-      # credentials to be set
-      - AWS_ACCESS_KEY_ID=fake
-      - AWS_SECRET_ACCESS_KEY=fake
-      - AWS_REGION=ap-northeast-1
-      - DYNAMODB_URL=http://dynamodb:8080
-      - "DYNAMODB_CREATE_TABLE=true"
       - SECRET_KEY=fake
       - STATSD_EXTERNAL_PREFIX=seizu
       - STATSD_EXTERNAL_PROVIDER=newrelic
       - PAGERDUTY_API_KEY
-      - AUTH_MODE
     healthcheck:
       test: ["CMD", "curl", "-fk", "https://localhost:8443/healthcheck"]
       interval: 30s

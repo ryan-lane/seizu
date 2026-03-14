@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react';
-import { useLazyReadCypher } from 'use-neo4j';
 import {
   Button,
   Divider,
@@ -16,9 +15,8 @@ import {
 import Info from '@mui/icons-material/Info';
 import Error from '@mui/icons-material/Error';
 import { ThreeDots } from 'react-loader-spinner';
-// eslint-disable-next-line  import/no-extraneous-dependencies
-import neo4j from 'neo4j-driver';
 
+import { useLazyCypherQuery, QueryRecord } from 'src/hooks/useCypherQuery';
 import CypherDetails from 'src/components/reports/CypherDetails';
 
 interface CypherVerticalTableProps {
@@ -41,7 +39,7 @@ export default function CypherVerticalTable({
     setOpen(true);
   };
 
-  const [runQuery, { loading, error, records }] = useLazyReadCypher(cypher);
+  const [runQuery, { loading, error, records }] = useLazyCypherQuery(cypher);
 
   useEffect(() => {
     if (needInputs === undefined || needInputs.length === 0) {
@@ -85,7 +83,7 @@ export default function CypherVerticalTable({
     return <Typography variant="body2">No records found.</Typography>;
   }
 
-  function makeTable(data) {
+  function makeTable(data: Record<string, unknown>) {
     const rows = [];
     Object.keys(data).forEach((key) => {
       const cells = [];
@@ -96,14 +94,12 @@ export default function CypherVerticalTable({
       }
       if (Array.isArray(data[key])) {
         // Unique the list prior to iterating over it.
-        const uniqueItems = [...new Set(data[key])];
+        const uniqueItems = [...new Set(data[key] as unknown[])];
         const listItems = [];
         uniqueItems.forEach((item, index) => {
           let mungedItem;
-          if (neo4j.isInt(item)) {
-            mungedItem = neo4j.int(item).toNumber();
-          } else if (typeof item === 'object') {
-            mungedItem = makeTable(item);
+          if (typeof item === 'object' && item !== null) {
+            mungedItem = makeTable(item as Record<string, unknown>);
           } else {
             mungedItem = String(item);
           }
@@ -125,11 +121,8 @@ export default function CypherVerticalTable({
             {listItems}
           </List>
         );
-      } else if (neo4j.isInt(data[key])) {
-        const item = neo4j.int(data[key]).toNumber();
-        cellData = <Typography variant="body1">{item}</Typography>;
       } else if (typeof data[key] === 'object') {
-        cellData = makeTable(data[key]);
+        cellData = makeTable(data[key] as Record<string, unknown>);
       } else {
         const item = data[key];
         cellData = <Typography variant="body1">{String(item)}</Typography>;
@@ -167,9 +160,9 @@ export default function CypherVerticalTable({
 
   const tables = [];
   for (let i = 0; i < records.length; i++) {
-    let mungedData;
+    let mungedData: Record<string, unknown>;
     const record = records[i];
-    const dataDetails = record.get('details');
+    const dataDetails = record['details'] as QueryRecord & { properties?: QueryRecord };
     if (dataDetails.properties === undefined) {
       mungedData = dataDetails;
     } else {

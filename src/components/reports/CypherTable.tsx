@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react';
-import { useLazyReadCypher } from 'use-neo4j';
 import Error from '@mui/icons-material/Error';
 import {
   Button,
@@ -14,9 +13,8 @@ import MUIDataTable from 'mui-datatables';
 import Info from '@mui/icons-material/Info';
 import Fullscreen from '@mui/icons-material/Fullscreen';
 import CloseFullscreen from '@mui/icons-material/CloseFullscreen';
-// eslint-disable-next-line  import/no-extraneous-dependencies
-import neo4j from 'neo4j-driver';
 
+import { useLazyCypherQuery, QueryRecord } from 'src/hooks/useCypherQuery';
 import CypherDetails from 'src/components/reports/CypherDetails';
 
 interface CypherTableProps {
@@ -42,7 +40,7 @@ export default function CypherTable({
   const [expandOpen, setExpandOpen] = useState(false);
   const [expandSize, setExpandSize] = useState(window.innerHeight);
   const [runQuery, { loading, error, records, first }] =
-    useLazyReadCypher(cypher);
+    useLazyCypherQuery(cypher);
 
   useEffect(() => {
     function handleResize() {
@@ -166,7 +164,7 @@ export default function CypherTable({
     let columnKeys;
     let firstObject;
     try {
-      firstObject = first.get('details');
+      firstObject = first['details'] as QueryRecord & { properties?: QueryRecord };
       if (firstObject === null || firstObject === undefined) {
         return <MUIDataTable data={[]} columns={[]} options={options} />;
       }
@@ -197,22 +195,20 @@ export default function CypherTable({
   const mungedRecords = [];
   for (let i = 0; i < records.length; i++) {
     const data = records[i];
-    let mungedData;
+    let mungedData: Record<string, unknown>;
     if (useDetails) {
-      const dataDetails = data.get('details');
+      const dataDetails = data['details'] as QueryRecord & { properties?: QueryRecord };
       if (dataDetails.properties === undefined) {
         mungedData = dataDetails;
       } else {
         mungedData = dataDetails.properties;
       }
     } else {
-      mungedData = data.toObject();
+      mungedData = data;
     }
     Object.keys(mungedData).forEach((key) => {
-      if (neo4j.isInt(mungedData[key])) {
-        mungedData[key] = neo4j.int(mungedData[key]).toNumber();
-      } else if (Array.isArray(mungedData[key])) {
-        mungedData[key] = mungedData[key].join(', ');
+      if (Array.isArray(mungedData[key])) {
+        mungedData[key] = (mungedData[key] as unknown[]).join(', ');
       }
     });
     mungedRecords.push(mungedData);

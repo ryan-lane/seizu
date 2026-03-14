@@ -2,8 +2,8 @@ import { render, screen } from '@testing-library/react';
 import { ThemeProvider, createTheme } from '@mui/material/styles';
 import CypherCount from '../CypherCount';
 
-jest.mock('use-neo4j', () => ({
-  useLazyReadCypher: jest.fn()
+jest.mock('src/hooks/useCypherQuery', () => ({
+  useLazyCypherQuery: jest.fn()
 }));
 
 jest.mock(
@@ -14,7 +14,7 @@ jest.mock(
     }
 );
 
-const { useLazyReadCypher } = require('use-neo4j');
+const { useLazyCypherQuery } = require('src/hooks/useCypherQuery');
 
 const theme = createTheme();
 
@@ -27,7 +27,7 @@ describe('CypherCount', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
-    useLazyReadCypher.mockReturnValue([
+    useLazyCypherQuery.mockReturnValue([
       mockRunQuery,
       { loading: false, error: null, records: undefined, first: undefined }
     ]);
@@ -43,7 +43,7 @@ describe('CypherCount', () => {
   });
 
   it('shows N/A with needInputs message when needInputs is provided', () => {
-    useLazyReadCypher.mockReturnValue([
+    useLazyCypherQuery.mockReturnValue([
       mockRunQuery,
       { loading: false, error: null, records: [], first: undefined }
     ]);
@@ -61,7 +61,7 @@ describe('CypherCount', () => {
   });
 
   it('shows loading spinner when loading', () => {
-    useLazyReadCypher.mockReturnValue([
+    useLazyCypherQuery.mockReturnValue([
       mockRunQuery,
       { loading: true, error: null, records: undefined, first: undefined }
     ]);
@@ -78,7 +78,7 @@ describe('CypherCount', () => {
   });
 
   it('shows error message when query fails', () => {
-    useLazyReadCypher.mockReturnValue([
+    useLazyCypherQuery.mockReturnValue([
       mockRunQuery,
       {
         loading: false,
@@ -101,7 +101,7 @@ describe('CypherCount', () => {
   });
 
   it('shows N/A when records exist but first is undefined', () => {
-    useLazyReadCypher.mockReturnValue([
+    useLazyCypherQuery.mockReturnValue([
       mockRunQuery,
       { loading: false, error: null, records: [], first: undefined }
     ]);
@@ -117,23 +117,15 @@ describe('CypherCount', () => {
   });
 
   it('renders the count value when data is loaded', () => {
-    const mockRecord = {
-      get: jest.fn().mockReturnValue({ toNumber: () => 42, low: 42, high: 0 })
-    };
-    useLazyReadCypher.mockReturnValue([
+    useLazyCypherQuery.mockReturnValue([
       mockRunQuery,
       {
         loading: false,
         error: null,
-        records: [mockRecord],
-        first: mockRecord
+        records: [{ total: 42 }],
+        first: { total: 42 }
       }
     ]);
-
-    jest.mock('neo4j-driver', () => ({
-      int: jest.fn().mockReturnValue({ toNumber: () => 42 })
-    }));
-
     render(
       <Wrapper>
         <CypherCount
@@ -143,5 +135,6 @@ describe('CypherCount', () => {
       </Wrapper>
     );
     expect(screen.getByText('Test Count')).toBeInTheDocument();
+    expect(screen.getByText('42')).toBeInTheDocument();
   });
 });

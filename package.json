@@ -53,8 +53,7 @@
     "react-helmet": "^6.1.0",
     "react-loader-spinner": "^8.0.2",
     "react-promise-tracker": "^2.1.1",
-    "react-router-dom": "^7.13.1",
-    "use-neo4j": "^0.3.4"
+    "react-router-dom": "^7.13.1"
   },
   "jest": {
     "moduleNameMapper": {

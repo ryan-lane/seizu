@@ -37,9 +37,6 @@ LOG_CONFIG_FILE = str_env(
 # Must be set to the region the server is running.
 AWS_DEFAULT_REGION = str_env("AWS_DEFAULT_REGION", "ap-northeast-1")
 
-# Auth mode
-AUTH_MODE = str_env("AUTH_MODE", "auto")
-
 # JWKS location to use to validate JWT
 JWKS_URL = str_env(
     "JWKS_URL",
@@ -69,27 +66,12 @@ NEO4J_USER = str_env("NEO4J_USER")
 # Password to use for neo4j connection
 NEO4J_PASSWORD = str_env("NEO4J_PASSWORD")
 
-# Protocol, port, and hostname from the client (javascript) side
-NEO4J_USER_PROTOCOL = str_env("NEO4J_USER_PROTOCOL", "bolt+s")
-NEO4J_USER_PORT = int_env("NEO4J_USER_PORT", 7687)
-NEO4J_USER_HOSTNAME = str_env("NEO4J_USER_HOSTNAME", "localhost")
-
 # URL of the neo4j browser console
 NEO4J_CONSOLE_URL = str_env("NEO4J_CONSOLE_URL", "https://localhost:7473")
 
 # Maximum duration in seconds a driver will keep a connection before being
 # removed from its connection pool.
 NEO4J_MAX_CONNECTION_LIFETIME = int_env("NEO4J_MAX_CONNECTION_LIFETIME", 3600)
-
-# Length of password in bytes to auto-generate for users
-GENERATED_PASSWORD_LENGTH = int_env("GENERATED_PASSWORD_LENGTH", 50)
-
-# Time in seconds until generated passwords expire
-PASSWORD_EXPIRATION_TIME = int_env("PASSWORD_EXPIRATION_TIME", 24 * 60 * 60)
-# The frequency in seconds for how often we'll scan for expired users
-USER_SCAN_FREQUENCY = int_env("USER_SCAN_FREQUENCY", 10)
-# A comma separated list of users that shouldn't be tracked for expiration (permanent users)
-USERS_EXCEMPT_FROM_EXPIRATION = list_env("USERS_EXCEMPT_FROM_EXPIRATION", ["neo4j"])
 
 # Whether or not scheduled queries should be enabled.
 ENABLE_SCHEDULED_QUERIES = bool_env("ENABLE_SCHEDULED_QUERIES", True)
@@ -104,13 +86,6 @@ SCHEDULED_QUERY_MODULES = list_env(
     ],
 )
 # NOTE: scheduled query module settings are defined within the modules themselves
-
-# Name of the dynamodb table used to track user password time expirations
-DYNAMODB_TABLE = str_env("DYNAMODB_TABLE", "seizu")
-# Override for the default dynamodb (to use local dynamodb)
-DYNAMODB_URL = str_env("DYNAMODB_URL")
-# Whether or not to auto-create the dynamodb table
-DYNAMODB_CREATE_TABLE = bool_env("DYNAMODB_CREATE_TABLE", False)
 
 # CSRF settings
 
