@@ -55,10 +55,6 @@ neo4j = ">=4.4.1"
 # License: Apache2
 # Upstream url: https://github.com/psf/requests
 requests = ">=2.27.1"
-# A Pythonic Interface to DynamoDB
-# License: MIT
-# Upstream url: https://github.com/pynamodb/PynamoDB
-pynamodb = ">=5.2.0"
 # HTTP security headers for Flask.
 # License: Apache2
 # Upstream url: https://github.com/GoogleCloudPlatform/flask-talisman

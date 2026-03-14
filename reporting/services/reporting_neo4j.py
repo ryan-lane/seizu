@@ -1,5 +1,4 @@
 import logging
-import secrets
 import time
 from datetime import datetime
 from typing import Dict
@@ -10,13 +9,8 @@ from neo4j import GraphDatabase
 from neo4j import Result
 from neo4j import Transaction
 from neo4j.exceptions import TransactionError
-from pynamodb.exceptions import DoesNotExist
-from pynamodb.exceptions import PutError
 
 from reporting import settings
-from reporting.exceptions import UserCreationError
-from reporting.exceptions import UserDeletionError
-from reporting.models.user import User
 from reporting.schema.reporting_config import ScheduledQuery
 from reporting.schema.reporting_config import ScheduledQueryWatchScan
 
@@ -37,99 +31,6 @@ def _get_neo4j_client() -> GraphDatabase:
             max_connection_lifetime=settings.NEO4J_MAX_CONNECTION_LIFETIME,
         )
     return _CLIENT_CACHE
-
-
-def get_users() -> List:
-    driver = _get_neo4j_client()
-    users = []
-    with driver.session() as session:
-        results = session.run("CALL dbms.security.listUsers")
-        for result in results:
-            users.append(result["username"])
-    return users
-
-
-def _create_user(tx: Transaction, username: str, password: str) -> None:
-    # 3rd (bool) param is so the user doesn't need to change password
-    tx.run(f'CALL dbms.security.createUser("{username}", "{password}", false)')
-
-
-def create_user(username: str) -> str:
-    """
-    Creates a user with a randomly generated password and returns the password.
-    """
-    # create or update the user in dynamo
-    try:
-        User(username).save()
-    except PutError:
-        msg = "Failed to update user in dynamo"
-        logger.error(msg, extra={"user": username})
-        raise UserCreationError(msg)
-    # Create user in neo4j
-    password = secrets.token_hex(settings.GENERATED_PASSWORD_LENGTH)
-    driver = _get_neo4j_client()
-    with driver.session() as session:
-        try:
-            session.write_transaction(_create_user, username, password)
-            logger.warning(
-                "Created user in neo4j",
-                extra={"type": "AUDIT", "user": username},
-            )
-        except neo4j.exceptions.ClientError:
-            msg = "Failed to create user in neo4j"
-            logger.error(msg, extra={"type": "AUDIT", "user": username})
-            raise UserCreationError(msg)
-    return password
-
-
-def renew_user(username: str) -> str:
-    """
-    Deletes and recreates a user with a randomly generated password and returns the password.
-    """
-    delete_user(username, silent=True)
-    return create_user(username)
-
-
-def _delete_user(tx: Transaction, username: str) -> None:
-    tx.run(f'CALL dbms.security.deleteUser("{username}")')
-
-
-def delete_user(username: str, silent: bool = False) -> None:
-    """
-    Deletes a user.
-    """
-    driver = _get_neo4j_client()
-    with driver.session() as session:
-        try:
-            session.write_transaction(_delete_user, username)
-            logger.warning(
-                "Deleted user from neo4j",
-                extra={"type": "AUDIT", "user": username},
-            )
-        except neo4j.exceptions.ClientError:
-            if not silent:
-                msg = "Failed to delete user in neo4j"
-                logger.error(msg, extra={"type": "AUDIT", "user": username})
-                raise UserDeletionError(msg)
-    # Note: we don't delete the dynamo user here, as it's useful to keep a record of which users have
-    # had accounts, and the expiration value will let us know whether or not to delete them in neo4j
-
-
-def delete_expired_users() -> None:
-    usernames = get_users()
-    for username in usernames:
-        if username in settings.USERS_EXCEMPT_FROM_EXPIRATION:
-            continue
-        try:
-            try:
-                user: User = User.get(username)
-                if user.is_expired():
-                    delete_user(username)
-            except DoesNotExist:
-                delete_user(username)
-        except UserDeletionError:
-            # Don't let a failure block the check for other users
-            pass
 
 
 def run_query(cypher: str, parameters: Dict = None) -> Result:

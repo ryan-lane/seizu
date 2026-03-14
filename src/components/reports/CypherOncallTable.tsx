@@ -1,10 +1,17 @@
 import { useEffect } from 'react';
-import PropTypes from 'prop-types';
 import { Typography } from '@mui/material';
 import { ThreeDots } from 'react-loader-spinner';
-import { useLazyReadCypher } from 'use-neo4j';
 import Error from '@mui/icons-material/Error';
+import { useLazyCypherQuery } from 'src/hooks/useCypherQuery';
 import OncallTable from 'src/components/reports/OncallTable';
+
+interface CypherOncallTableProps {
+  cypher?: string;
+  params?: Record<string, unknown>;
+  caption?: string;
+  needInputs?: string[];
+  enabled?: boolean;
+}
 
 export default function CypherOncallTable({
   cypher,
@@ -12,8 +19,8 @@ export default function CypherOncallTable({
   caption,
   needInputs,
   enabled
-}) {
-  const [runQuery, { loading, error, records }] = useLazyReadCypher(cypher);
+}: CypherOncallTableProps) {
+  const [runQuery, { loading, error, records }] = useLazyCypherQuery(cypher);
 
   useEffect(() => {
     if (enabled === true) {
@@ -59,16 +66,16 @@ export default function CypherOncallTable({
     return <ThreeDots color="#2BAD60" height="50" width="50" />;
   }
 
-  const userIds = [];
-  const escalationPolicyIds = [];
-  const scheduleIds = [];
+  const userIds: string[] = [];
+  const escalationPolicyIds: string[] = [];
+  const scheduleIds: string[] = [];
   records.forEach((record) => {
-    if (record.keys.includes('user_id')) {
-      userIds.push(record.get('user_id'));
-    } else if (record.keys.includes('escalation_policy_id')) {
-      escalationPolicyIds.push(record.get('escalation_policy_id'));
-    } else if (record.keys.includes('schedule_id')) {
-      scheduleIds.push(record.get('schedule_id'));
+    if ('user_id' in record) {
+      userIds.push(record['user_id'] as string);
+    } else if ('escalation_policy_id' in record) {
+      escalationPolicyIds.push(record['escalation_policy_id'] as string);
+    } else if ('schedule_id' in record) {
+      scheduleIds.push(record['schedule_id'] as string);
     }
   });
 
@@ -89,11 +96,3 @@ export default function CypherOncallTable({
     />
   );
 }
-
-CypherOncallTable.propTypes = {
-  cypher: PropTypes.string,
-  params: PropTypes.object,
-  caption: PropTypes.string,
-  needInputs: PropTypes.array,
-  enabled: PropTypes.bool
-};

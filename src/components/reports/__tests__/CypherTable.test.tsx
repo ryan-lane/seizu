@@ -2,8 +2,8 @@ import { render, screen } from '@testing-library/react';
 import { ThemeProvider, createTheme } from '@mui/material/styles';
 import CypherTable from '../CypherTable';
 
-jest.mock('use-neo4j', () => ({
-  useLazyReadCypher: jest.fn()
+jest.mock('src/hooks/useCypherQuery', () => ({
+  useLazyCypherQuery: jest.fn()
 }));
 
 jest.mock(
@@ -14,7 +14,7 @@ jest.mock(
     }
 );
 
-const { useLazyReadCypher } = require('use-neo4j');
+const { useLazyCypherQuery } = require('src/hooks/useCypherQuery');
 
 const theme = createTheme();
 
@@ -27,7 +27,7 @@ describe('CypherTable', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
-    useLazyReadCypher.mockReturnValue([
+    useLazyCypherQuery.mockReturnValue([
       mockRunQuery,
       { loading: false, error: null, records: undefined, first: undefined }
     ]);
@@ -43,7 +43,7 @@ describe('CypherTable', () => {
   });
 
   it('shows needInputs message when needInputs is provided', () => {
-    useLazyReadCypher.mockReturnValue([
+    useLazyCypherQuery.mockReturnValue([
       mockRunQuery,
       { loading: false, error: null, records: [], first: undefined }
     ]);
@@ -61,7 +61,7 @@ describe('CypherTable', () => {
   });
 
   it('shows error message when query fails', () => {
-    useLazyReadCypher.mockReturnValue([
+    useLazyCypherQuery.mockReturnValue([
       mockRunQuery,
       {
         loading: false,
@@ -81,7 +81,7 @@ describe('CypherTable', () => {
   });
 
   it('shows no records message when records array is empty', () => {
-    useLazyReadCypher.mockReturnValue([
+    useLazyCypherQuery.mockReturnValue([
       mockRunQuery,
       { loading: false, error: null, records: [], first: undefined }
     ]);
@@ -94,12 +94,8 @@ describe('CypherTable', () => {
   });
 
   it('renders a caption when data is loaded', () => {
-    const mockRecord = {
-      get: jest.fn().mockReturnValue({ properties: { name: 'test' } }),
-      toObject: jest.fn().mockReturnValue({ name: 'test' }),
-      keys: ['name']
-    };
-    useLazyReadCypher.mockReturnValue([
+    const mockRecord = { name: 'test' };
+    useLazyCypherQuery.mockReturnValue([
       mockRunQuery,
       {
         loading: false,

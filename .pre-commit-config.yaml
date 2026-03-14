@@ -38,7 +38,6 @@ repos:
     hooks:
     -   id: mypy
         additional_dependencies:
-          - pynamodb==5.2.0
           - pydantic
           - types-PyYAML
           - types-requests

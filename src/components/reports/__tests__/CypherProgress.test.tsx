@@ -2,8 +2,8 @@ import { render, screen } from '@testing-library/react';
 import { ThemeProvider, createTheme } from '@mui/material/styles';
 import CypherProgress from '../CypherProgress';
 
-jest.mock('use-neo4j', () => ({
-  useLazyReadCypher: jest.fn()
+jest.mock('src/hooks/useCypherQuery', () => ({
+  useLazyCypherQuery: jest.fn()
 }));
 
 jest.mock(
@@ -14,7 +14,7 @@ jest.mock(
     }
 );
 
-const { useLazyReadCypher } = require('use-neo4j');
+const { useLazyCypherQuery } = require('src/hooks/useCypherQuery');
 
 const theme = createTheme();
 
@@ -27,7 +27,7 @@ describe('CypherProgress', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
-    useLazyReadCypher.mockReturnValue([
+    useLazyCypherQuery.mockReturnValue([
       mockRunQuery,
       { loading: false, error: null, records: undefined, first: undefined }
     ]);
@@ -43,7 +43,7 @@ describe('CypherProgress', () => {
   });
 
   it('shows N/A with needInputs message when needInputs is provided', () => {
-    useLazyReadCypher.mockReturnValue([
+    useLazyCypherQuery.mockReturnValue([
       mockRunQuery,
       { loading: false, error: null, records: [], first: undefined }
     ]);
@@ -61,7 +61,7 @@ describe('CypherProgress', () => {
   });
 
   it('shows error message when query fails', () => {
-    useLazyReadCypher.mockReturnValue([
+    useLazyCypherQuery.mockReturnValue([
       mockRunQuery,
       {
         loading: false,
@@ -84,7 +84,7 @@ describe('CypherProgress', () => {
   });
 
   it('shows N/A when records exist but first is undefined', () => {
-    useLazyReadCypher.mockReturnValue([
+    useLazyCypherQuery.mockReturnValue([
       mockRunQuery,
       { loading: false, error: null, records: [], first: undefined }
     ]);
@@ -100,18 +100,13 @@ describe('CypherProgress', () => {
   });
 
   it('renders circular progress when data is loaded', () => {
-    const intValue = { toNumber: jest.fn() };
-    intValue.toNumber.mockReturnValueOnce(75).mockReturnValueOnce(100);
-    const mockRecord = {
-      get: jest.fn().mockReturnValue({ low: 0, high: 0, toNumber: () => 0 })
-    };
-    useLazyReadCypher.mockReturnValue([
+    useLazyCypherQuery.mockReturnValue([
       mockRunQuery,
       {
         loading: false,
         error: null,
-        records: [mockRecord],
-        first: mockRecord
+        records: [{ numerator: 75, denominator: 100 }],
+        first: { numerator: 75, denominator: 100 }
       }
     ]);
     render(
@@ -123,5 +118,6 @@ describe('CypherProgress', () => {
       </Wrapper>
     );
     expect(screen.getByText('Progress Caption')).toBeInTheDocument();
+    expect(screen.getByText('75%')).toBeInTheDocument();
   });
 });

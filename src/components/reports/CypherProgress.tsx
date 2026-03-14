@@ -13,9 +13,7 @@ import {
 import Info from '@mui/icons-material/Info';
 import Error from '@mui/icons-material/Error';
 import { ThreeDots } from 'react-loader-spinner';
-import { useLazyReadCypher } from 'use-neo4j';
-// eslint-disable-next-line  import/no-extraneous-dependencies
-import neo4j from 'neo4j-driver';
+import { useLazyCypherQuery } from 'src/hooks/useCypherQuery';
 import CypherDetails from 'src/components/reports/CypherDetails';
 
 interface CypherProgressProps {
@@ -41,7 +39,7 @@ export default function CypherProgress({
   };
 
   const [runQuery, { loading, error, records, first }] =
-    useLazyReadCypher(cypher);
+    useLazyCypherQuery(cypher);
 
   useEffect(() => {
     if (needInputs === undefined || needInputs.length === 0) {
@@ -116,8 +114,8 @@ export default function CypherProgress({
     );
   }
 
-  const numerator = neo4j.int(first.get('numerator')).toNumber();
-  const denominator = neo4j.int(first.get('denominator')).toNumber();
+  const numerator = first['numerator'] as number;
+  const denominator = first['denominator'] as number;
   const percent = Math.floor((numerator / denominator) * 100);
   type CircularProgressColor = 'inherit' | 'primary' | 'secondary' | 'success' | 'error' | 'info' | 'warning';
   let circleColor: CircularProgressColor = 'primary';
