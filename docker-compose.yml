@@ -2,12 +2,16 @@ networks:
   database:
   stats:
   proxy:
+  auth:
   credentials:
     driver: bridge
     ipam:
       config:
         - subnet: "169.254.169.0/24"
           gateway: "169.254.169.1"
+volumes:
+  authentik_postgres_data:
+  authentik_media:
 services:
   telegraf:
     image: telegraf
@@ -58,6 +62,142 @@ services:
       retries: 5
     networks:
       database:
+  # ── Authentik identity provider ──────────────────────────────────────────
+  # Start with: docker compose --profile auth up
+  # Setup is fully automated — no browser wizard required.
+  #   Admin:     akadmin / devpassword  (http://localhost:9000)
+  #   Dev user:  developer / devpassword
+  # The seizu OIDC application is created automatically via the blueprint.
+  # To enable auth in seizu, also set:
+  #   DEVELOPMENT_ONLY_REQUIRE_AUTH=true   (seizu service)
+  #   REACT_APP_OIDC_ENABLED=true          (seizu-node service)
+  authentik-postgresql:
+    image: postgres:16-alpine
+    profiles:
+      - auth
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: authentik
+      POSTGRES_USER: authentik
+      POSTGRES_PASSWORD: authentik
+    volumes:
+      - authentik_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U authentik"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      auth:
+  authentik-redis:
+    image: redis:7-alpine
+    profiles:
+      - auth
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      auth:
+  authentik-server:
+    image: ghcr.io/goauthentik/server:2024.12.3
+    profiles:
+      - auth
+    restart: unless-stopped
+    command: server
+    environment:
+      AUTHENTIK_REDIS__HOST: authentik-redis
+      AUTHENTIK_POSTGRESQL__HOST: authentik-postgresql
+      AUTHENTIK_POSTGRESQL__USER: authentik
+      AUTHENTIK_POSTGRESQL__PASSWORD: authentik
+      AUTHENTIK_POSTGRESQL__NAME: authentik
+      # Use a fixed dev secret — change this in production
+      AUTHENTIK_SECRET_KEY: seizu-dev-secret-change-in-production
+      # Bootstrap the initial admin account on first run
+      AUTHENTIK_BOOTSTRAP_EMAIL: admin@localhost
+      AUTHENTIK_BOOTSTRAP_PASSWORD: devpassword
+      AUTHENTIK_ERROR_REPORTING__ENABLED: "false"
+    volumes:
+      - authentik_media:/media
+      - ./.compose/authentik/blueprints:/blueprints/custom:ro
+    ports:
+      - "9000:9000"
+    depends_on:
+      authentik-postgresql:
+        condition: service_healthy
+      authentik-redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:9000/-/health/live/ || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      # Allow time for DB migrations and built-in blueprint application on first run
+      start_period: 90s
+    networks:
+      auth:
+      proxy:
+  authentik-worker:
+    image: ghcr.io/goauthentik/server:2024.12.3
+    profiles:
+      - auth
+    restart: unless-stopped
+    command: worker
+    user: root
+    environment:
+      AUTHENTIK_REDIS__HOST: authentik-redis
+      AUTHENTIK_POSTGRESQL__HOST: authentik-postgresql
+      AUTHENTIK_POSTGRESQL__USER: authentik
+      AUTHENTIK_POSTGRESQL__PASSWORD: authentik
+      AUTHENTIK_POSTGRESQL__NAME: authentik
+      AUTHENTIK_SECRET_KEY: seizu-dev-secret-change-in-production
+      AUTHENTIK_ERROR_REPORTING__ENABLED: "false"
+    volumes:
+      - authentik_media:/media
+      - ./.compose/authentik/blueprints:/blueprints/custom:ro
+      - /var/run/docker.sock:/var/run/docker.sock
+    depends_on:
+      authentik-postgresql:
+        condition: service_healthy
+      authentik-redis:
+        condition: service_healthy
+    networks:
+      auth:
+  # One-shot service: creates a developer test user via Django ORM after the
+  # server is healthy. Idempotent — safe to re-run on every `docker compose up`.
+  authentik-init:
+    image: ghcr.io/goauthentik/server:2024.12.3
+    profiles:
+      - auth
+    restart: on-failure
+    command:
+      - "shell"
+      - "-c"
+      - |
+        from authentik.core.models import User
+        obj, created = User.objects.get_or_create(
+            username="developer",
+            defaults={"name": "Developer", "email": "developer@localhost", "is_active": True},
+        )
+        if created:
+            obj.set_password("devpassword")
+            obj.save()
+    environment:
+      AUTHENTIK_REDIS__HOST: authentik-redis
+      AUTHENTIK_POSTGRESQL__HOST: authentik-postgresql
+      AUTHENTIK_POSTGRESQL__USER: authentik
+      AUTHENTIK_POSTGRESQL__PASSWORD: authentik
+      AUTHENTIK_POSTGRESQL__NAME: authentik
+      AUTHENTIK_SECRET_KEY: seizu-dev-secret-change-in-production
+      AUTHENTIK_ERROR_REPORTING__ENABLED: "false"
+    depends_on:
+      authentik-server:
+        condition: service_healthy
+    networks:
+      auth:
+  # ─────────────────────────────────────────────────────────────────────────
   seizu-dashboard-stats:
     image: ghcr.io/ryan-lane/seizu
     restart: on-failure
@@ -116,13 +256,16 @@ services:
       - NEO4J_PASSWORD
       - NEO4J_USER=neo4j
       - NEO4J_URI=bolt://neo4j:7687
-      # JWT authentication is disabled for development
+      # JWT authentication is disabled for development by default.
+      # To enable Authentik auth, start with --profile auth and change to:
+      #   DEVELOPMENT_ONLY_REQUIRE_AUTH=true
       - "DEVELOPMENT_ONLY_REQUIRE_AUTH=false"
-      # This user is being hardcoded for the reporting react UI, and with auto-auth
       - DEVELOPMENT_ONLY_AUTH_USER_EMAIL=testuser
-      # These JWKS settings can be used to test JWT in development, though first you'll need to enable auth
-      - JWKS_URL=https://token.dev/jwks/keys.json
-      - "JWKS_URL_FOR_ALB=false"
+      # Generic JWKS settings — works with any standard OIDC provider.
+      # When using Authentik (--profile auth), point to the internal Docker hostname:
+      - JWKS_URL=http://authentik-server:9000/application/o/seizu/jwks/
+      - JWT_HEADER_NAME=Authorization
+      - JWT_EMAIL_CLAIM=email
       # Disable the referer check so node can proxy to the backend
       - "CSRF_CHECK_REFERER=false"
       - SECRET_KEY=fake
@@ -155,6 +298,13 @@ services:
       - SSL_CRT_FILE=/ssl/cert.pem
       - SSL_KEY_FILE=/ssl/key.pem
       - PORT=7443
+      # OIDC is disabled by default. To enable Authentik auth (--profile auth),
+      # change REACT_APP_OIDC_ENABLED to true.
+      - "REACT_APP_OIDC_ENABLED=false"
+      - REACT_APP_OIDC_AUTHORITY=http://localhost:9000/application/o/seizu
+      - REACT_APP_OIDC_CLIENT_ID=seizu
+      - REACT_APP_OIDC_REDIRECT_URI=https://localhost:7443/auth/callback
+      - "REACT_APP_OIDC_SCOPE=openid email profile"
     working_dir: /home/seizu/seizu
     volumes:
       - ~/.bun:/home/bun/.bun

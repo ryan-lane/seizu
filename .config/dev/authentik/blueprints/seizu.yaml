@@ -1,0 +1,151 @@
+# Authentik blueprint: configures a public OAuth2/OIDC provider for Seizu
+# development. Applied automatically on worker startup via the blueprint
+# directory mount.
+#
+# The provider uses the Authorization Code flow with PKCE (public client),
+# which is the recommended setup for browser-based SPAs.
+version: 1
+metadata:
+  name: Seizu Development OIDC Provider
+  labels:
+    blueprints.goauthentik.io/instantiate: "true"
+entries:
+  # OAuth2/OIDC provider (public PKCE client)
+  - model: authentik_providers_oauth2.oauth2provider
+    state: present
+    identifiers:
+      name: seizu
+    attrs:
+      name: seizu
+      # Public client: no client secret, uses PKCE instead
+      client_type: public
+      client_id: seizu
+      authorization_flow: !Find
+        - authentik_flows.flow
+        - [slug, default-provider-authorization-explicit-consent]
+      # Allow redirects to both the bun dev server and the Flask backend
+      redirect_uris: |
+        https://localhost:7443/auth/callback
+        https://localhost:8443/auth/callback
+      signing_key: !Find
+        - authentik_crypto.certificatekeypair
+        - [name, "authentik Self-signed Certificate"]
+      # Include standard claims in the ID token so the frontend can read them
+      include_claims_in_id_token: true
+      property_mappings:
+        - !Find
+          - authentik_providers_oauth2.scopemapping
+          - [managed, "goauthentik.io/providers/oauth2/scope-openid"]
+        - !Find
+          - authentik_providers_oauth2.scopemapping
+          - [managed, "goauthentik.io/providers/oauth2/scope-email"]
+        - !Find
+          - authentik_providers_oauth2.scopemapping
+          - [managed, "goauthentik.io/providers/oauth2/scope-profile"]
+
+  # Application that binds the provider to a slug
+  - model: authentik_core.application
+    state: present
+    identifiers:
+      slug: seizu
+    attrs:
+      name: Seizu
+      slug: seizu
+      provider: !Find
+        - authentik_providers_oauth2.oauth2provider
+        - [name, seizu]
+      policy_engine_mode: any
+
+  # Brand: apply Seizu theme to the default-domain login page
+  - model: authentik_core.brand
+    state: present
+    identifiers:
+      domain: localhost
+    attrs:
+      domain: localhost
+      default: true
+      branding_title: Seizu
+      branding_custom_css: |
+        /* ── Seizu theme for Authentik ───────────────────────────────────────
+           Matches the Material-UI palette used by the Seizu React frontend.
+           Primary: #5664d2  |  Dark bg: #121212 / #1e1e1e
+        ──────────────────────────────────────────────────────────────────── */
+
+        :root {
+          --ak-accent: #5664d2;
+          --ak-dark-foreground: rgba(255, 255, 255, 0.87);
+          --ak-dark-foreground-link: #7986e7;
+          --ak-dark-background: #121212;
+          --ak-dark-background-light: #1e1e1e;
+          --ak-dark-background-lighter: #2c2c2c;
+          --ak-dark-background-button: #5664d2;
+          --ak-dark-background-button-active: #3d4fc9;
+        }
+
+        /* Force dark mode regardless of system preference */
+        :root,
+        .pf-t-dark {
+          color-scheme: dark;
+        }
+
+        body {
+          background-color: var(--ak-dark-background) !important;
+          color: var(--ak-dark-foreground) !important;
+        }
+
+        /* Login card */
+        .pf-c-login,
+        .ak-login-container {
+          background-color: var(--ak-dark-background) !important;
+        }
+
+        .pf-c-login__main,
+        .pf-c-card,
+        ak-flow-executor {
+          background-color: var(--ak-dark-background-light) !important;
+          border: 1px solid rgba(255, 255, 255, 0.12) !important;
+          border-radius: 4px !important;
+        }
+
+        /* Form labels */
+        .pf-c-form__label,
+        .pf-c-title,
+        label {
+          color: var(--ak-dark-foreground) !important;
+        }
+
+        /* Inputs */
+        .pf-c-form-control,
+        input[type="text"],
+        input[type="email"],
+        input[type="password"] {
+          background-color: var(--ak-dark-background-lighter) !important;
+          color: var(--ak-dark-foreground) !important;
+          border-color: rgba(255, 255, 255, 0.23) !important;
+        }
+
+        .pf-c-form-control:focus,
+        input:focus {
+          border-color: var(--ak-accent) !important;
+          box-shadow: 0 0 0 1px var(--ak-accent) !important;
+        }
+
+        /* Primary button */
+        .pf-c-button.pf-m-primary,
+        button[type="submit"],
+        .pf-c-login__main-footer-links-item button {
+          background-color: var(--ak-accent) !important;
+          border-color: var(--ak-accent) !important;
+          color: #ffffff !important;
+        }
+
+        .pf-c-button.pf-m-primary:hover,
+        button[type="submit"]:hover {
+          background-color: var(--ak-dark-background-button-active) !important;
+          border-color: var(--ak-dark-background-button-active) !important;
+        }
+
+        /* Links */
+        a {
+          color: var(--ak-dark-foreground-link) !important;
+        }

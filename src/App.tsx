@@ -4,6 +4,7 @@ import { createTheme, ThemeProvider } from '@mui/material/styles';
 import useMediaQuery from '@mui/material/useMediaQuery';
 import CssBaseline from '@mui/material/CssBaseline';
 import GlobalStyles from 'src/components/GlobalStyles';
+import AuthProvider from 'src/components/AuthProvider';
 import shadows from 'src/theme/shadows';
 import typography from 'src/theme/typography';
 import routes from 'src/routes';
@@ -33,7 +34,7 @@ function App() {
     <ThemeProvider theme={theme}>
       <GlobalStyles />
       <CssBaseline />
-      {routing}
+      <AuthProvider>{routing}</AuthProvider>
     </ThemeProvider>
   );
 }

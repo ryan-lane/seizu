@@ -1,4 +1,5 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useContext } from 'react';
+import { AuthContext } from 'src/auth.context';
 
 export type QueryRecord = Record<string, unknown>;
 
@@ -21,6 +22,7 @@ function getCsrfToken(): string {
 export function useLazyCypherQuery(
   cypher?: string
 ): [(params?: Record<string, unknown>) => void, QueryState] {
+  const { accessToken } = useContext(AuthContext);
   const [state, setState] = useState<QueryState>({
     loading: false,
     error: null,
@@ -32,12 +34,18 @@ export function useLazyCypherQuery(
     (params?: Record<string, unknown>) => {
       if (!cypher) return;
       setState({ loading: true, error: null, records: undefined, first: undefined });
+
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+        'X-CSRFToken': getCsrfToken()
+      };
+      if (accessToken) {
+        headers['Authorization'] = `Bearer ${accessToken}`;
+      }
+
       fetch('/api/v1/query', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-CSRFToken': getCsrfToken()
-        },
+        headers,
         body: JSON.stringify({ query: cypher, params })
       })
         .then((res) => res.json())
@@ -63,7 +71,7 @@ export function useLazyCypherQuery(
           setState({ loading: false, error: err, records: undefined, first: undefined });
         });
     },
-    [cypher]
+    [cypher, accessToken]
   );
 
   return [run, state];

@@ -25,40 +25,71 @@ FAKE_PRIVATE_KEY = (
 )
 
 
-def test__get_key(mocker):
-    mocker.patch("reporting.settings.JWKS_URL_FOR_ALB", True)
-    mocker.patch("jwt.get_unverified_header", return_value={"kid": FAKE_KEY["kid"]})
-    get_mock = mocker.MagicMock()
-    get_mock.content = "-----BEGIN PUBLIC KEY-----...\n"
-    mocker.patch("reporting.authnz.requests.get", return_value=get_mock)
-    key = reporting.authnz._get_key("fake_token")
-    assert key == "-----BEGIN PUBLIC KEY-----...\n"
+def _make_mock_signing_key(mocker):
+    """Return a mock signing key backed by the fake EC public key."""
+    signing_key = mocker.MagicMock()
+    signing_key.key = PyJWK(FAKE_KEY).key
+    return signing_key
 
 
-def test__get_key_not_alb(mocker):
-    mocker.patch("reporting.settings.JWKS_URL_FOR_ALB", False)
-    mocker.patch("jwt.get_unverified_header", return_value={"kid": FAKE_KEY["kid"]})
-    get_mock = mocker.MagicMock()
-    get_mock.json.return_value = {"keys": [FAKE_KEY]}
-    mocker.patch("reporting.authnz.requests.get", return_value=get_mock)
-    key = reporting.authnz._get_key("fake_token")
-    assert key.key_size == 256
+def _make_mock_client(mocker, signing_key):
+    """Return a mock PyJWKClient that returns the given signing key."""
+    mock_client = mocker.MagicMock()
+    mock_client.get_signing_key_from_jwt.return_value = signing_key
+    return mock_client
 
 
-def test__get_jwt_payload(mocker):
-    key = PyJWK(FAKE_KEY).key
-    mocker.patch("reporting.authnz._get_key", return_value=key)
+def test__get_jwt_payload_bearer(mocker):
+    """JWT is read from an Authorization: Bearer header by default."""
+    signing_key = _make_mock_signing_key(mocker)
+    mock_client = _make_mock_client(mocker, signing_key)
+    mocker.patch("reporting.authnz._get_jwks_client", return_value=mock_client)
     encoded = jwt.encode(
         {"email": "test@example.com"},
         base64.b64decode(FAKE_PRIVATE_KEY),
         algorithm="ES256",
     )
-    settings = {
-        "PREFERRED_URL_SCHEME": "https",
-    }
-    app = create_app(settings)
-    with app.test_request_context(headers={"x-amzn-oidc-data": encoded}):
+    app = create_app({"PREFERRED_URL_SCHEME": "https"})
+    with app.test_request_context(
+        headers={"Authorization": f"Bearer {encoded}"}
+    ):
         assert reporting.authnz._get_jwt_payload() == {"email": "test@example.com"}
+
+
+def test__get_jwt_payload_custom_header(mocker):
+    """JWT is read from a custom header when JWT_HEADER_NAME is overridden."""
+    mocker.patch("reporting.settings.JWT_HEADER_NAME", "x-amzn-oidc-data")
+    signing_key = _make_mock_signing_key(mocker)
+    mock_client = _make_mock_client(mocker, signing_key)
+    mocker.patch("reporting.authnz._get_jwks_client", return_value=mock_client)
+    encoded = jwt.encode(
+        {"email": "test@example.com"},
+        base64.b64decode(FAKE_PRIVATE_KEY),
+        algorithm="ES256",
+    )
+    app = create_app({"PREFERRED_URL_SCHEME": "https"})
+    with app.test_request_context(
+        headers={"x-amzn-oidc-data": encoded}
+    ):
+        assert reporting.authnz._get_jwt_payload() == {"email": "test@example.com"}
+
+
+def test__get_jwt_payload_custom_email_claim(mocker):
+    """Email is read from a configurable claim."""
+    mocker.patch("reporting.settings.JWT_EMAIL_CLAIM", "preferred_username")
+    signing_key = _make_mock_signing_key(mocker)
+    mock_client = _make_mock_client(mocker, signing_key)
+    mocker.patch("reporting.authnz._get_jwks_client", return_value=mock_client)
+    encoded = jwt.encode(
+        {"preferred_username": "user@example.com"},
+        base64.b64decode(FAKE_PRIVATE_KEY),
+        algorithm="ES256",
+    )
+    app = create_app({"PREFERRED_URL_SCHEME": "https"})
+    with app.test_request_context(
+        headers={"Authorization": f"Bearer {encoded}"}
+    ):
+        reporting.authnz._get_jwt_payload()
 
 
 def test_get_email(mocker):
@@ -68,6 +99,16 @@ def test_get_email(mocker):
         return_value={"email": "test@example.com"},
     )
     assert reporting.authnz.get_email() == "test@example.com"
+
+
+def test_get_email_custom_claim(mocker):
+    mocker.patch("reporting.settings.DEVELOPMENT_ONLY_REQUIRE_AUTH", True)
+    mocker.patch("reporting.settings.JWT_EMAIL_CLAIM", "preferred_username")
+    mocker.patch(
+        "reporting.authnz._get_jwt_payload",
+        return_value={"preferred_username": "user@example.com"},
+    )
+    assert reporting.authnz.get_email() == "user@example.com"
 
 
 def test_get_email_auth_disabled(mocker):
