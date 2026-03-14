@@ -1,3 +1,23 @@
+FROM python:3.12-slim AS backend
+
+RUN groupadd seizu && \
+    useradd -s /bin/bash -d /home/seizu -m -g seizu seizu
+
+RUN pip3 install pipenv
+
+COPY Pipfile Pipfile.lock ./
+RUN pipenv install --system --dev
+
+RUN mkdir /run/seizu && chown seizu:seizu /run/seizu
+
+USER seizu
+
+WORKDIR /home/seizu/seizu
+
+COPY . .
+
+EXPOSE 8080
+
 FROM oven/bun AS nodebuilder
 
 ENV INLINE_RUNTIME_CHUNK=false
@@ -12,24 +32,8 @@ COPY . .
 
 RUN bun run build --production
 
-FROM python:3.9-slim
-
-RUN groupadd seizu && \
-    useradd -s /bin/bash -d /home/seizu -m -g seizu seizu
-
-COPY requirements.txt requirements.txt
-RUN pip3 install -r requirements.txt
-
-RUN mkdir /run/seizu && chown seizu:seizu /run/seizu
-
-USER seizu
-
-WORKDIR /home/seizu/seizu
+FROM backend AS production
 
 COPY --chown=seizu:seizu --from=nodebuilder /home/node/seizu/build /build
-
-COPY . .
-
-EXPOSE 8080
 
 CMD ["gunicorn", "--config", "/home/seizu/seizu/gunicorn.conf", "reporting.wsgi:app", "--workers=2", "-k", "gevent", "--access-logfile=-", "--error-logfile=-"]
