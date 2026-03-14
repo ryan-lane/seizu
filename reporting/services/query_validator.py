@@ -17,13 +17,9 @@ def _check_read_only(query: str) -> None:
     """Verify the query is read-only using cypher-guard's AST parser."""
     try:
         if not is_read(query):
-            raise QueryValidationError(
-                ["Write queries are not allowed"]
-            )
+            raise QueryValidationError(["Write queries are not allowed"])
     except CypherParsingError as e:
-        raise QueryValidationError(
-            [f"Failed to parse query for read-only check: {e}"]
-        )
+        raise QueryValidationError([f"Failed to parse query for read-only check: {e}"])
 
 
 def validate_query(query: str) -> None:

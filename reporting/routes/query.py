@@ -69,12 +69,16 @@ def query() -> Response:
     try:
         validate_query(query_request.query)
     except QueryValidationError as e:
-        resp = jsonify(error="Query validation failed", details=[str(err) for err in e.errors])
+        resp = jsonify(
+            error="Query validation failed", details=[str(err) for err in e.errors]
+        )
         resp.status_code = 400
         return resp
 
     try:
-        results = reporting_neo4j.run_query(query_request.query, parameters=query_request.params)
+        results = reporting_neo4j.run_query(
+            query_request.query, parameters=query_request.params
+        )
         serialized = [
             {key: _serialize_neo4j_value(value) for key, value in record.items()}
             for record in results

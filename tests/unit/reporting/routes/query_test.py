@@ -56,7 +56,10 @@ def test_query_with_params(mocker):
     client = app.test_client()
     ret = client.post(
         "/api/v1/query",
-        json={"query": "MATCH (n) WHERE n.name = $name RETURN n.name AS name", "params": {"name": "Alice"}},
+        json={
+            "query": "MATCH (n) WHERE n.name = $name RETURN n.name AS name",
+            "params": {"name": "Alice"},
+        },
     )
     assert ret.status_code == 200
     mock_run_query.assert_called_once_with(

