@@ -2,8 +2,8 @@ import logging
 from typing import Dict
 
 import jwt
-from jwt import PyJWKClient
 from flask import request
+from jwt import PyJWKClient
 
 from reporting import settings
 

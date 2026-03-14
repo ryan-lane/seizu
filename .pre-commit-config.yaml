@@ -11,6 +11,9 @@ repos:
     -   id: check-vcs-permalinks
     -   id: check-yaml
         args: [--allow-multiple-documents]
+        # Authentik blueprints use custom YAML tags (!Find, !Format, etc.)
+        # that are not part of the YAML spec — exclude them from this check.
+        exclude: ^\.config/dev/authentik/blueprints/
     -   id: debug-statements
     -   id: end-of-file-fixer
     -   id: trailing-whitespace

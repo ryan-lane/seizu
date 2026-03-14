@@ -50,9 +50,7 @@ def test__get_jwt_payload_bearer(mocker):
         algorithm="ES256",
     )
     app = create_app({"PREFERRED_URL_SCHEME": "https"})
-    with app.test_request_context(
-        headers={"Authorization": f"Bearer {encoded}"}
-    ):
+    with app.test_request_context(headers={"Authorization": f"Bearer {encoded}"}):
         assert reporting.authnz._get_jwt_payload() == {"email": "test@example.com"}
 
 
@@ -68,9 +66,7 @@ def test__get_jwt_payload_custom_header(mocker):
         algorithm="ES256",
     )
     app = create_app({"PREFERRED_URL_SCHEME": "https"})
-    with app.test_request_context(
-        headers={"x-amzn-oidc-data": encoded}
-    ):
+    with app.test_request_context(headers={"x-amzn-oidc-data": encoded}):
         assert reporting.authnz._get_jwt_payload() == {"email": "test@example.com"}
 
 
@@ -86,9 +82,7 @@ def test__get_jwt_payload_custom_email_claim(mocker):
         algorithm="ES256",
     )
     app = create_app({"PREFERRED_URL_SCHEME": "https"})
-    with app.test_request_context(
-        headers={"Authorization": f"Bearer {encoded}"}
-    ):
+    with app.test_request_context(headers={"Authorization": f"Bearer {encoded}"}):
         reporting.authnz._get_jwt_payload()
 
 
