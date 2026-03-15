@@ -6,10 +6,12 @@ import { useLazyCypherQuery } from 'src/hooks/useCypherQuery';
 
 const CYPHER = 'MATCH (n) RETURN n';
 
+const AUTH_CONFIG_NO_OIDC = { auth_required: false, oidc: null, userManager: null };
+
 function makeWrapper(authRequired: boolean, accessToken: string | null) {
   return function Wrapper({ children }: { children: React.ReactNode }) {
     return (
-      <AuthConfigContext.Provider value={{ auth_required: authRequired }}>
+      <AuthConfigContext.Provider value={{ ...AUTH_CONFIG_NO_OIDC, auth_required: authRequired }}>
         <AuthContext.Provider value={{ user: null, accessToken, isLoading: false }}>
           {children}
         </AuthContext.Provider>
@@ -24,7 +26,7 @@ function StatefulWrapper({ children }: { children: React.ReactNode }) {
   const [accessToken, setToken] = useState<string | null>(null);
   _setToken = setToken;
   return (
-    <AuthConfigContext.Provider value={{ auth_required: true }}>
+    <AuthConfigContext.Provider value={{ ...AUTH_CONFIG_NO_OIDC, auth_required: true }}>
       <AuthContext.Provider value={{ user: null, accessToken, isLoading: false }}>
         {children}
       </AuthContext.Provider>

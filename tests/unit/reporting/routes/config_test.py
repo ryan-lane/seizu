@@ -52,7 +52,10 @@ def test_config_oidc_included_when_auth_required(mocker):
     mocker.patch("reporting.settings.DEVELOPMENT_ONLY_REQUIRE_AUTH", True)
     mocker.patch("reporting.settings.OIDC_AUTHORITY", "https://idp.example.com/o/app")
     mocker.patch("reporting.settings.OIDC_CLIENT_ID", "myapp")
-    mocker.patch("reporting.settings.OIDC_REDIRECT_URI", "https://app.example.com/auth/callback")
+    mocker.patch(
+        "reporting.settings.OIDC_REDIRECT_URI",
+        "https://app.example.com/auth/callback",
+    )
     mocker.patch("reporting.settings.OIDC_SCOPE", "openid email")
     app = create_app({"PREFERRED_URL_SCHEME": "https", "SECRET_KEY": "fake"})
     ret = app.test_client().get("/api/v1/config", follow_redirects=False)
