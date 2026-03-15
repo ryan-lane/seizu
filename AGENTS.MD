@@ -101,7 +101,7 @@ Flask 2 app, Python 3.12, using Gunicorn+Gevent in production.
 **Key files and patterns:**
 - `reporting/app.py` — Flask app factory (`create_app`)
 - `reporting/settings.py` — all configuration via env vars (Pydantic validators)
-- `reporting/routes/` — Flask blueprints: `config.py`, `query.py`, `pagerduty.py`, `static.py`
+- `reporting/routes/` — Flask blueprints: `config.py`, `query.py`, `static.py`
 - `reporting/services/` — business logic: `reporting_neo4j.py` (Neo4j driver + distributed locking), `query_validator.py` (multi-stage Cypher validation), `reporting_statsd.py`
 - `reporting/schema/reporting_config.py` — Pydantic models that validate the YAML dashboard config
 - `reporting/authnz/` — generic JWT validation using `PyJWKClient`; works with any standard OIDC provider
@@ -118,7 +118,6 @@ Flask 2 app, Python 3.12, using Gunicorn+Gevent in production.
 |--------|------|-------------|
 | GET | `/api/v1/config` | Returns full dashboard/report config |
 | POST | `/api/v1/query` | Executes a validated read-only Cypher query |
-| GET | `/api/v1/pagerduty/*` | PagerDuty proxy endpoints |
 | GET | `/healthcheck` | Healthcheck |
 
 ### Configuration System
@@ -127,7 +126,7 @@ The entire dashboard is configuration-driven via a YAML file (mounted as `/repor
 
 **YAML top-level sections:**
 - `queries` — named Cypher query strings
-- `dashboard` — rows/panels layout (panel types: `count`, `progress`, `pie`, `bar`, `table`, `vertical_table`, `markdown`, `oncall`)
+- `dashboard` — rows/panels layout (panel types: `count`, `progress`, `pie`, `bar`, `table`, `vertical_table`, `markdown`)
 - `reports` — report pages with typed inputs (`autocomplete`, `text`) and rows/panels
 - `scheduled_queries` — recurring query definitions with action plugins (SQS, Slack, log)
 
@@ -258,5 +257,8 @@ When making changes to the codebase, always review and update the following file
 - **`Dockerfile` and `docker-compose.yml`** — update if new files, build steps, services, or environment variables are introduced
 - **`.pre-commit-config.yaml`** — update hooks or dependencies if linting/formatting tooling changes
 - **`.eslintrc`** (or other lint/format configs) — update if new file types, parsers, or plugins are needed
-- **`docs/`** — update documentation if behavior, configuration, or interfaces change
+- **`Pipfile`** — add or remove Python dependencies when adding or removing backend features; run `docker compose run --rm seizu pipenv install <pkg>` to add, edit `Pipfile` directly then run `docker compose run --rm seizu pipenv lock` to update `Pipfile.lock`, then run `make lock` to regenerate `requirements.txt`
+- **`docs/`** — update documentation when adding, changing, or removing features, panel types, API endpoints, configuration options, or any user-facing behavior. Always grep docs/ for references to anything you are removing to ensure nothing is left stale.
+- **`schema/reporting-schema.json`** — regenerate via `make schema` (or manually update) when the Pydantic config schema changes
+- **`.env.example`** — add new env vars; remove or relocate vars when features are removed
 - **`AGENTS.MD`** — update these guidelines if new conventions or tooling patterns are introduced (loaded via `.claude/CLAUDE.md`)

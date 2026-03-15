@@ -3,7 +3,6 @@ import { Box, Divider, Drawer, List } from '@mui/material';
 import Dashboard from '@mui/icons-material/Dashboard';
 import Insights from '@mui/icons-material/Insights';
 import Article from '@mui/icons-material/Article';
-import Storage from '@mui/icons-material/Storage';
 import MenuBook from '@mui/icons-material/MenuBook';
 import NavItem from 'src/components/NavItem';
 import Hidden from 'src/components/Hidden';
@@ -44,11 +43,6 @@ function DashboardSidebar({ onMobileClose = () => {}, openMobile = false }: Dash
   ];
 
   const adminItems: NavItemData[] = [
-    {
-      href: '/app/neo4j',
-      icon: Storage,
-      title: 'Neo4J Console'
-    },
     {
       href: '/app/documentation',
       icon: MenuBook,

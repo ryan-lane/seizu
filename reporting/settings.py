@@ -78,9 +78,6 @@ NEO4J_USER = str_env("NEO4J_USER")
 # Password to use for neo4j connection
 NEO4J_PASSWORD = str_env("NEO4J_PASSWORD")
 
-# URL of the neo4j browser console
-NEO4J_CONSOLE_URL = str_env("NEO4J_CONSOLE_URL", "http://localhost:7474")
-
 # Maximum duration in seconds a driver will keep a connection before being
 # removed from its connection pool.
 NEO4J_MAX_CONNECTION_LIFETIME = int_env("NEO4J_MAX_CONNECTION_LIFETIME", 3600)
@@ -136,6 +133,3 @@ REPORTING_CONFIG_FILE = str_env("REPORTING_CONFIG_FILE", "/reporting-dashboard.c
 
 # Maximum number of stats we will generate for panels with inputs
 DASHBOARD_STATS_MAX_INPUT_RESULTS = int_env("DASHBOARD_STATS_MAX_INPUT_RESULTS", 100)
-
-# API key for interacting with pagerduty API
-PAGERDUTY_API_KEY = str_env("PAGERDUTY_API_KEY")

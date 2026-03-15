@@ -30,15 +30,15 @@ test_frontend:
 
 .PHONY: lock
 lock:
-	pipenv lock --keep-outdated --requirements > requirements.txt
+	docker compose run --rm seizu bash -c "cd /home/seizu/seizu && pipenv requirements" > requirements.txt
 
 .PHONY: lock_update
 lock_update:
-	pipenv lock --requirements > requirements.txt
+	docker compose run --rm seizu bash -c "cd /home/seizu/seizu && pipenv lock && pipenv requirements" > requirements.txt
 
 .PHONY: lock_dev
 lock_dev:
-	pipenv lock --requirements --dev-only > test-requirements.txt
+	docker compose run --rm seizu bash -c "cd /home/seizu/seizu && pipenv requirements --dev-only" > test-requirements.txt
 
 .PHONY: build
 build: clean

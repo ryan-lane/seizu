@@ -124,7 +124,6 @@ class Panel(BaseModel):
         "bar",
         "pie",
         "progress",
-        "oncall-table",
         "markdown",
     ] = Field(
         description="The type of panel to use.",

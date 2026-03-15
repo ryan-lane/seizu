@@ -15,7 +15,6 @@ def test_config(mocker):
     ret = client.get("/api/v1/config", follow_redirects=False)
     assert ret.status_code == 200
     ret_json = ret.json
-    assert ret_json["console_url"] == "http://localhost:7474"
     assert "auth_required" in ret_json
     for key in ["queries", "dashboard", "reports"]:
         assert key in ret_json["config"].keys()

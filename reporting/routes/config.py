@@ -28,18 +28,13 @@ def get_config() -> Response:
     HTTP/1.1 200 OK
     Content-Type: application/json
 
-    {
-      "console_url": "..."
-    }
+    {}
 
     :resheader Content-Type: application/json
     :statuscode 200: success
     """
     config = reporting_config.load_file(settings.REPORTING_CONFIG_FILE).model_dump()
     schema = reporting_config.output_json_schema()
-    pagerduty_enabled = False
-    if settings.PAGERDUTY_API_KEY:
-        pagerduty_enabled = True
     oidc_config = None
     if settings.OIDC_AUTHORITY:
         oidc_config = {
@@ -50,8 +45,6 @@ def get_config() -> Response:
         }
     resp = jsonify(
         {
-            "console_url": settings.NEO4J_CONSOLE_URL,
-            "pagerduty_enabled": pagerduty_enabled,
             "auth_required": settings.DEVELOPMENT_ONLY_REQUIRE_AUTH,
             "oidc": oidc_config,
             "stats": {

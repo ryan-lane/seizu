@@ -63,7 +63,6 @@ flask-talisman = ">=0.8.1"
 # License: BSD
 # Upstream url: https://github.com/maxcountryman/flask-seasurf/
 flask-seasurf = ">=1.1.1"
-pdpyras = ">=4.4.0"
 boto3 = ">=1.20.40"
 slack-sdk = ">=3.13.0"
 pydantic = ">=2.0.0"

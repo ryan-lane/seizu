@@ -79,8 +79,6 @@ export interface AppConfig {
 
 export interface SeizuConfig {
   config: AppConfig;
-  console_url: string;
-  pagerduty_enabled: boolean;
   stats: StatsConfig;
 }
 

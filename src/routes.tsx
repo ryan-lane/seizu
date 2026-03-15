@@ -4,7 +4,6 @@ import MainLayout from 'src/components/MainLayout';
 import OidcCallback from 'src/components/OidcCallback';
 import Dashboard from 'src/pages/Dashboard';
 import Reports from 'src/pages/Reports';
-import Neo4j from 'src/pages/Neo4j';
 import Documentation from 'src/pages/Documentation';
 import NotFound from 'src/pages/NotFound';
 
@@ -19,7 +18,6 @@ const routes = [
     children: [
       { path: 'dashboard', element: <Dashboard /> },
       { path: 'reports/:id', element: <Reports /> },
-      { path: 'neo4j', element: <Neo4j /> },
       { path: 'documentation', element: <Documentation /> },
       { path: '*', element: <Navigate to="/404" /> }
     ]

@@ -240,7 +240,6 @@ services:
       - SECRET_KEY=fake
       - STATSD_EXTERNAL_PREFIX=seizu
       - STATSD_EXTERNAL_PROVIDER=newrelic
-      - PAGERDUTY_API_KEY
     healthcheck:
       test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8080/healthcheck')"]
       interval: 30s
