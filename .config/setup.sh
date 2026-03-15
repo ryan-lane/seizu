@@ -31,4 +31,3 @@ if [ ! -f ./.compose/authentik/blueprints/seizu.yaml ]
 then
   cp ./.config/dev/authentik/blueprints/seizu.yaml ./.compose/authentik/blueprints/seizu.yaml
 fi
-
