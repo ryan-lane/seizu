@@ -18,6 +18,7 @@ import { ThreeDots } from 'react-loader-spinner';
 
 import { useLazyCypherQuery, QueryRecord } from 'src/hooks/useCypherQuery';
 import CypherDetails from 'src/components/reports/CypherDetails';
+import QueryValidationBadge from 'src/components/reports/QueryValidationBadge';
 
 interface CypherVerticalTableProps {
   cypher?: string;
@@ -39,7 +40,7 @@ export default function CypherVerticalTable({
     setOpen(true);
   };
 
-  const [runQuery, { loading, error, records }] = useLazyCypherQuery(cypher);
+  const [runQuery, { loading, error, records, warnings, queryErrors }] = useLazyCypherQuery(cypher);
 
   useEffect(() => {
     if (needInputs === undefined || needInputs.length === 0) {
@@ -72,6 +73,17 @@ export default function CypherVerticalTable({
       <Typography variant="body2">
         Failed to load requested data, please reload.
       </Typography>
+    );
+  }
+
+  if (queryErrors.length > 0) {
+    return (
+      <>
+        <Typography gutterBottom variant="h4" component="div">
+          <QueryValidationBadge errors={queryErrors} warnings={warnings} />
+        </Typography>
+        <Typography variant="body2">Query validation failed.</Typography>
+      </>
     );
   }
 
@@ -172,7 +184,7 @@ export default function CypherVerticalTable({
     const table = makeTable(mungedData);
     tables.push(
       <div key={i}>
-        <Typography gutterBottom variant="h4">
+        <Typography gutterBottom variant="h4" component="div">
           {caption}
           <Button
             variant="text"
@@ -183,6 +195,7 @@ export default function CypherVerticalTable({
           >
             <Info fontSize="small" />
           </Button>
+          <QueryValidationBadge errors={queryErrors} warnings={warnings} />
         </Typography>
         <Divider />
         <TableContainer component={Paper} sx={{ p: 2 }}>

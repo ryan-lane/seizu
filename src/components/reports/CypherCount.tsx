@@ -13,6 +13,7 @@ import Error from '@mui/icons-material/Error';
 import { ThreeDots } from 'react-loader-spinner';
 import { useLazyCypherQuery } from 'src/hooks/useCypherQuery';
 import CypherDetails from 'src/components/reports/CypherDetails';
+import QueryValidationBadge from 'src/components/reports/QueryValidationBadge';
 
 interface CypherCountProps {
   cypher?: string;
@@ -36,7 +37,7 @@ export default function CypherCount({
     setOpen(true);
   };
 
-  const [runQuery, { loading, error, records, first }] =
+  const [runQuery, { loading, error, records, first, warnings, queryErrors }] =
     useLazyCypherQuery(cypher);
 
   useEffect(() => {
@@ -92,6 +93,24 @@ export default function CypherCount({
     );
   }
 
+  if (queryErrors.length > 0) {
+    return (
+      <Card>
+        <Grid container direction="column" alignItems="center">
+          <CardHeader title={caption} />
+        </Grid>
+        <Divider />
+        <QueryValidationBadge errors={queryErrors} warnings={warnings} />
+        <Grid container spacing={0} direction="column" alignItems="center">
+          <CardContent>
+            <Typography variant="h4" align="center">N/A</Typography>
+            <Typography variant="body2" align="center">Query validation failed</Typography>
+          </CardContent>
+        </Grid>
+      </Card>
+    );
+  }
+
   if (loading || records === undefined) {
     return <ThreeDots color="#2BAD60" height="50" width="50" />;
   }
@@ -130,6 +149,7 @@ export default function CypherCount({
         <Button size="small" color="inherit" onClick={handleClickOpen}>
           <Info />
         </Button>
+        <QueryValidationBadge errors={queryErrors} warnings={warnings} />
         <Grid container spacing={0} direction="column" alignItems="center">
           <CardContent>
             <span>
