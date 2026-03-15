@@ -41,7 +41,7 @@ def get_config() -> Response:
     if settings.PAGERDUTY_API_KEY:
         pagerduty_enabled = True
     oidc_config = None
-    if settings.DEVELOPMENT_ONLY_REQUIRE_AUTH and settings.OIDC_AUTHORITY:
+    if settings.OIDC_AUTHORITY:
         oidc_config = {
             "authority": settings.OIDC_AUTHORITY,
             "client_id": settings.OIDC_CLIENT_ID,
