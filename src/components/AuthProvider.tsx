@@ -1,7 +1,7 @@
-import { ReactNode, useState, useEffect } from 'react';
+import { ReactNode, useState, useEffect, useContext } from 'react';
 import type { User } from 'oidc-client-ts';
 import { AuthContext } from 'src/auth.context';
-import { userManager } from 'src/userManager';
+import { AuthConfigContext } from 'src/authConfig.context';
 
 // Paths that should never trigger an OIDC redirect, even when unauthenticated.
 const UNAUTHENTICATED_PATHS = ['/auth/callback'];
@@ -11,6 +11,7 @@ interface AuthProviderProps {
 }
 
 function AuthProvider({ children }: AuthProviderProps) {
+  const { userManager } = useContext(AuthConfigContext);
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(userManager !== null);
 
@@ -49,7 +50,7 @@ function AuthProvider({ children }: AuthProviderProps) {
       userManager.events.removeUserLoaded(onUserLoaded);
       userManager.events.removeUserUnloaded(onUserUnloaded);
     };
-  }, []);
+  }, [userManager]);
 
   const accessToken = user?.access_token ?? null;
 

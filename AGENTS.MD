@@ -194,8 +194,12 @@ The backend uses `PyJWKClient` (PyJWT) to validate JWTs against any standard OID
 | `JWT_AUDIENCE` | `JWT_AUDIENCE` | `""` | Audience to validate; must match the OIDC client ID (e.g. `seizu`) when using Authentik, because Authentik always sets `aud` in the access token |
 | `DEVELOPMENT_ONLY_REQUIRE_AUTH` | `DEVELOPMENT_ONLY_REQUIRE_AUTH` | `true` | Set `false` in dev to bypass auth |
 | `TALISMAN_FORCE_HTTPS` | `TALISMAN_FORCE_HTTPS` | `true` | Set `false` when not serving HTTPS (dev or behind SSL-terminating LB) |
+| `OIDC_AUTHORITY` | `OIDC_AUTHORITY` | `""` | OIDC provider base URL; served to the frontend via `/api/v1/config` |
+| `OIDC_CLIENT_ID` | `OIDC_CLIENT_ID` | `""` | OIDC client ID; served to the frontend via `/api/v1/config` |
+| `OIDC_REDIRECT_URI` | `OIDC_REDIRECT_URI` | `""` | OIDC callback URL (browser-reachable); served to the frontend via `/api/v1/config` |
+| `OIDC_SCOPE` | `OIDC_SCOPE` | `"openid email"` | OIDC scope; served to the frontend via `/api/v1/config` |
 
-The frontend performs an OIDC PKCE flow when `REACT_APP_OIDC_ENABLED=true`. Required frontend env vars: `REACT_APP_OIDC_AUTHORITY`, `REACT_APP_OIDC_CLIENT_ID`, `REACT_APP_OIDC_REDIRECT_URI`. Auth state lives in `src/auth.context.ts`; the `UserManager` singleton is in `src/userManager.ts`.
+The frontend performs an OIDC PKCE flow when the backend returns `auth_required: true` and an `oidc` config object from `GET /api/v1/config`. The `UserManager` is created dynamically in `App.tsx` from the fetched config and shared via `AuthConfigContext` — there are no build-time `REACT_APP_OIDC_*` env vars. Auth state lives in `src/auth.context.ts`; the `UserManager` factory is in `src/userManager.ts`.
 
 **Testing authentication locally with Authentik:**
 

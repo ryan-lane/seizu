@@ -74,14 +74,12 @@ auth_enable:
 	@echo "Waiting for Authentik to become healthy..."
 	@until [ "$$(docker inspect --format='{{.State.Health.Status}}' seizu-authentik-server-1 2>/dev/null)" = "healthy" ]; do sleep 5; done
 	@sed -i '' 's/DEVELOPMENT_ONLY_REQUIRE_AUTH=false/DEVELOPMENT_ONLY_REQUIRE_AUTH=true/' .env
-	@sed -i '' 's/REACT_APP_OIDC_ENABLED=false/REACT_APP_OIDC_ENABLED=true/' .env
 	@docker compose up -d seizu seizu-node
 	@echo "Auth enabled. Visit http://localhost:3000 and log in as developer/devpassword"
 
 .PHONY: auth_disable
 auth_disable:
 	@sed -i '' 's/DEVELOPMENT_ONLY_REQUIRE_AUTH=true/DEVELOPMENT_ONLY_REQUIRE_AUTH=false/' .env
-	@sed -i '' 's/REACT_APP_OIDC_ENABLED=true/REACT_APP_OIDC_ENABLED=false/' .env
 	@docker compose up -d seizu seizu-node
 	@docker compose --profile auth stop authentik-server authentik-worker authentik-postgresql authentik-redis
 	@echo "Auth disabled. Visit http://localhost:3000"

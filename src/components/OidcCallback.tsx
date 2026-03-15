@@ -1,9 +1,10 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useContext } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { userManager } from 'src/userManager';
+import { AuthConfigContext } from 'src/authConfig.context';
 
 function OidcCallback() {
   const navigate = useNavigate();
+  const { userManager } = useContext(AuthConfigContext);
   const handled = useRef(false);
 
   useEffect(() => {
@@ -19,7 +20,7 @@ function OidcCallback() {
         console.error('OIDC callback error', err);
         navigate('/', { replace: true });
       });
-  }, [navigate]);
+  }, [navigate, userManager]);
 
   return null;
 }

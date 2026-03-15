@@ -8,17 +8,24 @@ import AuthProvider from 'src/components/AuthProvider';
 import shadows from 'src/theme/shadows';
 import typography from 'src/theme/typography';
 import routes from 'src/routes';
-import { AuthConfigContext, type AuthConfig } from 'src/authConfig.context';
+import { AuthConfigContext, type AuthConfig, type OidcConfig } from 'src/authConfig.context';
+import { createUserManager } from 'src/userManager';
 
 function App() {
   const prefersDarkMode = useMediaQuery('(prefers-color-scheme: dark)');
-  const [authConfig, setAuthConfig] = useState<AuthConfig>({ auth_required: true });
+  const [authConfig, setAuthConfig] = useState<AuthConfig>({
+    auth_required: true,
+    oidc: null,
+    userManager: null
+  });
 
   useEffect(() => {
     fetch('/api/v1/config')
       .then((r) => r.json())
-      .then((data: { auth_required: boolean }) => {
-        setAuthConfig({ auth_required: data.auth_required });
+      .then((data: { auth_required: boolean; oidc: OidcConfig | null }) => {
+        const oidc = data.oidc ?? null;
+        const userManager = oidc ? createUserManager(oidc) : null;
+        setAuthConfig({ auth_required: data.auth_required, oidc, userManager });
       })
       .catch(() => {
         // Keep default (auth_required: true) on error — safe fallback.

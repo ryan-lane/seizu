@@ -40,11 +40,20 @@ def get_config() -> Response:
     pagerduty_enabled = False
     if settings.PAGERDUTY_API_KEY:
         pagerduty_enabled = True
+    oidc_config = None
+    if settings.DEVELOPMENT_ONLY_REQUIRE_AUTH and settings.OIDC_AUTHORITY:
+        oidc_config = {
+            "authority": settings.OIDC_AUTHORITY,
+            "client_id": settings.OIDC_CLIENT_ID,
+            "redirect_uri": settings.OIDC_REDIRECT_URI,
+            "scope": settings.OIDC_SCOPE,
+        }
     resp = jsonify(
         {
             "console_url": settings.NEO4J_CONSOLE_URL,
             "pagerduty_enabled": pagerduty_enabled,
             "auth_required": settings.DEVELOPMENT_ONLY_REQUIRE_AUTH,
+            "oidc": oidc_config,
             "stats": {
                 "external_provider": settings.STATSD_EXTERNAL_PROVIDER,
                 "external_prefix": settings.STATSD_EXTERNAL_PREFIX,

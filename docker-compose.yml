@@ -226,6 +226,12 @@ services:
       - JWT_HEADER_NAME=Authorization
       - JWT_EMAIL_CLAIM=email
       - JWT_AUDIENCE=seizu
+      # OIDC client config served to the frontend via GET /api/v1/config.
+      # The redirect_uri must be the publicly reachable callback URL in the browser.
+      - OIDC_AUTHORITY=http://localhost:9000/application/o/seizu
+      - OIDC_CLIENT_ID=seizu
+      - OIDC_REDIRECT_URI=http://localhost:3000/auth/callback
+      - "OIDC_SCOPE=openid email profile"
       # Disable the referer check so node can proxy to the backend
       - "CSRF_CHECK_REFERER=false"
       # Disable HTTPS redirect and allow CSRF cookie over plain HTTP in development
@@ -256,13 +262,6 @@ services:
     environment:
       - NODE_ENV=development
       - PORT=3000
-      # OIDC is disabled by default. To enable Authentik auth (--profile auth),
-      # change REACT_APP_OIDC_ENABLED to true.
-      - REACT_APP_OIDC_ENABLED
-      - REACT_APP_OIDC_AUTHORITY=http://localhost:9000/application/o/seizu
-      - REACT_APP_OIDC_CLIENT_ID=seizu
-      - REACT_APP_OIDC_REDIRECT_URI=http://localhost:3000/auth/callback
-      - "REACT_APP_OIDC_SCOPE=openid email profile"
     working_dir: /home/seizu/seizu
     volumes:
       - ~/.bun:/home/bun/.bun

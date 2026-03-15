@@ -51,6 +51,14 @@ JWT_EMAIL_CLAIM = str_env("JWT_EMAIL_CLAIM", "email")
 JWT_ISSUER = str_env("JWT_ISSUER", "")
 # Optional audience to validate in the JWT. Leave empty to skip audience validation.
 JWT_AUDIENCE = str_env("JWT_AUDIENCE", "")
+# OIDC configuration surfaced to the frontend via GET /api/v1/config.
+# When DEVELOPMENT_ONLY_REQUIRE_AUTH is True, these are included in the config
+# response so the frontend can build its UserManager without build-time env vars.
+OIDC_AUTHORITY = str_env("OIDC_AUTHORITY", "")
+OIDC_CLIENT_ID = str_env("OIDC_CLIENT_ID", "")
+OIDC_REDIRECT_URI = str_env("OIDC_REDIRECT_URI", "")
+OIDC_SCOPE = str_env("OIDC_SCOPE", "openid email")
+
 # Whether or not to require authentication.
 # This option should only be changed in development.
 DEVELOPMENT_ONLY_REQUIRE_AUTH = bool_env("DEVELOPMENT_ONLY_REQUIRE_AUTH", True)
