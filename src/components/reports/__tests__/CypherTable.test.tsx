@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, cleanup } from '@testing-library/react';
 import { ThemeProvider, createTheme } from '@mui/material/styles';
 import CypherTable from '../CypherTable';
 
@@ -6,13 +6,19 @@ jest.mock('src/hooks/useCypherQuery', () => ({
   useLazyCypherQuery: jest.fn()
 }));
 
-jest.mock(
-  'src/components/reports/CypherDetails',
-  () =>
-    function MockCypherDetails() {
-      return null;
-    }
-);
+jest.mock('src/components/reports/CypherDetails', () => ({
+  __esModule: true,
+  default: function MockCypherDetails() {
+    return null;
+  }
+}));
+
+jest.mock('src/components/reports/QueryValidationBadge', () => ({
+  __esModule: true,
+  default: function MockQueryValidationBadge() {
+    return null;
+  }
+}));
 
 const { useLazyCypherQuery } = require('src/hooks/useCypherQuery');
 
@@ -22,16 +28,17 @@ function Wrapper({ children }) {
   return <ThemeProvider theme={theme}>{children}</ThemeProvider>;
 }
 
+const defaultState = { loading: false, error: null, records: undefined, first: undefined, warnings: [], queryErrors: [] };
+
 describe('CypherTable', () => {
   const mockRunQuery = jest.fn();
 
   beforeEach(() => {
     jest.clearAllMocks();
-    useLazyCypherQuery.mockReturnValue([
-      mockRunQuery,
-      { loading: false, error: null, records: undefined, first: undefined }
-    ]);
+    useLazyCypherQuery.mockReturnValue([mockRunQuery, defaultState]);
   });
+
+  afterEach(cleanup);
 
   it('shows error when cypher is undefined', () => {
     render(
@@ -45,7 +52,7 @@ describe('CypherTable', () => {
   it('shows needInputs message when needInputs is provided', () => {
     useLazyCypherQuery.mockReturnValue([
       mockRunQuery,
-      { loading: false, error: null, records: [], first: undefined }
+      { ...defaultState, records: [], first: undefined }
     ]);
     render(
       <Wrapper>
@@ -63,12 +70,7 @@ describe('CypherTable', () => {
   it('shows error message when query fails', () => {
     useLazyCypherQuery.mockReturnValue([
       mockRunQuery,
-      {
-        loading: false,
-        error: new Error('Query failed'),
-        records: undefined,
-        first: undefined
-      }
+      { ...defaultState, error: new Error('Query failed') }
     ]);
     render(
       <Wrapper>
@@ -83,7 +85,7 @@ describe('CypherTable', () => {
   it('shows no records message when records array is empty', () => {
     useLazyCypherQuery.mockReturnValue([
       mockRunQuery,
-      { loading: false, error: null, records: [], first: undefined }
+      { ...defaultState, records: [], first: undefined }
     ]);
     render(
       <Wrapper>
@@ -97,12 +99,7 @@ describe('CypherTable', () => {
     const mockRecord = { name: 'test' };
     useLazyCypherQuery.mockReturnValue([
       mockRunQuery,
-      {
-        loading: false,
-        error: null,
-        records: [mockRecord],
-        first: mockRecord
-      }
+      { ...defaultState, records: [mockRecord], first: mockRecord }
     ]);
     render(
       <Wrapper>
@@ -114,5 +111,21 @@ describe('CypherTable', () => {
       </Wrapper>
     );
     expect(screen.getByText('My Table')).toBeInTheDocument();
+  });
+
+  it('shows validation error state when queryErrors are present', () => {
+    useLazyCypherQuery.mockReturnValue([
+      mockRunQuery,
+      { ...defaultState, queryErrors: ['Write queries are not allowed'] }
+    ]);
+    render(
+      <Wrapper>
+        <CypherTable
+          cypher="CREATE (n) RETURN n"
+          caption="My Table"
+        />
+      </Wrapper>
+    );
+    expect(screen.getByText('Query validation failed.')).toBeInTheDocument();
   });
 });

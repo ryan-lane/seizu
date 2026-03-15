@@ -1,7 +1,7 @@
 from unittest.mock import MagicMock
 
 from reporting.app import create_app
-from reporting.services.query_validator import QueryValidationError
+from reporting.services.query_validator import ValidationResult
 
 
 def _app_settings():
@@ -10,15 +10,25 @@ def _app_settings():
     }
 
 
+def _mock_validate(mocker, errors=None, warnings=None):
+    result = ValidationResult(
+        errors=errors if errors is not None else [],
+        warnings=warnings if warnings is not None else [],
+    )
+    mocker.patch(
+        "reporting.routes.query.validate_query",
+        return_value=result,
+    )
+    return result
+
+
 def test_query_success(mocker):
     mocker.patch("reporting.settings.CSRF_DISABLE", True)
     mocker.patch(
         "reporting.routes.query.authnz.get_email",
         return_value="test@example.com",
     )
-    mocker.patch(
-        "reporting.routes.query.validate_query",
-    )
+    _mock_validate(mocker)
     mock_record = MagicMock()
     mock_record.items.return_value = [("name", "Alice"), ("count", 42)]
     mocker.patch(
@@ -33,7 +43,35 @@ def test_query_success(mocker):
         json={"query": "MATCH (n) RETURN n.name AS name, count(n) AS count"},
     )
     assert ret.status_code == 200
-    assert ret.json == {"results": [{"name": "Alice", "count": 42}]}
+    assert ret.json["results"] == [{"name": "Alice", "count": 42}]
+    assert ret.json["errors"] == []
+    assert ret.json["warnings"] == []
+
+
+def test_query_success_with_warnings(mocker):
+    mocker.patch("reporting.settings.CSRF_DISABLE", True)
+    mocker.patch(
+        "reporting.routes.query.authnz.get_email",
+        return_value="test@example.com",
+    )
+    _mock_validate(mocker, warnings=["Unknown label: Foo"])
+    mock_record = MagicMock()
+    mock_record.items.return_value = [("name", "Alice")]
+    mocker.patch(
+        "reporting.routes.query.reporting_neo4j.run_query",
+        return_value=[mock_record],
+    )
+
+    app = create_app(_app_settings())
+    client = app.test_client()
+    ret = client.post(
+        "/api/v1/query",
+        json={"query": "MATCH (n:Foo) RETURN n.name AS name"},
+    )
+    assert ret.status_code == 200
+    assert ret.json["results"] == [{"name": "Alice"}]
+    assert ret.json["warnings"] == ["Unknown label: Foo"]
+    assert ret.json["errors"] == []
 
 
 def test_query_with_params(mocker):
@@ -42,9 +80,7 @@ def test_query_with_params(mocker):
         "reporting.routes.query.authnz.get_email",
         return_value="test@example.com",
     )
-    mocker.patch(
-        "reporting.routes.query.validate_query",
-    )
+    _mock_validate(mocker)
     mock_record = MagicMock()
     mock_record.items.return_value = [("name", "Alice")]
     mock_run_query = mocker.patch(
@@ -103,26 +139,39 @@ def test_query_missing_query_field(mocker):
     assert "Invalid request" in ret.json["error"]
 
 
-def test_query_validation_failure(mocker):
+def test_query_validation_errors_return_400_with_errors_and_warnings(mocker):
     mocker.patch("reporting.settings.CSRF_DISABLE", True)
     mocker.patch(
         "reporting.routes.query.authnz.get_email",
         return_value="test@example.com",
     )
-    mocker.patch(
-        "reporting.routes.query.validate_query",
-        side_effect=QueryValidationError(["Syntax error at position 5"]),
-    )
+    _mock_validate(mocker, errors=["Write queries are not allowed"])
 
     app = create_app(_app_settings())
     client = app.test_client()
     ret = client.post(
         "/api/v1/query",
-        json={"query": "MATC (n) RETURN n"},
+        json={"query": "CREATE (n) RETURN n"},
     )
     assert ret.status_code == 400
-    assert "Query validation failed" in ret.json["error"]
-    assert len(ret.json["details"]) == 1
+    assert ret.json["errors"] == ["Write queries are not allowed"]
+    assert "warnings" in ret.json
+
+
+def test_query_validation_errors_do_not_execute_query(mocker):
+    mocker.patch("reporting.settings.CSRF_DISABLE", True)
+    mocker.patch(
+        "reporting.routes.query.authnz.get_email",
+        return_value="test@example.com",
+    )
+    _mock_validate(mocker, errors=["Write queries are not allowed"])
+    mock_run = mocker.patch("reporting.routes.query.reporting_neo4j.run_query")
+
+    app = create_app(_app_settings())
+    client = app.test_client()
+    client.post("/api/v1/query", json={"query": "CREATE (n) RETURN n"})
+
+    mock_run.assert_not_called()
 
 
 def test_query_execution_failure(mocker):
@@ -131,9 +180,7 @@ def test_query_execution_failure(mocker):
         "reporting.routes.query.authnz.get_email",
         return_value="test@example.com",
     )
-    mocker.patch(
-        "reporting.routes.query.validate_query",
-    )
+    _mock_validate(mocker)
     mocker.patch(
         "reporting.routes.query.reporting_neo4j.run_query",
         side_effect=Exception("Connection refused"),
@@ -173,9 +220,7 @@ def test_query_with_csrf(mocker, helpers):
         "reporting.routes.query.authnz.get_email",
         return_value="test@example.com",
     )
-    mocker.patch(
-        "reporting.routes.query.validate_query",
-    )
+    _mock_validate(mocker)
     mock_record = MagicMock()
     mock_record.items.return_value = [("n", 1)]
     mocker.patch(
@@ -206,13 +251,8 @@ def test_query_serialize_node(mocker):
         "reporting.routes.query.authnz.get_email",
         return_value="test@example.com",
     )
-    mocker.patch(
-        "reporting.routes.query.validate_query",
-    )
+    _mock_validate(mocker)
 
-    mock_node = MagicMock()
-    mock_node.__class__ = type("Node", (), {})
-    # Use the actual import path to make isinstance work
     from neo4j.graph import Node
 
     mock_node = MagicMock(spec=Node)
@@ -247,9 +287,7 @@ def test_query_serialize_relationship(mocker):
         "reporting.routes.query.authnz.get_email",
         return_value="test@example.com",
     )
-    mocker.patch(
-        "reporting.routes.query.validate_query",
-    )
+    _mock_validate(mocker)
 
     from neo4j.graph import Node
     from neo4j.graph import Relationship
@@ -295,9 +333,7 @@ def test_query_serialize_path(mocker):
         "reporting.routes.query.authnz.get_email",
         return_value="test@example.com",
     )
-    mocker.patch(
-        "reporting.routes.query.validate_query",
-    )
+    _mock_validate(mocker)
 
     from neo4j.graph import Node
     from neo4j.graph import Path

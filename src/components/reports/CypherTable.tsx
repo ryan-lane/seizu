@@ -16,6 +16,7 @@ import CloseFullscreen from '@mui/icons-material/CloseFullscreen';
 
 import { useLazyCypherQuery, QueryRecord } from 'src/hooks/useCypherQuery';
 import CypherDetails from 'src/components/reports/CypherDetails';
+import QueryValidationBadge from 'src/components/reports/QueryValidationBadge';
 
 interface CypherTableProps {
   cypher?: string;
@@ -39,7 +40,7 @@ export default function CypherTable({
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [expandOpen, setExpandOpen] = useState(false);
   const [expandSize, setExpandSize] = useState(window.innerHeight);
-  const [runQuery, { loading, error, records, first }] =
+  const [runQuery, { loading, error, records, first, warnings, queryErrors }] =
     useLazyCypherQuery(cypher);
 
   useEffect(() => {
@@ -84,6 +85,18 @@ export default function CypherTable({
     );
   }
 
+  if (queryErrors.length > 0) {
+    return (
+      <>
+        <Typography gutterBottom variant="h4" component="div">
+          {caption}
+          <QueryValidationBadge errors={queryErrors} warnings={warnings} />
+        </Typography>
+        <Typography variant="body2">Query validation failed.</Typography>
+      </>
+    );
+  }
+
   const setOpenDetails = () => {
     setDetailsOpen(true);
   };
@@ -102,9 +115,14 @@ export default function CypherTable({
     print: false,
     customToolbar: () => {
       const icons = [];
+      if (warnings.length > 0 || queryErrors.length > 0) {
+        icons.push(
+          <QueryValidationBadge key="validation" errors={queryErrors} warnings={warnings} />
+        );
+      }
       if (details !== undefined) {
         icons.push(
-          <Tooltip title="Show query details">
+          <Tooltip key="info" title="Show query details">
             <IconButton onClick={setOpenDetails}>
               <Info />
             </IconButton>
@@ -113,7 +131,7 @@ export default function CypherTable({
       }
       if (expandOpen === false) {
         icons.push(
-          <Tooltip title="Fullscreen">
+          <Tooltip key="fullscreen" title="Fullscreen">
             <IconButton onClick={setOpenExpand}>
               <Fullscreen />
             </IconButton>
@@ -121,7 +139,7 @@ export default function CypherTable({
         );
       } else {
         icons.push(
-          <Tooltip title="Close Fullscreen">
+          <Tooltip key="fullscreen" title="Close Fullscreen">
             <IconButton onClick={setClosedExpand}>
               <CloseFullscreen />
             </IconButton>

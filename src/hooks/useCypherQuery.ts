@@ -9,6 +9,8 @@ interface QueryState {
   error: Error | null;
   records: QueryRecord[] | undefined;
   first: QueryRecord | undefined;
+  warnings: string[];
+  queryErrors: string[];
 }
 
 function getCsrfToken(): string {
@@ -29,7 +31,9 @@ export function useLazyCypherQuery(
     loading: false,
     error: null,
     records: undefined,
-    first: undefined
+    first: undefined,
+    warnings: [],
+    queryErrors: []
   });
 
   const run = useCallback(
@@ -37,7 +41,7 @@ export function useLazyCypherQuery(
       if (!cypher) return;
       // When auth is required, wait until we have a token before querying.
       if (auth_required && !accessToken) return;
-      setState({ loading: true, error: null, records: undefined, first: undefined });
+      setState({ loading: true, error: null, records: undefined, first: undefined, warnings: [], queryErrors: [] });
 
       const headers: Record<string, string> = {
         'Content-Type': 'application/json',
@@ -53,26 +57,44 @@ export function useLazyCypherQuery(
         body: JSON.stringify({ query: cypher, params })
       })
         .then((res) => res.json())
-        .then((data: { error?: string; results?: QueryRecord[] }) => {
+        .then((data: { error?: string; errors?: string[]; warnings?: string[]; results?: QueryRecord[] }) => {
+          const validationErrors = data.errors ?? [];
+          const validationWarnings = data.warnings ?? [];
+
           if (data.error) {
+            // Server or request-level error (HTTP 500, malformed request, etc.)
             setState({
               loading: false,
               error: new Error(data.error),
               records: undefined,
-              first: undefined
+              first: undefined,
+              warnings: [],
+              queryErrors: []
+            });
+          } else if (validationErrors.length > 0) {
+            // Query validation errors — query was not executed
+            setState({
+              loading: false,
+              error: null,
+              records: undefined,
+              first: undefined,
+              warnings: validationWarnings,
+              queryErrors: validationErrors
             });
           } else {
-            const results = data.results || [];
+            const results = data.results ?? [];
             setState({
               loading: false,
               error: null,
               records: results,
-              first: results[0]
+              first: results[0],
+              warnings: validationWarnings,
+              queryErrors: []
             });
           }
         })
         .catch((err: Error) => {
-          setState({ loading: false, error: err, records: undefined, first: undefined });
+          setState({ loading: false, error: err, records: undefined, first: undefined, warnings: [], queryErrors: [] });
         });
     },
     [cypher, accessToken, auth_required]

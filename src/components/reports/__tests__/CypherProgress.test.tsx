@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, cleanup } from '@testing-library/react';
 import { ThemeProvider, createTheme } from '@mui/material/styles';
 import CypherProgress from '../CypherProgress';
 
@@ -6,13 +6,19 @@ jest.mock('src/hooks/useCypherQuery', () => ({
   useLazyCypherQuery: jest.fn()
 }));
 
-jest.mock(
-  'src/components/reports/CypherDetails',
-  () =>
-    function MockCypherDetails() {
-      return null;
-    }
-);
+jest.mock('src/components/reports/CypherDetails', () => ({
+  __esModule: true,
+  default: function MockCypherDetails() {
+    return null;
+  }
+}));
+
+jest.mock('src/components/reports/QueryValidationBadge', () => ({
+  __esModule: true,
+  default: function MockQueryValidationBadge() {
+    return null;
+  }
+}));
 
 const { useLazyCypherQuery } = require('src/hooks/useCypherQuery');
 
@@ -22,16 +28,17 @@ function Wrapper({ children }) {
   return <ThemeProvider theme={theme}>{children}</ThemeProvider>;
 }
 
+const defaultState = { loading: false, error: null, records: undefined, first: undefined, warnings: [], queryErrors: [] };
+
 describe('CypherProgress', () => {
   const mockRunQuery = jest.fn();
 
   beforeEach(() => {
     jest.clearAllMocks();
-    useLazyCypherQuery.mockReturnValue([
-      mockRunQuery,
-      { loading: false, error: null, records: undefined, first: undefined }
-    ]);
+    useLazyCypherQuery.mockReturnValue([mockRunQuery, defaultState]);
   });
+
+  afterEach(cleanup);
 
   it('shows error when cypher is undefined', () => {
     render(
@@ -45,7 +52,7 @@ describe('CypherProgress', () => {
   it('shows N/A with needInputs message when needInputs is provided', () => {
     useLazyCypherQuery.mockReturnValue([
       mockRunQuery,
-      { loading: false, error: null, records: [], first: undefined }
+      { ...defaultState, records: [], first: undefined }
     ]);
     render(
       <Wrapper>
@@ -63,12 +70,7 @@ describe('CypherProgress', () => {
   it('shows error message when query fails', () => {
     useLazyCypherQuery.mockReturnValue([
       mockRunQuery,
-      {
-        loading: false,
-        error: new Error('Query failed'),
-        records: undefined,
-        first: undefined
-      }
+      { ...defaultState, error: new Error('Query failed') }
     ]);
     render(
       <Wrapper>
@@ -86,7 +88,7 @@ describe('CypherProgress', () => {
   it('shows N/A when records exist but first is undefined', () => {
     useLazyCypherQuery.mockReturnValue([
       mockRunQuery,
-      { loading: false, error: null, records: [], first: undefined }
+      { ...defaultState, records: [], first: undefined }
     ]);
     render(
       <Wrapper>
@@ -103,8 +105,7 @@ describe('CypherProgress', () => {
     useLazyCypherQuery.mockReturnValue([
       mockRunQuery,
       {
-        loading: false,
-        error: null,
+        ...defaultState,
         records: [{ numerator: 75, denominator: 100 }],
         first: { numerator: 75, denominator: 100 }
       }
@@ -119,5 +120,21 @@ describe('CypherProgress', () => {
     );
     expect(screen.getByText('Progress Caption')).toBeInTheDocument();
     expect(screen.getByText('75%')).toBeInTheDocument();
+  });
+
+  it('shows validation error state when queryErrors are present', () => {
+    useLazyCypherQuery.mockReturnValue([
+      mockRunQuery,
+      { ...defaultState, queryErrors: ['Write queries are not allowed'] }
+    ]);
+    render(
+      <Wrapper>
+        <CypherProgress
+          cypher="CREATE (n) RETURN n"
+          caption="Test Progress"
+        />
+      </Wrapper>
+    );
+    expect(screen.getByText('Query validation failed')).toBeInTheDocument();
   });
 });

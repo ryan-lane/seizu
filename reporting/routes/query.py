@@ -13,7 +13,6 @@ from pydantic import ValidationError
 from reporting import authnz
 from reporting.schema.query import QueryRequest
 from reporting.services import reporting_neo4j
-from reporting.services.query_validator import QueryValidationError
 from reporting.services.query_validator import validate_query
 
 logger = logging.getLogger(__name__)
@@ -66,11 +65,12 @@ def query() -> Response:
         resp.status_code = 400
         return resp
 
-    try:
-        validate_query(query_request.query)
-    except QueryValidationError as e:
+    validation = validate_query(query_request.query)
+
+    if validation.has_errors:
         resp = jsonify(
-            error="Query validation failed", details=[str(err) for err in e.errors]
+            errors=[str(err) for err in validation.errors],
+            warnings=[str(w) for w in validation.warnings],
         )
         resp.status_code = 400
         return resp
@@ -83,7 +83,11 @@ def query() -> Response:
             {key: _serialize_neo4j_value(value) for key, value in record.items()}
             for record in results
         ]
-        resp = jsonify(results=serialized)
+        resp = jsonify(
+            results=serialized,
+            warnings=[str(w) for w in validation.warnings],
+            errors=[],
+        )
         return resp
     except Exception as e:
         logger.exception("Query execution failed")

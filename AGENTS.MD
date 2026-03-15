@@ -107,17 +107,24 @@ Flask 2 app, Python 3.12, using Gunicorn+Gevent in production.
 - `reporting/authnz/` — generic JWT validation using `PyJWKClient`; works with any standard OIDC provider
 
 **Query validation pipeline** (`reporting/services/query_validator.py`):
-1. Syntax validation (CyVer)
-2. Read-only enforcement (cypher-guard)
-3. Schema validation (CyVer)
-4. Property validation (CyVer)
+
+`validate_query()` returns a `ValidationResult(errors, warnings)` instead of raising. Errors block query execution; warnings are included in the response but the query still runs.
+
+Errors (blocking):
+1. Syntax validation (CyVer `SyntaxValidator`)
+2. Read-only enforcement (cypher-guard `is_read`) — also catches unsupported/unsafe clauses
+
+Warnings (non-blocking):
+3. Schema validation (CyVer `SchemaValidator`) — unknown labels, relationships, paths
+4. Property validation (CyVer `PropertiesValidator`) — unknown properties
 
 ### API Endpoints
 
 | Method | Path | Description |
 |--------|------|-------------|
 | GET | `/api/v1/config` | Returns full dashboard/report config |
-| POST | `/api/v1/query` | Executes a validated read-only Cypher query |
+| POST | `/api/v1/query` | Executes a validated read-only Cypher query; returns `{results, errors, warnings}` |
+| POST | `/api/v1/validate` | Validates a Cypher query without executing it; returns `{errors, warnings}` (always 200 if request is valid) |
 | GET | `/healthcheck` | Healthcheck |
 
 ### Configuration System

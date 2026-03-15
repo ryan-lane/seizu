@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, cleanup } from '@testing-library/react';
 import { ThemeProvider, createTheme } from '@mui/material/styles';
 import CypherCount from '../CypherCount';
 
@@ -6,13 +6,19 @@ jest.mock('src/hooks/useCypherQuery', () => ({
   useLazyCypherQuery: jest.fn()
 }));
 
-jest.mock(
-  'src/components/reports/CypherDetails',
-  () =>
-    function MockCypherDetails() {
-      return null;
-    }
-);
+jest.mock('src/components/reports/CypherDetails', () => ({
+  __esModule: true,
+  default: function MockCypherDetails() {
+    return null;
+  }
+}));
+
+jest.mock('src/components/reports/QueryValidationBadge', () => ({
+  __esModule: true,
+  default: function MockQueryValidationBadge() {
+    return null;
+  }
+}));
 
 const { useLazyCypherQuery } = require('src/hooks/useCypherQuery');
 
@@ -22,16 +28,17 @@ function Wrapper({ children }) {
   return <ThemeProvider theme={theme}>{children}</ThemeProvider>;
 }
 
+const defaultState = { loading: false, error: null, records: undefined, first: undefined, warnings: [], queryErrors: [] };
+
 describe('CypherCount', () => {
   const mockRunQuery = jest.fn();
 
   beforeEach(() => {
     jest.clearAllMocks();
-    useLazyCypherQuery.mockReturnValue([
-      mockRunQuery,
-      { loading: false, error: null, records: undefined, first: undefined }
-    ]);
+    useLazyCypherQuery.mockReturnValue([mockRunQuery, defaultState]);
   });
+
+  afterEach(cleanup);
 
   it('shows error when cypher is undefined', () => {
     render(
@@ -45,7 +52,7 @@ describe('CypherCount', () => {
   it('shows N/A with needInputs message when needInputs is provided', () => {
     useLazyCypherQuery.mockReturnValue([
       mockRunQuery,
-      { loading: false, error: null, records: [], first: undefined }
+      { ...defaultState, records: [], first: undefined }
     ]);
     render(
       <Wrapper>
@@ -63,7 +70,7 @@ describe('CypherCount', () => {
   it('shows loading spinner when loading', () => {
     useLazyCypherQuery.mockReturnValue([
       mockRunQuery,
-      { loading: true, error: null, records: undefined, first: undefined }
+      { ...defaultState, loading: true }
     ]);
     const { container } = render(
       <Wrapper>
@@ -80,12 +87,7 @@ describe('CypherCount', () => {
   it('shows error message when query fails', () => {
     useLazyCypherQuery.mockReturnValue([
       mockRunQuery,
-      {
-        loading: false,
-        error: new Error('Query failed'),
-        records: undefined,
-        first: undefined
-      }
+      { ...defaultState, error: new Error('Query failed') }
     ]);
     render(
       <Wrapper>
@@ -103,7 +105,7 @@ describe('CypherCount', () => {
   it('shows N/A when records exist but first is undefined', () => {
     useLazyCypherQuery.mockReturnValue([
       mockRunQuery,
-      { loading: false, error: null, records: [], first: undefined }
+      { ...defaultState, records: [], first: undefined }
     ]);
     render(
       <Wrapper>
@@ -119,12 +121,7 @@ describe('CypherCount', () => {
   it('renders the count value when data is loaded', () => {
     useLazyCypherQuery.mockReturnValue([
       mockRunQuery,
-      {
-        loading: false,
-        error: null,
-        records: [{ total: 42 }],
-        first: { total: 42 }
-      }
+      { ...defaultState, records: [{ total: 42 }], first: { total: 42 } }
     ]);
     render(
       <Wrapper>
@@ -136,5 +133,21 @@ describe('CypherCount', () => {
     );
     expect(screen.getByText('Test Count')).toBeInTheDocument();
     expect(screen.getByText('42')).toBeInTheDocument();
+  });
+
+  it('shows validation error state when queryErrors are present', () => {
+    useLazyCypherQuery.mockReturnValue([
+      mockRunQuery,
+      { ...defaultState, queryErrors: ['Write queries are not allowed'] }
+    ]);
+    render(
+      <Wrapper>
+        <CypherCount
+          cypher="CREATE (n) RETURN n"
+          caption="Test Count"
+        />
+      </Wrapper>
+    );
+    expect(screen.getByText('Query validation failed')).toBeInTheDocument();
   });
 });
