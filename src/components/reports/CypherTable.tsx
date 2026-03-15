@@ -54,7 +54,7 @@ export default function CypherTable({
     if (needInputs === undefined || needInputs.length === 0) {
       runQuery(params);
     }
-  }, [cypher, params]);
+  }, [cypher, params, runQuery]);
 
   if (needInputs !== undefined && needInputs.length > 0) {
     return (

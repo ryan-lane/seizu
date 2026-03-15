@@ -10,6 +10,24 @@ metadata:
   labels:
     blueprints.goauthentik.io/instantiate: "true"
 entries:
+  # Dev users — idempotent: safe to re-apply on every startup
+  - model: authentik_core.user
+    state: present
+    identifiers:
+      username: akadmin
+    attrs:
+      password: devpassword
+
+  - model: authentik_core.user
+    state: present
+    identifiers:
+      username: developer
+    attrs:
+      name: Developer
+      email: developer@localhost
+      is_active: true
+      password: devpassword
+
   # OAuth2/OIDC provider (public PKCE client)
   - model: authentik_providers_oauth2.oauth2provider
     state: present
@@ -23,10 +41,15 @@ entries:
       authorization_flow: !Find
         - authentik_flows.flow
         - [slug, default-provider-authorization-explicit-consent]
+      invalidation_flow: !Find
+        - authentik_flows.flow
+        - [slug, default-provider-invalidation-flow]
       # Allow redirects to both the bun dev server and the Flask backend
-      redirect_uris: |
-        https://localhost:7443/auth/callback
-        https://localhost:8443/auth/callback
+      redirect_uris:
+        - url: http://localhost:3000/auth/callback
+          matching_mode: strict
+        - url: http://localhost:8080/auth/callback
+          matching_mode: strict
       signing_key: !Find
         - authentik_crypto.certificatekeypair
         - [name, "authentik Self-signed Certificate"]
@@ -57,13 +80,12 @@ entries:
       policy_engine_mode: any
 
   # Brand: apply Seizu theme to the default-domain login page
-  - model: authentik_core.brand
+  - model: authentik_brands.brand
     state: present
     identifiers:
       domain: localhost
     attrs:
       domain: localhost
-      default: true
       branding_title: Seizu
       branding_custom_css: |
         /* ── Seizu theme for Authentik ───────────────────────────────────────

@@ -3,7 +3,7 @@
   "author": "PayPay Corp.",
   "licence": "Apache2",
   "version": "1.0.0",
-  "proxy": "https://seizu:8443",
+  "proxy": "http://seizu:8080",
   "private": true,
   "scripts": {
     "start": "react-scripts start",

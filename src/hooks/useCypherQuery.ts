@@ -1,5 +1,6 @@
 import { useState, useCallback, useContext } from 'react';
 import { AuthContext } from 'src/auth.context';
+import { AuthConfigContext } from 'src/authConfig.context';
 
 export type QueryRecord = Record<string, unknown>;
 
@@ -23,6 +24,7 @@ export function useLazyCypherQuery(
   cypher?: string
 ): [(params?: Record<string, unknown>) => void, QueryState] {
   const { accessToken } = useContext(AuthContext);
+  const { auth_required } = useContext(AuthConfigContext);
   const [state, setState] = useState<QueryState>({
     loading: false,
     error: null,
@@ -33,6 +35,8 @@ export function useLazyCypherQuery(
   const run = useCallback(
     (params?: Record<string, unknown>) => {
       if (!cypher) return;
+      // When auth is required, wait until we have a token before querying.
+      if (auth_required && !accessToken) return;
       setState({ loading: true, error: null, records: undefined, first: undefined });
 
       const headers: Record<string, string> = {
@@ -71,7 +75,7 @@ export function useLazyCypherQuery(
           setState({ loading: false, error: err, records: undefined, first: undefined });
         });
     },
-    [cypher, accessToken]
+    [cypher, accessToken, auth_required]
   );
 
   return [run, state];

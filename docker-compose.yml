@@ -12,6 +12,7 @@ networks:
 volumes:
   authentik_postgres_data:
   authentik_media:
+  neo4j_data:
 services:
   telegraf:
     image: telegraf
@@ -24,7 +25,7 @@ services:
   sqs:
     image: softwaremill/elasticmq
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:9324"]
+      test: ["CMD", "curl", "-s", "-o", "/dev/null", "http://localhost:9324"]
       interval: 30s
       timeout: 10s
       retries: 5
@@ -33,33 +34,26 @@ services:
     networks:
       database:
   neo4j:
-    image: neo4j:3.5
+    image: neo4j:5.15
     restart: unless-stopped
-    ports:
-      - 7473:7473
-      - 7687:7687
     volumes:
       - ./.compose/neo4j/neo4j.conf:/conf/neo4j.conf
-      - ./.compose/neo4j/data:/data
+      - neo4j_data:/data
       - ./.compose/neo4j/import:/import
       - ./.compose/neo4j/logs:/logs
       - ./.compose/neo4j/plugins:/plugins
-      - ./.compose/neo4j/ssl/client_policy/revoked:/ssl/client_policy/revoked
-      - ./.compose/neo4j/ssl/client_policy/trusted:/ssl/client_policy/trusted
-      - ~/.minica/localhost/cert.pem:/ssl/client_policy/cert.pem
-      - ~/.minica/localhost/key.pem:/ssl/client_policy/key.pem
     environment:
-      - NEO4J_PASSWORD
-      - NEO4J_AUTH=neo4j/$NEO4J_PASSWORD
-      # Raise memory limits
-      - NEO4J_dbms_memory_pagecache_size=1G
-      - NEO4J_dbms.memory.heap.initial_size=1G
-      - NEO4J_dbms_memory_heap_max__size=1G
+      - NEO4J_AUTH=none
+      # Raise memory limits (Neo4j 5.x config key names)
+      - NEO4J_server_memory_pagecache_size=1G
+      - NEO4J_server_memory_heap_initial__size=1G
+      - NEO4J_server_memory_heap_max__size=1G
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:7687"]
+      test: ["CMD", "wget", "-qO-", "http://localhost:7474/"]
       interval: 30s
       timeout: 10s
-      retries: 5
+      retries: 10
+      start_period: 30s
     networks:
       database:
   # ── Authentik identity provider ──────────────────────────────────────────
@@ -130,7 +124,7 @@ services:
       authentik-redis:
         condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:9000/-/health/live/ || exit 1"]
+      test: ["CMD", "/lifecycle/ak", "healthcheck"]
       interval: 10s
       timeout: 5s
       retries: 10
@@ -165,53 +159,22 @@ services:
         condition: service_healthy
     networks:
       auth:
-  # One-shot service: creates a developer test user via Django ORM after the
-  # server is healthy. Idempotent — safe to re-run on every `docker compose up`.
-  authentik-init:
-    image: ghcr.io/goauthentik/server:2024.12.3
-    profiles:
-      - auth
-    restart: on-failure
-    command:
-      - "shell"
-      - "-c"
-      - |
-        from authentik.core.models import User
-        obj, created = User.objects.get_or_create(
-            username="developer",
-            defaults={"name": "Developer", "email": "developer@localhost", "is_active": True},
-        )
-        if created:
-            obj.set_password("devpassword")
-            obj.save()
-    environment:
-      AUTHENTIK_REDIS__HOST: authentik-redis
-      AUTHENTIK_POSTGRESQL__HOST: authentik-postgresql
-      AUTHENTIK_POSTGRESQL__USER: authentik
-      AUTHENTIK_POSTGRESQL__PASSWORD: authentik
-      AUTHENTIK_POSTGRESQL__NAME: authentik
-      AUTHENTIK_SECRET_KEY: seizu-dev-secret-change-in-production
-      AUTHENTIK_ERROR_REPORTING__ENABLED: "false"
-    depends_on:
-      authentik-server:
-        condition: service_healthy
-    networks:
-      auth:
   # ─────────────────────────────────────────────────────────────────────────
   seizu-dashboard-stats:
     image: ghcr.io/ryan-lane/seizu
     restart: on-failure
     user: seizu
+    depends_on:
+      neo4j:
+        condition: service_healthy
     environment:
-      - NEO4J_PASSWORD
-      - NEO4J_USER=neo4j
       - NEO4J_URI=bolt://neo4j:7687
       - FLASK_APP=reporting.dashboard_stats
       - STATSD_HOST=telegraf
     command: flask worker dashboard-stats
     volumes:
       - .:/home/seizu/seizu
-      - ./.compose/seizu/reporting-dashboard.yaml:/reporting-dashboard.conf
+      - ./.config/dev/seizu/reporting-dashboard.yaml:/reporting-dashboard.conf
     networks:
       stats:
       database:
@@ -219,9 +182,10 @@ services:
     image: ghcr.io/ryan-lane/seizu
     restart: on-failure
     user: seizu
+    depends_on:
+      neo4j:
+        condition: service_healthy
     environment:
-      - NEO4J_PASSWORD
-      - NEO4J_USER=neo4j
       - NEO4J_URI=bolt://neo4j:7687
       - AWS_ACCESS_KEY_ID=fake
       - AWS_SECRET_ACCESS_KEY=fake
@@ -235,7 +199,7 @@ services:
     command: flask worker schedule-queries
     volumes:
       - .:/home/seizu/seizu
-      - ./.compose/seizu/reporting-dashboard.yaml:/reporting-dashboard.conf
+      - ./.config/dev/seizu/reporting-dashboard.yaml:/reporting-dashboard.conf
     networks:
       stats:
       database:
@@ -247,44 +211,41 @@ services:
     user: seizu
     environment:
       - HOST=0.0.0.0
-      - PORT=8443
-      # FORWARDED_ALLOW_IPS is needed for X-Forwarded-Proto. Gunicorn/flask will
-      # not correctly identify that SSL is being used otherwise.
-      - "FORWARDED_ALLOW_IPS=*"
+      - PORT=8080
       # Gevent will block on DNS unless ares is set.
       - GEVENT_RESOLVER=ares
-      - NEO4J_PASSWORD
-      - NEO4J_USER=neo4j
       - NEO4J_URI=bolt://neo4j:7687
       # JWT authentication is disabled for development by default.
       # To enable Authentik auth, start with --profile auth and change to:
       #   DEVELOPMENT_ONLY_REQUIRE_AUTH=true
-      - "DEVELOPMENT_ONLY_REQUIRE_AUTH=false"
+      - DEVELOPMENT_ONLY_REQUIRE_AUTH
       - DEVELOPMENT_ONLY_AUTH_USER_EMAIL=testuser
       # Generic JWKS settings — works with any standard OIDC provider.
       # When using Authentik (--profile auth), point to the internal Docker hostname:
       - JWKS_URL=http://authentik-server:9000/application/o/seizu/jwks/
       - JWT_HEADER_NAME=Authorization
       - JWT_EMAIL_CLAIM=email
+      - JWT_AUDIENCE=seizu
       # Disable the referer check so node can proxy to the backend
       - "CSRF_CHECK_REFERER=false"
+      # Disable HTTPS redirect and allow CSRF cookie over plain HTTP in development
+      - "TALISMAN_FORCE_HTTPS=false"
+      - "CSRF_COOKIE_SECURE=false"
       - SECRET_KEY=fake
       - STATSD_EXTERNAL_PREFIX=seizu
       - STATSD_EXTERNAL_PROVIDER=newrelic
       - PAGERDUTY_API_KEY
     healthcheck:
-      test: ["CMD", "curl", "-fk", "https://localhost:8443/healthcheck"]
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8080/healthcheck')"]
       interval: 30s
       timeout: 10s
       retries: 5
     volumes:
       - .:/home/seizu/seizu
-      - ./.compose/seizu/reporting-dashboard.yaml:/reporting-dashboard.conf
-      - ~/.minica/localhost/cert.pem:/ssl/cert.pem
-      - ~/.minica/localhost/key.pem:/ssl/key.pem
+      - ./.config/dev/seizu/reporting-dashboard.yaml:/reporting-dashboard.conf
     ports:
-      - 8443:8443
-    command: gunicorn --config /home/seizu/seizu/gunicorn.conf reporting.wsgi:app --reload --workers=2 -k gevent --access-logfile=- --error-logfile=- --keyfile=/ssl/key.pem --certfile=/ssl/cert.pem
+      - 8080:8080
+    command: gunicorn --config /home/seizu/seizu/gunicorn.conf reporting.wsgi:app --reload --workers=2 -k gevent --access-logfile=- --error-logfile=-
     networks:
       proxy:
       stats:
@@ -294,31 +255,26 @@ services:
     user: bun
     environment:
       - NODE_ENV=development
-      - "HTTPS=true"
-      - SSL_CRT_FILE=/ssl/cert.pem
-      - SSL_KEY_FILE=/ssl/key.pem
-      - PORT=7443
+      - PORT=3000
       # OIDC is disabled by default. To enable Authentik auth (--profile auth),
       # change REACT_APP_OIDC_ENABLED to true.
-      - "REACT_APP_OIDC_ENABLED=false"
+      - REACT_APP_OIDC_ENABLED
       - REACT_APP_OIDC_AUTHORITY=http://localhost:9000/application/o/seizu
       - REACT_APP_OIDC_CLIENT_ID=seizu
-      - REACT_APP_OIDC_REDIRECT_URI=https://localhost:7443/auth/callback
+      - REACT_APP_OIDC_REDIRECT_URI=http://localhost:3000/auth/callback
       - "REACT_APP_OIDC_SCOPE=openid email profile"
     working_dir: /home/seizu/seizu
     volumes:
       - ~/.bun:/home/bun/.bun
-      - ~/.minica/localhost/cert.pem:/ssl/cert.pem
-      - ~/.minica/localhost/key.pem:/ssl/key.pem
       - .:/home/seizu/seizu
     ports:
-      - 7443:7443
+      - 3000:3000
     networks:
       proxy:
     command: bun run start
   cartography:
     image: ghcr.io/cartography-cncf/cartography
-    user: cartography
+    user: "10001:10001"
     init: true
     # We call cartography directly, so make sure it doesn't try to start on up
     profiles:
@@ -328,7 +284,6 @@ services:
       - ./.compose/cartography/permission_relationships.yaml:/etc/cartography/permission_relationships.yaml
       - ./.compose/cartography/kube.config:/etc/cartography/kube.config
     environment:
-      - NEO4J_PASSWORD
       - "STATSD_ENABLED=true"
       - STATSD_HOST=telegraf
       - GITHUB_TOKEN

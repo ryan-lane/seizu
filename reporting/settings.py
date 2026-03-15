@@ -71,7 +71,7 @@ NEO4J_USER = str_env("NEO4J_USER")
 NEO4J_PASSWORD = str_env("NEO4J_PASSWORD")
 
 # URL of the neo4j browser console
-NEO4J_CONSOLE_URL = str_env("NEO4J_CONSOLE_URL", "https://localhost:7473")
+NEO4J_CONSOLE_URL = str_env("NEO4J_CONSOLE_URL", "http://localhost:7474")
 
 # Maximum duration in seconds a driver will keep a connection before being
 # removed from its connection pool.
@@ -90,6 +90,10 @@ SCHEDULED_QUERY_MODULES = list_env(
     ],
 )
 # NOTE: scheduled query module settings are defined within the modules themselves
+
+# Whether to redirect HTTP requests to HTTPS (via Flask-Talisman).
+# Disable in development or when running behind an SSL-terminating load balancer.
+TALISMAN_FORCE_HTTPS = bool_env("TALISMAN_FORCE_HTTPS", True)
 
 # CSRF settings
 

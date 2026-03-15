@@ -44,6 +44,7 @@ def get_config() -> Response:
         {
             "console_url": settings.NEO4J_CONSOLE_URL,
             "pagerduty_enabled": pagerduty_enabled,
+            "auth_required": settings.DEVELOPMENT_ONLY_REQUIRE_AUTH,
             "stats": {
                 "external_provider": settings.STATSD_EXTERNAL_PROVIDER,
                 "external_prefix": settings.STATSD_EXTERNAL_PREFIX,

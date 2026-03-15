@@ -2,6 +2,11 @@
 
 mkdir -p ./.compose/telegraf ./.compose/elasticmq ./.compose/neo4j ./.compose/seizu ./.compose/authentik/blueprints
 
+if [ ! -f ./.env ]
+then
+  cp ./.env.example ./.env
+fi
+
 if [ ! -f ./.compose/telegraf/telegraf.conf ]
 then
   cp ./.config/dev/telegraf/telegraf.conf ./.compose/telegraf/telegraf.conf
@@ -26,3 +31,4 @@ if [ ! -f ./.compose/authentik/blueprints/seizu.yaml ]
 then
   cp ./.config/dev/authentik/blueprints/seizu.yaml ./.compose/authentik/blueprints/seizu.yaml
 fi
+

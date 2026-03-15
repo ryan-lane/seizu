@@ -3,6 +3,9 @@ SHELL := /bin/bash
 
 args = `arg="$(filter-out $@,$(MAKECMDGOALS))" && echo $${arg:-${1}}`
 
+# Automatically include --profile auth if auth is enabled in .env
+AUTH_PROFILE := $(shell grep -q 'DEVELOPMENT_ONLY_REQUIRE_AUTH=true' .env 2>/dev/null && echo '--profile auth' || echo '')
+
 .PHONY: clean
 clean:
 	find . -name "*.pyc" -delete
@@ -23,7 +26,7 @@ test_unit: clean junit pipenv_install
 
 .PHONY: test_frontend
 test_frontend:
-	@docker-compose run --rm seizu-node bun run type-check
+	@docker compose run --rm seizu-node bun run type-check
 
 .PHONY: lock
 lock:
@@ -51,11 +54,7 @@ docs: schema
 
 .PHONY: bun
 bun:
-	@docker-compose run seizu-node bun $(call args)
-
-.PHONY: add_ssl
-add_ssl:
-	@./add-ssl.sh
+	@docker compose run seizu-node bun $(call args)
 
 .PHONY: setup
 config_setup:
@@ -63,36 +62,54 @@ config_setup:
 
 .PHONY: up
 up: config_setup
-	docker-compose up $(call args)
+	docker compose $(AUTH_PROFILE) up $(call args)
 
 .PHONY: down
 down:
-	docker-compose down
+	docker compose $(AUTH_PROFILE) down
+
+.PHONY: auth_enable
+auth_enable:
+	@docker compose --profile auth up -d
+	@echo "Waiting for Authentik to become healthy..."
+	@until [ "$$(docker inspect --format='{{.State.Health.Status}}' seizu-authentik-server-1 2>/dev/null)" = "healthy" ]; do sleep 5; done
+	@sed -i '' 's/DEVELOPMENT_ONLY_REQUIRE_AUTH=false/DEVELOPMENT_ONLY_REQUIRE_AUTH=true/' .env
+	@sed -i '' 's/REACT_APP_OIDC_ENABLED=false/REACT_APP_OIDC_ENABLED=true/' .env
+	@docker compose up -d seizu seizu-node
+	@echo "Auth enabled. Visit http://localhost:3000 and log in as developer/devpassword"
+
+.PHONY: auth_disable
+auth_disable:
+	@sed -i '' 's/DEVELOPMENT_ONLY_REQUIRE_AUTH=true/DEVELOPMENT_ONLY_REQUIRE_AUTH=false/' .env
+	@sed -i '' 's/REACT_APP_OIDC_ENABLED=true/REACT_APP_OIDC_ENABLED=false/' .env
+	@docker compose up -d seizu seizu-node
+	@docker compose --profile auth stop authentik-server authentik-worker authentik-postgresql authentik-redis
+	@echo "Auth disabled. Visit http://localhost:3000"
 
 .PHONY: restart
 restart:
-	docker-compose restart $(call args)
+	docker compose restart $(call args)
 
 .PHONY: logs
 logs:
-	docker-compose logs -f $(call args)
+	docker compose logs -f $(call args)
 
 .PHONY: sync_aws
 sync_aws:
-	docker-compose run cartography cartography --neo4j-password-env-var=NEO4J_PASSWORD --neo4j-user=neo4j --neo4j-uri=bolt://neo4j:7687 --aws-sync-all-profiles --permission-relationships-file=/etc/cartography/permission_relationships.yaml
+	docker compose run cartography --neo4j-uri=bolt://neo4j:7687 --selected-modules=aws --aws-sync-all-profiles --permission-relationships-file=/etc/cartography/permission_relationships.yaml
 
 .PHONY: sync_k8s
 sync_k8s:
-	docker-compose run cartography cartography --neo4j-password-env-var=NEO4J_PASSWORD --neo4j-user=neo4j --neo4j-uri=bolt://neo4j:7687 --k8s-kubeconfig=/etc/cartography/kube.config
+	docker compose run cartography --neo4j-uri=bolt://neo4j:7687 --selected-modules=kubernetes --k8s-kubeconfig=/etc/cartography/kube.config
 
 .PHONY: sync_crowdstrike
 sync_crowdstrike:
-	docker-compose run cartography cartography --neo4j-password-env-var=NEO4J_PASSWORD --neo4j-user=neo4j --neo4j-uri=bolt://neo4j:7687 --crowdstrike-client-id-env-var=CROWDSTRIKE_CLIENT_ID --crowdstrike-client-secret-env-var=CROWDSTRIKE_CLIENT_SECRET
+	docker compose run cartography --neo4j-uri=bolt://neo4j:7687 --selected-modules=crowdstrike --crowdstrike-client-id-env-var=CROWDSTRIKE_CLIENT_ID --crowdstrike-client-secret-env-var=CROWDSTRIKE_CLIENT_SECRET
 
 .PHONY: sync_github
 sync_github:
-	docker-compose run cartography cartography --neo4j-password-env-var=NEO4J_PASSWORD --neo4j-user=neo4j --neo4j-uri=bolt://neo4j:7687 --github-config-env-var=GITHUB_TOKEN
+	docker compose run cartography --neo4j-uri=bolt://neo4j:7687 --selected-modules=github --github-config-env-var=GITHUB_TOKEN
 
 .PHONY: sync_cve
 sync_cve:
-	docker-compose run cartography cartography --neo4j-password-env-var=NEO4J_PASSWORD --neo4j-user=neo4j --neo4j-uri=bolt://neo4j:7687 --cve-enabled
+	docker compose run cartography --neo4j-uri=bolt://neo4j:7687 --selected-modules=cve --cve-enabled

@@ -41,6 +41,7 @@ def _make_mock_client(mocker, signing_key):
 
 def test__get_jwt_payload_bearer(mocker):
     """JWT is read from an Authorization: Bearer header by default."""
+    mocker.patch("reporting.settings.JWT_AUDIENCE", "")
     signing_key = _make_mock_signing_key(mocker)
     mock_client = _make_mock_client(mocker, signing_key)
     mocker.patch("reporting.authnz._get_jwks_client", return_value=mock_client)
@@ -56,6 +57,7 @@ def test__get_jwt_payload_bearer(mocker):
 
 def test__get_jwt_payload_custom_header(mocker):
     """JWT is read from a custom header when JWT_HEADER_NAME is overridden."""
+    mocker.patch("reporting.settings.JWT_AUDIENCE", "")
     mocker.patch("reporting.settings.JWT_HEADER_NAME", "x-amzn-oidc-data")
     signing_key = _make_mock_signing_key(mocker)
     mock_client = _make_mock_client(mocker, signing_key)
@@ -72,6 +74,7 @@ def test__get_jwt_payload_custom_header(mocker):
 
 def test__get_jwt_payload_custom_email_claim(mocker):
     """Email is read from a configurable claim."""
+    mocker.patch("reporting.settings.JWT_AUDIENCE", "")
     mocker.patch("reporting.settings.JWT_EMAIL_CLAIM", "preferred_username")
     signing_key = _make_mock_signing_key(mocker)
     mock_client = _make_mock_client(mocker, signing_key)
@@ -112,3 +115,68 @@ def test_get_email_auth_disabled(mocker):
         "test@example.com",
     )
     assert reporting.authnz.get_email() == "test@example.com"
+
+
+def test__get_jwt_payload_missing_header(mocker):
+    """Missing Authorization header raises ValueError."""
+    import pytest
+
+    app = create_app({"PREFERRED_URL_SCHEME": "https"})
+    with app.test_request_context():
+        with pytest.raises(ValueError, match="Missing JWT header"):
+            reporting.authnz._get_jwt_payload()
+
+
+def test__get_jwt_payload_with_audience(mocker):
+    """JWT audience claim is accepted when JWT_AUDIENCE matches."""
+    mocker.patch("reporting.settings.JWT_AUDIENCE", "myapp")
+    signing_key = _make_mock_signing_key(mocker)
+    mock_client = _make_mock_client(mocker, signing_key)
+    mocker.patch("reporting.authnz._get_jwks_client", return_value=mock_client)
+    encoded = jwt.encode(
+        {"email": "test@example.com", "aud": "myapp"},
+        base64.b64decode(FAKE_PRIVATE_KEY),
+        algorithm="ES256",
+    )
+    app = create_app({"PREFERRED_URL_SCHEME": "https"})
+    with app.test_request_context(headers={"Authorization": f"Bearer {encoded}"}):
+        payload = reporting.authnz._get_jwt_payload()
+        assert payload["email"] == "test@example.com"
+
+
+def test__get_jwt_payload_audience_mismatch(mocker):
+    """JWT with wrong audience claim is rejected."""
+    import pytest
+
+    mocker.patch("reporting.settings.JWT_AUDIENCE", "myapp")
+    signing_key = _make_mock_signing_key(mocker)
+    mock_client = _make_mock_client(mocker, signing_key)
+    mocker.patch("reporting.authnz._get_jwks_client", return_value=mock_client)
+    encoded = jwt.encode(
+        {"email": "test@example.com", "aud": "other-app"},
+        base64.b64decode(FAKE_PRIVATE_KEY),
+        algorithm="ES256",
+    )
+    app = create_app({"PREFERRED_URL_SCHEME": "https"})
+    with app.test_request_context(headers={"Authorization": f"Bearer {encoded}"}):
+        with pytest.raises(jwt.exceptions.InvalidAudienceError):
+            reporting.authnz._get_jwt_payload()
+
+
+def test__get_jwt_payload_aud_in_token_but_not_configured(mocker):
+    """Token with aud claim fails when JWT_AUDIENCE is not set (PyJWT requirement)."""
+    import pytest
+
+    mocker.patch("reporting.settings.JWT_AUDIENCE", "")
+    signing_key = _make_mock_signing_key(mocker)
+    mock_client = _make_mock_client(mocker, signing_key)
+    mocker.patch("reporting.authnz._get_jwks_client", return_value=mock_client)
+    encoded = jwt.encode(
+        {"email": "test@example.com", "aud": "myapp"},
+        base64.b64decode(FAKE_PRIVATE_KEY),
+        algorithm="ES256",
+    )
+    app = create_app({"PREFERRED_URL_SCHEME": "https"})
+    with app.test_request_context(headers={"Authorization": f"Bearer {encoded}"}):
+        with pytest.raises(jwt.exceptions.InvalidAudienceError):
+            reporting.authnz._get_jwt_payload()

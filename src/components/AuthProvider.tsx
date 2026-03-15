@@ -19,22 +19,6 @@ function AuthProvider({ children }: AuthProviderProps) {
       return;
     }
 
-    // Don't redirect when we're processing the OIDC callback.
-    if (UNAUTHENTICATED_PATHS.includes(window.location.pathname)) {
-      setIsLoading(false);
-      return;
-    }
-
-    userManager.getUser().then((loadedUser) => {
-      if (loadedUser && !loadedUser.expired) {
-        setUser(loadedUser);
-        setIsLoading(false);
-      } else {
-        // Redirect to OIDC; page will leave so we stay in loading state.
-        userManager.signinRedirect();
-      }
-    });
-
     const onUserLoaded = (loadedUser: User) => {
       setUser(loadedUser);
       setIsLoading(false);
@@ -43,6 +27,23 @@ function AuthProvider({ children }: AuthProviderProps) {
 
     userManager.events.addUserLoaded(onUserLoaded);
     userManager.events.addUserUnloaded(onUserUnloaded);
+
+    // On the OIDC callback path, OidcCallback drives the flow via
+    // signinRedirectCallback(). The userLoaded event above will fire when it
+    // completes — don't try to load or redirect here.
+    if (UNAUTHENTICATED_PATHS.includes(window.location.pathname)) {
+      setIsLoading(false);
+    } else {
+      userManager.getUser().then((loadedUser) => {
+        if (loadedUser && !loadedUser.expired) {
+          setUser(loadedUser);
+          setIsLoading(false);
+        } else {
+          // Redirect to OIDC; page will leave so we stay in loading state.
+          userManager.signinRedirect();
+        }
+      });
+    }
 
     return () => {
       userManager.events.removeUserLoaded(onUserLoaded);
