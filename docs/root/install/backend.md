@@ -31,7 +31,6 @@ When using the docker image, the defaults for the reporting configuration file a
 
 * ``REPORTING_CONFIG_FILE``: location to the dashboard configuration; default: ``/reporting-dashboard.conf``
 * ``REPORTING_CONFIG_SCHEMA_FILE``: location to the dashboard configuration jsonschema; default: ``/reporting-dashboard.schema.json``
-* ``NEO4J_CONSOLE_URL``: The link to the Neo4j console, to provide to users, in the frontend; default: ``https://localhost:7473``
 * ``SECRET_KEY``: Flask session secret key for for sessions and CSRF. Set to some long, random string; default: ``None``
 
 ### Neo4j configuration

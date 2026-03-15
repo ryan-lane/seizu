@@ -30,15 +30,15 @@ test_frontend:
 
 .PHONY: lock
 lock:
-	pipenv lock --keep-outdated --requirements > requirements.txt
+	docker compose run --rm seizu bash -c "cd /home/seizu/seizu && pipenv requirements" > requirements.txt
 
 .PHONY: lock_update
 lock_update:
-	pipenv lock --requirements > requirements.txt
+	docker compose run --rm seizu bash -c "cd /home/seizu/seizu && pipenv lock && pipenv requirements" > requirements.txt
 
 .PHONY: lock_dev
 lock_dev:
-	pipenv lock --requirements --dev-only > test-requirements.txt
+	docker compose run --rm seizu bash -c "cd /home/seizu/seizu && pipenv requirements --dev-only" > test-requirements.txt
 
 .PHONY: build
 build: clean
@@ -70,19 +70,13 @@ down:
 
 .PHONY: auth_enable
 auth_enable:
-	@docker compose --profile auth up -d
-	@echo "Waiting for Authentik to become healthy..."
-	@until [ "$$(docker inspect --format='{{.State.Health.Status}}' seizu-authentik-server-1 2>/dev/null)" = "healthy" ]; do sleep 5; done
 	@sed -i '' 's/DEVELOPMENT_ONLY_REQUIRE_AUTH=false/DEVELOPMENT_ONLY_REQUIRE_AUTH=true/' .env
-	@docker compose up -d seizu seizu-node
-	@echo "Auth enabled. Visit http://localhost:3000 and log in as developer/devpassword"
+	@echo "Auth enabled in .env. Run 'make down && make up' to apply."
 
 .PHONY: auth_disable
 auth_disable:
 	@sed -i '' 's/DEVELOPMENT_ONLY_REQUIRE_AUTH=true/DEVELOPMENT_ONLY_REQUIRE_AUTH=false/' .env
-	@docker compose up -d seizu seizu-node
-	@docker compose --profile auth stop authentik-server authentik-worker authentik-postgresql authentik-redis
-	@echo "Auth disabled. Visit http://localhost:3000"
+	@echo "Auth disabled in .env. Run 'make down && make up' to apply."
 
 .PHONY: restart
 restart:

@@ -18,7 +18,6 @@ import CypherProgress from 'src/components/reports/CypherProgress';
 import CypherCount from 'src/components/reports/CypherCount';
 import CypherTable from 'src/components/reports/CypherTable';
 import CypherVerticalTable from 'src/components/reports/CypherVerticalTable';
-import OncallTable from 'src/components/reports/OncallTable';
 
 function Dashboard() {
   const { config } = useContext(ConfigContext);
@@ -107,13 +106,6 @@ function Dashboard() {
             params={params}
             id={item.table_id}
             details={details}
-          />
-        );
-      } else if (item.type === 'oncall-table') {
-        itemComponent = (
-          <OncallTable
-            caption={item.caption}
-            enabled={config.pagerduty_enabled}
           />
         );
       } else if (item.type === 'markdown') {

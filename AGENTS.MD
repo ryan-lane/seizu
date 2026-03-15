@@ -101,7 +101,7 @@ Flask 2 app, Python 3.12, using Gunicorn+Gevent in production.
 **Key files and patterns:**
 - `reporting/app.py` — Flask app factory (`create_app`)
 - `reporting/settings.py` — all configuration via env vars (Pydantic validators)
-- `reporting/routes/` — Flask blueprints: `config.py`, `query.py`, `pagerduty.py`, `static.py`
+- `reporting/routes/` — Flask blueprints: `config.py`, `query.py`, `static.py`
 - `reporting/services/` — business logic: `reporting_neo4j.py` (Neo4j driver + distributed locking), `query_validator.py` (multi-stage Cypher validation), `reporting_statsd.py`
 - `reporting/schema/reporting_config.py` — Pydantic models that validate the YAML dashboard config
 - `reporting/authnz/` — generic JWT validation using `PyJWKClient`; works with any standard OIDC provider
@@ -118,7 +118,6 @@ Flask 2 app, Python 3.12, using Gunicorn+Gevent in production.
 |--------|------|-------------|
 | GET | `/api/v1/config` | Returns full dashboard/report config |
 | POST | `/api/v1/query` | Executes a validated read-only Cypher query |
-| GET | `/api/v1/pagerduty/*` | PagerDuty proxy endpoints |
 | GET | `/healthcheck` | Healthcheck |
 
 ### Configuration System
@@ -127,7 +126,7 @@ The entire dashboard is configuration-driven via a YAML file (mounted as `/repor
 
 **YAML top-level sections:**
 - `queries` — named Cypher query strings
-- `dashboard` — rows/panels layout (panel types: `count`, `progress`, `pie`, `bar`, `table`, `vertical_table`, `markdown`, `oncall`)
+- `dashboard` — rows/panels layout (panel types: `count`, `progress`, `pie`, `bar`, `table`, `vertical_table`, `markdown`)
 - `reports` — report pages with typed inputs (`autocomplete`, `text`) and rows/panels
 - `scheduled_queries` — recurring query definitions with action plugins (SQS, Slack, log)
 
@@ -203,12 +202,15 @@ The frontend performs an OIDC PKCE flow when the backend returns `auth_required:
 
 **Testing authentication locally with Authentik:**
 
-**Step 1 — Enable auth:**
+`make auth_enable` and `make auth_disable` only update `.env`. `make up` and `make down` automatically include `--profile auth` when `DEVELOPMENT_ONLY_REQUIRE_AUTH=true` is set in `.env`, so Authentik services start and stop with the rest of the stack.
+
+**Step 1 — Enable auth and restart:**
 ```bash
 make auth_enable
+make down && make up
 ```
 
-This starts the Authentik services (waiting for them to be healthy), flips `DEVELOPMENT_ONLY_REQUIRE_AUTH` and `REACT_APP_OIDC_ENABLED` in `.env`, and restarts `seizu` and `seizu-node`. On first run allow ~2 minutes for Authentik to become healthy; subsequent runs take ~30 seconds.
+`make auth_enable` sets `DEVELOPMENT_ONLY_REQUIRE_AUTH=true` in `.env`. `make up` then detects this and starts the full stack including the Authentik profile. On first run allow ~2 minutes for Authentik to become healthy; subsequent runs take ~30 seconds.
 
 Setup is fully automated — no browser wizard needed. The following happen automatically:
 1. `AUTHENTIK_BOOTSTRAP_PASSWORD` creates the `akadmin` admin account and skips the setup wizard
@@ -216,9 +218,7 @@ Setup is fully automated — no browser wizard needed. The following happen auto
 3. `.config/dev/authentik/blueprints/seizu.yaml` (mounted at `/blueprints/custom`) creates the seizu OIDC provider and application
 4. The custom blueprint sets passwords for `akadmin` and `developer` and creates the `developer` user
 
-Note: `REACT_APP_*` vars are injected into the React bundle at dev-server start time, so a container restart is required (not just a hot reload).
-
-**Step 4 — Log in:**
+**Step 2 — Log in:**
 
 Visit `http://localhost:3000`. You will be redirected to Authentik at `http://localhost:9000`. Log in as `developer` / `devpassword`. Authentik redirects back to `http://localhost:3000/auth/callback`, completes the PKCE exchange, and the app loads with a valid session.
 
@@ -231,9 +231,10 @@ Visit `http://localhost:3000`. You will be redirected to Authentik at `http://lo
 **Reverting to no-auth dev mode:**
 ```bash
 make auth_disable
+make down && make up
 ```
 
-This flips the flags back in `.env`, restarts `seizu` and `seizu-node`, and stops the Authentik services.
+`make auth_disable` sets `DEVELOPMENT_ONLY_REQUIRE_AUTH=false` in `.env`. `make down && make up` then stops the full stack (including Authentik) and restarts without the auth profile.
 
 **Authentik admin UI:** `http://localhost:9000` — log in as `akadmin` / `devpassword` to inspect the OIDC provider, application, and users.
 
@@ -258,5 +259,8 @@ When making changes to the codebase, always review and update the following file
 - **`Dockerfile` and `docker-compose.yml`** — update if new files, build steps, services, or environment variables are introduced
 - **`.pre-commit-config.yaml`** — update hooks or dependencies if linting/formatting tooling changes
 - **`.eslintrc`** (or other lint/format configs) — update if new file types, parsers, or plugins are needed
-- **`docs/`** — update documentation if behavior, configuration, or interfaces change
+- **`Pipfile`** — add or remove Python dependencies when adding or removing backend features; run `docker compose run --rm seizu pipenv install <pkg>` to add, edit `Pipfile` directly then run `docker compose run --rm seizu pipenv lock` to update `Pipfile.lock`, then run `make lock` to regenerate `requirements.txt`
+- **`docs/`** — update documentation when adding, changing, or removing features, panel types, API endpoints, configuration options, or any user-facing behavior. Always grep docs/ for references to anything you are removing to ensure nothing is left stale.
+- **`schema/reporting-schema.json`** — regenerate via `make schema` (or manually update) when the Pydantic config schema changes
+- **`.env.example`** — add new env vars; remove or relocate vars when features are removed
 - **`AGENTS.MD`** — update these guidelines if new conventions or tooling patterns are introduced (loaded via `.claude/CLAUDE.md`)

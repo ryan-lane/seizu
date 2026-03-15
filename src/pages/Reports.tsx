@@ -23,8 +23,6 @@ import CypherTable from 'src/components/reports/CypherTable';
 import CypherVerticalTable from 'src/components/reports/CypherVerticalTable';
 import CypherAutocomplete from 'src/components/reports/CypherAutocomplete';
 import FreeTextInput from 'src/components/reports/FreeTextInput';
-import CypherOncallTable from 'src/components/reports/CypherOncallTable';
-import OncallTable from 'src/components/reports/OncallTable';
 
 function Reports() {
   const { id } = useParams();
@@ -230,25 +228,6 @@ function Reports() {
             needInputs={needInputs}
           />
         );
-      } else if (item.type === 'oncall-table') {
-        if (item.cypher === undefined) {
-          itemComponent = (
-            <OncallTable
-              caption={item.caption}
-              enabled={config.pagerduty_enabled}
-            />
-          );
-        } else {
-          itemComponent = (
-            <CypherOncallTable
-              cypher={queries[item.cypher]}
-              params={params}
-              caption={item.caption}
-              needInputs={needInputs}
-              enabled={config.pagerduty_enabled}
-            />
-          );
-        }
       } else if (item.type === 'markdown') {
         itemComponent = (
           <MuiMarkdown
