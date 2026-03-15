@@ -202,12 +202,15 @@ The frontend performs an OIDC PKCE flow when the backend returns `auth_required:
 
 **Testing authentication locally with Authentik:**
 
-**Step 1 — Enable auth:**
+`make auth_enable` and `make auth_disable` only update `.env`. `make up` and `make down` automatically include `--profile auth` when `DEVELOPMENT_ONLY_REQUIRE_AUTH=true` is set in `.env`, so Authentik services start and stop with the rest of the stack.
+
+**Step 1 — Enable auth and restart:**
 ```bash
 make auth_enable
+make down && make up
 ```
 
-This starts the Authentik services (waiting for them to be healthy), flips `DEVELOPMENT_ONLY_REQUIRE_AUTH` and `REACT_APP_OIDC_ENABLED` in `.env`, and restarts `seizu` and `seizu-node`. On first run allow ~2 minutes for Authentik to become healthy; subsequent runs take ~30 seconds.
+`make auth_enable` sets `DEVELOPMENT_ONLY_REQUIRE_AUTH=true` in `.env`. `make up` then detects this and starts the full stack including the Authentik profile. On first run allow ~2 minutes for Authentik to become healthy; subsequent runs take ~30 seconds.
 
 Setup is fully automated — no browser wizard needed. The following happen automatically:
 1. `AUTHENTIK_BOOTSTRAP_PASSWORD` creates the `akadmin` admin account and skips the setup wizard
@@ -215,9 +218,7 @@ Setup is fully automated — no browser wizard needed. The following happen auto
 3. `.config/dev/authentik/blueprints/seizu.yaml` (mounted at `/blueprints/custom`) creates the seizu OIDC provider and application
 4. The custom blueprint sets passwords for `akadmin` and `developer` and creates the `developer` user
 
-Note: `REACT_APP_*` vars are injected into the React bundle at dev-server start time, so a container restart is required (not just a hot reload).
-
-**Step 4 — Log in:**
+**Step 2 — Log in:**
 
 Visit `http://localhost:3000`. You will be redirected to Authentik at `http://localhost:9000`. Log in as `developer` / `devpassword`. Authentik redirects back to `http://localhost:3000/auth/callback`, completes the PKCE exchange, and the app loads with a valid session.
 
@@ -230,9 +231,10 @@ Visit `http://localhost:3000`. You will be redirected to Authentik at `http://lo
 **Reverting to no-auth dev mode:**
 ```bash
 make auth_disable
+make down && make up
 ```
 
-This flips the flags back in `.env`, restarts `seizu` and `seizu-node`, and stops the Authentik services.
+`make auth_disable` sets `DEVELOPMENT_ONLY_REQUIRE_AUTH=false` in `.env`. `make down && make up` then stops the full stack (including Authentik) and restarts without the auth profile.
 
 **Authentik admin UI:** `http://localhost:9000` — log in as `akadmin` / `devpassword` to inspect the OIDC provider, application, and users.
 

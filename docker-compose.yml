@@ -57,14 +57,12 @@ services:
     networks:
       database:
   # ── Authentik identity provider ──────────────────────────────────────────
-  # Start with: docker compose --profile auth up
+  # Use `make auth_enable && make down && make up` to start with auth.
+  # make up includes --profile auth automatically when DEVELOPMENT_ONLY_REQUIRE_AUTH=true.
   # Setup is fully automated — no browser wizard required.
   #   Admin:     akadmin / devpassword  (http://localhost:9000)
   #   Dev user:  developer / devpassword
   # The seizu OIDC application is created automatically via the blueprint.
-  # To enable auth in seizu, also set:
-  #   DEVELOPMENT_ONLY_REQUIRE_AUTH=true   (seizu service)
-  #   REACT_APP_OIDC_ENABLED=true          (seizu-node service)
   authentik-postgresql:
     image: postgres:16-alpine
     profiles:
