@@ -46,7 +46,7 @@ export default function CypherPie({
     if (needInputs === undefined || needInputs.length === 0) {
       runQuery(params);
     }
-  }, [cypher, params]);
+  }, [cypher, params, runQuery]);
 
   if (cypher === undefined) {
     return (

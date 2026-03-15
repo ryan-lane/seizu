@@ -79,7 +79,7 @@ def _lock(tx: Transaction, query_id: str) -> None:
     query = """
     MERGE (sq:ScheduledQuery{id: $query_id})
     ON CREATE SET sq.firstseen = timestamp(), sq.fail_count = 0
-    SET sq.scheduled = {UPDATE_TAG}
+    SET sq.scheduled = $UPDATE_TAG
     """
     run_tx_with_retry(tx, query, {"query_id": query_id, "UPDATE_TAG": int(time.time())})
 

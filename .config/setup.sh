@@ -1,6 +1,11 @@
 #!/bin/bash
 
-mkdir -p ./.compose/telegraf ./.compose/elasticmq ./.compose/neo4j ./.compose/seizu
+mkdir -p ./.compose/telegraf ./.compose/elasticmq ./.compose/neo4j ./.compose/seizu ./.compose/authentik/blueprints
+
+if [ ! -f ./.env ]
+then
+  cp ./.env.example ./.env
+fi
 
 if [ ! -f ./.compose/telegraf/telegraf.conf ]
 then
@@ -20,4 +25,9 @@ fi
 if [ ! -f ./.compose/seizu/reporting-dashboard.yaml ]
 then
   cp ./.config/dev/seizu/reporting-dashboard.yaml ./.compose/seizu/reporting-dashboard.yaml
+fi
+
+if [ ! -f ./.compose/authentik/blueprints/seizu.yaml ]
+then
+  cp ./.config/dev/authentik/blueprints/seizu.yaml ./.compose/authentik/blueprints/seizu.yaml
 fi

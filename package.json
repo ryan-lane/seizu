@@ -3,7 +3,7 @@
   "author": "PayPay Corp.",
   "licence": "Apache2",
   "version": "1.0.0",
-  "proxy": "https://seizu:8443",
+  "proxy": "http://seizu:8080",
   "private": true,
   "scripts": {
     "start": "react-scripts start",
@@ -45,6 +45,7 @@
     "markdown-to-jsx": "^9.7.9",
     "mui-datatables": "^4.3.0",
     "mui-markdown": "^2.1.1",
+    "oidc-client-ts": "^3.5.0",
     "prism-react-renderer": "^2.4.1",
     "prop-types": "^15.7.2",
     "query-string": "^9.3.1",

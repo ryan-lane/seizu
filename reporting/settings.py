@@ -34,19 +34,31 @@ LOG_CONFIG_FILE = str_env(
     "/home/seizu/seizu/logging.conf",
 )
 
-# Must be set to the region the server is running.
-AWS_DEFAULT_REGION = str_env("AWS_DEFAULT_REGION", "ap-northeast-1")
-
-# JWKS location to use to validate JWT
-JWKS_URL = str_env(
-    "JWKS_URL",
-    "https://public-keys.auth.elb.{AWS_DEFAULT_REGION}.amazonaws.com/{kid}",
-)
-# AWS ALBs use a URL that fetches a KID directly, while other providers use a URL that has a JSON file with a list
-# of keys. Default for this is to be setup behind an ALB, so to use a kid based url.
-JWKS_URL_FOR_ALB = bool_env("JWKS_URL_FOR_ALB", True)
+# Standard JWKS endpoint used to validate JWTs. Must be a JSON endpoint returning a
+# {"keys": [...]} JWK Set. Works with any standard OIDC provider.
+# Example: https://authentik.example.com/application/o/myapp/jwks/
+# Example: https://cognito-idp.{region}.amazonaws.com/{userPoolId}/.well-known/jwks.json
+JWKS_URL = str_env("JWKS_URL", "")
 # Algorithms we allow for JWT signing
-ALLOWED_JWT_ALGORITHMS = list_env("ALLOWED_JWT_ALGORITHMS", ["ES256", "ES512"])
+ALLOWED_JWT_ALGORITHMS = list_env("ALLOWED_JWT_ALGORITHMS", ["RS256", "ES256", "ES512"])
+# The request header from which the JWT is read.
+# Use "Authorization" (default) for standard Bearer token auth (e.g. OIDC PKCE).
+# Use "x-amzn-oidc-data" for backwards compatibility with AWS ALB OIDC headers.
+JWT_HEADER_NAME = str_env("JWT_HEADER_NAME", "Authorization")
+# The JWT claim that contains the user's email address.
+JWT_EMAIL_CLAIM = str_env("JWT_EMAIL_CLAIM", "email")
+# Optional issuer to validate in the JWT. Leave empty to skip issuer validation.
+JWT_ISSUER = str_env("JWT_ISSUER", "")
+# Optional audience to validate in the JWT. Leave empty to skip audience validation.
+JWT_AUDIENCE = str_env("JWT_AUDIENCE", "")
+# OIDC configuration surfaced to the frontend via GET /api/v1/config.
+# When DEVELOPMENT_ONLY_REQUIRE_AUTH is True, these are included in the config
+# response so the frontend can build its UserManager without build-time env vars.
+OIDC_AUTHORITY = str_env("OIDC_AUTHORITY", "")
+OIDC_CLIENT_ID = str_env("OIDC_CLIENT_ID", "")
+OIDC_REDIRECT_URI = str_env("OIDC_REDIRECT_URI", "")
+OIDC_SCOPE = str_env("OIDC_SCOPE", "openid email")
+
 # Whether or not to require authentication.
 # This option should only be changed in development.
 DEVELOPMENT_ONLY_REQUIRE_AUTH = bool_env("DEVELOPMENT_ONLY_REQUIRE_AUTH", True)
@@ -67,7 +79,7 @@ NEO4J_USER = str_env("NEO4J_USER")
 NEO4J_PASSWORD = str_env("NEO4J_PASSWORD")
 
 # URL of the neo4j browser console
-NEO4J_CONSOLE_URL = str_env("NEO4J_CONSOLE_URL", "https://localhost:7473")
+NEO4J_CONSOLE_URL = str_env("NEO4J_CONSOLE_URL", "http://localhost:7474")
 
 # Maximum duration in seconds a driver will keep a connection before being
 # removed from its connection pool.
@@ -86,6 +98,10 @@ SCHEDULED_QUERY_MODULES = list_env(
     ],
 )
 # NOTE: scheduled query module settings are defined within the modules themselves
+
+# Whether to redirect HTTP requests to HTTPS (via Flask-Talisman).
+# Disable in development or when running behind an SSL-terminating load balancer.
+TALISMAN_FORCE_HTTPS = bool_env("TALISMAN_FORCE_HTTPS", True)
 
 # CSRF settings
 

@@ -1,6 +1,7 @@
 import { Navigate } from 'react-router-dom';
 import DashboardLayout from 'src/components/DashboardLayout';
 import MainLayout from 'src/components/MainLayout';
+import OidcCallback from 'src/components/OidcCallback';
 import Dashboard from 'src/pages/Dashboard';
 import Reports from 'src/pages/Reports';
 import Neo4j from 'src/pages/Neo4j';
@@ -8,6 +9,10 @@ import Documentation from 'src/pages/Documentation';
 import NotFound from 'src/pages/NotFound';
 
 const routes = [
+  {
+    path: '/auth/callback',
+    element: <OidcCallback />
+  },
   {
     path: 'app',
     element: <DashboardLayout />,

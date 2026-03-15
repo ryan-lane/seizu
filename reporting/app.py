@@ -34,6 +34,7 @@ def create_app(override_settings: Optional[Dict] = None) -> Flask:
     csp = Talisman()
     csp.init_app(
         app,
+        force_https=settings.TALISMAN_FORCE_HTTPS,
         content_security_policy=CSP_POLICY,
         # Add a nonce to inline scripts in the react app. When we can remove unsafe-inline from style-src,
         # we should inject the nonce here.
