@@ -87,6 +87,32 @@ describe('useLazyCypherQuery', () => {
     expect(headers).not.toHaveProperty('Authorization');
   });
 
+  it('includes params in the request body', () => {
+    const { result } = renderHook(() => useLazyCypherQuery(CYPHER), {
+      wrapper: makeWrapper(false, null)
+    });
+    const [run] = result.current;
+    act(() => {
+      run({ base_severity: 'CRITICAL', count: 3 });
+    });
+    const body = JSON.parse((global.fetch as jest.Mock).mock.calls[0][1].body);
+    expect(body.query).toBe(CYPHER);
+    expect(body.params).toEqual({ base_severity: 'CRITICAL', count: 3 });
+  });
+
+  it('sends query without params when run is called with no arguments', () => {
+    const { result } = renderHook(() => useLazyCypherQuery(CYPHER), {
+      wrapper: makeWrapper(false, null)
+    });
+    const [run] = result.current;
+    act(() => {
+      run();
+    });
+    const body = JSON.parse((global.fetch as jest.Mock).mock.calls[0][1].body);
+    expect(body.query).toBe(CYPHER);
+    expect(body.params).toBeUndefined();
+  });
+
   it('re-fires query when accessToken becomes available', () => {
     const { result } = renderHook(() => useLazyCypherQuery(CYPHER), {
       wrapper: StatefulWrapper

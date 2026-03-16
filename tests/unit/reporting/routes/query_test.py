@@ -104,6 +104,41 @@ def test_query_with_params(mocker):
     )
 
 
+def test_query_passes_params_to_validator(mocker):
+    """validate_query must receive the request params so it can run EXPLAIN with them."""
+    mocker.patch("reporting.settings.CSRF_DISABLE", True)
+    mocker.patch(
+        "reporting.routes.query.authnz.get_email",
+        return_value="test@example.com",
+    )
+    from reporting.services.query_validator import ValidationResult
+
+    mock_validate = mocker.patch(
+        "reporting.routes.query.validate_query",
+        return_value=ValidationResult(),
+    )
+    mock_record = MagicMock()
+    mock_record.items.return_value = [("name", "Alice")]
+    mocker.patch(
+        "reporting.routes.query.reporting_neo4j.run_query",
+        return_value=[mock_record],
+    )
+
+    app = create_app(_app_settings())
+    client = app.test_client()
+    client.post(
+        "/api/v1/query",
+        json={
+            "query": "MATCH (n) WHERE n.name = $name RETURN n.name AS name",
+            "params": {"name": "Alice"},
+        },
+    )
+    mock_validate.assert_called_once_with(
+        "MATCH (n) WHERE n.name = $name RETURN n.name AS name",
+        params={"name": "Alice"},
+    )
+
+
 def test_query_no_json_body(mocker):
     mocker.patch("reporting.settings.CSRF_DISABLE", True)
     mocker.patch(

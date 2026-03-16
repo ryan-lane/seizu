@@ -9,7 +9,7 @@ jest.mock('src/components/QueryString', () => ({
 describe('FreeTextInput', () => {
   const defaultProps = {
     inputId: 'test-input',
-    inputDefault: 'default',
+    inputDefault: { label: 'default', value: 'default' },
     labelName: 'Test Label',
     value: {},
     setValue: jest.fn()

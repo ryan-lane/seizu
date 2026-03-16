@@ -65,7 +65,7 @@ def query() -> Response:
         resp.status_code = 400
         return resp
 
-    validation = validate_query(query_request.query)
+    validation = validate_query(query_request.query, params=query_request.params)
 
     if validation.has_errors:
         resp = jsonify(
