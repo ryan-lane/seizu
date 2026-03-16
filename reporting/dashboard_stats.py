@@ -120,12 +120,7 @@ def send_stats_for_panel(
 def dashboard_stats() -> None:
     logger.debug("Sending in stats...")
     config = reporting_config.load_file(settings.REPORTING_CONFIG_FILE)
-    dashboard_rows = config.dashboard.rows
-    for row in dashboard_rows:
-        for panel in row.panels:
-            send_stats_for_panel(panel, [], config)
-    reports = config.reports
-    for _, report in reports.items():
+    for _, report in config.reports.items():
         for row in report.rows:
             for panel in row.panels:
                 send_stats_for_panel(panel, report.inputs, config)

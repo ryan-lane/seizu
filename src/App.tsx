@@ -24,7 +24,7 @@ function App() {
       .then((r) => r.json())
       .then((data: { auth_required: boolean; oidc: OidcConfig | null }) => {
         const oidc = data.oidc ?? null;
-        const userManager = oidc ? createUserManager(oidc) : null;
+        const userManager = (data.auth_required && oidc) ? createUserManager(oidc) : null;
         setAuthConfig({ auth_required: data.auth_required, oidc, userManager });
       })
       .catch(() => {

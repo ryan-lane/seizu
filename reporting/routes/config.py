@@ -33,7 +33,7 @@ def get_config() -> Response:
     :resheader Content-Type: application/json
     :statuscode 200: success
     """
-    config = reporting_config.load_file(settings.REPORTING_CONFIG_FILE).model_dump()
+    loaded = reporting_config.load_file(settings.REPORTING_CONFIG_FILE)
     schema = reporting_config.output_json_schema()
     oidc_config = None
     if settings.OIDC_AUTHORITY:
@@ -51,7 +51,9 @@ def get_config() -> Response:
                 "external_provider": settings.STATSD_EXTERNAL_PROVIDER,
                 "external_prefix": settings.STATSD_EXTERNAL_PREFIX,
             },
-            "config": config,
+            "config": {
+                "queries": loaded.queries,
+            },
             "schema": schema,
         },
     )

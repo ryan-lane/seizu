@@ -1,4 +1,3 @@
-import { useContext } from 'react';
 import { Helmet } from 'react-helmet';
 import {
   Box,
@@ -18,20 +17,20 @@ import {
 } from '@mui/material';
 import { ThreeDots } from 'react-loader-spinner';
 
-import { ConfigContext } from 'src/config.context';
+import { useAllReports } from 'src/hooks/useReportsApi';
 
 function Documentation() {
-  const { config } = useContext(ConfigContext);
-  if (config === undefined) {
+  const { reports, loading } = useAllReports();
+
+  if (loading) {
     return <ThreeDots color="#2BAD60" height="100" width="100" />;
   }
 
-  const { dashboard, reports } = config.config;
   const metricRows = [];
   const metrics = {};
 
-  Object.keys(reports).forEach((reportName) => {
-    reports[reportName].rows.forEach((row) => {
+  reports.forEach((report) => {
+    report.rows.forEach((row) => {
       row.panels.forEach((panel) => {
         if (panel.metric === undefined || metrics[panel.metric] !== undefined) {
           return;
@@ -47,26 +46,6 @@ function Documentation() {
           type: panel.type
         };
       });
-    });
-  });
-
-  dashboard.rows.forEach((row) => {
-    row.panels.forEach((panel) => {
-      if (panel.metric === undefined || metrics[panel.metric] !== undefined) {
-        return;
-      }
-      const params = [];
-      if (panel.params !== undefined) {
-        if (panel.params !== undefined) {
-          panel.params.forEach((input) => {
-            params.push(input.name);
-          });
-        }
-      }
-      metrics[panel.metric] = {
-        params,
-        type: panel.type
-      };
     });
   });
 

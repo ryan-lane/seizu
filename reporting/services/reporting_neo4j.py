@@ -29,6 +29,7 @@ def _get_neo4j_client() -> GraphDatabase:
             settings.NEO4J_URI,
             auth=neo4j_auth,
             max_connection_lifetime=settings.NEO4J_MAX_CONNECTION_LIFETIME,
+            notifications_min_severity=settings.NEO4J_NOTIFICATIONS_MIN_SEVERITY,
         )
     return _CLIENT_CACHE
 

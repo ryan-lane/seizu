@@ -275,29 +275,6 @@ class Row(BaseModel):
     )
 
 
-class Dashboard(BaseModel):
-    rows: List[Row] = Field(
-        default_factory=list,
-        description="The rows of the dashboard.",
-        examples=[
-            """
-            .. code-block:: yaml
-
-              rows:
-                - name: "CVEs by severity"
-                  panels:
-                    - cypher: cves-by-severity
-                      details_cypher: cves-by-severity-details
-                      type: count
-                      params:
-                        base_severity: CRITICAL
-                      caption: Critical CVEs
-                      size: 2
-            """
-        ],
-    )
-
-
 class Report(BaseModel):
     name: str = Field(
         description="The name of the report.",
@@ -561,42 +538,13 @@ class ReportingConfig(BaseModel):
         ],
     )
 
-    dashboard: Dashboard = Field(
-        default_factory=Dashboard,
-        description="The dashboard to use for the report.",
-        examples=[
-            """
-            .. code-block:: yaml
-
-              dashboard:
-                rows:
-                  - name: CVEs by severity as percentage of total
-                    panels:
-                      - cypher: cves-severity-of-total
-                        type: progress
-                        params:
-                          - name: base_severity
-                            value: CRITICAL
-                        caption: Critical CVEs
-                        size: 2
-                  - name: CVEs by severity
-                    panels:
-                      - cypher: cves-by-severity
-                        type: count
-                        params:
-                          - name: base_severity
-                            value: CRITICAL
-                          caption: Critical CVEs
-                        size: 2
-                      - cypher: cves-by-severity
-                        type: count
-                        params:
-                          - name: base_severity
-                            value: HIGH
-                        caption: High CVEs
-                        size: 2
-            """
-        ],
+    dashboard: Optional[str] = Field(
+        default=None,
+        description=(
+            "Key of the report in the ``reports`` section to use as the default"
+            " dashboard. If unset, no report is displayed on the dashboard page."
+        ),
+        examples=["dashboard"],
     )
 
     reports: Dict[str, Report] = Field(

@@ -80,6 +80,25 @@ The quickstart configuration provided by the docker-compose is based around the 
 $> make sync_cve
 ```
 
+## Seeding reports
+
+Report and dashboard configurations are stored in DynamoDB Local. After starting the stack for the first time, seed the example reports from the YAML config:
+
+```bash
+make seed_reports
+```
+
+This reads `.config/dev/seizu/reporting-dashboard.yaml`, creates each report in DynamoDB, and sets the dashboard pointer. After resetting the DynamoDB volume, re-run `make seed_reports` to repopulate.
+
+To reset the DynamoDB data volume:
+
+```bash
+docker compose down
+docker volume rm seizu_dynamodb_data
+docker compose up
+make seed_reports
+```
+
 ## Updating configuration
 
-The ``up`` make target, prior to running docker-compose, copies a number of default configuration files into a git and docker ignored ``.compose`` directory. Once these initial files are copied in, they won't be overwritten or modified. If you need to change configuration for the docker-compose components, you can update them there. Specifically, if you're looking to update the dashboard configuration, that can be found at ``.compose/seizu/reporting-dashboard.yaml``.
+The ``up`` make target, prior to running docker-compose, copies a number of default configuration files into a git and docker ignored ``.compose`` directory. Once these initial files are copied in, they won't be overwritten or modified. If you need to change the YAML configuration (queries, scheduled queries), update ``.compose/seizu/reporting-dashboard.yaml``. Report and dashboard configurations are managed via the API or the seed script.

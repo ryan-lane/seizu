@@ -67,14 +67,8 @@ export interface Report {
   inputs?: ReportInput[];
 }
 
-export interface DashboardConfig {
-  rows: Row[];
-}
-
 export interface AppConfig {
-  dashboard: DashboardConfig;
   queries: Record<string, string>;
-  reports: Record<string, Report>;
 }
 
 export interface SeizuConfig {

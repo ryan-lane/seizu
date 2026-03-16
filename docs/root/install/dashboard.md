@@ -2,12 +2,46 @@
 
 ## Navigation Sections
 
-Seizu's navigation currently supports a dashboard, and an arbitrary number of reports.
+Seizu's navigation supports a dashboard and an arbitrary number of reports.
 The dashboard is the landing page, and is meant as a general overview of the data in your graph.
 Reports are topic-specific views of your graph data.
 
-Both dashboards and reports use a list of rows, which contain a list of panels; both are grid-based.
-Rows are rendered in the order specified in the configuration, and panels within rows are also rendered in the order specified.
+Both the dashboard and reports use a list of rows, which contain a list of panels; both are grid-based.
+Rows are rendered in the order specified, and panels within rows are also rendered in the order specified.
+
+## Configuration Storage
+
+Report and dashboard configurations are stored in DynamoDB, not in the YAML configuration file.
+The YAML file contains `queries` (named Cypher strings), `scheduled_queries`, and a `dashboard` pointer.
+
+To populate DynamoDB from the YAML file during initial setup or development:
+
+```bash
+make seed_reports
+```
+
+The `dashboard` key in the YAML file is a string that names a report in the `reports` section to use as the default dashboard:
+
+```yaml
+dashboard: dashboard   # pointer to the "dashboard" entry in reports
+
+reports:
+  dashboard:
+    name: Dashboard
+    rows:
+      - name: Overview
+        panels:
+          - cypher: cves-total
+            type: count
+            caption: Total CVEs
+            size: 3
+```
+
+To change the dashboard at runtime, call the API:
+
+```bash
+curl -X PUT /api/v1/reports/<report_id>/dashboard
+```
 
 ## Panels
 

@@ -34,67 +34,69 @@ queries:
     WHERE (datetime(c.published_date)) > feedupdatetime AND c.base_severity IN $base_severity
     RETURN {id: c.id, base_severity: c.base_severity, base_score: c.base_score, description: c.description_en} AS details
 
-dashboard:
-  rows:
-    - name: CVEs as count and progress panels
-      panels:
-        - cypher: cves-total
-          type: count
-          caption: Total CVEs
-          metric: cve.count
-          size: 2.4
-        - cypher: cves-severity-of-total
-          details_cypher: cves-severity-of-total-details
-          type: progress
-          params:
-            - name: base_severity
-              value: CRITICAL
-          caption: Critical CVEs
-          metric: cve.progress
-          size: 2.4
-          threshold: 0
-        - cypher: cves-severity-of-total
-          details_cypher: cves-severity-of-total-details
-          type: progress
-          params:
-            - name: base_severity
-              value: HIGH
-          caption: High CVEs
-          metric: cve.progress
-          size: 2.4
-          threshold: 0
-        - cypher: cves-severity-of-total
-          details_cypher: cves-severity-of-total-details
-          type: progress
-          params:
-            - name: base_severity
-              value: MEDIUM
-          caption: Medium CVEs
-          metric: cve.progress
-          size: 2.4
-          threshold: 0
-        - cypher: cves-severity-of-total
-          details_cypher: cves-severity-of-total-details
-          type: progress
-          params:
-            - name: base_severity
-              value: LOW
-          caption: Low CVEs
-          metric: cve.progress
-          size: 2.4
-          threshold: 0
-    - name: CVEs as pie, bar panels
-      panels:
-        - cypher: cves-by-severity-as-rows
-          type: pie
-          caption: CVE severities
-          size: 6
-        - cypher: cves-by-severity-as-rows
-          type: bar
-          caption: CVE severities
-          size: 6
+dashboard: dashboard
 
 reports:
+  dashboard:
+    name: Dashboard
+    rows:
+      - name: CVEs as count and progress panels
+        panels:
+          - cypher: cves-total
+            type: count
+            caption: Total CVEs
+            metric: cve.count
+            size: 2.4
+          - cypher: cves-severity-of-total
+            details_cypher: cves-severity-of-total-details
+            type: progress
+            params:
+              - name: base_severity
+                value: CRITICAL
+            caption: Critical CVEs
+            metric: cve.progress
+            size: 2.4
+            threshold: 0
+          - cypher: cves-severity-of-total
+            details_cypher: cves-severity-of-total-details
+            type: progress
+            params:
+              - name: base_severity
+                value: HIGH
+            caption: High CVEs
+            metric: cve.progress
+            size: 2.4
+            threshold: 0
+          - cypher: cves-severity-of-total
+            details_cypher: cves-severity-of-total-details
+            type: progress
+            params:
+              - name: base_severity
+                value: MEDIUM
+            caption: Medium CVEs
+            metric: cve.progress
+            size: 2.4
+            threshold: 0
+          - cypher: cves-severity-of-total
+            details_cypher: cves-severity-of-total-details
+            type: progress
+            params:
+              - name: base_severity
+                value: LOW
+            caption: Low CVEs
+            metric: cve.progress
+            size: 2.4
+            threshold: 0
+      - name: CVEs as pie, bar panels
+        panels:
+          - cypher: cves-by-severity-as-rows
+            type: pie
+            caption: CVE severities
+            size: 6
+          - cypher: cves-by-severity-as-rows
+            type: bar
+            caption: CVE severities
+            size: 6
   cves:
     name: CVEs
     inputs:
