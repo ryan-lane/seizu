@@ -27,7 +27,7 @@ def validate() -> Response:
         resp.status_code = 400
         return resp
 
-    validation = validate_query(query_request.query)
+    validation = validate_query(query_request.query, params=query_request.params)
 
     resp = jsonify(
         errors=[str(err) for err in validation.errors],

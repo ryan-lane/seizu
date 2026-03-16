@@ -1,22 +1,37 @@
+from unittest.mock import MagicMock
+
 from reporting.services.query_validator import validate_query
 from reporting.services.query_validator import ValidationResult
 
 
 def _mock_cyver(
     mocker,
-    syntax_ok=True,
+    syntax_notifications=None,
+    syntax_exception=None,
     schema_ok=True,
-    props_ok=True,
-    syntax_meta=None,
     schema_meta=None,
+    props_ok=True,
     props_meta=None,
+    query_type="r",
 ):
+    """Mock the EXPLAIN-based syntax/write check and CyVer schema/property validators.
+
+    syntax_notifications: list of notification dicts returned by EXPLAIN summary.
+    syntax_exception: if set, execute_query raises this exception instead.
+    query_type: value for summary.query_type ('r', 'w', 'rw', 's').
+    """
+    mock_driver = MagicMock()
+    if syntax_exception is not None:
+        mock_driver.execute_query.side_effect = syntax_exception
+    else:
+        mock_summary = MagicMock()
+        mock_summary.notifications = syntax_notifications or []
+        mock_summary.query_type = query_type
+        mock_driver.execute_query.return_value = ([], mock_summary, [])
     mocker.patch(
-        "reporting.services.query_validator.SyntaxValidator"
-    ).return_value.validate.return_value = (
-        syntax_ok,
-        syntax_meta if syntax_meta is not None else [],
-    )
+        "reporting.services.query_validator._get_neo4j_client"
+    ).return_value = mock_driver
+
     mocker.patch(
         "reporting.services.query_validator.SchemaValidator"
     ).return_value.validate.return_value = (
@@ -29,7 +44,6 @@ def _mock_cyver(
         props_ok,
         props_meta if props_meta is not None else [],
     )
-    mocker.patch("reporting.services.query_validator._get_neo4j_client")
 
 
 # --- validate_query returns ValidationResult ---
@@ -47,9 +61,11 @@ def test_validate_query_success(mocker):
 def test_validate_query_syntax_error_is_error(mocker):
     _mock_cyver(
         mocker,
-        syntax_ok=False,
-        syntax_meta=[
-            {"code": "SyntaxError", "description": "Syntax error at position 5"}
+        syntax_notifications=[
+            {
+                "code": "Neo.ClientError.Statement.SyntaxError",
+                "description": "Syntax error at position 5",
+            }
         ],
     )
     result = validate_query("MATC (n) RETURN n")
@@ -58,14 +74,29 @@ def test_validate_query_syntax_error_is_error(mocker):
     assert result.warnings == []
 
 
+def test_validate_query_syntax_exception_is_error(mocker):
+    """An exception raised by execute_query is treated as a syntax error."""
+
+    class FakeSyntaxError(Exception):
+        code = "Neo.ClientError.Statement.SyntaxError"
+        message = "Invalid input 'MATC'"
+
+    _mock_cyver(mocker, syntax_exception=FakeSyntaxError())
+    result = validate_query("MATC (n) RETURN n")
+    assert result.has_errors
+    assert len(result.errors) == 1
+
+
 def test_validate_query_syntax_error_stops_further_validation(mocker):
     """When syntax fails, schema and property validators are not called."""
-    syntax_mock = mocker.patch(
-        "reporting.services.query_validator.SyntaxValidator"
-    ).return_value
-    syntax_mock.validate.return_value = (
-        False,
-        [{"code": "SyntaxError", "description": "bad syntax"}],
+    _mock_cyver(
+        mocker,
+        syntax_notifications=[
+            {
+                "code": "Neo.ClientError.Statement.SyntaxError",
+                "description": "bad syntax",
+            }
+        ],
     )
     schema_mock = mocker.patch(
         "reporting.services.query_validator.SchemaValidator"
@@ -73,7 +104,6 @@ def test_validate_query_syntax_error_stops_further_validation(mocker):
     props_mock = mocker.patch(
         "reporting.services.query_validator.PropertiesValidator"
     ).return_value
-    mocker.patch("reporting.services.query_validator._get_neo4j_client")
 
     validate_query("MATC (n) RETURN n")
 
@@ -81,8 +111,38 @@ def test_validate_query_syntax_error_stops_further_validation(mocker):
     props_mock.validate.assert_not_called()
 
 
+def test_validate_query_parameterized_query_with_params_no_error(mocker):
+    """Parameterized queries with params provided validate cleanly."""
+    _mock_cyver(mocker)  # clean EXPLAIN — params resolved the notification
+    result = validate_query(
+        "MATCH (c:CVE) WHERE c.base_severity = $base_severity RETURN count(c)",
+        params={"base_severity": "CRITICAL"},
+    )
+    assert not result.has_errors
+    assert result.warnings == []
+
+
+def test_validate_query_parameterized_query_without_params_is_warning(mocker):
+    """ParameterNotProvided during validation is a warning, not a blocking error."""
+    _mock_cyver(
+        mocker,
+        syntax_notifications=[
+            {
+                "code": "Neo.ClientNotification.Statement.ParameterNotProvided",
+                "description": "Missing parameters: base_severity",
+            }
+        ],
+    )
+    result = validate_query(
+        "MATCH (c:CVE) WHERE c.base_severity = $base_severity RETURN count(c)"
+    )
+    assert not result.has_errors
+    assert len(result.warnings) == 1
+    assert "Missing parameters" in result.warnings[0]
+
+
 def test_validate_query_write_is_error(mocker):
-    _mock_cyver(mocker)
+    _mock_cyver(mocker, query_type="rw")
     result = validate_query("CREATE (n:Person {name: 'Alice'}) RETURN n")
     assert result.has_errors
     assert any("Write" in str(e) for e in result.errors)
@@ -134,8 +194,9 @@ def test_validate_query_errors_and_warnings_independent(mocker):
     """Syntax error short-circuits; schema/property warnings are never added."""
     _mock_cyver(
         mocker,
-        syntax_ok=False,
-        syntax_meta=[{"code": "SyntaxError", "description": "bad"}],
+        syntax_notifications=[
+            {"code": "Neo.ClientError.Statement.SyntaxError", "description": "bad"}
+        ],
         schema_ok=False,
         schema_meta=[{"code": "SchemaError", "description": "Unknown label"}],
     )
@@ -144,7 +205,7 @@ def test_validate_query_errors_and_warnings_independent(mocker):
     assert result.warnings == []
 
 
-# --- Read-only enforcement (cypher-guard) ---
+# --- Read-only enforcement (EXPLAIN query_type) ---
 
 
 def test_check_read_only_allows_match(mocker):
@@ -165,12 +226,11 @@ def test_check_read_only_allows_match_with_where(mocker):
     assert not result.has_errors
 
 
-def test_check_read_only_rejects_unsupported_clauses(mocker):
-    """cypher-guard rejects queries with clauses it doesn't support (e.g. LIMIT),
-    which is the safe behavior for a whitelist approach."""
+def test_check_read_only_allows_limit(mocker):
+    """LIMIT is a valid read clause; EXPLAIN returns query_type='r'."""
     _mock_cyver(mocker)
     result = validate_query("MATCH (n) RETURN n LIMIT 10")
-    assert result.has_errors
+    assert not result.has_errors
 
 
 def test_check_read_only_allows_unwind(mocker):
@@ -180,25 +240,25 @@ def test_check_read_only_allows_unwind(mocker):
 
 
 def test_check_read_only_rejects_create(mocker):
-    _mock_cyver(mocker)
+    _mock_cyver(mocker, query_type="rw")
     result = validate_query("CREATE (n:Person {name: 'Alice'})")
     assert result.has_errors
 
 
 def test_check_read_only_rejects_merge(mocker):
-    _mock_cyver(mocker)
+    _mock_cyver(mocker, query_type="rw")
     result = validate_query("MERGE (n:Person {name: 'Alice'}) RETURN n")
     assert result.has_errors
 
 
 def test_check_read_only_rejects_delete(mocker):
-    _mock_cyver(mocker)
+    _mock_cyver(mocker, query_type="w")
     result = validate_query("MATCH (n) DELETE n")
     assert result.has_errors
 
 
 def test_check_read_only_rejects_set(mocker):
-    _mock_cyver(mocker)
+    _mock_cyver(mocker, query_type="rw")
     result = validate_query("MATCH (n) SET n.name = 'Bob' RETURN n")
     assert result.has_errors
 
@@ -365,14 +425,14 @@ class TestNeo4jectionWriteClauses:
     """Direct write clause injection attempts."""
 
     def test_create_node_injection(self, mocker):
-        _mock_cyver(mocker)
+        _mock_cyver(mocker, query_type="rw")
         result = validate_query(
             "MATCH (n) RETURN n UNION CREATE (evil:Backdoor {cmd: 'whoami'})"
         )
         assert result.has_errors
 
     def test_merge_with_on_create(self, mocker):
-        _mock_cyver(mocker)
+        _mock_cyver(mocker, query_type="rw")
         result = validate_query(
             "MERGE (n:Admin {name: 'attacker'}) "
             "ON CREATE SET n.role = 'superadmin' RETURN n"
@@ -380,12 +440,12 @@ class TestNeo4jectionWriteClauses:
         assert result.has_errors
 
     def test_detach_delete_all(self, mocker):
-        _mock_cyver(mocker)
+        _mock_cyver(mocker, query_type="w")
         result = validate_query("MATCH (n) DETACH DELETE n")
         assert result.has_errors
 
     def test_foreach_write(self, mocker):
-        _mock_cyver(mocker)
+        _mock_cyver(mocker, query_type="rw")
         result = validate_query(
             "MATCH (n) WITH collect(n) as nodes "
             "FOREACH (x IN nodes | SET x.pwned = true)"
@@ -393,6 +453,6 @@ class TestNeo4jectionWriteClauses:
         assert result.has_errors
 
     def test_remove_labels(self, mocker):
-        _mock_cyver(mocker)
+        _mock_cyver(mocker, query_type="rw")
         result = validate_query("MATCH (n:Admin) REMOVE n:Admin RETURN n")
         assert result.has_errors
