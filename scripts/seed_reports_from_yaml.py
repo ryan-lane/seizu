@@ -28,13 +28,12 @@ Environment variables (all optional; defaults match docker-compose dev setup):
     REPORTING_CONFIG_FILE    default: /reporting-dashboard.conf
     SNOWFLAKE_MACHINE_ID     default: 1
 """
-
 import argparse
 import sys
 
+from reporting import settings
 from reporting.schema import reporting_config
 from reporting.services import report_store
-from reporting import settings
 
 
 SEED_USER = "seed-script"
@@ -59,7 +58,7 @@ def seed(config_file: str, force: bool, dry_run: bool) -> None:
         return
 
     if settings.DYNAMODB_CREATE_TABLE and not dry_run:
-        report_store.create_table_if_not_exists()
+        report_store.initialize()
 
     existing = set() if force else _existing_names()
 
@@ -70,14 +69,18 @@ def seed(config_file: str, force: bool, dry_run: bool) -> None:
 
     for report_id_key, report in config.reports.items():
         if report.name in existing:
-            print(f"[skip] '{report.name}' (name already exists; use --force to override)")
+            print(
+                f"[skip] '{report.name}' (name already exists; use --force to override)"  # noqa: E702
+            )
             skipped += 1
             continue
 
         report_config_dict = report.model_dump()
 
         if dry_run:
-            print(f"[dry-run] would create report '{report.name}' (key: {report_id_key})")
+            print(
+                f"[dry-run] would create report '{report.name}' (key: {report_id_key})"
+            )
             created += 1
             continue
 
@@ -99,7 +102,9 @@ def seed(config_file: str, force: bool, dry_run: bool) -> None:
         dashboard_report_id = seeded_ids.get(config.dashboard)
         if dashboard_report_id:
             report_store.set_dashboard_report(dashboard_report_id)
-            print(f"[dashboard] set to '{dashboard_report_id}' (key: {config.dashboard})")
+            print(
+                f"[dashboard] set to '{dashboard_report_id}' (key: {config.dashboard})"
+            )
         else:
             print(
                 f"[warn] dashboard key '{config.dashboard}' was not seeded"

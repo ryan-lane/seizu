@@ -50,7 +50,9 @@ def get_boto_resource(
     endpoint_url: Optional[str] = None,
 ) -> Any:
     """Get a boto3 resource."""
-    cache_key = f"resource:{resource}:{region}:{aws_access_key_id}:{endpoint_url}"
+    cache_key = (
+        f"resource:{resource}:{region}:{aws_access_key_id}:{endpoint_url}"  # noqa: E231
+    )
     if cache_key in RESOURCE_CACHE:
         return RESOURCE_CACHE[cache_key]
     session = get_boto_session(region, aws_access_key_id, aws_secret_access_key)

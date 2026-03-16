@@ -6,15 +6,17 @@ from typing import Dict
 from typing import List
 from typing import Optional
 
+from snowflake import SnowflakeGenerator
 from sqlalchemy import Column
+from sqlalchemy import Engine
 from sqlalchemy import JSON
 from sqlalchemy import UniqueConstraint
+from sqlmodel import col
+from sqlmodel import create_engine
 from sqlmodel import Field
+from sqlmodel import select
 from sqlmodel import Session
 from sqlmodel import SQLModel
-from sqlmodel import create_engine
-from sqlmodel import select
-from snowflake import SnowflakeGenerator
 
 from reporting import settings
 from reporting.schema.report_config import ReportListItem
@@ -33,7 +35,7 @@ _snowflake_gen: Optional[SnowflakeGenerator] = None
 # ---------------------------------------------------------------------------
 
 
-class ReportRecord(SQLModel, table=True):
+class ReportRecord(SQLModel, table=True):  # type: ignore
     __tablename__ = "reports"
     report_id: str = Field(primary_key=True)
     name: str
@@ -43,7 +45,7 @@ class ReportRecord(SQLModel, table=True):
     updated_at: str
 
 
-class ReportVersionRecord(SQLModel, table=True):
+class ReportVersionRecord(SQLModel, table=True):  # type: ignore
     __tablename__ = "report_versions"
     __table_args__ = (UniqueConstraint("report_id", "version"),)
     id: Optional[int] = Field(default=None, primary_key=True)
@@ -55,7 +57,7 @@ class ReportVersionRecord(SQLModel, table=True):
     comment: Optional[str] = None
 
 
-class DashboardPointerRecord(SQLModel, table=True):
+class DashboardPointerRecord(SQLModel, table=True):  # type: ignore
     __tablename__ = "dashboard_pointer"
     id: int = Field(default=1, primary_key=True)
     report_id: str
@@ -78,7 +80,7 @@ def generate_report_id() -> str:
     return str(next(_get_snowflake_gen()))
 
 
-def _get_engine():
+def _get_engine() -> Engine:
     global _engine
     if _engine is None:
         url = settings.SQL_DATABASE_URL
@@ -183,7 +185,7 @@ class SQLModelReportStore(ReportStore):
             stmt = (
                 select(ReportVersionRecord)
                 .where(ReportVersionRecord.report_id == report_id)
-                .order_by(ReportVersionRecord.version.desc())
+                .order_by(col(ReportVersionRecord.version).desc())
             )
             rows = session.exec(stmt).all()
             return [

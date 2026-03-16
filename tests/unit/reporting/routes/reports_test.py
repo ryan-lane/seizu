@@ -83,6 +83,61 @@ def test_list_reports_empty(mocker):
 
 
 # ---------------------------------------------------------------------------
+# GET /api/v1/reports/dashboard
+# ---------------------------------------------------------------------------
+
+
+def test_get_dashboard_report_success(mocker):
+    app = _make_app(mocker)
+    mocker.patch(
+        "reporting.routes.reports.report_store.get_dashboard_report",
+        return_value=_report_version(),
+    )
+    ret = app.test_client().get("/api/v1/reports/dashboard")
+    assert ret.status_code == 200
+    assert ret.json["report_id"] == "rid1"
+    assert ret.json["version"] == 1
+
+
+def test_get_dashboard_report_not_configured(mocker):
+    app = _make_app(mocker)
+    mocker.patch(
+        "reporting.routes.reports.report_store.get_dashboard_report",
+        return_value=None,
+    )
+    ret = app.test_client().get("/api/v1/reports/dashboard")
+    assert ret.status_code == 404
+    assert "dashboard" in ret.json["error"].lower()
+
+
+# ---------------------------------------------------------------------------
+# PUT /api/v1/reports/<report_id>/dashboard
+# ---------------------------------------------------------------------------
+
+
+def test_set_dashboard_report_success(mocker):
+    app = _make_app(mocker)
+    mocker.patch(
+        "reporting.routes.reports.report_store.set_dashboard_report",
+        return_value=True,
+    )
+    ret = app.test_client().put("/api/v1/reports/rid1/dashboard")
+    assert ret.status_code == 200
+    assert ret.json["report_id"] == "rid1"
+
+
+def test_set_dashboard_report_not_found(mocker):
+    app = _make_app(mocker)
+    mocker.patch(
+        "reporting.routes.reports.report_store.set_dashboard_report",
+        return_value=False,
+    )
+    ret = app.test_client().put("/api/v1/reports/missing/dashboard")
+    assert ret.status_code == 404
+    assert "not found" in ret.json["error"].lower()
+
+
+# ---------------------------------------------------------------------------
 # GET /api/v1/reports/<report_id>
 # ---------------------------------------------------------------------------
 

@@ -4,11 +4,11 @@ from unittest.mock import patch
 
 import pytest
 
-from reporting.services.report_store import dynamodb as dynamodb_module
-from reporting.services.report_store.dynamodb import DynamoDBReportStore
 from reporting.schema.report_config import ReportListItem
 from reporting.schema.report_config import ReportMetadata
 from reporting.schema.report_config import ReportVersion
+from reporting.services.report_store import dynamodb as dynamodb_module
+from reporting.services.report_store.dynamodb import DynamoDBReportStore
 
 
 # ---------------------------------------------------------------------------
@@ -52,7 +52,7 @@ def store():
 def _version_item(report_id="123", version=1):
     return {
         "PK": f"REPORT#{report_id}",
-        "SK": f"VERSION#{version:010d}",
+        "SK": f"VERSION#{version:010d}",  # noqa: E231
         "report_id": report_id,
         "version": version,
         "config": {"rows": []},
@@ -232,9 +232,7 @@ def test_create_report_returns_version(patch_table, store, mocker):
         return_value="snowflake123",
     )
     mock_batch = MagicMock()
-    patch_table.batch_writer.return_value.__enter__ = MagicMock(
-        return_value=mock_batch
-    )
+    patch_table.batch_writer.return_value.__enter__ = MagicMock(return_value=mock_batch)
     patch_table.batch_writer.return_value.__exit__ = MagicMock(return_value=False)
 
     result = store.create_report(
@@ -259,9 +257,7 @@ def test_create_report_writes_four_items(patch_table, store, mocker):
         return_value="rid",
     )
     mock_batch = MagicMock()
-    patch_table.batch_writer.return_value.__enter__ = MagicMock(
-        return_value=mock_batch
-    )
+    patch_table.batch_writer.return_value.__enter__ = MagicMock(return_value=mock_batch)
     patch_table.batch_writer.return_value.__exit__ = MagicMock(return_value=False)
 
     store.create_report(name="T", description="", config={}, created_by="u@x.com")
@@ -275,9 +271,7 @@ def test_create_report_latest_item_has_correct_sk(patch_table, store, mocker):
         return_value="rid",
     )
     mock_batch = MagicMock()
-    patch_table.batch_writer.return_value.__enter__ = MagicMock(
-        return_value=mock_batch
-    )
+    patch_table.batch_writer.return_value.__enter__ = MagicMock(return_value=mock_batch)
     patch_table.batch_writer.return_value.__exit__ = MagicMock(return_value=False)
 
     store.create_report(name="T", description="", config={}, created_by="u@x.com")
@@ -308,9 +302,7 @@ def test_save_report_version_returns_none_when_report_missing(patch_table, store
 def test_save_report_version_increments_version(patch_table, store):
     patch_table.get_item.return_value = {"Item": _metadata_item(current_version=3)}
     mock_batch = MagicMock()
-    patch_table.batch_writer.return_value.__enter__ = MagicMock(
-        return_value=mock_batch
-    )
+    patch_table.batch_writer.return_value.__enter__ = MagicMock(return_value=mock_batch)
     patch_table.batch_writer.return_value.__exit__ = MagicMock(return_value=False)
 
     result = store.save_report_version(
@@ -328,9 +320,7 @@ def test_save_report_version_increments_version(patch_table, store):
 def test_save_report_version_updates_metadata_and_list(patch_table, store):
     patch_table.get_item.return_value = {"Item": _metadata_item(current_version=1)}
     mock_batch = MagicMock()
-    patch_table.batch_writer.return_value.__enter__ = MagicMock(
-        return_value=mock_batch
-    )
+    patch_table.batch_writer.return_value.__enter__ = MagicMock(return_value=mock_batch)
     patch_table.batch_writer.return_value.__exit__ = MagicMock(return_value=False)
 
     store.save_report_version(report_id="123", config={}, created_by="u@x.com")
@@ -373,9 +363,7 @@ def test_create_report_converts_floats_in_config(patch_table, store, mocker):
         return_value="rid",
     )
     mock_batch = MagicMock()
-    patch_table.batch_writer.return_value.__enter__ = MagicMock(
-        return_value=mock_batch
-    )
+    patch_table.batch_writer.return_value.__enter__ = MagicMock(return_value=mock_batch)
     patch_table.batch_writer.return_value.__exit__ = MagicMock(return_value=False)
 
     store.create_report(

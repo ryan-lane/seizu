@@ -47,7 +47,7 @@ def _get_snowflake_gen() -> SnowflakeGenerator:
     return _snowflake_gen
 
 
-def _get_table():
+def _get_table() -> Any:
     endpoint_url = settings.DYNAMODB_ENDPOINT_URL or None
     resource = get_boto_resource(
         "dynamodb",
@@ -79,7 +79,7 @@ def _report_pk(report_id: str) -> str:
 
 def _version_sk(version: int) -> str:
     """Zero-pad version numbers so lexicographic sort matches numeric sort."""
-    return f"{_SK_VERSION_PREFIX}{version:010d}"
+    return f"{_SK_VERSION_PREFIX}{version:010d}"  # noqa: E231
 
 
 def generate_report_id() -> str:

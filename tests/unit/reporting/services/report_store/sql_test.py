@@ -7,8 +7,8 @@ from unittest.mock import patch
 
 import pytest
 from sqlalchemy.pool import StaticPool
-from sqlmodel import SQLModel
 from sqlmodel import create_engine
+from sqlmodel import SQLModel
 
 from reporting.schema.report_config import ReportListItem
 from reporting.schema.report_config import ReportMetadata
@@ -63,9 +63,7 @@ def test_initialize_creates_tables(mocker):
         connect_args={"check_same_thread": False},
         poolclass=StaticPool,
     )
-    mocker.patch(
-        "reporting.services.report_store.sql._get_engine", return_value=engine
-    )
+    mocker.patch("reporting.services.report_store.sql._get_engine", return_value=engine)
     s = SQLModelReportStore()
     s.initialize()
     table_names = engine.dialect.get_table_names(engine.connect())
@@ -117,9 +115,7 @@ def test_get_report_metadata_found(store, mocker):
         "reporting.services.report_store.sql.generate_report_id",
         return_value="rid1",
     )
-    store.create_report(
-        name="Test", description="d", config={}, created_by="u@x.com"
-    )
+    store.create_report(name="Test", description="d", config={}, created_by="u@x.com")
     result = store.get_report_metadata("rid1")
     assert isinstance(result, ReportMetadata)
     assert result.report_id == "rid1"
@@ -163,9 +159,7 @@ def test_get_report_latest_returns_newest_after_update(store, mocker):
         return_value="rid1",
     )
     store.create_report(name="T", description="", config={"v": 1}, created_by="u@x.com")
-    store.save_report_version(
-        report_id="rid1", config={"v": 2}, created_by="u@x.com"
-    )
+    store.save_report_version(report_id="rid1", config={"v": 2}, created_by="u@x.com")
     result = store.get_report_latest("rid1")
     assert result.version == 2
     assert result.config == {"v": 2}
@@ -251,7 +245,9 @@ def test_create_report_persists_metadata(store, mocker):
         "reporting.services.report_store.sql.generate_report_id",
         return_value="rid99",
     )
-    store.create_report(name="Persisted", description="d", config={}, created_by="u@x.com")
+    store.create_report(
+        name="Persisted", description="d", config={}, created_by="u@x.com"
+    )
     meta = store.get_report_metadata("rid99")
     assert meta is not None
     assert meta.name == "Persisted"

@@ -4,6 +4,9 @@ from typing import Dict
 from typing import List
 from typing import Optional
 
+from reporting.schema.report_config import ReportListItem
+from reporting.schema.report_config import ReportMetadata
+from reporting.schema.report_config import ReportVersion
 from reporting.services.report_store.base import ReportStore
 
 logger = logging.getLogger(__name__)
@@ -44,23 +47,23 @@ def initialize() -> None:
     get_store().initialize()
 
 
-def list_reports() -> List:
+def list_reports() -> List[ReportListItem]:
     return get_store().list_reports()
 
 
-def get_report_metadata(report_id: str):
+def get_report_metadata(report_id: str) -> Optional[ReportMetadata]:
     return get_store().get_report_metadata(report_id)
 
 
-def get_report_latest(report_id: str):
+def get_report_latest(report_id: str) -> Optional[ReportVersion]:
     return get_store().get_report_latest(report_id)
 
 
-def get_report_version(report_id: str, version: int):
+def get_report_version(report_id: str, version: int) -> Optional[ReportVersion]:
     return get_store().get_report_version(report_id, version)
 
 
-def list_report_versions(report_id: str) -> List:
+def list_report_versions(report_id: str) -> List[ReportVersion]:
     return get_store().list_report_versions(report_id)
 
 
@@ -70,7 +73,7 @@ def create_report(
     config: Dict[str, Any],
     created_by: str,
     comment: Optional[str] = None,
-):
+) -> ReportVersion:
     return get_store().create_report(
         name=name,
         description=description,
@@ -85,7 +88,7 @@ def save_report_version(
     config: Dict[str, Any],
     created_by: str,
     comment: Optional[str] = None,
-):
+) -> Optional[ReportVersion]:
     return get_store().save_report_version(
         report_id=report_id,
         config=config,
@@ -102,5 +105,5 @@ def set_dashboard_report(report_id: str) -> bool:
     return get_store().set_dashboard_report(report_id)
 
 
-def get_dashboard_report():
+def get_dashboard_report() -> Optional[ReportVersion]:
     return get_store().get_dashboard_report()
