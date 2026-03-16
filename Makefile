@@ -53,7 +53,7 @@ build: clean
 
 .PHONY: seed_reports
 seed_reports:
-	docker compose run --rm seizu bash -c "pipenv sync --dev && PYTHONPATH=/home/seizu/seizu pipenv run python scripts/seed_reports_from_yaml.py --config .config/dev/seizu/reporting-dashboard.yaml $(ARGS)"
+	docker compose $(COMPOSE_PROFILES) run --rm seizu bash -c "pipenv sync --dev && PYTHONPATH=/home/seizu/seizu pipenv run python scripts/seed_reports_from_yaml.py --config .config/dev/seizu/reporting-dashboard.yaml $(ARGS)"
 
 .PHONY: schema
 schema:
@@ -91,12 +91,16 @@ auth_disable:
 
 .PHONY: sqlmodel_enable
 sqlmodel_enable:
-	@sed -i '' 's/REPORT_STORE_BACKEND=dynamodb/REPORT_STORE_BACKEND=sqlmodel/' .env
+	@grep -q 'REPORT_STORE_BACKEND=' .env 2>/dev/null \
+		&& sed -i '' 's/REPORT_STORE_BACKEND=.*/REPORT_STORE_BACKEND=sqlmodel/' .env \
+		|| echo 'REPORT_STORE_BACKEND=sqlmodel' >> .env
 	@echo "SQLModel backend enabled in .env. Run 'make down && make up' to apply."
 
 .PHONY: sqlmodel_disable
 sqlmodel_disable:
-	@sed -i '' 's/REPORT_STORE_BACKEND=sqlmodel/REPORT_STORE_BACKEND=dynamodb/' .env
+	@grep -q 'REPORT_STORE_BACKEND=' .env 2>/dev/null \
+		&& sed -i '' 's/REPORT_STORE_BACKEND=.*/REPORT_STORE_BACKEND=dynamodb/' .env \
+		|| echo 'REPORT_STORE_BACKEND=dynamodb' >> .env
 	@echo "DynamoDB backend restored in .env. Run 'make down && make up' to apply."
 
 .PHONY: restart
