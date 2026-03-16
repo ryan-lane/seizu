@@ -593,9 +593,7 @@ def test_save_report_version_correct_sks(patch_table, store):
 # ---------------------------------------------------------------------------
 
 
-def test_create_report_nested_none_config_produces_no_nones(
-    patch_table, store, mocker
-):
+def test_create_report_nested_none_config_produces_no_nones(patch_table, store, mocker):
     """Config from Pydantic model_dump() may contain nested None values for
     optional fields; verify _strip_none removes them before they reach DynamoDB
     (which would convert None to {"NULL": True}, rejected by DynamoDB Local)."""
