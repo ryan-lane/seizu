@@ -310,7 +310,10 @@ services:
       - ./.config/dev/seizu/reporting-dashboard.yaml:/reporting-dashboard.conf
     ports:
       - 8080:8080
-    command: gunicorn --config /home/seizu/seizu/gunicorn.conf reporting.wsgi:app --reload --workers=2 -k gevent --access-logfile=- --error-logfile=-
+    # Start from /run/seizu so the gunicorn arbiter control socket (gunicorn.ctl)
+    # is created there instead of in the bind-mounted project volume, which
+    # would cause the seizu-node watchpack watcher to trip over the Unix socket.
+    command: bash -c "cd /run/seizu && exec gunicorn --config /home/seizu/seizu/gunicorn.conf reporting.wsgi:app --reload --workers=2 -k gevent --access-logfile=- --error-logfile=-"
     networks:
       proxy:
       stats:
