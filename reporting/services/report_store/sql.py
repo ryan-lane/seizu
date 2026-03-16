@@ -11,6 +11,7 @@ from sqlalchemy import Column
 from sqlalchemy import Engine
 from sqlalchemy import JSON
 from sqlalchemy import UniqueConstraint
+from sqlalchemy.exc import IntegrityError
 from sqlmodel import col
 from sqlmodel import create_engine
 from sqlmodel import Field
@@ -105,8 +106,16 @@ class SQLModelReportStore(ReportStore):
 
     def initialize(self) -> None:
         """Create all tables if they do not already exist."""
-        SQLModel.metadata.create_all(_get_engine())
-        logger.info("SQL report store tables initialised")
+        try:
+            SQLModel.metadata.create_all(_get_engine())
+            logger.info("SQL report store tables initialised")
+        except IntegrityError:
+            # Race condition: multiple gunicorn workers call initialize()
+            # simultaneously. PostgreSQL's CREATE TABLE IF NOT EXISTS is not
+            # atomic under concurrent load; the second worker hits a unique
+            # violation on pg_type. The tables were created by the first
+            # worker, so this is safe to ignore.
+            logger.info("SQL report store tables already exist")
 
     def list_reports(self) -> List[ReportListItem]:
         with Session(_get_engine()) as session:
