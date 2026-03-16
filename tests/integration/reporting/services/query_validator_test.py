@@ -7,9 +7,6 @@ service to be running and reachable via the NEO4J_URI environment variable
 Run with:
     docker compose run --rm seizu pipenv run pytest tests/integration
 """
-
-import pytest
-
 from reporting.services.query_validator import validate_query
 
 
@@ -76,7 +73,9 @@ class TestValidReadQueries:
         """Missing params produce a warning, not a blocking error."""
         result = validate_query("MATCH (n) WHERE n.name = $name RETURN n LIMIT 1")
         assert not result.has_errors
-        assert any("parameter" in w.lower() or "Parameter" in w for w in result.warnings)
+        assert any(
+            "parameter" in w.lower() or "Parameter" in w for w in result.warnings
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -111,8 +110,7 @@ class TestWriteQueriesBlocked:
 
     def test_merge_on_create_set(self):
         _assert_blocked(
-            "MERGE (n:IntegrationTest {x: 1}) "
-            "ON CREATE SET n.role = 'test' RETURN n"
+            "MERGE (n:IntegrationTest {x: 1}) " "ON CREATE SET n.role = 'test' RETURN n"
         )
 
 
@@ -138,9 +136,7 @@ class TestSSRFQueriesBlocked:
         )
 
     def test_call_apoc_systemdb(self):
-        _assert_blocked(
-            "CALL apoc.systemdb.graph() YIELD nodes RETURN nodes"
-        )
+        _assert_blocked("CALL apoc.systemdb.graph() YIELD nodes RETURN nodes")
 
 
 # ---------------------------------------------------------------------------

@@ -92,7 +92,10 @@ def test_validate_query_syntax_error_stops_further_validation(mocker):
     _mock_cyver(
         mocker,
         syntax_notifications=[
-            {"code": "Neo.ClientError.Statement.SyntaxError", "description": "bad syntax"}
+            {
+                "code": "Neo.ClientError.Statement.SyntaxError",
+                "description": "bad syntax",
+            }
         ],
     )
     schema_mock = mocker.patch(
