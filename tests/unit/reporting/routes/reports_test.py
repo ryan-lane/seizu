@@ -1,6 +1,5 @@
 from reporting.app import create_app
 from reporting.schema.report_config import ReportListItem
-from reporting.schema.report_config import ReportMetadata
 from reporting.schema.report_config import ReportVersion
 
 
@@ -21,6 +20,16 @@ def _make_app(mocker):
     return create_app(_app_settings())
 
 
+def _report_list_item(report_id="rid1", name="My Report", current_version=1):
+    return ReportListItem(
+        report_id=report_id,
+        name=name,
+        current_version=current_version,
+        created_at="2024-01-01T00:00:00+00:00",
+        updated_at="2024-01-01T00:00:00+00:00",
+    )
+
+
 def _report_version(report_id="rid1", version=1):
     return ReportVersion(
         report_id=report_id,
@@ -29,17 +38,6 @@ def _report_version(report_id="rid1", version=1):
         created_at="2024-01-01T00:00:00+00:00",
         created_by="user@example.com",
         comment=None,
-    )
-
-
-def _report_metadata(report_id="rid1", current_version=1):
-    return ReportMetadata(
-        report_id=report_id,
-        name="My Report",
-        description="desc",
-        current_version=current_version,
-        created_at="2024-01-01T00:00:00+00:00",
-        updated_at="2024-01-01T00:00:00+00:00",
     )
 
 
@@ -52,16 +50,7 @@ def test_list_reports_success(mocker):
     app = _make_app(mocker)
     mocker.patch(
         "reporting.routes.reports.report_store.list_reports",
-        return_value=[
-            ReportListItem(
-                report_id="rid1",
-                name="My Report",
-                description="desc",
-                current_version=1,
-                created_at="2024-01-01T00:00:00+00:00",
-                updated_at="2024-01-01T00:00:00+00:00",
-            )
-        ],
+        return_value=[_report_list_item()],
     )
     ret = app.test_client().get("/api/v1/reports")
     assert ret.status_code == 200
@@ -69,6 +58,7 @@ def test_list_reports_success(mocker):
     assert len(reports) == 1
     assert reports[0]["report_id"] == "rid1"
     assert reports[0]["name"] == "My Report"
+    assert reports[0]["current_version"] == 1
 
 
 def test_list_reports_empty(mocker):
@@ -174,10 +164,6 @@ def test_get_report_not_found(mocker):
 def test_list_versions_success(mocker):
     app = _make_app(mocker)
     mocker.patch(
-        "reporting.routes.reports.report_store.get_report_metadata",
-        return_value=_report_metadata(),
-    )
-    mocker.patch(
         "reporting.routes.reports.report_store.list_report_versions",
         return_value=[_report_version(version=2), _report_version(version=1)],
     )
@@ -192,8 +178,8 @@ def test_list_versions_success(mocker):
 def test_list_versions_report_not_found(mocker):
     app = _make_app(mocker)
     mocker.patch(
-        "reporting.routes.reports.report_store.get_report_metadata",
-        return_value=None,
+        "reporting.routes.reports.report_store.list_report_versions",
+        return_value=[],
     )
     ret = app.test_client().get("/api/v1/reports/missing/versions")
     assert ret.status_code == 404
@@ -239,7 +225,7 @@ def test_create_report_success(mocker):
     )
     ret = app.test_client().post(
         "/api/v1/reports",
-        json={"name": "New Report", "config": {"rows": []}},
+        json={"config": {"rows": []}},
     )
     assert ret.status_code == 201
     assert ret.json["report_id"] == "rid1"
@@ -255,15 +241,11 @@ def test_create_report_passes_fields_to_service(mocker):
     app.test_client().post(
         "/api/v1/reports",
         json={
-            "name": "Report X",
-            "description": "My desc",
             "config": {"rows": [{"name": "row1"}]},
             "comment": "first version",
         },
     )
     mock_create.assert_called_once_with(
-        name="Report X",
-        description="My desc",
         config={"rows": [{"name": "row1"}]},
         created_by="user@example.com",
         comment="first version",
@@ -274,7 +256,7 @@ def test_create_report_missing_required_fields(mocker):
     app = _make_app(mocker)
     ret = app.test_client().post(
         "/api/v1/reports",
-        json={"description": "no name or config"},
+        json={"comment": "no config"},
     )
     assert ret.status_code == 400
     assert "Invalid request" in ret.json["error"]

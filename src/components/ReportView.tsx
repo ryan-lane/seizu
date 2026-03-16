@@ -131,9 +131,12 @@ function ReportView({ report, queries, title, boxSx = { height: '100%', py: 3 } 
           const paramName = inputData.name;
           const paramValue = inputData?.value;
           const paramInputId = inputData?.input_id;
-          if (paramValue !== null) {
+          // Use != null (loose) to treat both null and undefined as "not set".
+          // When config is stored in DynamoDB, _strip_none removes None fields,
+          // so absent keys come back as undefined rather than null.
+          if (paramValue != null) {
             params[paramName] = paramValue;
-          } else if (paramInputId !== null) {
+          } else if (paramInputId != null) {
             params[paramName] = varData[paramInputId]?.value;
             if (
               params[paramName] === undefined ||

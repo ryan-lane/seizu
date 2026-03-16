@@ -21,7 +21,6 @@ from sqlmodel import SQLModel
 
 from reporting import settings
 from reporting.schema.report_config import ReportListItem
-from reporting.schema.report_config import ReportMetadata
 from reporting.schema.report_config import ReportVersion
 from reporting.services.report_store.base import ReportStore
 
@@ -34,16 +33,6 @@ _snowflake_gen: Optional[SnowflakeGenerator] = None
 # ---------------------------------------------------------------------------
 # SQLModel table definitions
 # ---------------------------------------------------------------------------
-
-
-class ReportRecord(SQLModel, table=True):  # type: ignore
-    __tablename__ = "reports"
-    report_id: str = Field(primary_key=True)
-    name: str
-    description: str = ""
-    current_version: int = 1
-    created_at: str
-    updated_at: str
 
 
 class ReportVersionRecord(SQLModel, table=True):  # type: ignore
@@ -62,6 +51,15 @@ class DashboardPointerRecord(SQLModel, table=True):  # type: ignore
     __tablename__ = "dashboard_pointer"
     id: int = Field(default=1, primary_key=True)
     report_id: str
+    updated_at: str
+
+
+class ReportRecord(SQLModel, table=True):  # type: ignore
+    __tablename__ = "reports"
+    report_id: str = Field(primary_key=True)
+    name: str
+    current_version: int = 1
+    created_at: str
     updated_at: str
 
 
@@ -124,7 +122,6 @@ class SQLModelReportStore(ReportStore):
                 ReportListItem(
                     report_id=r.report_id,
                     name=r.name,
-                    description=r.description,
                     current_version=r.current_version,
                     created_at=r.created_at,
                     updated_at=r.updated_at,
@@ -132,29 +129,13 @@ class SQLModelReportStore(ReportStore):
                 for r in rows
             ]
 
-    def get_report_metadata(self, report_id: str) -> Optional[ReportMetadata]:
-        with Session(_get_engine()) as session:
-            row = session.get(ReportRecord, report_id)
-            if not row:
-                return None
-            return ReportMetadata(
-                report_id=row.report_id,
-                name=row.name,
-                description=row.description,
-                current_version=row.current_version,
-                created_at=row.created_at,
-                updated_at=row.updated_at,
-            )
-
     def get_report_latest(self, report_id: str) -> Optional[ReportVersion]:
         with Session(_get_engine()) as session:
-            report = session.get(ReportRecord, report_id)
-            if not report:
-                return None
             stmt = (
                 select(ReportVersionRecord)
                 .where(ReportVersionRecord.report_id == report_id)
-                .where(ReportVersionRecord.version == report.current_version)
+                .order_by(col(ReportVersionRecord.version).desc())
+                .limit(1)
             )
             row = session.exec(stmt).first()
             if not row:
@@ -211,8 +192,6 @@ class SQLModelReportStore(ReportStore):
 
     def create_report(
         self,
-        name: str,
-        description: str,
         config: Dict[str, Any],
         created_by: str,
         comment: Optional[str] = None,
@@ -220,13 +199,13 @@ class SQLModelReportStore(ReportStore):
         report_id = generate_report_id()
         now = datetime.now(tz=timezone.utc).isoformat()
         version = 1
+        name = config.get("name", "")
 
         with Session(_get_engine()) as session:
             session.add(
                 ReportRecord(
                     report_id=report_id,
                     name=name,
-                    description=description,
                     current_version=version,
                     created_at=now,
                     updated_at=now,
@@ -266,6 +245,7 @@ class SQLModelReportStore(ReportStore):
                 return None
 
             version = report.current_version + 1
+            name = config.get("name", report.name)
             now = datetime.now(tz=timezone.utc).isoformat()
 
             session.add(
@@ -278,6 +258,7 @@ class SQLModelReportStore(ReportStore):
                     comment=comment,
                 )
             )
+            report.name = name
             report.current_version = version
             report.updated_at = now
             session.add(report)
@@ -301,7 +282,8 @@ class SQLModelReportStore(ReportStore):
 
     def set_dashboard_report(self, report_id: str) -> bool:
         with Session(_get_engine()) as session:
-            if not session.get(ReportRecord, report_id):
+            exists = session.get(ReportRecord, report_id)
+            if not exists:
                 return False
             now = datetime.now(tz=timezone.utc).isoformat()
             existing = session.get(DashboardPointerRecord, 1)

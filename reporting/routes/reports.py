@@ -7,7 +7,6 @@ from flask import Response
 from pydantic import ValidationError
 
 from reporting import authnz
-from reporting.schema.report_config import CreateReportRequest
 from reporting.schema.report_config import CreateVersionRequest
 from reporting.services import report_store
 
@@ -58,12 +57,11 @@ def get_report(report_id: str) -> Response:
 @blueprint.route("/api/v1/reports/<report_id>/versions", methods=["GET"])
 def list_versions(report_id: str) -> Response:
     authnz.get_email()
-    metadata = report_store.get_report_metadata(report_id)
-    if not metadata:
+    versions = report_store.list_report_versions(report_id)
+    if not versions:
         resp = jsonify(error="Report not found")
         resp.status_code = 404
         return resp
-    versions = report_store.list_report_versions(report_id)
     return jsonify(versions=[v.model_dump() for v in versions])
 
 
@@ -90,15 +88,13 @@ def create_report() -> Response:
         return resp
 
     try:
-        body = CreateReportRequest.model_validate(request.get_json())
+        body = CreateVersionRequest.model_validate(request.get_json())
     except ValidationError as e:
         resp = jsonify(error="Invalid request", details=e.errors())
         resp.status_code = 400
         return resp
 
     report = report_store.create_report(
-        name=body.name,
-        description=body.description,
         config=body.config,
         created_by=created_by,
         comment=body.comment,

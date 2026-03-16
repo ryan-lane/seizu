@@ -276,6 +276,15 @@ class Row(BaseModel):
 
 
 class Report(BaseModel):
+    schema_version: int = Field(
+        default=1,
+        description=(
+            "The schema version of the report config."
+            " Increment when making breaking changes to the report schema."
+        ),
+        examples=[1],
+    )
+
     name: str = Field(
         description="The name of the report.",
         examples=["CVEs"],

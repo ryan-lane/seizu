@@ -72,12 +72,6 @@ def test_list_reports_delegates(mock_store):
     assert result == []
 
 
-def test_get_report_metadata_delegates(mock_store):
-    mock_store.get_report_metadata.return_value = None
-    report_store.get_report_metadata("rid1")
-    mock_store.get_report_metadata.assert_called_once_with("rid1")
-
-
 def test_get_report_latest_delegates(mock_store):
     mock_store.get_report_latest.return_value = None
     report_store.get_report_latest("rid1")
@@ -97,11 +91,9 @@ def test_list_report_versions_delegates(mock_store):
 
 
 def test_create_report_delegates(mock_store):
-    report_store.create_report(
-        name="T", description="d", config={}, created_by="u@x.com", comment="c"
-    )
+    report_store.create_report(config={}, created_by="u@x.com", comment="c")
     mock_store.create_report.assert_called_once_with(
-        name="T", description="d", config={}, created_by="u@x.com", comment="c"
+        config={}, created_by="u@x.com", comment="c"
     )
 
 

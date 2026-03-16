@@ -85,8 +85,6 @@ def seed(config_file: str, force: bool, dry_run: bool) -> None:
             continue
 
         result = report_store.create_report(
-            name=report.name,
-            description="",
             config=report_config_dict,
             created_by=SEED_USER,
             comment=SEED_COMMENT,

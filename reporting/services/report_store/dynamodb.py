@@ -12,7 +12,6 @@ from snowflake import SnowflakeGenerator
 
 from reporting import settings
 from reporting.schema.report_config import ReportListItem
-from reporting.schema.report_config import ReportMetadata
 from reporting.schema.report_config import ReportVersion
 from reporting.services import get_boto_resource
 from reporting.services.report_store.base import ReportStore
@@ -25,10 +24,10 @@ _snowflake_gen: Optional[SnowflakeGenerator] = None
 
 # DynamoDB key constants
 _PK_REPORT_LIST = "REPORT_LIST"
-_SK_METADATA = "#METADATA"
 # The latest-version pointer uses a '#' prefix so it sorts before all
 # "VERSION#…" sort keys and is never returned by begins_with("VERSION#") queries.
 _SK_LATEST = "#LATEST"
+_SK_METADATA = "#METADATA"
 _SK_VERSION_PREFIX = "VERSION#"
 # Dashboard pointer — a single item that records which report is the default dashboard.
 _PK_DASHBOARD = "#DASHBOARD"
@@ -87,6 +86,42 @@ def generate_report_id() -> str:
     return str(next(_get_snowflake_gen()))
 
 
+def _strip_none(value: Any) -> Any:
+    """Recursively remove None values from dicts and lists.
+
+    DynamoDB Local rejects the NULL type in TransactWriteItems, even when
+    nested inside a Map or List attribute.  Omitting None entirely is
+    equivalent — a missing attribute reads back as None on deserialisation.
+    """
+    if isinstance(value, dict):
+        return {k: _strip_none(v) for k, v in value.items() if v is not None}
+    if isinstance(value, list):
+        return [_strip_none(v) for v in value if v is not None]
+    return value
+
+
+def _transact_put(table: Any, *items: Dict[str, Any]) -> None:
+    """Write one or more items atomically via TransactWriteItems.
+
+    table.meta.client applies its own type serialization (Python → AttributeValue
+    wire format), so items must be passed as plain Python dicts — not pre-serialized
+    with TypeSerializer.  We only need to strip None values first, because
+    boto3/botocore would convert them to {"NULL": True} which DynamoDB Local
+    rejects inside TransactWriteItems.
+    """
+    table.meta.client.transact_write_items(
+        TransactItems=[
+            {
+                "Put": {
+                    "TableName": settings.DYNAMODB_TABLE_NAME,
+                    "Item": _strip_none(item),
+                }
+            }
+            for item in items
+        ]
+    )
+
+
 # ---------------------------------------------------------------------------
 # DynamoDB backend implementation
 # ---------------------------------------------------------------------------
@@ -133,23 +168,12 @@ class DynamoDBReportStore(ReportStore):
             )
 
     def list_reports(self) -> List[ReportListItem]:
-        """Return summary metadata for all reports."""
+        """Return lightweight metadata for all reports."""
         table = _get_table()
         resp = table.query(
             KeyConditionExpression=Key("PK").eq(_PK_REPORT_LIST),
         )
         return [ReportListItem(**item) for item in resp.get("Items", [])]
-
-    def get_report_metadata(self, report_id: str) -> Optional[ReportMetadata]:
-        """Return metadata for a single report, or None if not found."""
-        table = _get_table()
-        resp = table.get_item(
-            Key={"PK": _report_pk(report_id), "SK": _SK_METADATA},
-        )
-        item = resp.get("Item")
-        if not item:
-            return None
-        return ReportMetadata(**item)
 
     def get_report_latest(self, report_id: str) -> Optional[ReportVersion]:
         """Return the latest version of a report config, or None if not found."""
@@ -191,8 +215,6 @@ class DynamoDBReportStore(ReportStore):
 
     def create_report(
         self,
-        name: str,
-        description: str,
         config: Dict[str, Any],
         created_by: str,
         comment: Optional[str] = None,
@@ -201,6 +223,7 @@ class DynamoDBReportStore(ReportStore):
         report_id = generate_report_id()
         now = datetime.now(tz=timezone.utc).isoformat()
         version = 1
+        name = config.get("name", "")
 
         version_item = {
             "PK": _report_pk(report_id),
@@ -218,7 +241,6 @@ class DynamoDBReportStore(ReportStore):
             "SK": _SK_METADATA,
             "report_id": report_id,
             "name": name,
-            "description": description,
             "current_version": version,
             "created_at": now,
             "updated_at": now,
@@ -228,19 +250,13 @@ class DynamoDBReportStore(ReportStore):
             "SK": f"REPORT#{report_id}",
             "report_id": report_id,
             "name": name,
-            "description": description,
             "current_version": version,
             "created_at": now,
             "updated_at": now,
         }
 
         table = _get_table()
-        with table.batch_writer() as batch:
-            batch.put_item(Item=version_item)
-            batch.put_item(Item=latest_item)
-            batch.put_item(Item=metadata_item)
-            batch.put_item(Item=list_item)
-
+        _transact_put(table, version_item, latest_item, metadata_item, list_item)
         return ReportVersion(**version_item)
 
     def save_report_version(
@@ -254,11 +270,14 @@ class DynamoDBReportStore(ReportStore):
 
         Returns None if the report does not exist.
         """
-        metadata = self.get_report_metadata(report_id)
-        if not metadata:
+        table = _get_table()
+        resp = table.get_item(Key={"PK": _report_pk(report_id), "SK": _SK_METADATA})
+        meta = resp.get("Item")
+        if not meta:
             return None
 
-        version = metadata.current_version + 1
+        version = int(meta["current_version"]) + 1
+        name = config.get("name", meta.get("name", ""))
         now = datetime.now(tz=timezone.utc).isoformat()
 
         version_item = {
@@ -272,23 +291,26 @@ class DynamoDBReportStore(ReportStore):
             "comment": comment,
         }
         latest_item = {**version_item, "SK": _SK_LATEST}
+        metadata_item = {
+            "PK": _report_pk(report_id),
+            "SK": _SK_METADATA,
+            "report_id": report_id,
+            "name": name,
+            "current_version": version,
+            "created_at": meta["created_at"],
+            "updated_at": now,
+        }
+        list_item = {
+            "PK": _PK_REPORT_LIST,
+            "SK": f"REPORT#{report_id}",
+            "report_id": report_id,
+            "name": name,
+            "current_version": version,
+            "created_at": meta["created_at"],
+            "updated_at": now,
+        }
 
-        table = _get_table()
-        with table.batch_writer() as batch:
-            batch.put_item(Item=version_item)
-            batch.put_item(Item=latest_item)
-
-        table.update_item(
-            Key={"PK": _report_pk(report_id), "SK": _SK_METADATA},
-            UpdateExpression="SET current_version = :v, updated_at = :now",
-            ExpressionAttributeValues={":v": version, ":now": now},
-        )
-        table.update_item(
-            Key={"PK": _PK_REPORT_LIST, "SK": f"REPORT#{report_id}"},
-            UpdateExpression="SET current_version = :v, updated_at = :now",
-            ExpressionAttributeValues={":v": version, ":now": now},
-        )
-
+        _transact_put(table, version_item, latest_item, metadata_item, list_item)
         return ReportVersion(**version_item)
 
     def get_dashboard_report_id(self) -> Optional[str]:
@@ -305,7 +327,7 @@ class DynamoDBReportStore(ReportStore):
 
         Returns False if the report does not exist.
         """
-        if not self.get_report_metadata(report_id):
+        if not self.get_report_latest(report_id):
             return False
         table = _get_table()
         table.put_item(

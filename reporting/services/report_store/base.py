@@ -6,7 +6,6 @@ from typing import List
 from typing import Optional
 
 from reporting.schema.report_config import ReportListItem
-from reporting.schema.report_config import ReportMetadata
 from reporting.schema.report_config import ReportVersion
 
 
@@ -19,11 +18,7 @@ class ReportStore(ABC):
 
     @abstractmethod
     def list_reports(self) -> List[ReportListItem]:
-        """Return summary metadata for all reports."""
-
-    @abstractmethod
-    def get_report_metadata(self, report_id: str) -> Optional[ReportMetadata]:
-        """Return metadata for a single report, or None if not found."""
+        """Return lightweight metadata for all reports."""
 
     @abstractmethod
     def get_report_latest(self, report_id: str) -> Optional[ReportVersion]:
@@ -42,8 +37,6 @@ class ReportStore(ABC):
     @abstractmethod
     def create_report(
         self,
-        name: str,
-        description: str,
         config: Dict[str, Any],
         created_by: str,
         comment: Optional[str] = None,

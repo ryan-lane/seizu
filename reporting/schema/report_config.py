@@ -24,29 +24,10 @@ def _coerce_decimal(value: Any) -> Any:
 
 
 class ReportListItem(BaseModel):
-    """Lightweight summary of a report stored in the REPORT_LIST partition."""
+    """Lightweight summary of a report for list views."""
 
     report_id: str
     name: str
-    description: str = ""
-    current_version: int
-    created_at: str
-    updated_at: str
-
-    @field_validator("current_version", mode="before")
-    @classmethod
-    def coerce_version(cls, v: Any) -> int:
-        if isinstance(v, Decimal):
-            return int(v)
-        return v
-
-
-class ReportMetadata(BaseModel):
-    """Full metadata for a report stored in its own partition under #METADATA."""
-
-    report_id: str
-    name: str
-    description: str = ""
     current_version: int
     created_at: str
     updated_at: str
@@ -82,17 +63,8 @@ class ReportVersion(BaseModel):
         return _coerce_decimal(v)
 
 
-class CreateReportRequest(BaseModel):
-    """Request body for POST /api/v1/reports."""
-
-    name: str
-    description: str = ""
-    config: Dict[str, Any]
-    comment: Optional[str] = None
-
-
 class CreateVersionRequest(BaseModel):
-    """Request body for POST /api/v1/reports/<id>/versions."""
+    """Request body for POST /api/v1/reports and POST /api/v1/reports/<id>/versions."""
 
     config: Dict[str, Any]
     comment: Optional[str] = None

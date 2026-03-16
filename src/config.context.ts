@@ -62,6 +62,7 @@ export interface InputValue {
 }
 
 export interface Report {
+  schema_version?: number;
   name: string;
   rows: Row[];
   inputs?: ReportInput[];

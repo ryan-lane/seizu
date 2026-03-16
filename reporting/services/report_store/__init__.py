@@ -5,7 +5,6 @@ from typing import List
 from typing import Optional
 
 from reporting.schema.report_config import ReportListItem
-from reporting.schema.report_config import ReportMetadata
 from reporting.schema.report_config import ReportVersion
 from reporting.services.report_store.base import ReportStore
 
@@ -51,10 +50,6 @@ def list_reports() -> List[ReportListItem]:
     return get_store().list_reports()
 
 
-def get_report_metadata(report_id: str) -> Optional[ReportMetadata]:
-    return get_store().get_report_metadata(report_id)
-
-
 def get_report_latest(report_id: str) -> Optional[ReportVersion]:
     return get_store().get_report_latest(report_id)
 
@@ -68,15 +63,11 @@ def list_report_versions(report_id: str) -> List[ReportVersion]:
 
 
 def create_report(
-    name: str,
-    description: str,
     config: Dict[str, Any],
     created_by: str,
     comment: Optional[str] = None,
 ) -> ReportVersion:
     return get_store().create_report(
-        name=name,
-        description=description,
         config=config,
         created_by=created_by,
         comment=comment,
