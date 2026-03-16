@@ -51,6 +51,10 @@ lock_dev:
 build: clean
 	docker build . -t paypay/seizu
 
+.PHONY: rebuild
+rebuild:
+	docker compose build seizu
+
 .PHONY: seed_reports
 seed_reports:
 	docker compose $(COMPOSE_PROFILES) run --rm seizu bash -c "pipenv sync --dev && PYTHONPATH=/home/seizu/seizu pipenv run python scripts/seed_reports_from_yaml.py --config .config/dev/seizu/reporting-dashboard.yaml $(ARGS)"

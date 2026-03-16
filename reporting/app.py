@@ -51,7 +51,10 @@ def create_app(override_settings: Optional[Dict] = None) -> Flask:
     app.register_blueprint(validate.blueprint)
     app.register_blueprint(static.blueprint)
 
-    if settings.DYNAMODB_CREATE_TABLE:
+    should_init = settings.DYNAMODB_CREATE_TABLE or (
+        settings.REPORT_STORE_BACKEND == "sqlmodel"
+    )
+    if should_init:
         with app.app_context():
             report_store.initialize()
 
