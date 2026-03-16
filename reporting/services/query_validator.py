@@ -1,13 +1,21 @@
+import re
 from dataclasses import dataclass
 from dataclasses import field
+from typing import Any
+from typing import Dict
+from typing import Optional
 
-from cypher_guard import CypherParsingError
-from cypher_guard import is_read
 from CyVer import PropertiesValidator
 from CyVer import SchemaValidator
-from CyVer import SyntaxValidator
 
 from reporting.services.reporting_neo4j import _get_neo4j_client
+
+# Keyword scan for dangerous read-path operations that Neo4j classifies as
+# query_type='r' but can be used for SSRF or data exfiltration.
+_DANGEROUS_RE = re.compile(
+    r"\bLOAD\s+CSV\b|\bCALL\s+apoc\.",
+    re.IGNORECASE,
+)
 
 
 @dataclass
@@ -20,28 +28,55 @@ class ValidationResult:
         return bool(self.errors)
 
 
-def validate_query(query: str) -> ValidationResult:
+def validate_query(
+    query: str, params: Optional[Dict[str, Any]] = None
+) -> ValidationResult:
     result = ValidationResult()
     driver = _get_neo4j_client()
 
-    # Syntax validation — error, cannot proceed without valid syntax
-    syntax_validator = SyntaxValidator(driver)
-    is_valid, metadata = syntax_validator.validate(query)
-    if not is_valid:
-        result.errors.extend(metadata)
-        return result
-
-    # Read-only enforcement via cypher-guard — error
-    # Raises CypherParsingError on invalid or unsupported syntax, which is
-    # treated as a security-safe rejection.
+    # Syntax validation and write detection via EXPLAIN.
+    # EXPLAIN never executes the query (no side effects).  The returned summary
+    # includes query_type: 'r' (read), 'w' (write), 'rw' (read-write), or 's'
+    # (schema).  We only permit 'r'.  Params are forwarded so Neo4j can plan
+    # parameterized queries correctly, avoiding false ParameterNotProvided errors.
     try:
-        if not is_read(query):
+        _, summary, _ = driver.execute_query(
+            f"EXPLAIN {query}",
+            parameters_=params or {},
+        )
+        if summary.query_type != "r":
             result.errors.append("Write queries are not allowed")
             return result
-    except CypherParsingError as e:
-        result.errors.append(
-            f"Query has invalid syntax or uses unsupported Cypher clauses: {e}"
-        )
+        if summary.notifications:
+            for notification in summary.notifications:
+                code = notification.get("code", "")
+                description = notification.get("description", str(notification))
+                if code == "Neo.ClientNotification.Statement.ParameterNotProvided":
+                    # When params are omitted (e.g. /api/v1/validate called
+                    # without params), surface as a warning rather than
+                    # blocking the caller.
+                    result.warnings.append(description)
+                elif code in (
+                    "Neo.DatabaseError.Statement.ExecutionFailed",
+                    "Neo.ClientError.Statement.SyntaxError",
+                    "Neo.ClientNotification.Statement.UnsatisfiableRelationshipTypeExpression",
+                ):
+                    result.errors.append(description)
+    except Exception as e:
+        error_msg = getattr(e, "message", str(e))
+        if "EXPLAIN" in error_msg:
+            error_msg = error_msg.split("EXPLAIN")[0].strip('"')
+        result.errors.append(error_msg)
+        return result
+
+    if result.has_errors:
+        return result
+
+    # SSRF / exfiltration guard — Neo4j classifies LOAD CSV and APOC HTTP
+    # procedures as query_type='r', so they pass the check above.
+    # Reject them explicitly before allowing the query to execute.
+    if _DANGEROUS_RE.search(query):
+        result.errors.append("Write queries are not allowed")
         return result
 
     # Schema validation — warning, query still executes

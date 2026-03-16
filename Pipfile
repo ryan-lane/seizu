@@ -70,8 +70,6 @@ pydantic = ">=2.0.0"
 # License: Apache2
 # Upstream url: https://github.com/AnomalyFi/CyVer
 CyVer = ">=2.0.0"
-# Cypher query clause parser for read-only enforcement
-cypher-guard = "*"
 
 [dev-packages]
 # A framework for managing and maintaining multi-language pre-commit hooks.

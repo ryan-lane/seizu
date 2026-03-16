@@ -1,6 +1,14 @@
-import PropTypes from 'prop-types';
 import { TextField } from '@mui/material';
+import { InputValue } from 'src/config.context';
 import { setQueryStringValue } from 'src/components/QueryString';
+
+interface FreeTextInputProps {
+  inputId?: string;
+  inputDefault?: InputValue;
+  labelName?: string;
+  value?: Record<string, InputValue | undefined>;
+  setValue?: (val: Record<string, InputValue | undefined>) => void;
+}
 
 export default function FreeTextInput({
   inputId,
@@ -8,17 +16,17 @@ export default function FreeTextInput({
   labelName,
   value,
   setValue
-}) {
+}: FreeTextInputProps) {
   return (
     <TextField
       onChange={(event) => {
-        if (event.target.value === null || event.target.value === undefined) {
-          setValue({ ...value, [inputId]: { label: '', value: inputDefault } });
-          setQueryStringValue(inputId, inputDefault);
+        if (event.target.value === null || event.target.value === undefined || event.target.value === '') {
+          setValue?.({ ...value, [inputId || '']: inputDefault });
+          setQueryStringValue(inputId, inputDefault?.value);
         } else {
-          setValue({
+          setValue?.({
             ...value,
-            [inputId]: { label: '', value: event.target.value }
+            [inputId || '']: { label: '', value: event.target.value }
           });
           setQueryStringValue(inputId, event.target.value);
         }
@@ -30,11 +38,3 @@ export default function FreeTextInput({
     />
   );
 }
-
-FreeTextInput.propTypes = {
-  inputId: PropTypes.string,
-  inputDefault: PropTypes.string,
-  labelName: PropTypes.string,
-  value: PropTypes.object,
-  setValue: PropTypes.func
-};

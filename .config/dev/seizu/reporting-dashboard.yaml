@@ -14,7 +14,8 @@ queries:
     RETURN c AS details
   cves-by-severity-as-rows: |-
     MATCH (c:CVE)
-    RETURN {id: c.base_severity, value: count(c.id)} AS details
+    WITH c.base_severity AS severity, count(c.id) AS total
+    RETURN {id: severity, value: total} AS details
   cves: |-
     MATCH (c:CVE)
     WHERE c.base_severity =~ ($base_severity)
