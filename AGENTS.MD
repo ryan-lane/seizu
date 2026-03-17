@@ -103,7 +103,7 @@ Setup and configuration for adjacent development services (e.g., Neo4j, Redis, o
 React 19 + TypeScript, built with Bun, using Material-UI for components and Nivo for charts.
 
 **Key files and patterns:**
-- `src/config.context.ts` — central ConfigContext loaded from `GET /api/v1/config`; holds `queries` (Cypher strings) and is the single source of truth for query lookup
+- `src/config.context.ts` — central ConfigContext loaded from `GET /api/v1/config`; holds OIDC and stats config; Cypher query resolution is now per-report (see `Report.queries`)
 - `src/authConfig.context.ts` — `AuthConfigContext`; holds `auth_required` fetched from `GET /api/v1/config` in `App.tsx` at startup; consumed by `useCypherQuery` to gate API calls until a token is present
 - `src/auth.context.ts` — `AuthContext`; holds the OIDC `user` and `accessToken` managed by `AuthProvider`
 - `src/userManager.ts` — creates the `oidc-client-ts` `UserManager` singleton; returns `null` when auth is not required
@@ -111,7 +111,7 @@ React 19 + TypeScript, built with Bun, using Material-UI for components and Nivo
 - `src/components/OidcCallback.tsx` — rendered at `/auth/callback`; calls `signinRedirectCallback()` to complete the PKCE exchange then navigates to `/`
 - `src/hooks/useCypherQuery.ts` — wraps `POST /api/v1/query` for all data fetching; skips the request when `auth_required` is true and no `accessToken` is available yet
 - `src/hooks/useReportsApi.ts` — hooks for fetching reports from DynamoDB: `useReportsList()`, `useReport(id)`, `useDashboardReport()`, `useAllReports()`
-- `src/components/ReportView.tsx` — shared report rendering component used by both `Dashboard` and `Reports` pages; accepts a `Report` object and `queries` map
+- `src/components/ReportView.tsx` — shared report rendering component used by both `Dashboard` and `Reports` pages; accepts a `Report` object; resolves panel `cypher` fields against `report.queries` with fallback to literal Cypher string
 - `src/components/reports/` — panel components (`CypherCount`, `CypherTable`, `CypherBar`, etc.) are rendered dynamically based on the config panel type
 - All POST requests must include the `X-CSRFToken` header
 
@@ -144,7 +144,7 @@ Warnings (non-blocking):
 
 | Method | Path | Description |
 |--------|------|-------------|
-| GET | `/api/v1/config` | Returns `queries`, OIDC config, stats config, and JSON schema |
+| GET | `/api/v1/config` | Returns OIDC config, stats config, and JSON schema |
 | POST | `/api/v1/query` | Executes a validated read-only Cypher query; returns `{results, errors, warnings}` |
 | POST | `/api/v1/validate` | Validates a Cypher query without executing it; returns `{errors, warnings}` (always 200 if request is valid) |
 | GET | `/api/v1/reports` | Lists all reports (metadata only) |
@@ -162,9 +162,9 @@ Warnings (non-blocking):
 Dashboard and report configurations are stored in DynamoDB. The YAML config file (mounted as `/reporting-dashboard.yaml` in the container; example at `.config/dev/seizu/reporting-dashboard.yaml`) is used for `queries` and `scheduled_queries`, and as a seed source for populating DynamoDB.
 
 **YAML top-level sections:**
-- `queries` — named Cypher query strings; served to the frontend via `GET /api/v1/config` and used to resolve cypher references in panel configs
+- `queries` — named Cypher query strings used only by `scheduled_queries` cypher references; not served to the frontend
 - `dashboard` — a string key pointing to the report in `reports` that should be used as the default dashboard (e.g. `dashboard: dashboard`)
-- `reports` — report definitions used to seed DynamoDB via `make seed_reports`; not served directly to the frontend
+- `reports` — report definitions used to seed DynamoDB via `make seed_reports`; each report has its own `queries` dict for named Cypher strings used by its panels; not served directly to the frontend
 - `scheduled_queries` — recurring query definitions with action plugins (SQS, Slack, log)
 
 **Report storage abstraction** (`reporting/services/report_store/`): a pluggable storage layer for report configurations.
@@ -199,7 +199,7 @@ make seed_reports ARGS="--dry-run"   # preview without writing
 ```
 The seed script also sets the dashboard pointer if `dashboard:` is configured in the YAML.
 
-The `queries` key in `AppConfig` (`src/config.context.ts`) mirrors the `queries` field in `ReportingConfig` (`reporting/schema/reporting_config.py`) — keep them in sync when changing the queries schema.
+Each `Report` in DynamoDB has a `queries` dict (named Cypher strings). Panel `cypher` fields are resolved against this dict at render time, falling back to the literal value as a direct Cypher string when no key matches. The `Report` TypeScript interface in `src/config.context.ts` must stay in sync with the Pydantic `Report` model in `reporting/schema/reporting_config.py`.
 
 ### Cartography Data Sync
 
