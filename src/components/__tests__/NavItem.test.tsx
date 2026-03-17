@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, cleanup } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { ThemeProvider, createTheme } from '@mui/material/styles';
 import NavItem from '../NavItem';
@@ -14,6 +14,8 @@ function Wrapper({ children }) {
 }
 
 describe('NavItem', () => {
+  afterEach(cleanup);
+
   it('renders a nav item with title', () => {
     render(
       <Wrapper>

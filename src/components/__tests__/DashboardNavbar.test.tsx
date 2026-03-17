@@ -1,4 +1,4 @@
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, cleanup } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { ThemeProvider, createTheme } from '@mui/material/styles';
 import { ConfigContext } from 'src/config.context';
@@ -28,6 +28,8 @@ describe('DashboardNavbar', () => {
   beforeEach(() => {
     jest.clearAllMocks();
   });
+
+  afterEach(cleanup);
 
   it('renders without error', () => {
     const { container } = render(

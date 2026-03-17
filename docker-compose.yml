@@ -300,6 +300,9 @@ services:
       - DYNAMODB_CREATE_TABLE=true
       # SQLModel — PostgreSQL URL for the sqlmodel backend
       - SQL_DATABASE_URL=postgresql://seizu:seizu@postgres:5432/seizu
+      # In dev the project is bind-mounted here; the production image copies
+      # the frontend build to /build via the Dockerfile nodebuilder stage.
+      - STATIC_FOLDER=/home/seizu/seizu/build
     healthcheck:
       test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8080/healthcheck')"]
       interval: 30s

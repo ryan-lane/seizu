@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, cleanup } from '@testing-library/react';
 import { ThemeProvider, createTheme } from '@mui/material/styles';
 import Hidden from '../Hidden';
 
@@ -9,6 +9,8 @@ function Wrapper({ children }) {
 }
 
 describe('Hidden', () => {
+  afterEach(cleanup);
+
   it('renders children when not hidden', () => {
     // useMediaQuery returns false by default in jsdom (no window.matchMedia)
     // so lgUp will not match, meaning children should be visible

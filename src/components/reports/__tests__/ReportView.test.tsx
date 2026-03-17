@@ -6,44 +6,34 @@
  * old code used `!== null` which treated `undefined` as "value is set", causing
  * params to be sent as `{}` and triggering Neo4j ParameterMissing errors.
  * The fix uses `!= null` (loose) which handles both null and undefined.
+ *
+ * Strategy: mock useLazyCypherQuery (the data hook) rather than the panel
+ * components. This avoids jest.mock() leakage into CypherCount/CypherTable/
+ * FreeTextInput test files, which share bun's module registry.
+ * Assertions use hook call tracking (useLazyCypherQuery.mock.calls, mockRunQuery)
+ * and DOM queries instead of prop inspection.
  */
-import { render, cleanup } from '@testing-library/react';
+import { render, screen, cleanup } from '@testing-library/react';
 import { ThemeProvider, createTheme } from '@mui/material/styles';
 import ReportView from 'src/components/ReportView';
 import { Report } from 'src/config.context';
 
 // ---------------------------------------------------------------------------
-// Mock all panel components to capture their props
+// Mock only the hook and non-tested components (no test files for these)
 // ---------------------------------------------------------------------------
 
-let lastCountProps: Record<string, unknown> = {};
-let lastProgressProps: Record<string, unknown> = {};
-let lastTableProps: Record<string, unknown> = {};
-
-jest.mock('src/components/reports/CypherCount', () => ({
-  __esModule: true,
-  default: function MockCount(props: Record<string, unknown>) {
-    lastCountProps = props;
-    return null;
-  }
+jest.mock('src/hooks/useCypherQuery', () => ({
+  useLazyCypherQuery: jest.fn()
 }));
 
-jest.mock('src/components/reports/CypherProgress', () => ({
+// CypherAutocomplete calls useLazyCypherQuery for input options — mock it so
+// only the panel's hook call is counted.
+jest.mock('src/components/reports/CypherAutocomplete', () => ({
   __esModule: true,
-  default: function MockProgress(props: Record<string, unknown>) {
-    lastProgressProps = props;
-    return null;
-  }
+  default: () => null
 }));
 
-jest.mock('src/components/reports/CypherTable', () => ({
-  __esModule: true,
-  default: function MockTable(props: Record<string, unknown>) {
-    lastTableProps = props;
-    return null;
-  }
-}));
-
+// These panel types are not used in the tests below but imported by ReportView.
 jest.mock('src/components/reports/CypherPie', () => ({
   __esModule: true,
   default: () => null
@@ -59,28 +49,25 @@ jest.mock('src/components/reports/CypherVerticalTable', () => ({
   default: () => null
 }));
 
-jest.mock('src/components/reports/CypherAutocomplete', () => ({
-  __esModule: true,
-  default: () => null
-}));
-
-jest.mock('src/components/reports/FreeTextInput', () => ({
-  __esModule: true,
-  default: () => null
-}));
-
 jest.mock('src/components/QueryString', () => ({
   getQueryStringValue: () => undefined
 }));
 
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
+const { useLazyCypherQuery } = require('src/hooks/useCypherQuery');
 
 const theme = createTheme();
 function Wrapper({ children }: { children: React.ReactNode }) {
   return <ThemeProvider theme={theme}>{children}</ThemeProvider>;
 }
+
+const defaultState = {
+  loading: false,
+  error: null,
+  records: undefined,
+  first: undefined,
+  warnings: [],
+  queryErrors: []
+};
 
 const QUERIES: Record<string, string> = {
   'cves-total': 'MATCH (c:CVE) RETURN count(c.id) AS total',
@@ -109,10 +96,11 @@ function makeReport(panels: Report['rows'][0]['panels'], queries?: Record<string
 // ---------------------------------------------------------------------------
 
 describe('ReportView param building', () => {
+  const mockRunQuery = jest.fn();
+
   beforeEach(() => {
-    lastCountProps = {};
-    lastProgressProps = {};
-    lastTableProps = {};
+    jest.clearAllMocks();
+    useLazyCypherQuery.mockReturnValue([mockRunQuery, defaultState]);
   });
 
   afterEach(cleanup);
@@ -133,8 +121,9 @@ describe('ReportView param building', () => {
       </Wrapper>
     );
 
-    expect(lastCountProps.params).toEqual({ base_severity: 'CRITICAL' });
-    expect(lastCountProps.needInputs).toEqual([]);
+    // useLazyCypherQuery is called once for the panel (autocomplete is mocked).
+    // runQuery is called by the panel's useEffect with the built params dict.
+    expect(mockRunQuery).toHaveBeenCalledWith({ base_severity: 'CRITICAL' });
   });
 
   it('adds to needInputs when value key is absent (as after DynamoDB _strip_none)', () => {
@@ -156,10 +145,10 @@ describe('ReportView param building', () => {
       </Wrapper>
     );
 
-    // No value in varData yet → should add the input label to needInputs
-    expect(lastCountProps.needInputs).toEqual(['Base Severity']);
-    // params dict should NOT contain base_severity set to undefined
-    expect((lastCountProps.params as Record<string, unknown>)['base_severity']).toBeUndefined();
+    // No value in varData yet → panel should not execute the query.
+    expect(mockRunQuery).not.toHaveBeenCalled();
+    // The panel renders the "Set <label>" message for the missing input.
+    expect(screen.getByText('(Set Base Severity)')).toBeInTheDocument();
   });
 
   it('adds to needInputs when value is explicitly null (original YAML-loaded behavior)', () => {
@@ -180,7 +169,8 @@ describe('ReportView param building', () => {
       </Wrapper>
     );
 
-    expect(lastCountProps.needInputs).toEqual(['Base Severity']);
+    expect(mockRunQuery).not.toHaveBeenCalled();
+    expect(screen.getByText('(Set Base Severity)')).toBeInTheDocument();
   });
 
   it('passes params correctly for progress panel with static value', () => {
@@ -200,8 +190,7 @@ describe('ReportView param building', () => {
       </Wrapper>
     );
 
-    expect(lastProgressProps.params).toEqual({ base_severity: 'CRITICAL' });
-    expect(lastProgressProps.needInputs).toEqual([]);
+    expect(mockRunQuery).toHaveBeenCalledWith({ base_severity: 'CRITICAL' });
   });
 
   it('passes empty params when panel has no params defined', () => {
@@ -219,8 +208,7 @@ describe('ReportView param building', () => {
       </Wrapper>
     );
 
-    expect(lastCountProps.params).toEqual({});
-    expect(lastCountProps.needInputs).toEqual([]);
+    expect(mockRunQuery).toHaveBeenCalledWith({});
   });
 
   it('passes multiple static params to panel', () => {
@@ -242,7 +230,7 @@ describe('ReportView param building', () => {
       </Wrapper>
     );
 
-    expect(lastCountProps.params).toEqual({ base_severity: 'HIGH', limit: '10' });
+    expect(mockRunQuery).toHaveBeenCalledWith({ base_severity: 'HIGH', limit: '10' });
   });
 
   it('resolves named query reference from report.queries', () => {
@@ -260,7 +248,7 @@ describe('ReportView param building', () => {
       </Wrapper>
     );
 
-    expect(lastCountProps.cypher).toBe('MATCH (c:CVE) RETURN count(c.id) AS total');
+    expect(useLazyCypherQuery).toHaveBeenCalledWith('MATCH (c:CVE) RETURN count(c.id) AS total');
   });
 
   it('passes direct Cypher string to panel when not found in report.queries', () => {
@@ -282,8 +270,7 @@ describe('ReportView param building', () => {
       </Wrapper>
     );
 
-    // The literal Cypher string should be passed through unchanged
-    expect(lastCountProps.cypher).toBe(directCypher);
+    expect(useLazyCypherQuery).toHaveBeenCalledWith(directCypher);
   });
 
   it('falls back to literal string when panel.cypher is not in report.queries', () => {
@@ -303,6 +290,6 @@ describe('ReportView param building', () => {
       </Wrapper>
     );
 
-    expect(lastCountProps.cypher).toBe(directCypher);
+    expect(useLazyCypherQuery).toHaveBeenCalledWith(directCypher);
   });
 });

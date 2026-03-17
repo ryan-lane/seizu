@@ -3,19 +3,14 @@
   "author": "PayPay Corp.",
   "licence": "Apache2",
   "version": "1.0.0",
-  "proxy": "http://seizu:8080",
   "private": true,
   "scripts": {
-    "start": "react-scripts start",
-    "build": "react-scripts build",
-    "test": "react-scripts test",
-    "eject": "react-scripts eject",
+    "start": "vite",
+    "build": "tsc --noEmit && vite build",
+    "test": "bun test",
     "type-check": "tsc --noEmit",
-    "test:ci": "react-scripts test --watchAll=false",
-    "test:type-check": "tsc --noEmit && react-scripts test --watchAll=false"
-  },
-  "eslintConfig": {
-    "extends": "react-app"
+    "test:ci": "bun test --watchAll=false",
+    "test:type-check": "tsc --noEmit && bun test --watchAll=false"
   },
   "browserslist": {
     "production": [
@@ -56,13 +51,6 @@
     "react-promise-tracker": "^2.1.1",
     "react-router-dom": "^7.13.1"
   },
-  "jest": {
-    "moduleNameMapper": {
-      "^react-router-dom$": "<rootDir>/node_modules/react-router-dom/dist/index.js",
-      "^react-router/dom$": "<rootDir>/node_modules/react-router/dist/development/dom-export.js",
-      "^react-router$": "<rootDir>/node_modules/react-router/dist/development/index.js"
-    }
-  },
   "devDependencies": {
     "@happy-dom/global-registrator": "^20.8.4",
     "@testing-library/dom": "^10.4.1",
@@ -76,6 +64,7 @@
     "@types/react-helmet": "^6.1.11",
     "@typescript-eslint/eslint-plugin": "^8.57.0",
     "@typescript-eslint/parser": "^8.57.0",
+    "@vitejs/plugin-react": "^6.0.1",
     "eslint": "^10.0.3",
     "eslint-config-airbnb": "19.0.4",
     "eslint-config-prettier": "^10.1.8",
@@ -86,7 +75,7 @@
     "eslint-plugin-react": "^7.37.5",
     "eslint-plugin-react-hooks": "^7.0.1",
     "prettier": "^3.8.1",
-    "react-scripts": "^5.0.1",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "vite": "^8.0.0"
   }
 }

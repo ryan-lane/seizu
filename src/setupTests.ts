@@ -1,5 +1,7 @@
 import { GlobalRegistrator } from '@happy-dom/global-registrator';
-GlobalRegistrator.register();
+// Set a desktop viewport so MUI media queries (e.g. breakpoints.down('lg'))
+// don't fire and hide components during tests.
+GlobalRegistrator.register({ width: 1920, height: 1080 });
 
 import '@testing-library/jest-dom';
 
