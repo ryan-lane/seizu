@@ -1,4 +1,5 @@
 import logging
+from typing import Dict
 from typing import List
 
 import neo4j.exceptions
@@ -11,7 +12,6 @@ from reporting import setup_logging  # noqa:F401
 from reporting.schema import reporting_config
 from reporting.schema.reporting_config import Input
 from reporting.schema.reporting_config import Panel
-from reporting.schema.reporting_config import ReportingConfig
 from reporting.services import reporting_statsd  # noqa:F401
 from reporting.services.reporting_neo4j import run_query_with_retry
 
@@ -23,7 +23,7 @@ app.cli.add_command(user_cli)
 
 
 def send_stats_for_panel(
-    panel: Panel, panel_inputs: List[Input], config: ReportingConfig
+    panel: Panel, panel_inputs: List[Input], queries: Dict[str, str]
 ) -> None:
     if panel.type not in ["progress", "count"]:
         return
@@ -33,7 +33,7 @@ def send_stats_for_panel(
     cypher_id = panel.cypher
     if not cypher_id:
         return
-    cypher = config.queries[cypher_id]
+    cypher = queries.get(cypher_id, cypher_id)
     tags = []
     params = {}
     inputs = []
@@ -123,4 +123,4 @@ def dashboard_stats() -> None:
     for _, report in config.reports.items():
         for row in report.rows:
             for panel in row.panels:
-                send_stats_for_panel(panel, report.inputs, config)
+                send_stats_for_panel(panel, report.inputs, report.queries)

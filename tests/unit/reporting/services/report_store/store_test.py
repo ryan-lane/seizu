@@ -91,9 +91,9 @@ def test_list_report_versions_delegates(mock_store):
 
 
 def test_create_report_delegates(mock_store):
-    report_store.create_report(config={}, created_by="u@x.com", comment="c")
+    report_store.create_report(name="My Report", created_by="u@x.com")
     mock_store.create_report.assert_called_once_with(
-        config={}, created_by="u@x.com", comment="c"
+        name="My Report", created_by="u@x.com"
     )
 
 

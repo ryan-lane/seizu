@@ -37,11 +37,10 @@ class ReportStore(ABC):
     @abstractmethod
     def create_report(
         self,
-        config: Dict[str, Any],
+        name: str,
         created_by: str,
-        comment: Optional[str] = None,
-    ) -> ReportVersion:
-        """Create a new report with version 1 and return the initial ReportVersion."""
+    ) -> ReportListItem:
+        """Create a new empty report (no initial version) and return the ReportListItem."""
 
     @abstractmethod
     def save_report_version(

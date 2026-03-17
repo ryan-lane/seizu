@@ -63,14 +63,12 @@ def list_report_versions(report_id: str) -> List[ReportVersion]:
 
 
 def create_report(
-    config: Dict[str, Any],
+    name: str,
     created_by: str,
-    comment: Optional[str] = None,
-) -> ReportVersion:
+) -> ReportListItem:
     return get_store().create_report(
-        config=config,
+        name=name,
         created_by=created_by,
-        comment=comment,
     )
 
 

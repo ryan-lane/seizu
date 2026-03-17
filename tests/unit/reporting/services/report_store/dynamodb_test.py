@@ -53,6 +53,7 @@ def _version_item(report_id="123", version=1):
         "PK": f"REPORT#{report_id}",
         "SK": f"VERSION#{version:010d}",  # noqa: E231
         "report_id": report_id,
+        "name": "My Report",
         "version": version,
         "config": {"rows": []},
         "created_at": "2024-01-01T00:00:00+00:00",
@@ -66,6 +67,7 @@ def _latest_item(report_id="123", version=1):
         "PK": f"REPORT#{report_id}",
         "SK": "#LATEST",
         "report_id": report_id,
+        "name": "My Report",
         "version": version,
         "config": {"rows": []},
         "created_at": "2024-01-01T00:00:00+00:00",
@@ -217,35 +219,32 @@ def test_list_report_versions_scan_index_forward_false(patch_table, store):
 # ---------------------------------------------------------------------------
 
 
-def test_create_report_returns_version(patch_table, store, mocker):
+def test_create_report_returns_list_item(patch_table, store, mocker):
     mocker.patch(
         "reporting.services.report_store.dynamodb.generate_report_id",
         return_value="snowflake123",
     )
     result = store.create_report(
-        config={"name": "My Report", "rows": []},
+        name="My Report",
         created_by="user@example.com",
-        comment="initial version",
     )
 
-    assert isinstance(result, ReportVersion)
+    assert isinstance(result, ReportListItem)
     assert result.report_id == "snowflake123"
-    assert result.version == 1
-    assert result.config == {"name": "My Report", "rows": []}
-    assert result.created_by == "user@example.com"
-    assert result.comment == "initial version"
+    assert result.name == "My Report"
+    assert result.current_version == 0
 
 
-def test_create_report_writes_four_items_transactionally(patch_table, store, mocker):
+def test_create_report_writes_two_items_transactionally(patch_table, store, mocker):
     mocker.patch(
         "reporting.services.report_store.dynamodb.generate_report_id",
         return_value="rid",
     )
-    store.create_report(config={}, created_by="u@x.com")
+    store.create_report(name="My Report", created_by="u@x.com")
 
     patch_table.meta.client.transact_write_items.assert_called_once()
     items = patch_table.meta.client.transact_write_items.call_args[1]["TransactItems"]
-    assert len(items) == 4
+    assert len(items) == 2
 
 
 def test_create_report_correct_sks(patch_table, store, mocker):
@@ -253,14 +252,14 @@ def test_create_report_correct_sks(patch_table, store, mocker):
         "reporting.services.report_store.dynamodb.generate_report_id",
         return_value="rid",
     )
-    store.create_report(config={}, created_by="u@x.com")
+    store.create_report(name="My Report", created_by="u@x.com")
 
     items = patch_table.meta.client.transact_write_items.call_args[1]["TransactItems"]
     sks = [i["Put"]["Item"]["SK"] for i in items]
-    assert "#LATEST" in sks
-    assert "VERSION#0000000001" in sks
-    assert "REPORT#rid" in sks
     assert "#METADATA" in sks
+    # list item SK is the report_id prefixed with REPORT#
+    pks = [i["Put"]["Item"]["PK"] for i in items]
+    assert "REPORT_LIST" in pks
 
 
 # ---------------------------------------------------------------------------
@@ -283,13 +282,14 @@ def test_save_report_version_increments_version(patch_table, store):
 
     result = store.save_report_version(
         report_id="123",
-        config={"name": "My Report", "rows": [{"name": "new"}]},
+        config={"rows": [{"name": "new"}]},
         created_by="editor@example.com",
         comment="v4",
     )
 
     assert result.version == 4
-    assert result.config == {"name": "My Report", "rows": [{"name": "new"}]}
+    assert result.name == "My Report"
+    assert result.config == {"rows": [{"name": "new"}]}
     assert result.comment == "v4"
 
 
@@ -330,12 +330,11 @@ def test_floats_to_decimal_leaves_non_floats_unchanged():
     assert result == {"name": "CVEs", "version": 1, "enabled": True, "comment": None}
 
 
-def test_create_report_converts_floats_in_config(patch_table, store, mocker):
-    mocker.patch(
-        "reporting.services.report_store.dynamodb.generate_report_id",
-        return_value="rid",
+def test_save_report_version_converts_floats_in_config(patch_table, store):
+    patch_table.get_item.return_value = {"Item": _metadata_item(current_version=0)}
+    store.save_report_version(
+        report_id="123", config={"rows": [{"size": 2.0}]}, created_by="u@x.com"
     )
-    store.create_report(config={"rows": [{"size": 2.0}]}, created_by="u@x.com")
 
     items = patch_table.meta.client.transact_write_items.call_args[1]["TransactItems"]
     version_item = next(
@@ -538,12 +537,12 @@ def test_set_dashboard_report_returns_false_when_report_missing(patch_table, sto
 
 
 def test_set_dashboard_report_returns_true_when_report_exists(patch_table, store):
-    patch_table.get_item.return_value = {"Item": _version_item()}
+    patch_table.get_item.return_value = {"Item": _metadata_item()}
     assert store.set_dashboard_report("123") is True
 
 
 def test_set_dashboard_report_writes_pointer_item(patch_table, store):
-    patch_table.get_item.return_value = {"Item": _version_item(report_id="rid1")}
+    patch_table.get_item.return_value = {"Item": _metadata_item(report_id="rid1")}
     store.set_dashboard_report("rid1")
     patch_table.put_item.assert_called_once()
     item = patch_table.put_item.call_args[1]["Item"]
@@ -593,16 +592,12 @@ def test_save_report_version_correct_sks(patch_table, store):
 # ---------------------------------------------------------------------------
 
 
-def test_create_report_nested_none_config_produces_no_nones(patch_table, store, mocker):
+def test_save_report_version_nested_none_config_produces_no_nones(patch_table, store):
     """Config from Pydantic model_dump() may contain nested None values for
     optional fields; verify _strip_none removes them before they reach DynamoDB
     (which would convert None to {"NULL": True}, rejected by DynamoDB Local)."""
-    mocker.patch(
-        "reporting.services.report_store.dynamodb.generate_report_id",
-        return_value="rid",
-    )
+    patch_table.get_item.return_value = {"Item": _metadata_item(current_version=0)}
     config = {
-        "name": "Dashboard",
         "inputs": [],
         "rows": [
             {
@@ -632,7 +627,7 @@ def test_create_report_nested_none_config_produces_no_nones(patch_table, store, 
             }
         ],
     }
-    store.create_report(config=config, created_by="u@x.com")
+    store.save_report_version(report_id="123", config=config, created_by="u@x.com")
     items = patch_table.meta.client.transact_write_items.call_args[1]["TransactItems"]
     for item_op in items:
         assert not _contains_none(item_op["Put"]["Item"])

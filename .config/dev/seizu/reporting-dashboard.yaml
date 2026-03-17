@@ -1,31 +1,4 @@
 queries:
-  cves-total: |-
-    MATCH (c:CVE)
-    RETURN count(c.id) AS total
-  cves-severity-of-total: |-
-    MATCH (c:CVE)
-    WITH COUNT(DISTINCT c.id) AS denominator
-    MATCH (c:CVE)
-    WHERE c.base_severity = $base_severity
-    RETURN count(DISTINCT c.id) AS numerator, denominator
-  cves-severity-of-total-details: |-
-    MATCH (c:CVE)
-    WHERE c.base_severity = $base_severity
-    RETURN c AS details
-  cves-by-severity-as-rows: |-
-    MATCH (c:CVE)
-    WITH c.base_severity AS severity, count(c.id) AS total
-    RETURN {id: severity, value: total} AS details
-  cves: |-
-    MATCH (c:CVE)
-    WHERE c.base_severity =~ ($base_severity)
-    RETURN DISTINCT {
-      id: c.id,
-      base_severity: c.base_severity,
-      description: c.description_en,
-      published_date: c.published_date
-    } AS details
-    ORDER BY details.severity DESC
   recent-cves: |-
     MATCH (s:SyncMetadata)
     WHERE s.grouptype = "CVE" AND s.syncedtype IN $syncedtype
@@ -39,6 +12,24 @@ dashboard: dashboard
 reports:
   dashboard:
     name: Dashboard
+    queries:
+      cves-total: |-
+        MATCH (c:CVE)
+        RETURN count(c.id) AS total
+      cves-severity-of-total: |-
+        MATCH (c:CVE)
+        WITH COUNT(DISTINCT c.id) AS denominator
+        MATCH (c:CVE)
+        WHERE c.base_severity = $base_severity
+        RETURN count(DISTINCT c.id) AS numerator, denominator
+      cves-severity-of-total-details: |-
+        MATCH (c:CVE)
+        WHERE c.base_severity = $base_severity
+        RETURN c AS details
+      cves-by-severity-as-rows: |-
+        MATCH (c:CVE)
+        WITH c.base_severity AS severity, count(c.id) AS total
+        RETURN {id: severity, value: total} AS details
     rows:
       - name: CVEs as count and progress panels
         panels:
@@ -46,6 +37,12 @@ reports:
             type: count
             caption: Total CVEs
             metric: cve.count
+            size: 2.4
+          - cypher: |-
+              MATCH (c:CVE)
+              RETURN count(c.id) AS total
+            type: count
+            caption: Total CVEs (direct)
             size: 2.4
           - cypher: cves-severity-of-total
             details_cypher: cves-severity-of-total-details
@@ -99,6 +96,17 @@ reports:
             size: 6
   cves:
     name: CVEs
+    queries:
+      cves: |-
+        MATCH (c:CVE)
+        WHERE c.base_severity =~ ($base_severity)
+        RETURN DISTINCT {
+          id: c.id,
+          base_severity: c.base_severity,
+          description: c.description_en,
+          published_date: c.published_date
+        } AS details
+        ORDER BY details.severity DESC
     inputs:
       - input_id: cve_base_severity
         cypher: |-

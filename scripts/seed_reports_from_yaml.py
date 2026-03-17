@@ -85,6 +85,11 @@ def seed(config_file: str, force: bool, dry_run: bool) -> None:
             continue
 
         result = report_store.create_report(
+            name=report.name,
+            created_by=SEED_USER,
+        )
+        report_store.save_report_version(
+            report_id=result.report_id,
             config=report_config_dict,
             created_by=SEED_USER,
             comment=SEED_COMMENT,
@@ -92,7 +97,7 @@ def seed(config_file: str, force: bool, dry_run: bool) -> None:
         seeded_ids[report_id_key] = result.report_id
         print(
             f"[created] '{result.report_id}' name='{report.name}'"
-            f" version={result.version} yaml_key='{report_id_key}'"
+            f" yaml_key='{report_id_key}'"
         )
         created += 1
 

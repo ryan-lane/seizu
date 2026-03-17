@@ -33,6 +33,7 @@ def _report_list_item(report_id="rid1", name="My Report", current_version=1):
 def _report_version(report_id="rid1", version=1):
     return ReportVersion(
         report_id=report_id,
+        name="My Report",
         version=version,
         config={"rows": []},
         created_at="2024-01-01T00:00:00+00:00",
@@ -221,34 +222,31 @@ def test_create_report_success(mocker):
     app = _make_app(mocker)
     mocker.patch(
         "reporting.routes.reports.report_store.create_report",
-        return_value=_report_version(),
+        return_value=_report_list_item(),
     )
     ret = app.test_client().post(
         "/api/v1/reports",
-        json={"config": {"rows": []}},
+        json={"name": "My Report"},
     )
     assert ret.status_code == 201
     assert ret.json["report_id"] == "rid1"
-    assert ret.json["version"] == 1
+    assert ret.json["name"] == "My Report"
+    assert ret.json["current_version"] == 1
 
 
 def test_create_report_passes_fields_to_service(mocker):
     app = _make_app(mocker)
     mock_create = mocker.patch(
         "reporting.routes.reports.report_store.create_report",
-        return_value=_report_version(),
+        return_value=_report_list_item(),
     )
     app.test_client().post(
         "/api/v1/reports",
-        json={
-            "config": {"rows": [{"name": "row1"}]},
-            "comment": "first version",
-        },
+        json={"name": "My Report"},
     )
     mock_create.assert_called_once_with(
-        config={"rows": [{"name": "row1"}]},
+        name="My Report",
         created_by="user@example.com",
-        comment="first version",
     )
 
 
@@ -256,7 +254,7 @@ def test_create_report_missing_required_fields(mocker):
     app = _make_app(mocker)
     ret = app.test_client().post(
         "/api/v1/reports",
-        json={"comment": "no config"},
+        json={},
     )
     assert ret.status_code == 400
     assert "Invalid request" in ret.json["error"]

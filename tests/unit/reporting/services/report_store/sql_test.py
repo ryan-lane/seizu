@@ -85,16 +85,13 @@ def test_list_reports_returns_created_reports(store, mocker):
         "reporting.services.report_store.sql.generate_report_id",
         return_value="rid1",
     )
-    store.create_report(
-        config={"name": "My Report", "rows": []},
-        created_by="user@example.com",
-    )
+    store.create_report(name="My Report", created_by="user@example.com")
     result = store.list_reports()
     assert len(result) == 1
     assert isinstance(result[0], ReportListItem)
     assert result[0].report_id == "rid1"
     assert result[0].name == "My Report"
-    assert result[0].current_version == 1
+    assert result[0].current_version == 0
 
 
 # ---------------------------------------------------------------------------
@@ -106,21 +103,33 @@ def test_get_report_latest_not_found(store):
     assert store.get_report_latest("missing") is None
 
 
+def test_get_report_latest_not_found_for_empty_report(store, mocker):
+    mocker.patch(
+        "reporting.services.report_store.sql.generate_report_id",
+        return_value="rid1",
+    )
+    store.create_report(name="r1", created_by="user@example.com")
+    assert store.get_report_latest("rid1") is None
+
+
 def test_get_report_latest_returns_version(store, mocker):
     mocker.patch(
         "reporting.services.report_store.sql.generate_report_id",
         return_value="rid1",
     )
-    store.create_report(
-        config={"name": "r1", "rows": [{"name": "r1"}]},
+    store.create_report(name="r1", created_by="user@example.com")
+    store.save_report_version(
+        report_id="rid1",
+        config={"rows": [{"name": "r1"}]},
         created_by="user@example.com",
         comment="v1",
     )
     result = store.get_report_latest("rid1")
     assert isinstance(result, ReportVersion)
     assert result.report_id == "rid1"
+    assert result.name == "r1"
     assert result.version == 1
-    assert result.config == {"name": "r1", "rows": [{"name": "r1"}]}
+    assert result.config == {"rows": [{"name": "r1"}]}
     assert result.created_by == "user@example.com"
     assert result.comment == "v1"
 
@@ -130,13 +139,12 @@ def test_get_report_latest_returns_newest_after_update(store, mocker):
         "reporting.services.report_store.sql.generate_report_id",
         return_value="rid1",
     )
-    store.create_report(config={"name": "r", "v": 1}, created_by="u@x.com")
-    store.save_report_version(
-        report_id="rid1", config={"name": "r", "v": 2}, created_by="u@x.com"
-    )
+    store.create_report(name="r", created_by="u@x.com")
+    store.save_report_version(report_id="rid1", config={"v": 1}, created_by="u@x.com")
+    store.save_report_version(report_id="rid1", config={"v": 2}, created_by="u@x.com")
     result = store.get_report_latest("rid1")
     assert result.version == 2
-    assert result.config == {"name": "r", "v": 2}
+    assert result.config == {"v": 2}
 
 
 # ---------------------------------------------------------------------------
@@ -153,17 +161,17 @@ def test_get_report_version_found(store, mocker):
         "reporting.services.report_store.sql.generate_report_id",
         return_value="rid1",
     )
-    store.create_report(config={"name": "r", "v": 1}, created_by="u@x.com")
-    store.save_report_version(
-        report_id="rid1", config={"name": "r", "v": 2}, created_by="u@x.com"
-    )
+    store.create_report(name="r", created_by="u@x.com")
+    store.save_report_version(report_id="rid1", config={"v": 1}, created_by="u@x.com")
+    store.save_report_version(report_id="rid1", config={"v": 2}, created_by="u@x.com")
 
     v1 = store.get_report_version("rid1", 1)
     v2 = store.get_report_version("rid1", 2)
     assert v1.version == 1
-    assert v1.config == {"name": "r", "v": 1}
+    assert v1.name == "r"
+    assert v1.config == {"v": 1}
     assert v2.version == 2
-    assert v2.config == {"name": "r", "v": 2}
+    assert v2.config == {"v": 2}
 
 
 # ---------------------------------------------------------------------------
@@ -175,18 +183,24 @@ def test_list_report_versions_empty(store):
     assert store.list_report_versions("missing") == []
 
 
+def test_list_report_versions_empty_for_report_with_no_versions(store, mocker):
+    mocker.patch(
+        "reporting.services.report_store.sql.generate_report_id",
+        return_value="rid1",
+    )
+    store.create_report(name="r", created_by="u@x.com")
+    assert store.list_report_versions("rid1") == []
+
+
 def test_list_report_versions_newest_first(store, mocker):
     mocker.patch(
         "reporting.services.report_store.sql.generate_report_id",
         return_value="rid1",
     )
-    store.create_report(config={"name": "r", "v": 1}, created_by="u@x.com")
-    store.save_report_version(
-        report_id="rid1", config={"name": "r", "v": 2}, created_by="u@x.com"
-    )
-    store.save_report_version(
-        report_id="rid1", config={"name": "r", "v": 3}, created_by="u@x.com"
-    )
+    store.create_report(name="r", created_by="u@x.com")
+    store.save_report_version(report_id="rid1", config={"v": 1}, created_by="u@x.com")
+    store.save_report_version(report_id="rid1", config={"v": 2}, created_by="u@x.com")
+    store.save_report_version(report_id="rid1", config={"v": 3}, created_by="u@x.com")
 
     versions = store.list_report_versions("rid1")
     assert len(versions) == 3
@@ -200,22 +214,19 @@ def test_list_report_versions_newest_first(store, mocker):
 # ---------------------------------------------------------------------------
 
 
-def test_create_report_returns_version(store, mocker):
+def test_create_report_returns_list_item(store, mocker):
     mocker.patch(
         "reporting.services.report_store.sql.generate_report_id",
         return_value="snowflake42",
     )
     result = store.create_report(
-        config={"name": "My Report", "rows": []},
+        name="My Report",
         created_by="creator@example.com",
-        comment="first",
     )
-    assert isinstance(result, ReportVersion)
+    assert isinstance(result, ReportListItem)
     assert result.report_id == "snowflake42"
-    assert result.version == 1
-    assert result.config == {"name": "My Report", "rows": []}
-    assert result.created_by == "creator@example.com"
-    assert result.comment == "first"
+    assert result.name == "My Report"
+    assert result.current_version == 0
 
 
 # ---------------------------------------------------------------------------
@@ -235,32 +246,33 @@ def test_save_report_version_increments_version(store, mocker):
         "reporting.services.report_store.sql.generate_report_id",
         return_value="rid1",
     )
-    store.create_report(config={"name": "r", "v": 1}, created_by="u@x.com")
+    store.create_report(name="r", created_by="u@x.com")
     result = store.save_report_version(
         report_id="rid1",
-        config={"name": "r updated", "v": 2},
+        config={"v": 2},
         created_by="editor@example.com",
         comment="update",
     )
-    assert result.version == 2
-    assert result.config == {"name": "r updated", "v": 2}
+    assert result.version == 1
+    assert result.name == "r"
+    assert result.config == {"v": 2}
     assert result.comment == "update"
 
 
-def test_save_report_version_updates_name_in_record(store, mocker):
+def test_save_report_version_does_not_change_name(store, mocker):
     mocker.patch(
         "reporting.services.report_store.sql.generate_report_id",
         return_value="rid1",
     )
-    store.create_report(config={"name": "Original Name"}, created_by="u@x.com")
+    store.create_report(name="Original Name", created_by="u@x.com")
     store.save_report_version(
         report_id="rid1",
-        config={"name": "Updated Name"},
+        config={"rows": []},
         created_by="u@x.com",
     )
     result = store.list_reports()
-    assert result[0].name == "Updated Name"
-    assert result[0].current_version == 2
+    assert result[0].name == "Original Name"
+    assert result[0].current_version == 1
 
 
 def test_save_report_version_latest_reflects_new_version(store, mocker):
@@ -268,16 +280,12 @@ def test_save_report_version_latest_reflects_new_version(store, mocker):
         "reporting.services.report_store.sql.generate_report_id",
         return_value="rid1",
     )
-    store.create_report(config={"name": "r"}, created_by="u@x.com")
-    store.save_report_version(
-        report_id="rid1", config={"name": "r", "v": 2}, created_by="u@x.com"
-    )
-    store.save_report_version(
-        report_id="rid1", config={"name": "r", "v": 3}, created_by="u@x.com"
-    )
+    store.create_report(name="r", created_by="u@x.com")
+    store.save_report_version(report_id="rid1", config={"v": 1}, created_by="u@x.com")
+    store.save_report_version(report_id="rid1", config={"v": 2}, created_by="u@x.com")
 
     latest = store.get_report_latest("rid1")
-    assert latest.version == 3
+    assert latest.version == 2
 
 
 # ---------------------------------------------------------------------------
@@ -297,14 +305,25 @@ def test_set_dashboard_report_false_for_missing_report(store):
     assert store.set_dashboard_report("nonexistent") is False
 
 
+def test_set_dashboard_report_succeeds_for_empty_report(store, mocker):
+    mocker.patch(
+        "reporting.services.report_store.sql.generate_report_id",
+        return_value="rid1",
+    )
+    store.create_report(name="My Report", created_by="u@x.com")
+    ok = store.set_dashboard_report("rid1")
+    assert ok is True
+    assert store.get_dashboard_report_id() == "rid1"
+
+
 def test_set_and_get_dashboard_report(store, mocker):
     mocker.patch(
         "reporting.services.report_store.sql.generate_report_id",
         return_value="rid1",
     )
-    store.create_report(
-        config={"name": "My Report", "rows": []},
-        created_by="u@x.com",
+    store.create_report(name="My Report", created_by="u@x.com")
+    store.save_report_version(
+        report_id="rid1", config={"rows": []}, created_by="u@x.com"
     )
     ok = store.set_dashboard_report("rid1")
     assert ok is True
@@ -322,8 +341,8 @@ def test_set_dashboard_report_can_be_changed(store, mocker):
         "reporting.services.report_store.sql.generate_report_id",
         side_effect=lambda: next(ids),
     )
-    store.create_report(config={"name": "r1"}, created_by="u@x.com")
-    store.create_report(config={"name": "r2"}, created_by="u@x.com")
+    store.create_report(name="r1", created_by="u@x.com")
+    store.create_report(name="r2", created_by="u@x.com")
     store.set_dashboard_report("rid1")
     store.set_dashboard_report("rid2")
     assert store.get_dashboard_report_id() == "rid2"

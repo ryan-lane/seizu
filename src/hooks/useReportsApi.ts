@@ -14,6 +14,7 @@ export interface ReportListItem {
 
 export interface ReportVersion {
   report_id: string;
+  name: string;
   version: number;
   config: Report;
   created_at: string;
@@ -154,12 +155,14 @@ export function useAllReports(): {
 
 export function useReport(reportId: string | undefined): {
   report: Report | undefined;
+  name: string | undefined;
   loading: boolean;
   error: Error | null;
 } {
   const { accessToken } = useContext(AuthContext);
   const { auth_required } = useContext(AuthConfigContext);
   const [report, setReport] = useState<Report | undefined>(undefined);
+  const [name, setName] = useState<string | undefined>(undefined);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
 
@@ -169,6 +172,7 @@ export function useReport(reportId: string | undefined): {
 
     setLoading(true);
     setReport(undefined);
+    setName(undefined);
     setError(null);
 
     fetch(`/api/v1/reports/${reportId}`, { headers: getApiHeaders(accessToken) })
@@ -178,6 +182,7 @@ export function useReport(reportId: string | undefined): {
       })
       .then((data: ReportVersion) => {
         setReport(data.config);
+        setName(data.name);
         setLoading(false);
       })
       .catch((err: Error) => {
@@ -186,5 +191,5 @@ export function useReport(reportId: string | undefined): {
       });
   }, [reportId, accessToken, auth_required]);
 
-  return { report, loading, error };
+  return { report, name, loading, error };
 }

@@ -88,9 +88,10 @@ const QUERIES: Record<string, string> = {
   'cves-list': 'MATCH (c:CVE) WHERE c.base_severity =~ ($base_severity) RETURN c'
 };
 
-function makeReport(panels: Report['rows'][0]['panels']): Report {
+function makeReport(panels: Report['rows'][0]['panels'], queries?: Record<string, string>): Report {
   return {
     name: 'Test',
+    queries: queries ?? QUERIES,
     inputs: [
       {
         input_id: 'cve_severity',
@@ -128,7 +129,7 @@ describe('ReportView param building', () => {
 
     render(
       <Wrapper>
-        <ReportView report={report} queries={QUERIES} title="Test" />
+        <ReportView report={report} title="Test" />
       </Wrapper>
     );
 
@@ -151,7 +152,7 @@ describe('ReportView param building', () => {
 
     render(
       <Wrapper>
-        <ReportView report={report} queries={QUERIES} title="Test" />
+        <ReportView report={report} title="Test" />
       </Wrapper>
     );
 
@@ -175,7 +176,7 @@ describe('ReportView param building', () => {
 
     render(
       <Wrapper>
-        <ReportView report={report} queries={QUERIES} title="Test" />
+        <ReportView report={report} title="Test" />
       </Wrapper>
     );
 
@@ -195,7 +196,7 @@ describe('ReportView param building', () => {
 
     render(
       <Wrapper>
-        <ReportView report={report} queries={QUERIES} title="Test" />
+        <ReportView report={report} title="Test" />
       </Wrapper>
     );
 
@@ -214,7 +215,7 @@ describe('ReportView param building', () => {
 
     render(
       <Wrapper>
-        <ReportView report={report} queries={QUERIES} title="Test" />
+        <ReportView report={report} title="Test" />
       </Wrapper>
     );
 
@@ -237,10 +238,71 @@ describe('ReportView param building', () => {
 
     render(
       <Wrapper>
-        <ReportView report={report} queries={QUERIES} title="Test" />
+        <ReportView report={report} title="Test" />
       </Wrapper>
     );
 
     expect(lastCountProps.params).toEqual({ base_severity: 'HIGH', limit: '10' });
+  });
+
+  it('resolves named query reference from report.queries', () => {
+    const report = makeReport([
+      {
+        type: 'count',
+        cypher: 'cves-total',
+        caption: 'Total CVEs'
+      }
+    ]);
+
+    render(
+      <Wrapper>
+        <ReportView report={report} title="Test" />
+      </Wrapper>
+    );
+
+    expect(lastCountProps.cypher).toBe('MATCH (c:CVE) RETURN count(c.id) AS total');
+  });
+
+  it('passes direct Cypher string to panel when not found in report.queries', () => {
+    const directCypher = 'MATCH (c:CVE) RETURN count(c.id) AS total';
+    const report = makeReport(
+      [
+        {
+          type: 'count',
+          cypher: directCypher,
+          caption: 'Total CVEs (direct)'
+        }
+      ],
+      {} // empty queries dict — no named references
+    );
+
+    render(
+      <Wrapper>
+        <ReportView report={report} title="Test" />
+      </Wrapper>
+    );
+
+    // The literal Cypher string should be passed through unchanged
+    expect(lastCountProps.cypher).toBe(directCypher);
+  });
+
+  it('falls back to literal string when panel.cypher is not in report.queries', () => {
+    const directCypher = 'MATCH (n) RETURN count(n) AS total';
+    const report = makeReport([
+      {
+        type: 'count',
+        cypher: directCypher,
+        caption: 'All Nodes'
+      }
+    ]);
+    // QUERIES does not contain directCypher as a key, so it should be used as-is
+
+    render(
+      <Wrapper>
+        <ReportView report={report} title="Test" />
+      </Wrapper>
+    );
+
+    expect(lastCountProps.cypher).toBe(directCypher);
   });
 });

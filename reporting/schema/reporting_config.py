@@ -290,6 +290,25 @@ class Report(BaseModel):
         examples=["CVEs"],
     )
 
+    queries: Dict[str, str] = Field(
+        default_factory=dict,
+        description=(
+            "Named Cypher queries for this report."
+            " Panel ``cypher`` fields may reference a key from this dict,"
+            " or provide a Cypher query string directly."
+        ),
+        examples=[
+            """
+            .. code-block:: yaml
+
+              queries:
+                cves-total: |-
+                  MATCH (c:CVE)
+                  RETURN count(c.id) AS total
+            """
+        ],
+    )
+
     inputs: List[Input] = Field(
         default_factory=list,
         description="The inputs to use for the report.",

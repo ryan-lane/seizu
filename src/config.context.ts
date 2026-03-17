@@ -63,13 +63,14 @@ export interface InputValue {
 
 export interface Report {
   schema_version?: number;
-  name: string;
+  name?: string;
+  queries?: Record<string, string>;
   rows: Row[];
   inputs?: ReportInput[];
 }
 
 export interface AppConfig {
-  queries: Record<string, string>;
+  [key: string]: unknown;
 }
 
 export interface SeizuConfig {

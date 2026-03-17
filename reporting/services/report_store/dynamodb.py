@@ -215,33 +215,19 @@ class DynamoDBReportStore(ReportStore):
 
     def create_report(
         self,
-        config: Dict[str, Any],
+        name: str,
         created_by: str,
-        comment: Optional[str] = None,
-    ) -> ReportVersion:
-        """Create a new report with version 1 and return the initial ReportVersion."""
+    ) -> ReportListItem:
+        """Create a new empty report (no initial version) and return the ReportListItem."""
         report_id = generate_report_id()
         now = datetime.now(tz=timezone.utc).isoformat()
-        version = 1
-        name = config.get("name", "")
 
-        version_item = {
-            "PK": _report_pk(report_id),
-            "SK": _version_sk(version),
-            "report_id": report_id,
-            "version": version,
-            "config": _floats_to_decimal(config),
-            "created_at": now,
-            "created_by": created_by,
-            "comment": comment,
-        }
-        latest_item = {**version_item, "SK": _SK_LATEST}
         metadata_item = {
             "PK": _report_pk(report_id),
             "SK": _SK_METADATA,
             "report_id": report_id,
             "name": name,
-            "current_version": version,
+            "current_version": 0,
             "created_at": now,
             "updated_at": now,
         }
@@ -250,14 +236,20 @@ class DynamoDBReportStore(ReportStore):
             "SK": f"REPORT#{report_id}",
             "report_id": report_id,
             "name": name,
-            "current_version": version,
+            "current_version": 0,
             "created_at": now,
             "updated_at": now,
         }
 
         table = _get_table()
-        _transact_put(table, version_item, latest_item, metadata_item, list_item)
-        return ReportVersion(**version_item)
+        _transact_put(table, metadata_item, list_item)
+        return ReportListItem(
+            report_id=report_id,
+            name=name,
+            current_version=0,
+            created_at=now,
+            updated_at=now,
+        )
 
     def save_report_version(
         self,
@@ -277,13 +269,14 @@ class DynamoDBReportStore(ReportStore):
             return None
 
         version = int(meta["current_version"]) + 1
-        name = config.get("name", meta.get("name", ""))
+        name = meta["name"]
         now = datetime.now(tz=timezone.utc).isoformat()
 
         version_item = {
             "PK": _report_pk(report_id),
             "SK": _version_sk(version),
             "report_id": report_id,
+            "name": name,
             "version": version,
             "config": _floats_to_decimal(config),
             "created_at": now,
@@ -327,9 +320,10 @@ class DynamoDBReportStore(ReportStore):
 
         Returns False if the report does not exist.
         """
-        if not self.get_report_latest(report_id):
-            return False
         table = _get_table()
+        resp = table.get_item(Key={"PK": _report_pk(report_id), "SK": _SK_METADATA})
+        if not resp.get("Item"):
+            return False
         table.put_item(
             Item={
                 "PK": _PK_DASHBOARD,

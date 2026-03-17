@@ -24,12 +24,16 @@ import FreeTextInput from 'src/components/reports/FreeTextInput';
 
 interface ReportViewProps {
   report: Report;
-  queries: Record<string, string>;
-  title: string;
+  title?: string;
   boxSx?: object;
 }
 
-function ReportView({ report, queries, title, boxSx = { height: '100%', py: 3 } }: ReportViewProps) {
+function ReportView({ report, title, boxSx = { height: '100%', py: 3 } }: ReportViewProps) {
+  const reportQueries = report.queries ?? {};
+  function resolveQuery(cypher: string | undefined): string | undefined {
+    if (cypher === undefined) return undefined;
+    return reportQueries[cypher] ?? cypher;
+  }
   const [varData, setVarData] = useState({});
 
   useEffect(() => {
@@ -156,8 +160,8 @@ function ReportView({ report, queries, title, boxSx = { height: '100%', py: 3 } 
       }
 
       const details = {
-        cypher: queries[item.cypher],
-        details_cypher: queries[item.details_cypher],
+        cypher: resolveQuery(item.cypher),
+        details_cypher: resolveQuery(item.details_cypher),
         type: item.type,
         metric: item.metric,
         columns: item.columns,
@@ -169,7 +173,7 @@ function ReportView({ report, queries, title, boxSx = { height: '100%', py: 3 } 
       if (item.type === 'progress') {
         itemComponent = (
           <CypherProgress
-            cypher={queries[item.cypher]}
+            cypher={resolveQuery(item.cypher)}
             params={params}
             caption={item.caption}
             threshold={item.threshold}
@@ -180,7 +184,7 @@ function ReportView({ report, queries, title, boxSx = { height: '100%', py: 3 } 
       } else if (item.type === 'pie') {
         itemComponent = (
           <CypherPie
-            cypher={queries[item.cypher]}
+            cypher={resolveQuery(item.cypher)}
             params={params}
             caption={item.caption}
             pieSettings={item.pie_settings}
@@ -190,7 +194,7 @@ function ReportView({ report, queries, title, boxSx = { height: '100%', py: 3 } 
       } else if (item.type === 'bar') {
         itemComponent = (
           <CypherBar
-            cypher={queries[item.cypher]}
+            cypher={resolveQuery(item.cypher)}
             params={params}
             caption={item.caption}
             barSettings={item.bar_settings}
@@ -200,7 +204,7 @@ function ReportView({ report, queries, title, boxSx = { height: '100%', py: 3 } 
       } else if (item.type === 'count') {
         itemComponent = (
           <CypherCount
-            cypher={queries[item.cypher]}
+            cypher={resolveQuery(item.cypher)}
             params={params}
             caption={item.caption}
             details={details}
@@ -210,7 +214,7 @@ function ReportView({ report, queries, title, boxSx = { height: '100%', py: 3 } 
       } else if (item.type === 'table') {
         itemComponent = (
           <CypherTable
-            cypher={queries[item.cypher]}
+            cypher={resolveQuery(item.cypher)}
             params={params}
             columns={item.columns}
             caption={item.caption}
@@ -221,7 +225,7 @@ function ReportView({ report, queries, title, boxSx = { height: '100%', py: 3 } 
       } else if (item.type === 'vertical-table') {
         itemComponent = (
           <CypherVerticalTable
-            cypher={queries[item.cypher]}
+            cypher={resolveQuery(item.cypher)}
             params={params}
             id={item.table_id}
             details={details}

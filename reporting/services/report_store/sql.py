@@ -58,7 +58,7 @@ class ReportRecord(SQLModel, table=True):  # type: ignore
     __tablename__ = "reports"
     report_id: str = Field(primary_key=True)
     name: str
-    current_version: int = 1
+    current_version: int = 0
     created_at: str
     updated_at: str
 
@@ -131,6 +131,9 @@ class SQLModelReportStore(ReportStore):
 
     def get_report_latest(self, report_id: str) -> Optional[ReportVersion]:
         with Session(_get_engine()) as session:
+            report = session.get(ReportRecord, report_id)
+            if not report:
+                return None
             stmt = (
                 select(ReportVersionRecord)
                 .where(ReportVersionRecord.report_id == report_id)
@@ -142,6 +145,7 @@ class SQLModelReportStore(ReportStore):
                 return None
             return ReportVersion(
                 report_id=row.report_id,
+                name=report.name,
                 version=row.version,
                 config=row.config,
                 created_at=row.created_at,
@@ -153,6 +157,9 @@ class SQLModelReportStore(ReportStore):
         self, report_id: str, version: int
     ) -> Optional[ReportVersion]:
         with Session(_get_engine()) as session:
+            report = session.get(ReportRecord, report_id)
+            if not report:
+                return None
             stmt = (
                 select(ReportVersionRecord)
                 .where(ReportVersionRecord.report_id == report_id)
@@ -163,6 +170,7 @@ class SQLModelReportStore(ReportStore):
                 return None
             return ReportVersion(
                 report_id=row.report_id,
+                name=report.name,
                 version=row.version,
                 config=row.config,
                 created_at=row.created_at,
@@ -172,6 +180,9 @@ class SQLModelReportStore(ReportStore):
 
     def list_report_versions(self, report_id: str) -> List[ReportVersion]:
         with Session(_get_engine()) as session:
+            report = session.get(ReportRecord, report_id)
+            if not report:
+                return []
             stmt = (
                 select(ReportVersionRecord)
                 .where(ReportVersionRecord.report_id == report_id)
@@ -181,6 +192,7 @@ class SQLModelReportStore(ReportStore):
             return [
                 ReportVersion(
                     report_id=r.report_id,
+                    name=report.name,
                     version=r.version,
                     config=r.config,
                     created_at=r.created_at,
@@ -192,44 +204,31 @@ class SQLModelReportStore(ReportStore):
 
     def create_report(
         self,
-        config: Dict[str, Any],
+        name: str,
         created_by: str,
-        comment: Optional[str] = None,
-    ) -> ReportVersion:
+    ) -> ReportListItem:
+        """Create a new empty report (no initial version) and return the ReportListItem."""
         report_id = generate_report_id()
         now = datetime.now(tz=timezone.utc).isoformat()
-        version = 1
-        name = config.get("name", "")
 
         with Session(_get_engine()) as session:
             session.add(
                 ReportRecord(
                     report_id=report_id,
                     name=name,
-                    current_version=version,
+                    current_version=0,
                     created_at=now,
                     updated_at=now,
                 )
             )
-            session.add(
-                ReportVersionRecord(
-                    report_id=report_id,
-                    version=version,
-                    config=config,
-                    created_at=now,
-                    created_by=created_by,
-                    comment=comment,
-                )
-            )
             session.commit()
 
-        return ReportVersion(
+        return ReportListItem(
             report_id=report_id,
-            version=version,
-            config=config,
+            name=name,
+            current_version=0,
             created_at=now,
-            created_by=created_by,
-            comment=comment,
+            updated_at=now,
         )
 
     def save_report_version(
@@ -245,7 +244,7 @@ class SQLModelReportStore(ReportStore):
                 return None
 
             version = report.current_version + 1
-            name = config.get("name", report.name)
+            name = report.name
             now = datetime.now(tz=timezone.utc).isoformat()
 
             session.add(
@@ -258,7 +257,6 @@ class SQLModelReportStore(ReportStore):
                     comment=comment,
                 )
             )
-            report.name = name
             report.current_version = version
             report.updated_at = now
             session.add(report)
@@ -266,6 +264,7 @@ class SQLModelReportStore(ReportStore):
 
         return ReportVersion(
             report_id=report_id,
+            name=name,
             version=version,
             config=config,
             created_at=now,

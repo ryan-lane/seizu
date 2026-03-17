@@ -4,7 +4,6 @@ from reporting import dashboard_stats
 from reporting.schema.reporting_config import Input
 from reporting.schema.reporting_config import Panel
 from reporting.schema.reporting_config import PanelParam
-from reporting.schema.reporting_config import ReportingConfig
 
 
 def test_send_stats_for_panel_no_metric(mocker):
@@ -13,8 +12,7 @@ def test_send_stats_for_panel_no_metric(mocker):
     panel = Panel(
         cypher="test", params=[{"name": "severity", "value": "HIGH"}], type="count"
     )
-    config = mocker.MagicMock()
-    dashboard_stats.send_stats_for_panel(panel, [], config)
+    dashboard_stats.send_stats_for_panel(panel, [], {})
     assert run_query_mock.call_count == 0
     assert stats_mock.call_count == 0
 
@@ -34,11 +32,7 @@ def test_send_stats_for_panel_with_input_exception(mocker):
         type="count",
         metric="crowdstrike.vulnerabilities",
     )
-    config = ReportingConfig(
-        queries={
-            "test": "MATCH (g:GitHubRepository) RETURN g.id",
-        },
-    )
+    queries = {"test": "MATCH (g:GitHubRepository) RETURN g.id"}
     panel_inputs = [
         Input(
             input_id="service-name-autocomplete-input",
@@ -48,7 +42,7 @@ def test_send_stats_for_panel_with_input_exception(mocker):
             size=3,
         ),
     ]
-    dashboard_stats.send_stats_for_panel(panel, panel_inputs, config)
+    dashboard_stats.send_stats_for_panel(panel, panel_inputs, queries)
     # once, but with an exception
     assert run_query_mock.call_count == 1
     assert stats_mock.call_count == 0
@@ -73,11 +67,7 @@ def test_send_stats_for_panel_with_metric_exception(mocker):
         type="count",
         metric="crowdstrike.vulnerabilities",
     )
-    config = ReportingConfig(
-        queries={
-            "test": "MATCH (g:GitHubRepository) RETURN g.id",
-        },
-    )
+    queries = {"test": "MATCH (g:GitHubRepository) RETURN g.id"}
     panel_inputs = [
         Input(
             input_id="service-name-autocomplete-input",
@@ -87,7 +77,7 @@ def test_send_stats_for_panel_with_metric_exception(mocker):
             size=3,
         ),
     ]
-    dashboard_stats.send_stats_for_panel(panel, panel_inputs, config)
+    dashboard_stats.send_stats_for_panel(panel, panel_inputs, queries)
     # inputs call, exception to first input metric, return on 2nd input metric
     assert run_query_mock.call_count == 3
     # only one successful return for input metric query
@@ -113,11 +103,7 @@ def test_send_stats_for_panel_with_input(mocker):
         type="count",
         metric="crowdstrike.vulnerabilities",
     )
-    config = ReportingConfig(
-        queries={
-            "test": "MATCH (g:GitHubRepository) RETURN g.id",
-        },
-    )
+    queries = {"test": "MATCH (g:GitHubRepository) RETURN g.id"}
     panel_inputs = [
         Input(
             input_id="service-name-autocomplete-input",
@@ -127,7 +113,7 @@ def test_send_stats_for_panel_with_input(mocker):
             size=3,
         ),
     ]
-    dashboard_stats.send_stats_for_panel(panel, panel_inputs, config)
+    dashboard_stats.send_stats_for_panel(panel, panel_inputs, queries)
     # once for inputs, twice for metrics
     assert run_query_mock.call_count == 3
     # two metrics to report. same panel with two input returns
@@ -153,11 +139,7 @@ def test_send_stats_for_panel_with_input_progress(mocker):
         type="progress",
         metric="crowdstrike.vulnerabilities",
     )
-    config = ReportingConfig(
-        queries={
-            "test": "MATCH (g:GitHubRepository) RETURN g.id",
-        },
-    )
+    queries = {"test": "MATCH (g:GitHubRepository) RETURN g.id"}
     panel_inputs = [
         Input(
             input_id="service-name-autocomplete-input",
@@ -167,7 +149,7 @@ def test_send_stats_for_panel_with_input_progress(mocker):
             size=3,
         ),
     ]
-    dashboard_stats.send_stats_for_panel(panel, panel_inputs, config)
+    dashboard_stats.send_stats_for_panel(panel, panel_inputs, queries)
     # once for inputs, twice for metrics
     assert run_query_mock.call_count == 3
     # 4 metrics to report. same panel with two input returns, but numerator and denominator metrics for each
@@ -187,12 +169,8 @@ def test_send_stats_for_panel_no_input(mocker):
         type="count",
         metric="crowdstrike.vulnerabilities",
     )
-    config = ReportingConfig(
-        queries={
-            "test": "MATCH (g:GitHubRepository) RETURN g.id",
-        },
-    )
-    dashboard_stats.send_stats_for_panel(panel, [], config)
+    queries = {"test": "MATCH (g:GitHubRepository) RETURN g.id"}
+    dashboard_stats.send_stats_for_panel(panel, [], queries)
     assert stats_mock.call_count == 1
 
 
@@ -210,12 +188,8 @@ def test_send_stats_for_panel_no_input_progress(mocker):
         type="progress",
         metric="crowdstrike.vulnerabilities",
     )
-    config = ReportingConfig(
-        queries={
-            "test": "MATCH (g:GitHubRepository) RETURN g.id",
-        },
-    )
-    dashboard_stats.send_stats_for_panel(panel, [], config)
+    queries = {"test": "MATCH (g:GitHubRepository) RETURN g.id"}
+    dashboard_stats.send_stats_for_panel(panel, [], queries)
     assert stats_mock.call_count == 2
 
 
@@ -233,13 +207,29 @@ def test_send_stats_for_panel_no_stats(mocker):
         type="count",
         metric="crowdstrike.vulnerabilities",
     )
-    config = ReportingConfig(
-        queries={
-            "test": "MATCH (g:GitHubRepository) RETURN g.id",
-        },
-    )
-    dashboard_stats.send_stats_for_panel(panel, [], config)
+    queries = {"test": "MATCH (g:GitHubRepository) RETURN g.id"}
+    dashboard_stats.send_stats_for_panel(panel, [], queries)
     assert not stats_mock.called
+
+
+def test_send_stats_for_panel_direct_cypher(mocker):
+    """Panel with a direct Cypher string (not a reference key) should execute it directly."""
+    stats_mock = mocker.patch("reporting.dashboard_stats.statsd.gauge")
+    run_query_mock = mocker.patch(
+        "reporting.dashboard_stats.run_query_with_retry",
+        return_value=[{"total": 42}],
+    )
+    direct_cypher = "MATCH (c:CVE) RETURN count(c.id) AS total"
+    panel = Panel(
+        cypher=direct_cypher,
+        params=[],
+        type="count",
+        metric="cve.count",
+    )
+    # Pass an empty queries dict — the panel's cypher is a literal string
+    dashboard_stats.send_stats_for_panel(panel, [], {})
+    run_query_mock.assert_called_once_with(direct_cypher, parameters={})
+    assert stats_mock.call_count == 1
 
 
 def test_dashboard_stats(mocker):

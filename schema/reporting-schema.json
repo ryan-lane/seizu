@@ -405,6 +405,17 @@
                     "title": "Name",
                     "type": "string"
                 },
+                "queries": {
+                    "additionalProperties": {
+                        "type": "string"
+                    },
+                    "description": "Named Cypher queries for this report. Panel ``cypher`` fields may reference a key from this dict, or provide a Cypher query string directly.",
+                    "examples": [
+                        "\n            .. code-block:: yaml\n\n              queries:\n                cves-total: |-\n                  MATCH (c:CVE)\n                  RETURN count(c.id) AS total\n            "
+                    ],
+                    "title": "Queries",
+                    "type": "object"
+                },
                 "inputs": {
                     "description": "The inputs to use for the report.",
                     "examples": [

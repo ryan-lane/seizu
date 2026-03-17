@@ -7,6 +7,7 @@ from flask import Response
 from pydantic import ValidationError
 
 from reporting import authnz
+from reporting.schema.report_config import CreateReportRequest
 from reporting.schema.report_config import CreateVersionRequest
 from reporting.services import report_store
 
@@ -88,16 +89,15 @@ def create_report() -> Response:
         return resp
 
     try:
-        body = CreateVersionRequest.model_validate(request.get_json())
+        body = CreateReportRequest.model_validate(request.get_json())
     except ValidationError as e:
         resp = jsonify(error="Invalid request", details=e.errors())
         resp.status_code = 400
         return resp
 
     report = report_store.create_report(
-        config=body.config,
+        name=body.name,
         created_by=created_by,
-        comment=body.comment,
     )
     resp = jsonify(report.model_dump())
     resp.status_code = 201

@@ -44,6 +44,7 @@ class ReportVersion(BaseModel):
     """A single versioned report config."""
 
     report_id: str
+    name: str
     version: int
     config: Dict[str, Any]
     created_at: str
@@ -63,8 +64,14 @@ class ReportVersion(BaseModel):
         return _coerce_decimal(v)
 
 
+class CreateReportRequest(BaseModel):
+    """Request body for POST /api/v1/reports."""
+
+    name: str
+
+
 class CreateVersionRequest(BaseModel):
-    """Request body for POST /api/v1/reports and POST /api/v1/reports/<id>/versions."""
+    """Request body for POST /api/v1/reports/<id>/versions."""
 
     config: Dict[str, Any]
     comment: Optional[str] = None
