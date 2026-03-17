@@ -8,7 +8,7 @@
     "allowSyntheticDefaultImports": true,
     "strict": false,
     "noEmit": true,
-    "moduleResolution": "node",
+    "moduleResolution": "bundler",
     "resolveJsonModule": true,
     "isolatedModules": true,
     "jsx": "react-jsx",

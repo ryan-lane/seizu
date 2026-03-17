@@ -33,6 +33,8 @@ jobs:
         run: bun install
       - name: Type check
         run: bun run type-check
+      - name: Run tests
+        run: bun test --watchAll=false
   linter:
     runs-on: ubuntu-latest
     steps:

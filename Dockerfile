@@ -20,17 +20,15 @@ EXPOSE 8080
 
 FROM oven/bun AS nodebuilder
 
-ENV INLINE_RUNTIME_CHUNK=false
-
 WORKDIR /home/node/seizu
 
-COPY package*.json bun.lock .eslintrc .prettierrc .prettierignore tsconfig.json .
+COPY package*.json bun.lock .eslintrc .prettierrc .prettierignore tsconfig.json vite.config.ts .
 
 RUN bun install
 
 COPY . .
 
-RUN bun run build --production
+RUN bun run build
 
 FROM backend AS production
 
