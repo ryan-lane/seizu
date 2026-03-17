@@ -1,7 +1,9 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, cleanup } from '@testing-library/react';
 import Logo from '../Logo';
 
 describe('Logo', () => {
+  afterEach(cleanup);
+
   it('renders an image with alt text', () => {
     render(<Logo />);
     const img = screen.getByAltText('Logo');

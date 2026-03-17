@@ -1,4 +1,4 @@
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, cleanup } from '@testing-library/react';
 import FreeTextInput from '../FreeTextInput';
 
 jest.mock('src/components/QueryString', () => ({
@@ -18,6 +18,8 @@ describe('FreeTextInput', () => {
   beforeEach(() => {
     jest.clearAllMocks();
   });
+
+  afterEach(cleanup);
 
   it('renders a text field with the given label', () => {
     render(<FreeTextInput {...defaultProps} />);
