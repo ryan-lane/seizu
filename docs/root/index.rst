@@ -7,7 +7,7 @@ Seizu (星図)
 What is Seizu?
 --------------
 
-`Seizu (星図) <https://paypay.github.io/seizu/>`_ is a react/mui frontend and python backend for various forms of reporting of Neo4j graph data.
+`Seizu (星図) <https://mappedsky.github.io/seizu/>`_ is a react/mui frontend and python backend for various forms of reporting of Neo4j graph data.
 It is well suited for building reporting for tools like `cartography <https://github.com/lyft/cartography>`_ and `starbase <https://github.com/JupiterOne/starbase>`_
 
 Seizu includes:
@@ -20,15 +20,15 @@ Seizu includes:
 Getting started
 ---------------
 
-Seizu has a `quickstart guide <https://paypay.github.io/seizu/dev/docker-compose.html#quickstart>`_, which can be used for evaluation, or development.
+Seizu has a `quickstart guide <https://mappedsky.github.io/seizu/dev/docker-compose.html#quickstart>`_, which can be used for evaluation, or development.
 
 Documentation
 -------------
 
-* `Installation documentation <https://paypay.github.io/seizu/install/backend.html>`_
-* `Dashboard configuration <https://paypay.github.io/seizu/install/dashboard.html>`_
-* `Scheduled query documentation <https://paypay.github.io/seizu/install/scheduled-queries.html>`_
-* `Basic development documentation <https://paypay.github.io/seizu/dev/docker-compose.html>`_
+* `Installation documentation <https://mappedsky.github.io/seizu/install/backend.html>`_
+* `Dashboard configuration <https://mappedsky.github.io/seizu/install/dashboard.html>`_
+* `Scheduled query documentation <https://mappedsky.github.io/seizu/install/scheduled-queries.html>`_
+* `Basic development documentation <https://mappedsky.github.io/seizu/dev/docker-compose.html>`_
 
 .. toctree::
     :caption: Installation & Configuration

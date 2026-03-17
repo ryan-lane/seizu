@@ -2,17 +2,17 @@
 
 ## Code of conduct
 
-This project is governed by PayPay’s [code of conduct](https://paypay.github.com/seizu/dev/code-of-conduct.html). All contributors and participants agree to abide by its terms.
+This project is governed by the [code of conduct](https://mappedsky.github.io/seizu/dev/code-of-conduct.html). All contributors and participants agree to abide by its terms.
 
 ## Contributing code
 
 ### File issues in Github
 
 In general all enhancements or bugs should be tracked via github issues before PRs are submitted.
-We don’t require them, but it’ll help us plan and track.
+We don't require them, but it'll help us plan and track.
 
 When submitting bugs through issues, please try to be as descriptive as possible.
- It’ll make it easier and quicker for everyone if the developers can easily reproduce your bug.
+It'll make it easier and quicker for everyone if the developers can easily reproduce your bug.
 
 ### Submit pull requests
 

@@ -63,7 +63,7 @@ master_doc = "index"
 
 # General information about the project.
 project = "Seizu Documentation"
-copyright = f"2022-{datetime.now().year}, PayPay"
+copyright = f"2022-{datetime.now().year}, Seizu Project Authors"
 author = "Seizu Project Authors"
 
 # The version info for the project you're documenting, acts as replacement for
@@ -139,7 +139,7 @@ html_theme_options = {
     "globaltoc_depth": 2,
     "globaltoc_collapse": True,
     "globaltoc_includehidden": True,
-    "repo_url": "https://github.com/paypay/seizu",
+    "repo_url": "https://github.com/mappedsky/seizu",
     "repo_name": "seizu",
     "repo_type": "github",
     "nav_links": [

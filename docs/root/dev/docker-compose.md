@@ -7,7 +7,7 @@ A full docker-compose setup is included that can start neo4j, dynamodb, telegrap
 First clone the seizu repo:
 
 ```bash
-$> git clone https://github.com/paypay/seizu
+$> git clone https://github.com/mappedsky/seizu
 $> cd seizu
 ```
 
