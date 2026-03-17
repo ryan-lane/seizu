@@ -163,3 +163,6 @@ generated/
 
 # docker compose user-customized container configs
 .compose
+
+# gunicorn arbiter control socket (created in CWD by the master process)
+gunicorn.ctl

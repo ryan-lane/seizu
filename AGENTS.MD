@@ -41,15 +41,17 @@ Use the `seizu` service for Python-related commands:
 
 ```bash
 # Run all Python unit tests
-docker compose run --rm seizu pipenv run pytest tests/unit
+docker compose run --rm seizu bash -c "pipenv sync --dev && pipenv run pytest tests/unit"
 
 # Run a single test file or test
-docker compose run --rm seizu pipenv run pytest tests/unit/reporting/routes/query_test.py
-docker compose run --rm seizu pipenv run pytest tests/unit/reporting/routes/query_test.py::test_query_success
+docker compose run --rm seizu bash -c "pipenv sync --dev && pipenv run pytest tests/unit/reporting/routes/query_test.py"
+docker compose run --rm seizu bash -c "pipenv sync --dev && pipenv run pytest tests/unit/reporting/routes/query_test.py::test_query_success"
 
 # Install Python packages
 docker compose run --rm seizu pipenv install <package>
 ```
+
+> **Why `pipenv sync --dev` before pytest?** The Docker image's system Python has packages baked in at image-build time. When new packages are added, the `.venv` (stored in the project directory and therefore persisted on the host) must be synced from `Pipfile.lock` before running tests. `pipenv sync --dev` does this and ensures `pipenv run pytest` uses the virtualenv's pytest (with all current dependencies) rather than the system-level one.
 
 ### Makefile shortcuts
 
@@ -58,8 +60,12 @@ make test           # run all tests
 make test_unit      # backend unit tests only
 make test_frontend  # frontend type-check only
 make lint           # pre-commit on all files
-make auth_enable    # start Authentik, enable auth, restart services
-make auth_disable   # disable auth, restart services, stop Authentik
+make schema           # regenerate schema/reporting-schema.json from Pydantic models
+make seed_reports     # seed report store from .config/dev/seizu/reporting-dashboard.yaml
+make auth_enable      # start Authentik, enable auth, restart services
+make auth_disable     # disable auth, restart services, stop Authentik
+make sqlmodel_enable  # switch to SQLModel/PostgreSQL backend, restart with postgres container
+make sqlmodel_disable # switch back to DynamoDB backend
 ```
 
 ### Linting (pre-commit)
@@ -97,13 +103,15 @@ Setup and configuration for adjacent development services (e.g., Neo4j, Redis, o
 React 19 + TypeScript, built with Bun, using Material-UI for components and Nivo for charts.
 
 **Key files and patterns:**
-- `src/config.context.ts` — central ConfigContext loaded from `GET /api/v1/config`; holds all dashboard/report config and is the single source of truth for app state
+- `src/config.context.ts` — central ConfigContext loaded from `GET /api/v1/config`; holds OIDC and stats config; Cypher query resolution is now per-report (see `Report.queries`)
 - `src/authConfig.context.ts` — `AuthConfigContext`; holds `auth_required` fetched from `GET /api/v1/config` in `App.tsx` at startup; consumed by `useCypherQuery` to gate API calls until a token is present
 - `src/auth.context.ts` — `AuthContext`; holds the OIDC `user` and `accessToken` managed by `AuthProvider`
-- `src/userManager.ts` — creates the `oidc-client-ts` `UserManager` singleton; returns `null` when `REACT_APP_OIDC_ENABLED` is not `true`
+- `src/userManager.ts` — creates the `oidc-client-ts` `UserManager` singleton; returns `null` when auth is not required
 - `src/components/AuthProvider.tsx` — manages the OIDC flow: registers `userLoaded`/`userUnloaded` event listeners (always, including on the callback path), calls `getUser()` on normal routes, and triggers `signinRedirect()` when unauthenticated
 - `src/components/OidcCallback.tsx` — rendered at `/auth/callback`; calls `signinRedirectCallback()` to complete the PKCE exchange then navigates to `/`
 - `src/hooks/useCypherQuery.ts` — wraps `POST /api/v1/query` for all data fetching; skips the request when `auth_required` is true and no `accessToken` is available yet
+- `src/hooks/useReportsApi.ts` — hooks for fetching reports from DynamoDB: `useReportsList()`, `useReport(id)`, `useDashboardReport()`, `useAllReports()`
+- `src/components/ReportView.tsx` — shared report rendering component used by both `Dashboard` and `Reports` pages; accepts a `Report` object; resolves panel `cypher` fields against `report.queries` with fallback to literal Cypher string
 - `src/components/reports/` — panel components (`CypherCount`, `CypherTable`, `CypherBar`, etc.) are rendered dynamically based on the config panel type
 - All POST requests must include the `X-CSRFToken` header
 
@@ -114,9 +122,10 @@ Flask 2 app, Python 3.12, using Gunicorn+Gevent in production.
 **Key files and patterns:**
 - `reporting/app.py` — Flask app factory (`create_app`)
 - `reporting/settings.py` — all configuration via env vars (Pydantic validators)
-- `reporting/routes/` — Flask blueprints: `config.py`, `query.py`, `static.py`
-- `reporting/services/` — business logic: `reporting_neo4j.py` (Neo4j driver + distributed locking), `query_validator.py` (multi-stage Cypher validation), `reporting_statsd.py`
-- `reporting/schema/reporting_config.py` — Pydantic models that validate the YAML dashboard config
+- `reporting/routes/` — Flask blueprints: `config.py`, `query.py`, `reports.py`, `static.py`
+- `reporting/services/` — business logic: `reporting_neo4j.py` (Neo4j driver + distributed locking), `report_store/` (pluggable report storage; see below), `query_validator.py` (multi-stage Cypher validation), `reporting_statsd.py`
+- `reporting/schema/reporting_config.py` — Pydantic models that validate the YAML config (`queries`, `dashboard`, `reports`, `scheduled_queries`)
+- `reporting/schema/report_config.py` — Pydantic models for DynamoDB report items and API request/response schemas
 - `reporting/authnz/` — generic JWT validation using `PyJWKClient`; works with any standard OIDC provider
 
 **Query validation pipeline** (`reporting/services/query_validator.py`):
@@ -135,22 +144,62 @@ Warnings (non-blocking):
 
 | Method | Path | Description |
 |--------|------|-------------|
-| GET | `/api/v1/config` | Returns full dashboard/report config |
+| GET | `/api/v1/config` | Returns OIDC config, stats config, and JSON schema |
 | POST | `/api/v1/query` | Executes a validated read-only Cypher query; returns `{results, errors, warnings}` |
 | POST | `/api/v1/validate` | Validates a Cypher query without executing it; returns `{errors, warnings}` (always 200 if request is valid) |
+| GET | `/api/v1/reports` | Lists all reports (metadata only) |
+| POST | `/api/v1/reports` | Creates a new report; returns 201 |
+| GET | `/api/v1/reports/dashboard` | Returns the latest version of the dashboard report; 404 if none configured |
+| PUT | `/api/v1/reports/<id>/dashboard` | Sets a report as the default dashboard |
+| GET | `/api/v1/reports/<id>` | Returns the latest version of a report |
+| GET | `/api/v1/reports/<id>/versions` | Lists all versions of a report |
+| GET | `/api/v1/reports/<id>/versions/<n>` | Returns a specific version of a report |
+| POST | `/api/v1/reports/<id>/versions` | Saves a new version of a report; returns 201 |
 | GET | `/healthcheck` | Healthcheck |
 
 ### Configuration System
 
-The entire dashboard is configuration-driven via a YAML file (mounted as `/reporting-dashboard.yaml` in the container; example at `.config/dev/seizu/reporting-dashboard.yaml`).
+Dashboard and report configurations are stored in DynamoDB. The YAML config file (mounted as `/reporting-dashboard.yaml` in the container; example at `.config/dev/seizu/reporting-dashboard.yaml`) is used for `queries` and `scheduled_queries`, and as a seed source for populating DynamoDB.
 
 **YAML top-level sections:**
-- `queries` — named Cypher query strings
-- `dashboard` — rows/panels layout (panel types: `count`, `progress`, `pie`, `bar`, `table`, `vertical_table`, `markdown`)
-- `reports` — report pages with typed inputs (`autocomplete`, `text`) and rows/panels
+- `queries` — named Cypher query strings used only by `scheduled_queries` cypher references; not served to the frontend
+- `dashboard` — a string key pointing to the report in `reports` that should be used as the default dashboard (e.g. `dashboard: dashboard`)
+- `reports` — report definitions used to seed DynamoDB via `make seed_reports`; each report has its own `queries` dict for named Cypher strings used by its panels; not served directly to the frontend
 - `scheduled_queries` — recurring query definitions with action plugins (SQS, Slack, log)
 
-The TypeScript interfaces in `src/config.context.ts` mirror the Pydantic models in `reporting/schema/reporting_config.py` — keep them in sync when changing the config schema.
+**Report storage abstraction** (`reporting/services/report_store/`): a pluggable storage layer for report configurations.
+- `base.py` — `ReportStore` ABC defining the full public interface (`list_reports`, `get_report_latest`, `create_report`, `set_dashboard_report`, `initialize`, etc.)
+- `dynamodb.py` — `DynamoDBReportStore(ReportStore)` — DynamoDB single-table design with composite PK/SK; Snowflake IDs
+- `sql.py` — `SQLModelReportStore(ReportStore)` — SQLModel/SQLAlchemy implementation; works with any DB supported by SQLAlchemy (PostgreSQL, SQLite, etc.); configured via `SQL_DATABASE_URL`
+- `__init__.py` — `get_store()` factory (reads `REPORT_STORE_BACKEND` setting; default: `dynamodb`) and module-level convenience delegators
+
+Use `from reporting.services import report_store` and call e.g. `report_store.list_reports()` — the configured backend is selected transparently.
+
+**Switching backends in development:**
+```bash
+make sqlmodel_enable   # sets REPORT_STORE_BACKEND=sqlmodel; restarts with postgres container
+make sqlmodel_disable  # reverts to REPORT_STORE_BACKEND=dynamodb
+make dynamodb_enable   # alias: sqlmodel_disable (dynamodb is the default)
+make down && make up   # apply after changing backends
+```
+`make up` automatically includes `--profile sqlmodel` when `REPORT_STORE_BACKEND=sqlmodel` is set in `.env` (same pattern as `--profile auth`).
+
+**DynamoDB storage** (`reporting/services/report_store/dynamodb.py`): reports and their version history are stored in a single DynamoDB table using a composite key design:
+- Each report has a `#METADATA` item, a `#LATEST` pointer, and `VERSION#<n>` items
+- A `#DASHBOARD/#POINTER` item records which report is the default dashboard
+- Machine IDs for the Snowflake ID generator are set via `SNOWFLAKE_MACHINE_ID`
+
+**SQLModel storage** (`reporting/services/report_store/sql.py`): three tables — `reports`, `report_versions`, `dashboard_pointer`. Uses SQLAlchemy JSON column for config storage; `initialize()` runs `SQLModel.metadata.create_all()`. Configured via `SQL_DATABASE_URL`.
+
+**Seeding reports** from the YAML config:
+```bash
+make seed_reports                    # seed from .config/dev/seizu/reporting-dashboard.yaml
+make seed_reports ARGS="--force"     # re-seed, overwriting existing reports by name
+make seed_reports ARGS="--dry-run"   # preview without writing
+```
+The seed script also sets the dashboard pointer if `dashboard:` is configured in the YAML.
+
+Each `Report` in DynamoDB has a `queries` dict (named Cypher strings). Panel `cypher` fields are resolved against this dict at render time, falling back to the literal value as a direct Cypher string when no key matches. The `Report` TypeScript interface in `src/config.context.ts` must stay in sync with the Pydantic `Report` model in `reporting/schema/reporting_config.py`.
 
 ### Cartography Data Sync
 
@@ -179,6 +228,8 @@ Located in `reporting/scheduled_query_modules/`. Each module implements a standa
 | `seizu-dashboard-stats` | Stats aggregation worker |
 | `seizu-scheduled-queries` | Scheduled query worker |
 | `neo4j` | Graph database |
+| `dynamodb` | DynamoDB Local (report config storage, default backend) |
+| `postgres` | PostgreSQL (report config storage, `sqlmodel` profile/backend) |
 | `telegraf` | Metrics aggregation |
 | `sqs` | ElasticMQ (local SQS emulation) |
 | `authentik-server` | Authentik OIDC provider (profile: `auth`) |
@@ -193,12 +244,14 @@ Networks are segmented: `proxy`, `database`, `stats`, `auth`, `credentials`.
 - Frontend (Bun dev server): `http://localhost:3000`
 - Backend (Flask/Gunicorn): `http://localhost:8080`
 
-**Neo4j data volume:** Neo4j data is stored in a named Docker volume (`neo4j_data`) rather than a bind mount. To reset the database for a fresh start:
+**Named volumes:** Data is stored in named Docker volumes rather than bind mounts. To reset:
 ```bash
 docker compose down
-docker volume rm seizu_neo4j_data
+docker volume rm seizu_neo4j_data     # reset Neo4j graph data
+docker volume rm seizu_dynamodb_data  # reset DynamoDB report configs
 docker compose up
 ```
+After resetting DynamoDB, re-seed reports with `make seed_reports`.
 
 ### Authentication
 

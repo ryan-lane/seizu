@@ -8,6 +8,7 @@ import boto3
 logger = logging.getLogger(__name__)
 
 CLIENT_CACHE: Dict[str, Any] = {}
+RESOURCE_CACHE: Dict[str, Any] = {}
 
 
 def get_boto_client(
@@ -39,6 +40,27 @@ def get_boto_client(
         client, config=config.get("config"), endpoint_url=endpoint_url
     )
     return CLIENT_CACHE[cache_key]
+
+
+def get_boto_resource(
+    resource: str,
+    region: Optional[str] = None,
+    aws_access_key_id: Optional[str] = None,
+    aws_secret_access_key: Optional[str] = None,
+    endpoint_url: Optional[str] = None,
+) -> Any:
+    """Get a boto3 resource."""
+    cache_key = (
+        f"resource:{resource}:{region}:{aws_access_key_id}:{endpoint_url}"  # noqa: E231
+    )
+    if cache_key in RESOURCE_CACHE:
+        return RESOURCE_CACHE[cache_key]
+    session = get_boto_session(region, aws_access_key_id, aws_secret_access_key)
+    if not session:
+        logger.error(f"Failed to get {resource} resource.")
+        return None
+    RESOURCE_CACHE[cache_key] = session.resource(resource, endpoint_url=endpoint_url)
+    return RESOURCE_CACHE[cache_key]
 
 
 def get_boto_session(

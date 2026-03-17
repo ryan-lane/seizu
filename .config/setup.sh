@@ -1,6 +1,6 @@
 #!/bin/bash
 
-mkdir -p ./.compose/telegraf ./.compose/elasticmq ./.compose/neo4j ./.compose/seizu ./.compose/authentik/blueprints
+mkdir -p ./.compose/telegraf ./.compose/elasticmq ./.compose/neo4j ./.compose/seizu ./.compose/authentik/blueprints ./.compose/dynamodb
 
 if [ ! -f ./.env ]
 then
@@ -30,4 +30,9 @@ fi
 if [ ! -f ./.compose/authentik/blueprints/seizu.yaml ]
 then
   cp ./.config/dev/authentik/blueprints/seizu.yaml ./.compose/authentik/blueprints/seizu.yaml
+fi
+
+if [ ! -f ./.compose/dynamodb/Dockerfile ]
+then
+  cp ./.config/dev/dynamodb/Dockerfile ./.compose/dynamodb/Dockerfile
 fi

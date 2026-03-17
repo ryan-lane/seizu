@@ -2,12 +2,57 @@
 
 ## Navigation Sections
 
-Seizu's navigation currently supports a dashboard, and an arbitrary number of reports.
+Seizu's navigation supports a dashboard and an arbitrary number of reports.
 The dashboard is the landing page, and is meant as a general overview of the data in your graph.
 Reports are topic-specific views of your graph data.
 
-Both dashboards and reports use a list of rows, which contain a list of panels; both are grid-based.
-Rows are rendered in the order specified in the configuration, and panels within rows are also rendered in the order specified.
+Both the dashboard and reports use a list of rows, which contain a list of panels; both are grid-based.
+Rows are rendered in the order specified, and panels within rows are also rendered in the order specified.
+
+## Configuration Storage
+
+Report and dashboard configurations are stored in DynamoDB, not in the YAML configuration file.
+The YAML file contains a top-level `queries` dict (used only by `scheduled_queries` references), `scheduled_queries`, a `dashboard` pointer, and a `reports` section used to seed DynamoDB.
+Each report has its own `queries` dict for named Cypher strings used by its panels.
+
+To populate DynamoDB from the YAML file during initial setup or development:
+
+```bash
+make seed_reports
+```
+
+The `dashboard` key in the YAML file is a string that names a report in the `reports` section to use as the default dashboard:
+
+```yaml
+dashboard: dashboard   # pointer to the "dashboard" entry in reports
+
+reports:
+  dashboard:
+    name: Dashboard
+    queries:
+      cves-total: |-
+        MATCH (c:CVE)
+        RETURN count(c.id) AS total
+    rows:
+      - name: Overview
+        panels:
+          - cypher: cves-total       # reference to a named query in this report's queries dict
+            type: count
+            caption: Total CVEs
+            size: 3
+          - cypher: |-               # direct Cypher string — no named reference needed
+              MATCH (c:CVE)
+              RETURN count(c.id) AS total
+            type: count
+            caption: Total CVEs (direct)
+            size: 3
+```
+
+To change the dashboard at runtime, call the API:
+
+```bash
+curl -X PUT /api/v1/reports/<report_id>/dashboard
+```
 
 ## Panels
 
@@ -22,8 +67,8 @@ To simply display a count of a particular query, use a ``count`` panel.
 
 | Field | Description |
 |-------|-------------|
-| cypher | A cypher query to use for this panel. This is a reference to a query in the queries configuration section. The query must return the count as ``total``. |
-| details\_cypher | A cypher to use for displaying a table view of the data, in a details view. This is a reference to a query in the queries configuration section. The query must return the rows as ``details``. |
+| cypher | A cypher query to use for this panel. Either a key from the report's `queries` dict, or a direct Cypher string. The query must return the count as ``total``. |
+| details\_cypher | A cypher to use for displaying a table view of the data, in a details view. Either a key from the report's `queries` dict, or a direct Cypher string. The query must return the rows as ``details``. |
 | params | A list of parameters to pass into the query. See [the PanelParam schema](schema.html#panelparam) for more info. |
 | caption | The caption to show as the title of this panel. |
 | type | The type of panel. ``count``, for this panel type. |
@@ -50,8 +95,8 @@ By default, this panel will color the progress data based on a threshold of <70%
 
 | Field | Description |
 |-------|-------------|
-| cypher | A cypher query to use for this panel. This is a reference to a query in the queries configuration section. The query must return the counts as ``numerator`` and ``denominator``. |
-| details\_cypher | A cypher to use for displaying a table view of the data, in a details view. This is a reference to a query in the queries configuration section. The query must return the rows as ``details``. |
+| cypher | A cypher query to use for this panel. Either a key from the report's `queries` dict, or a direct Cypher string. The query must return the counts as ``numerator`` and ``denominator``. |
+| details\_cypher | A cypher to use for displaying a table view of the data, in a details view. Either a key from the report's `queries` dict, or a direct Cypher string. The query must return the rows as ``details``. |
 | params | A list of parameters to pass into the query. See [the PanelParam schema](schema.html#panelparam) for more info. |
 | caption | The caption to show as the title of this panel. |
 | type | The type of panel. ``progress``, for this panel type. |
@@ -81,8 +126,8 @@ To display a pie graph, use a ``pie`` panel.
 
 | Field | Description |
 |-------|-------------|
-| cypher | A cypher query to use for this panel. This is a reference to a query in the queries configuration section. The query must return rows, formatted as a dictionary, with keys ``id`` and ``value``, as a detail; example: ``RETURN {id: c.base_severity, value: count(c.id)} AS details``
-| details\_cypher | A cypher to use for displaying a table view of the data, in a details view. This is a reference to a query in the queries configuration section. The query must return the rows as ``details``. |
+| cypher | A cypher query to use for this panel. Either a key from the report's `queries` dict, or a direct Cypher string. The query must return rows, formatted as a dictionary, with keys ``id`` and ``value``, as a detail; example: ``RETURN {id: c.base_severity, value: count(c.id)} AS details``
+| details\_cypher | A cypher to use for displaying a table view of the data, in a details view. Either a key from the report's `queries` dict, or a direct Cypher string. The query must return the rows as ``details``. |
 | params | A list of parameters to pass into the query. See [the PanelParam schema](schema.html#panelparam) for more info. |
 | caption | The caption to show as the title of this panel. |
 | type | The type of panel. ``pie``, for this panel type. |
@@ -109,8 +154,8 @@ To display a bar graph, use a ``bar`` panel.
 
 | Field | Description |
 |-------|-------------|
-| cypher | A cypher query to use for this panel. This is a reference to a query in the queries configuration section. The query must return rows, formatted as a dictionary, with keys ``id`` and ``value``, as a detail; example: ``RETURN {id: c.base_severity, value: count(c.id)} AS details``
-| details\_cypher | A cypher to use for displaying a table view of the data, in a details view. This is a reference to a query in the queries configuration section. The query must return the rows as ``details``. |
+| cypher | A cypher query to use for this panel. Either a key from the report's `queries` dict, or a direct Cypher string. The query must return rows, formatted as a dictionary, with keys ``id`` and ``value``, as a detail; example: ``RETURN {id: c.base_severity, value: count(c.id)} AS details``
+| details\_cypher | A cypher to use for displaying a table view of the data, in a details view. Either a key from the report's `queries` dict, or a direct Cypher string. The query must return the rows as ``details``. |
 | params | A list of parameters to pass into the query. See [the PanelParam schema](schema.html#panelparam) for more info. |
 | caption | The caption to show as the title of this panel. |
 | type | The type of panel. ``bar``, for this panel type. |
@@ -137,7 +182,7 @@ To display rows in a paged table, use a ``table`` panel.
 
 | Field | Description |
 |-------|-------------|
-| cypher | A cypher query to use for this panel. This is a reference to a query in the queries configuration section. The query must return the rows as ``details``. |
+| cypher | A cypher query to use for this panel. Either a key from the report's `queries` dict, or a direct Cypher string. The query must return the rows as ``details``. |
 | params | A list of parameters to pass into the query. See [the PanelParam schema](schema.html#panelparam) for more info. |
 | caption | The caption to show as the title of this panel. |
 | type | The type of panel. ``table``, for this panel type. |
@@ -165,7 +210,7 @@ Note: the caption per-row is set via the ``table_id`` field, and if unset, will 
 
 | Field | Description |
 |-------|-------------|
-| cypher | A cypher query to use for this panel. This is a reference to a query in the queries configuration section. The query must return the rows as ``details``. |
+| cypher | A cypher query to use for this panel. Either a key from the report's `queries` dict, or a direct Cypher string. The query must return the rows as ``details``. |
 | params | A list of parameters to pass into the query. See [the PanelParam schema](schema.html#panelparam) for more info. |
 | caption | The caption to show as the title of this panel. |
 | type | The type of panel. ``vertical-table``, for this panel type. |
@@ -214,6 +259,37 @@ To render markdown, use a ``markdown`` panel.
               Upgrade to log4j 2.17.1 or higher.
             type: markdown
             size: 12
+```
+
+## Named Queries
+
+Reports can define a `queries` dict of named Cypher strings.
+Panel `cypher` and `details_cypher` fields are resolved against this dict at render time.
+If the field value is not a key in the dict, it is used as a literal Cypher string — allowing panels to embed queries directly without adding them to the `queries` dict first.
+
+```yaml
+reports:
+  dashboard:
+    name: Dashboard
+    queries:
+      cves-total: |-
+        MATCH (c:CVE)
+        RETURN count(c.id) AS total
+    rows:
+      - name: Overview
+        panels:
+          # Named reference — resolved from the queries dict above
+          - cypher: cves-total
+            type: count
+            caption: Total CVEs
+            size: 3
+          # Direct Cypher string — no entry in queries needed
+          - cypher: |-
+              MATCH (c:CVE)
+              RETURN count(c.id) AS total
+            type: count
+            caption: Total CVEs (direct)
+            size: 3
 ```
 
 ## Inputs

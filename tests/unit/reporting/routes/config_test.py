@@ -16,8 +16,9 @@ def test_config(mocker):
     assert ret.status_code == 200
     ret_json = ret.json
     assert "auth_required" in ret_json
-    for key in ["queries", "dashboard", "reports"]:
-        assert key in ret_json["config"].keys()
+    assert ret_json["config"] == {}
+    assert "reports" not in ret_json["config"].keys()
+    assert "dashboard" not in ret_json["config"].keys()
     assert "$schema" in ret_json["schema"].keys()
 
 

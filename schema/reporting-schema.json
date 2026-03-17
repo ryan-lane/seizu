@@ -19,23 +19,6 @@
             "title": "BarPanelSettings",
             "type": "object"
         },
-        "Dashboard": {
-            "properties": {
-                "rows": {
-                    "description": "The rows of the dashboard.",
-                    "examples": [
-                        "\n            .. code-block:: yaml\n\n              rows:\n                - name: \"CVEs by severity\"\n                  panels:\n                    - cypher: cves-by-severity\n                      details_cypher: cves-by-severity-details\n                      type: count\n                      params:\n                        base_severity: CRITICAL\n                      caption: Critical CVEs\n                      size: 2\n            "
-                    ],
-                    "items": {
-                        "$ref": "#/$defs/Row"
-                    },
-                    "title": "Rows",
-                    "type": "array"
-                }
-            },
-            "title": "Dashboard",
-            "type": "object"
-        },
         "Input": {
             "properties": {
                 "input_id": {
@@ -405,6 +388,15 @@
         },
         "Report": {
             "properties": {
+                "schema_version": {
+                    "default": 1,
+                    "description": "The schema version of the report config. Increment when making breaking changes to the report schema.",
+                    "examples": [
+                        1
+                    ],
+                    "title": "Schema Version",
+                    "type": "integer"
+                },
                 "name": {
                     "description": "The name of the report.",
                     "examples": [
@@ -412,6 +404,17 @@
                     ],
                     "title": "Name",
                     "type": "string"
+                },
+                "queries": {
+                    "additionalProperties": {
+                        "type": "string"
+                    },
+                    "description": "Named Cypher queries for this report. Panel ``cypher`` fields may reference a key from this dict, or provide a Cypher query string directly.",
+                    "examples": [
+                        "\n            .. code-block:: yaml\n\n              queries:\n                cves-total: |-\n                  MATCH (c:CVE)\n                  RETURN count(c.id) AS total\n            "
+                    ],
+                    "title": "Queries",
+                    "type": "object"
                 },
                 "inputs": {
                     "description": "The inputs to use for the report.",
@@ -683,11 +686,20 @@
             "type": "object"
         },
         "dashboard": {
-            "$ref": "#/$defs/Dashboard",
-            "description": "The dashboard to use for the report.",
+            "anyOf": [
+                {
+                    "type": "string"
+                },
+                {
+                    "type": "null"
+                }
+            ],
+            "default": null,
+            "description": "Key of the report in the ``reports`` section to use as the default dashboard. If unset, no report is displayed on the dashboard page.",
             "examples": [
-                "\n            .. code-block:: yaml\n\n              dashboard:\n                rows:\n                  - name: CVEs by severity as percentage of total\n                    panels:\n                      - cypher: cves-severity-of-total\n                        type: progress\n                        params:\n                          - name: base_severity\n                            value: CRITICAL\n                        caption: Critical CVEs\n                        size: 2\n                  - name: CVEs by severity\n                    panels:\n                      - cypher: cves-by-severity\n                        type: count\n                        params:\n                          - name: base_severity\n                            value: CRITICAL\n                          caption: Critical CVEs\n                        size: 2\n                      - cypher: cves-by-severity\n                        type: count\n                        params:\n                          - name: base_severity\n                            value: HIGH\n                        caption: High CVEs\n                        size: 2\n            "
-            ]
+                "dashboard"
+            ],
+            "title": "Dashboard"
         },
         "reports": {
             "additionalProperties": {

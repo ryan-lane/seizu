@@ -72,6 +72,14 @@ DEVELOPMENT_ONLY_AUTH_USER_EMAIL = str_env(
 # URI to connect to neo4j
 NEO4J_URI = str_env("NEO4J_URI", "bolt://localhost:7687")
 
+# Minimum severity level for Neo4j query notifications logged by the driver.
+# Valid values: WARNING (default), INFORMATION, OFF.
+# Set to OFF to suppress schema warnings about missing labels/properties when
+# the database is not fully populated (e.g. in development).
+NEO4J_NOTIFICATIONS_MIN_SEVERITY = str_env(
+    "NEO4J_NOTIFICATIONS_MIN_SEVERITY", "WARNING"
+)
+
 # Username to connect to neo4j
 NEO4J_USER = str_env("NEO4J_USER")
 
@@ -133,3 +141,25 @@ REPORTING_CONFIG_FILE = str_env("REPORTING_CONFIG_FILE", "/reporting-dashboard.c
 
 # Maximum number of stats we will generate for panels with inputs
 DASHBOARD_STATS_MAX_INPUT_RESULTS = int_env("DASHBOARD_STATS_MAX_INPUT_RESULTS", 100)
+
+# DynamoDB settings for report config storage
+# Name of the DynamoDB table used to store report configs and version history
+DYNAMODB_TABLE_NAME = str_env("DYNAMODB_TABLE_NAME", "seizu-reports")
+# AWS region for DynamoDB. Falls back to boto3 default chain if unset.
+DYNAMODB_REGION = str_env("DYNAMODB_REGION", "us-east-1")
+# Override the DynamoDB endpoint URL, e.g. http://dynamodb:8000 for local dev.
+# Leave empty to use the default AWS endpoint.
+DYNAMODB_ENDPOINT_URL = str_env("DYNAMODB_ENDPOINT_URL", "")
+# When true, the table is created automatically on startup if it does not exist.
+# Enable this in local development against DynamoDB Local.
+DYNAMODB_CREATE_TABLE = bool_env("DYNAMODB_CREATE_TABLE", False)
+# Snowflake ID generator machine ID (0–1023). Set a unique value per instance
+# when running multiple replicas to avoid ID collisions.
+SNOWFLAKE_MACHINE_ID = int_env("SNOWFLAKE_MACHINE_ID", 1)
+# Report storage backend. Supported values: "dynamodb" (default), "sqlmodel".
+REPORT_STORE_BACKEND = str_env("REPORT_STORE_BACKEND", "dynamodb")
+# SQLAlchemy database URL used when REPORT_STORE_BACKEND=sqlmodel.
+# Any SQLAlchemy-compatible URL works (PostgreSQL, SQLite, MySQL, etc.).
+# Example: postgresql://seizu:seizu@postgres:5432/seizu
+# Example: sqlite:///./seizu.db
+SQL_DATABASE_URL = str_env("SQL_DATABASE_URL", "")

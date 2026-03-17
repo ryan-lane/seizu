@@ -8,8 +8,10 @@ from flask_talisman import Talisman
 from reporting import settings
 from reporting.routes import config
 from reporting.routes import query
+from reporting.routes import reports
 from reporting.routes import static
 from reporting.routes import validate
+from reporting.services import report_store
 
 
 CSP_POLICY = {
@@ -45,8 +47,16 @@ def create_app(override_settings: Optional[Dict] = None) -> Flask:
 
     app.register_blueprint(config.blueprint)
     app.register_blueprint(query.blueprint)
+    app.register_blueprint(reports.blueprint)
     app.register_blueprint(validate.blueprint)
     app.register_blueprint(static.blueprint)
+
+    should_init = settings.DYNAMODB_CREATE_TABLE or (
+        settings.REPORT_STORE_BACKEND == "sqlmodel"
+    )
+    if should_init:
+        with app.app_context():
+            report_store.initialize()
 
     # No CSRF cookie on healthcheck
     csrf.exempt_urls("/healthcheck")

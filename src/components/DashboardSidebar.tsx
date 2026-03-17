@@ -1,4 +1,3 @@
-import { useContext } from 'react';
 import { Box, Divider, Drawer, List } from '@mui/material';
 import Dashboard from '@mui/icons-material/Dashboard';
 import Insights from '@mui/icons-material/Insights';
@@ -6,8 +5,8 @@ import Article from '@mui/icons-material/Article';
 import MenuBook from '@mui/icons-material/MenuBook';
 import NavItem from 'src/components/NavItem';
 import Hidden from 'src/components/Hidden';
-import { ConfigContext } from 'src/config.context';
 import { NavItemData } from 'src/components/NavItem';
+import { useReportsList } from 'src/hooks/useReportsApi';
 
 interface DashboardSidebarProps {
   onMobileClose?: () => void;
@@ -15,18 +14,12 @@ interface DashboardSidebarProps {
 }
 
 function DashboardSidebar({ onMobileClose = () => {}, openMobile = false }: DashboardSidebarProps) {
-  const { config } = useContext(ConfigContext);
-  const { reports } = config!.config;
-  const reportSubitems: NavItemData[] = [];
-
-  Object.keys(reports).forEach((key) => {
-    const report = reports[key];
-    reportSubitems.push({
-      href: `/app/reports/${key}`,
-      title: report.name,
-      icon: Article
-    });
-  });
+  const { reports } = useReportsList();
+  const reportSubitems: NavItemData[] = reports.map((report) => ({
+    href: `/app/reports/${report.report_id}`,
+    title: report.name,
+    icon: Article
+  }));
 
   const items: NavItemData[] = [
     {

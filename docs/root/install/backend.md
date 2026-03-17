@@ -25,33 +25,64 @@ When using the docker image, the defaults should be sufficient for basic configu
 
 ### Frontend configuration
 
-seizu will pass configuration to the backend via a configuration endpoint.
-It uses this configuration to build the dashboard and reports.
-When using the docker image, the defaults for the reporting configuration file and schema file should be sufficient, but you will want to bind mount in the configuration file to the location defined in ``REPORTING_CONFIG_FILE``.
+seizu passes configuration to the frontend via a configuration endpoint.
+Bind mount the YAML configuration file into the container at the location defined in ``REPORTING_CONFIG_FILE``.
+Report and dashboard configurations are stored in DynamoDB and are not part of the YAML file.
 
-* ``REPORTING_CONFIG_FILE``: location to the dashboard configuration; default: ``/reporting-dashboard.conf``
-* ``REPORTING_CONFIG_SCHEMA_FILE``: location to the dashboard configuration jsonschema; default: ``/reporting-dashboard.schema.json``
-* ``SECRET_KEY``: Flask session secret key for for sessions and CSRF. Set to some long, random string; default: ``None``
+* ``REPORTING_CONFIG_FILE``: location of the YAML configuration file (queries and scheduled queries); default: ``/reporting-dashboard.conf``
+* ``SECRET_KEY``: Flask session secret key for sessions and CSRF. Set to some long, random string; default: ``None``
 
 ### Neo4j configuration
-
-If you wish you use any of the workers, or SSO, it's necessary to configure access from the backend to Neo4j.
 
 * ``NEO4J_URI``: the URL to connect to neo4j; default: ``bolt://localhost:7687``
 * ``NEO4J_USER``: the username to use to connect; default: ``None``
 * ``NEO4J_PASSWORD``: the password to use to connect; default: ``None``
+* ``NEO4J_MAX_CONNECTION_LIFETIME``: maximum duration in seconds a driver will keep a connection before removing it from its pool; default: ``3600``
+* ``NEO4J_NOTIFICATIONS_MIN_SEVERITY``: minimum severity for Neo4j query notifications logged by the driver (``WARNING``, ``INFORMATION``, ``OFF``). Set to ``OFF`` to suppress schema warnings when the database is not fully populated; default: ``WARNING``
+
+### Report storage configuration
+
+* ``REPORT_STORE_BACKEND``: storage backend to use for report configurations. Supported values: ``dynamodb`` (default), ``sqlmodel``
+
+### DynamoDB configuration
+
+seizu stores report and dashboard configurations in DynamoDB. In production, standard AWS credential resolution applies (instance profile, environment variables, etc.).
+
+* ``DYNAMODB_TABLE_NAME``: name of the DynamoDB table; default: ``seizu-reports``
+* ``DYNAMODB_REGION``: AWS region for DynamoDB; default: ``us-east-1``
+* ``DYNAMODB_ENDPOINT_URL``: override the DynamoDB endpoint URL (e.g. ``http://dynamodb:8000`` for local DynamoDB); default: ``""`` (uses AWS endpoint)
+* ``DYNAMODB_CREATE_TABLE``: when ``true``, creates the table automatically on startup if it does not exist. Enable in local development; default: ``false``
+* ``SNOWFLAKE_MACHINE_ID``: Snowflake ID generator machine ID (0–1023). Set a unique value per instance when running multiple replicas to avoid ID collisions; default: ``1``
+
+### SQL configuration
+
+Used when ``REPORT_STORE_BACKEND=sqlmodel``.
+
+* ``SQL_DATABASE_URL``: SQLAlchemy database URL. Any SQLAlchemy-compatible database is supported. Examples:
+
+  * ``postgresql://user:pass@host:5432/seizu``
+  * ``sqlite:///./seizu.db``
+
+  default: ``""``
 
 ### Auth configuration
 
-#### SSO configuration
+#### OIDC / JWT configuration
 
-seizu, when placed behind a load balancer or API gateway that handles OAuth2 and provides a JWT, can validate the JWT and pass the user identity to the backend.
+seizu validates JWTs using `PyJWKClient` against any standard OIDC JWKS endpoint. Set ``JWKS_URL`` to your provider's JWKS JSON endpoint and configure the frontend OIDC settings so the browser can complete the PKCE flow.
 
-* ``JWKS_URL``: JWKS location to use to validate JWT. ``{AWS_DEFAULT_REGION}`` and ``{kid}`` can be used as template variables; default: ``https://public-keys.auth.elb.{AWS_DEFAULT_REGION}.amazonaws.com/{kid}``
-* ``JWKS_URL_FOR_ALB``: AWS ALBs use a URL that fetches a KID directly, while other providers use a URL that has a JSON file with a list of keys. If using an ALB, this should be false, if using a standard JSON file with a list of keys, this should be true; default: ``True``
-* ``ALLOWED_JWT_ALGORITHMS``: A comma separated list of algorithms we allow for JWT signing; default: ``ES256,ES512``
-* ``DEVELOPMENT_ONLY_REQUIRE_AUTH``: Whether or not to require authentication. This option should only be changed in development; default: ``True``
-* ``DEVELOPMENT_ONLY_AUTH_USER_EMAIL``: The email address of the fake user when authentication is disabled. This option should only be changed in development; default: ``testuser``
+* ``JWKS_URL``: JWKS JSON endpoint used to validate JWTs (e.g. ``https://idp.example.com/application/o/seizu/jwks/``); default: ``""``
+* ``JWT_HEADER_NAME``: request header carrying the token; default: ``Authorization``
+* ``JWT_EMAIL_CLAIM``: JWT claim for the user's email address; default: ``email``
+* ``JWT_ISSUER``: optional issuer to validate in the JWT; default: ``""`` (skips issuer validation)
+* ``JWT_AUDIENCE``: optional audience to validate; must match the OIDC client ID when using providers (like Authentik) that always set ``aud``; default: ``""``
+* ``ALLOWED_JWT_ALGORITHMS``: comma-separated list of allowed JWT signing algorithms; default: ``RS256,ES256,ES512``
+* ``OIDC_AUTHORITY``: OIDC provider base URL; passed to the frontend via ``GET /api/v1/config``; default: ``""``
+* ``OIDC_CLIENT_ID``: OIDC client ID; passed to the frontend; default: ``""``
+* ``OIDC_REDIRECT_URI``: OIDC callback URL (browser-reachable); passed to the frontend; default: ``""``
+* ``OIDC_SCOPE``: OIDC scope; default: ``openid email``
+* ``DEVELOPMENT_ONLY_REQUIRE_AUTH``: whether or not to require authentication. This option should only be changed in development; default: ``True``
+* ``DEVELOPMENT_ONLY_AUTH_USER_EMAIL``: the email address of the fake user when authentication is disabled. This option should only be changed in development; default: ``testuser``
 
 ### Scheduled queries
 

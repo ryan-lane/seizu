@@ -13,6 +13,8 @@ volumes:
   authentik_postgres_data:
   authentik_media:
   neo4j_data:
+  dynamodb_data:
+  postgres_data:
 services:
   telegraf:
     image: telegraf
@@ -22,6 +24,45 @@ services:
       - METRICS_PREFIX=seizu
     networks:
       stats:
+  dynamodb:
+    build:
+      context: .compose/dynamodb
+    # -sharedDb uses a single shared database file; -dbPath persists it to the
+    # named volume so data survives container restarts.
+    command: "-jar DynamoDBLocal.jar -sharedDb -dbPath /home/dynamodblocal/data"
+    volumes:
+      - dynamodb_data:/home/dynamodblocal/data
+    healthcheck:
+      # DynamoDB Local returns 400 for requests without proper headers, but
+      # that still means the service is up and accepting connections.
+      test: ["CMD-SHELL", "bash -c 'echo > /dev/tcp/localhost/8000'"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      database:
+  # ── PostgreSQL (sqlmodel report store backend) ───────────────────────────
+  # Use `make sqlmodel_enable && make down && make up` to activate this backend.
+  # make up includes --profile sqlmodel automatically when REPORT_STORE_BACKEND=sqlmodel.
+  postgres:
+    image: postgres:16-alpine
+    profiles:
+      - sqlmodel
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: seizu
+      POSTGRES_USER: seizu
+      POSTGRES_PASSWORD: seizu
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U seizu"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      database:
+  # ─────────────────────────────────────────────────────────────────────────
   sqs:
     image: softwaremill/elasticmq
     healthcheck:
@@ -207,12 +248,21 @@ services:
       context: .
       target: backend
     user: seizu
+    depends_on:
+      neo4j:
+        condition: service_healthy
+      dynamodb:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+        required: false
     environment:
       - HOST=0.0.0.0
       - PORT=8080
       # Gevent will block on DNS unless ares is set.
       - GEVENT_RESOLVER=ares
       - NEO4J_URI=bolt://neo4j:7687
+      - NEO4J_NOTIFICATIONS_MIN_SEVERITY=OFF
       # JWT authentication is disabled for development by default.
       # To enable Authentik auth, start with --profile auth and change to:
       #   DEVELOPMENT_ONLY_REQUIRE_AUTH=true
@@ -238,6 +288,18 @@ services:
       - SECRET_KEY=fake
       - STATSD_EXTERNAL_PREFIX=seizu
       - STATSD_EXTERNAL_PROVIDER=newrelic
+      # Report store backend — set REPORT_STORE_BACKEND=sqlmodel to switch
+      - REPORT_STORE_BACKEND
+      # DynamoDB — points to the local DynamoDB container in development
+      - AWS_ACCESS_KEY_ID=fake
+      - AWS_SECRET_ACCESS_KEY=fake
+      - AWS_DEFAULT_REGION=us-east-1
+      - DYNAMODB_TABLE_NAME=seizu-reports
+      - DYNAMODB_ENDPOINT_URL=http://dynamodb:8000
+      - DYNAMODB_REGION=us-east-1
+      - DYNAMODB_CREATE_TABLE=true
+      # SQLModel — PostgreSQL URL for the sqlmodel backend
+      - SQL_DATABASE_URL=postgresql://seizu:seizu@postgres:5432/seizu
     healthcheck:
       test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8080/healthcheck')"]
       interval: 30s
@@ -248,7 +310,10 @@ services:
       - ./.config/dev/seizu/reporting-dashboard.yaml:/reporting-dashboard.conf
     ports:
       - 8080:8080
-    command: gunicorn --config /home/seizu/seizu/gunicorn.conf reporting.wsgi:app --reload --workers=2 -k gevent --access-logfile=- --error-logfile=-
+    # Start from /run/seizu so the gunicorn arbiter control socket (gunicorn.ctl)
+    # is created there instead of in the bind-mounted project volume, which
+    # would cause the seizu-node watchpack watcher to trip over the Unix socket.
+    command: bash -c "cd /run/seizu && exec gunicorn --config /home/seizu/seizu/gunicorn.conf reporting.wsgi:app --reload --workers=2 -k gevent --access-logfile=- --error-logfile=-"
     networks:
       proxy:
       stats:

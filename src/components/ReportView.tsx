@@ -1,0 +1,304 @@
+import { useState, useEffect } from 'react';
+import { Helmet } from 'react-helmet';
+import {
+  Box,
+  Container,
+  Divider,
+  Grid,
+  Paper,
+  Typography
+} from '@mui/material';
+import Error from '@mui/icons-material/Error';
+import MuiMarkdown from 'mui-markdown';
+
+import { Report } from 'src/config.context';
+import { getQueryStringValue } from 'src/components/QueryString';
+import CypherAutocomplete from 'src/components/reports/CypherAutocomplete';
+import CypherBar from 'src/components/reports/CypherBar';
+import CypherCount from 'src/components/reports/CypherCount';
+import CypherPie from 'src/components/reports/CypherPie';
+import CypherProgress from 'src/components/reports/CypherProgress';
+import CypherTable from 'src/components/reports/CypherTable';
+import CypherVerticalTable from 'src/components/reports/CypherVerticalTable';
+import FreeTextInput from 'src/components/reports/FreeTextInput';
+
+interface ReportViewProps {
+  report: Report;
+  title?: string;
+  boxSx?: object;
+}
+
+function ReportView({ report, title, boxSx = { height: '100%', py: 3 } }: ReportViewProps) {
+  const reportQueries = report.queries ?? {};
+  function resolveQuery(cypher: string | undefined): string | undefined {
+    if (cypher === undefined) return undefined;
+    return reportQueries[cypher] ?? cypher;
+  }
+  const [varData, setVarData] = useState({});
+
+  useEffect(() => {
+    const initialVarState = {};
+    if (report.inputs) {
+      report.inputs.forEach((input) => {
+        const inputValue = getQueryStringValue(input.input_id);
+        if (inputValue !== undefined) {
+          // TODO(ryan-lane): Figure out a way to pass the label along with the value in the param
+          initialVarState[input.input_id] = { label: inputValue, value: inputValue };
+        } else if (input.default !== undefined) {
+          initialVarState[input.input_id] = input.default;
+        } else {
+          initialVarState[input.input_id] = {};
+        }
+      });
+    }
+    setVarData(initialVarState);
+  }, [report]);
+
+  const head = [];
+  if (report.inputs) {
+    report.inputs.forEach((input) => {
+      if (input === undefined) {
+        head.push(
+          <Grid
+            key={input.input_id}
+            size={{ lg: 3, md: 3, xl: 3, xs: 3 }}
+            sx={{ pl: 3, pb: 2, pr: 3 }}
+          >
+            <Paper elevation={1} sx={{ p: 2 }}>
+              <Error />
+              <Typography>Undefined input id: {input.input_id}</Typography>
+            </Paper>
+          </Grid>
+        );
+        return;
+      }
+
+      let inputComponent;
+      if (input.type === 'autocomplete') {
+        inputComponent = (
+          <CypherAutocomplete
+            cypher={input.cypher}
+            params={input.params}
+            inputId={input.input_id}
+            inputDefault={input.default}
+            labelName={input.label}
+            value={varData}
+            setValue={setVarData}
+          />
+        );
+      } else if (input.type === 'text') {
+        inputComponent = (
+          <FreeTextInput
+            inputId={input.input_id}
+            inputDefault={input.default}
+            labelName={input.label}
+            value={varData}
+            setValue={setVarData}
+          />
+        );
+      }
+
+      let size;
+      let xsSize;
+      if (input.size === undefined) {
+        size = 3;
+        xsSize = 6;
+      } else if (input.size < 7) {
+        size = input.size;
+        xsSize = input.size * 2;
+      } else {
+        size = input.size;
+        xsSize = input.size;
+      }
+      head.push(
+        <Grid
+          key={input.input_id}
+          size={{ lg: size, md: size, xl: size, xs: xsSize }}
+          sx={{ pl: 3, pb: 2, pr: 3 }}
+        >
+          <Paper elevation={1} sx={{ p: 2 }}>
+            {inputComponent}
+          </Paper>
+        </Grid>
+      );
+    });
+  }
+
+  const rows = [];
+  report.rows.forEach((row) => {
+    const items = [];
+    row.panels.forEach((item, index) => {
+      const needInputs = [];
+      const params = {};
+      if (item.params !== undefined) {
+        item.params.forEach((inputData) => {
+          const paramName = inputData.name;
+          const paramValue = inputData?.value;
+          const paramInputId = inputData?.input_id;
+          // Use != null (loose) to treat both null and undefined as "not set".
+          // When config is stored in DynamoDB, _strip_none removes None fields,
+          // so absent keys come back as undefined rather than null.
+          if (paramValue != null) {
+            params[paramName] = paramValue;
+          } else if (paramInputId != null) {
+            params[paramName] = varData[paramInputId]?.value;
+            if (
+              params[paramName] === undefined ||
+              params[paramName] === null ||
+              params[paramName] === ''
+            ) {
+              try {
+                const input = report.inputs.find((obj) => obj.input_id === paramInputId);
+                needInputs.push(input.label);
+              } catch (err) {
+                console.log(err);
+                needInputs.push(`*(Error: undefined input: ${paramInputId})`);
+              }
+            }
+          }
+        });
+      }
+
+      const details = {
+        cypher: resolveQuery(item.cypher),
+        details_cypher: resolveQuery(item.details_cypher),
+        type: item.type,
+        metric: item.metric,
+        columns: item.columns,
+        caption: item.caption,
+        params
+      };
+
+      let itemComponent;
+      if (item.type === 'progress') {
+        itemComponent = (
+          <CypherProgress
+            cypher={resolveQuery(item.cypher)}
+            params={params}
+            caption={item.caption}
+            threshold={item.threshold}
+            details={details}
+            needInputs={needInputs}
+          />
+        );
+      } else if (item.type === 'pie') {
+        itemComponent = (
+          <CypherPie
+            cypher={resolveQuery(item.cypher)}
+            params={params}
+            caption={item.caption}
+            pieSettings={item.pie_settings}
+            details={details}
+          />
+        );
+      } else if (item.type === 'bar') {
+        itemComponent = (
+          <CypherBar
+            cypher={resolveQuery(item.cypher)}
+            params={params}
+            caption={item.caption}
+            barSettings={item.bar_settings}
+            details={details}
+          />
+        );
+      } else if (item.type === 'count') {
+        itemComponent = (
+          <CypherCount
+            cypher={resolveQuery(item.cypher)}
+            params={params}
+            caption={item.caption}
+            details={details}
+            needInputs={needInputs}
+          />
+        );
+      } else if (item.type === 'table') {
+        itemComponent = (
+          <CypherTable
+            cypher={resolveQuery(item.cypher)}
+            params={params}
+            columns={item.columns}
+            caption={item.caption}
+            details={details}
+            needInputs={needInputs}
+          />
+        );
+      } else if (item.type === 'vertical-table') {
+        itemComponent = (
+          <CypherVerticalTable
+            cypher={resolveQuery(item.cypher)}
+            params={params}
+            id={item.table_id}
+            details={details}
+            needInputs={needInputs}
+          />
+        );
+      } else if (item.type === 'markdown') {
+        itemComponent = (
+          <MuiMarkdown
+            overrides={{
+              h1: { component: 'h2' },
+              h2: { component: 'h3' },
+              h3: { component: 'h4' },
+              h4: { component: 'h5' },
+              h5: { component: 'h6' },
+              ol: { props: { className: 'mui-markdown-ol' } },
+              ul: { props: { className: 'mui-markdown-ul' } }
+            }}
+          >
+            {item.markdown}
+          </MuiMarkdown>
+        );
+      }
+
+      let size;
+      let xsSize;
+      if (item.size === undefined) {
+        size = 3;
+        xsSize = 6;
+      } else if (item.size < 7) {
+        size = item.size;
+        xsSize = item.size * 2;
+      } else {
+        size = item.size;
+        xsSize = item.size;
+      }
+      items.push(
+        // We allow index in keys here because the config isn't reloaded, and as such elements
+        // in the config will never change.
+        // eslint-disable-next-line react/no-array-index-key
+        <Grid key={index} size={{ lg: size, md: size, xl: size, xs: xsSize }}>
+          {itemComponent}
+        </Grid>
+      );
+    });
+    rows.push(
+      <Container key={row.name} maxWidth={false} sx={{ pb: 2 }}>
+        <Paper elevation={1} sx={{ p: 2 }}>
+          <Typography gutterBottom variant="h2">
+            {row.name}
+          </Typography>
+          <Divider />
+          <Grid container spacing={2} sx={{ py: 2 }}>
+            {items}
+          </Grid>
+        </Paper>
+      </Container>
+    );
+  });
+
+  return (
+    <>
+      <Helmet>
+        <title>{title} | Seizu</title>
+      </Helmet>
+      <Box sx={boxSx}>
+        <Grid container>
+          {head}
+          {rows}
+        </Grid>
+      </Box>
+    </>
+  );
+}
+
+export default ReportView;
