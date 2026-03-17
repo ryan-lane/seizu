@@ -49,7 +49,7 @@ lock_dev:
 
 .PHONY: build
 build: clean
-	docker build . -t paypay/seizu
+	docker build . -t mappedsky/seizu
 
 .PHONY: rebuild
 rebuild:

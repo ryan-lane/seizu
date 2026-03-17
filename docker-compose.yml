@@ -200,7 +200,7 @@ services:
       auth:
   # ─────────────────────────────────────────────────────────────────────────
   seizu-dashboard-stats:
-    image: ghcr.io/ryan-lane/seizu
+    image: ghcr.io/mappedsky/seizu
     restart: on-failure
     user: seizu
     depends_on:
@@ -218,7 +218,7 @@ services:
       stats:
       database:
   seizu-scheduled-queries:
-    image: ghcr.io/ryan-lane/seizu
+    image: ghcr.io/mappedsky/seizu
     restart: on-failure
     user: seizu
     depends_on:
@@ -243,7 +243,7 @@ services:
       stats:
       database:
   seizu:
-    image: ghcr.io/ryan-lane/seizu
+    image: ghcr.io/mappedsky/seizu
     build:
       context: .
       target: backend
