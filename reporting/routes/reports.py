@@ -79,6 +79,19 @@ def get_version(report_id: str, version_num: int) -> Response:
     return jsonify(version.model_dump())
 
 
+@blueprint.route("/api/v1/reports/<report_id>", methods=["DELETE"])
+def delete_report(report_id: str) -> Response:
+    authnz.get_email()
+    ok = report_store.delete_report(report_id)
+    if not ok:
+        resp = jsonify(error="Report not found")
+        resp.status_code = 404
+        return resp
+    resp = jsonify(report_id=report_id)
+    resp.status_code = 200
+    return resp
+
+
 @blueprint.route("/api/v1/reports", methods=["POST"])
 def create_report() -> Response:
     created_by = authnz.get_email()

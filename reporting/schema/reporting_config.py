@@ -61,10 +61,10 @@ class Input(BaseModel):
         ],
     )
 
-    size: Optional[float] = Field(
-        default=2.0,
+    size: Optional[int] = Field(
+        default=2,
         description="The size of the input element.",
-        examples=["2.0"],
+        examples=["2"],
     )
 
 
@@ -202,10 +202,10 @@ class Panel(BaseModel):
         ],
     )
 
-    size: Optional[float] = Field(
-        default=2.0,
+    size: Optional[int] = Field(
+        default=2,
         description="The size of the panel.",
-        examples=["2.0"],
+        examples=["2"],
     )
 
     threshold: Optional[float] = Field(

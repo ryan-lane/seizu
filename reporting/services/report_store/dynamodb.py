@@ -306,6 +306,45 @@ class DynamoDBReportStore(ReportStore):
         _transact_put(table, version_item, latest_item, metadata_item, list_item)
         return ReportVersion(**version_item)
 
+    def delete_report(self, report_id: str) -> bool:
+        """Delete a report and all its versions.
+
+        Scans all items under the report PK and batch-deletes them, then
+        removes the list entry and clears the dashboard pointer if needed.
+        Returns False if the report does not exist.
+        """
+        table = _get_table()
+        # Check existence via metadata item
+        resp = table.get_item(Key={"PK": _report_pk(report_id), "SK": _SK_METADATA})
+        if not resp.get("Item"):
+            return False
+
+        # Collect all items under this report PK (metadata, latest, all versions)
+        items_resp = table.query(
+            KeyConditionExpression=Key("PK").eq(_report_pk(report_id)),
+            ProjectionExpression="PK, SK",
+        )
+        keys_to_delete = [
+            {"PK": item["PK"], "SK": item["SK"]} for item in items_resp.get("Items", [])
+        ]
+        # Also delete the list-index entry
+        keys_to_delete.append({"PK": _PK_REPORT_LIST, "SK": f"REPORT#{report_id}"})
+
+        # Clear dashboard pointer if it points to this report
+        dashboard_resp = table.get_item(
+            Key={"PK": _PK_DASHBOARD, "SK": _SK_DASHBOARD_POINTER}
+        )
+        dashboard_item = dashboard_resp.get("Item")
+        if dashboard_item and dashboard_item.get("report_id") == report_id:
+            keys_to_delete.append({"PK": _PK_DASHBOARD, "SK": _SK_DASHBOARD_POINTER})
+
+        # Batch delete in chunks of 25 (DynamoDB TransactWriteItems limit)
+        with table.batch_writer() as batch:
+            for key in keys_to_delete:
+                batch.delete_item(Key=key)
+
+        return True
+
     def get_dashboard_report_id(self) -> Optional[str]:
         """Return the report_id of the current dashboard report, or None if not set."""
         table = _get_table()

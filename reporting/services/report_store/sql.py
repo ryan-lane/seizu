@@ -272,6 +272,32 @@ class SQLModelReportStore(ReportStore):
             comment=comment,
         )
 
+    def delete_report(self, report_id: str) -> bool:
+        """Delete a report and all its versions.
+
+        Returns False if the report does not exist.
+        """
+        with Session(_get_engine()) as session:
+            report = session.get(ReportRecord, report_id)
+            if not report:
+                return False
+
+            # Clear the dashboard pointer if it references this report
+            pointer = session.get(DashboardPointerRecord, 1)
+            if pointer and pointer.report_id == report_id:
+                session.delete(pointer)
+
+            # Delete all versions for this report
+            stmt = select(ReportVersionRecord).where(
+                ReportVersionRecord.report_id == report_id
+            )
+            for version_record in session.exec(stmt).all():
+                session.delete(version_record)
+
+            session.delete(report)
+            session.commit()
+        return True
+
     def get_dashboard_report_id(self) -> Optional[str]:
         with Session(_get_engine()) as session:
             row = session.get(DashboardPointerRecord, 1)

@@ -83,16 +83,16 @@
                 "size": {
                     "anyOf": [
                         {
-                            "type": "number"
+                            "type": "integer"
                         },
                         {
                             "type": "null"
                         }
                     ],
-                    "default": 2.0,
+                    "default": 2,
                     "description": "The size of the input element.",
                     "examples": [
-                        "2.0"
+                        "2"
                     ],
                     "title": "Size"
                 }
@@ -238,16 +238,16 @@
                 "size": {
                     "anyOf": [
                         {
-                            "type": "number"
+                            "type": "integer"
                         },
                         {
                             "type": "null"
                         }
                     ],
-                    "default": 2.0,
+                    "default": 2,
                     "description": "The size of the panel.",
                     "examples": [
-                        "2.0"
+                        "2"
                     ],
                     "title": "Size"
                 },
@@ -725,6 +725,5 @@
         }
     },
     "title": "ReportingConfig",
-    "type": "object",
-    "$schema": "https://json-schema.org/draft/2020-12/schema"
+    "type": "object"
 }

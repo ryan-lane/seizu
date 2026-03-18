@@ -110,7 +110,7 @@ React 19 + TypeScript, built with Bun, using Material-UI for components and Nivo
 - `src/components/AuthProvider.tsx` — manages the OIDC flow: registers `userLoaded`/`userUnloaded` event listeners (always, including on the callback path), calls `getUser()` on normal routes, and triggers `signinRedirect()` when unauthenticated
 - `src/components/OidcCallback.tsx` — rendered at `/auth/callback`; calls `signinRedirectCallback()` to complete the PKCE exchange then navigates to `/`
 - `src/hooks/useCypherQuery.ts` — wraps `POST /api/v1/query` for all data fetching; skips the request when `auth_required` is true and no `accessToken` is available yet
-- `src/hooks/useReportsApi.ts` — hooks for fetching reports from DynamoDB: `useReportsList()`, `useReport(id)`, `useDashboardReport()`, `useAllReports()`
+- `src/hooks/useReportsApi.ts` — hooks for fetching reports from DynamoDB: `useReportsList()`, `useReport(id)`, `useDashboardReport()`, `useDashboardReportId()`, `useAllReports()`; `useReportsMutations()` returns async functions for create/save-version/set-dashboard/delete operations
 - `src/components/ReportView.tsx` — shared report rendering component used by both `Dashboard` and `Reports` pages; accepts a `Report` object; resolves panel `cypher` fields against `report.queries` with fallback to literal Cypher string
 - `src/components/reports/` — panel components (`CypherCount`, `CypherTable`, `CypherBar`, etc.) are rendered dynamically based on the config panel type
 - All POST requests must include the `X-CSRFToken` header
@@ -155,6 +155,7 @@ Warnings (non-blocking):
 | GET | `/api/v1/reports/<id>/versions` | Lists all versions of a report |
 | GET | `/api/v1/reports/<id>/versions/<n>` | Returns a specific version of a report |
 | POST | `/api/v1/reports/<id>/versions` | Saves a new version of a report; returns 201 |
+| DELETE | `/api/v1/reports/<id>` | Deletes a report and all its versions; clears dashboard pointer if needed |
 | GET | `/healthcheck` | Healthcheck |
 
 ### Configuration System

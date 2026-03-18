@@ -56,6 +56,14 @@ class ReportStore(ABC):
         """
 
     @abstractmethod
+    def delete_report(self, report_id: str) -> bool:
+        """Delete a report and all its versions.
+
+        Also clears the dashboard pointer if it points to this report.
+        Returns False if the report does not exist.
+        """
+
+    @abstractmethod
     def get_dashboard_report_id(self) -> Optional[str]:
         """Return the report_id of the current dashboard report, or None if not set."""
 
