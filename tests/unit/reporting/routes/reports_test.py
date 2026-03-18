@@ -341,3 +341,30 @@ def test_create_version_non_json_body(mocker):
     )
     assert ret.status_code == 400
     assert "Request must be JSON" in ret.json["error"]
+
+
+# ---------------------------------------------------------------------------
+# DELETE /api/v1/reports/<report_id>
+# ---------------------------------------------------------------------------
+
+
+def test_delete_report_success(mocker):
+    app = _make_app(mocker)
+    mocker.patch(
+        "reporting.routes.reports.report_store.delete_report",
+        return_value=True,
+    )
+    ret = app.test_client().delete("/api/v1/reports/rid1")
+    assert ret.status_code == 200
+    assert ret.json["report_id"] == "rid1"
+
+
+def test_delete_report_not_found(mocker):
+    app = _make_app(mocker)
+    mocker.patch(
+        "reporting.routes.reports.report_store.delete_report",
+        return_value=False,
+    )
+    ret = app.test_client().delete("/api/v1/reports/missing")
+    assert ret.status_code == 404
+    assert "not found" in ret.json["error"].lower()
