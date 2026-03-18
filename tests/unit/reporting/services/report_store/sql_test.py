@@ -346,3 +346,49 @@ def test_set_dashboard_report_can_be_changed(store, mocker):
     store.set_dashboard_report("rid1")
     store.set_dashboard_report("rid2")
     assert store.get_dashboard_report_id() == "rid2"
+
+
+# ---------------------------------------------------------------------------
+# delete_report
+# ---------------------------------------------------------------------------
+
+
+def test_delete_report_returns_false_for_missing_report(store):
+    assert store.delete_report("nonexistent") is False
+
+
+def test_delete_report_removes_report(store, mocker):
+    mocker.patch(
+        "reporting.services.report_store.sql.generate_report_id",
+        return_value="rid1",
+    )
+    store.create_report(name="r", created_by="u@x.com")
+    store.save_report_version(report_id="rid1", config={"v": 1}, created_by="u@x.com")
+    assert store.delete_report("rid1") is True
+    assert store.list_reports() == []
+    assert store.list_report_versions("rid1") == []
+
+
+def test_delete_report_clears_dashboard_pointer(store, mocker):
+    mocker.patch(
+        "reporting.services.report_store.sql.generate_report_id",
+        return_value="rid1",
+    )
+    store.create_report(name="r", created_by="u@x.com")
+    store.set_dashboard_report("rid1")
+    assert store.get_dashboard_report_id() == "rid1"
+    store.delete_report("rid1")
+    assert store.get_dashboard_report_id() is None
+
+
+def test_delete_report_does_not_clear_other_dashboard_pointer(store, mocker):
+    ids = iter(["rid1", "rid2"])
+    mocker.patch(
+        "reporting.services.report_store.sql.generate_report_id",
+        side_effect=lambda: next(ids),
+    )
+    store.create_report(name="r1", created_by="u@x.com")
+    store.create_report(name="r2", created_by="u@x.com")
+    store.set_dashboard_report("rid2")
+    store.delete_report("rid1")
+    assert store.get_dashboard_report_id() == "rid2"

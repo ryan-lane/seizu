@@ -592,6 +592,46 @@ def test_save_report_version_correct_sks(patch_table, store):
 # ---------------------------------------------------------------------------
 
 
+# ---------------------------------------------------------------------------
+# delete_report
+# ---------------------------------------------------------------------------
+
+
+def test_delete_report_returns_false_when_not_found(patch_table, store):
+    patch_table.get_item.return_value = {}
+    assert store.delete_report("missing") is False
+
+
+def test_delete_report_returns_true_on_success(patch_table, store):
+    patch_table.get_item.side_effect = [
+        {"Item": _metadata_item()},  # metadata check
+        {},  # dashboard pointer check — not set
+    ]
+    patch_table.query.return_value = {
+        "Items": [
+            {"PK": "REPORT#123", "SK": "#METADATA"},
+            {"PK": "REPORT#123", "SK": "#LATEST"},
+            {"PK": "REPORT#123", "SK": "VERSION#0000000001"},
+        ]
+    }
+    assert store.delete_report("123") is True
+
+
+def test_delete_report_clears_dashboard_pointer(patch_table, store):
+    patch_table.get_item.side_effect = [
+        {"Item": _metadata_item()},  # metadata check
+        {"Item": {"PK": "#DASHBOARD", "SK": "#POINTER", "report_id": "123"}},
+    ]
+    patch_table.query.return_value = {
+        "Items": [{"PK": "REPORT#123", "SK": "#METADATA"}]
+    }
+    store.delete_report("123")
+    # batch_writer context manager calls delete_item; verify it was called
+    batch = patch_table.batch_writer.return_value.__enter__.return_value
+    deleted_keys = [call[1]["Key"] for call in batch.delete_item.call_args_list]
+    assert {"PK": "#DASHBOARD", "SK": "#POINTER"} in deleted_keys
+
+
 def test_save_report_version_nested_none_config_produces_no_nones(patch_table, store):
     """Config from Pydantic model_dump() may contain nested None values for
     optional fields; verify _strip_none removes them before they reach DynamoDB
