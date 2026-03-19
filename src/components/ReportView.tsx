@@ -16,6 +16,7 @@ import { getQueryStringValue } from 'src/components/QueryString';
 import CypherAutocomplete from 'src/components/reports/CypherAutocomplete';
 import CypherBar from 'src/components/reports/CypherBar';
 import CypherCount from 'src/components/reports/CypherCount';
+import CypherGraph from 'src/components/reports/CypherGraph';
 import CypherPie from 'src/components/reports/CypherPie';
 import CypherProgress from 'src/components/reports/CypherProgress';
 import CypherTable from 'src/components/reports/CypherTable';
@@ -199,6 +200,16 @@ function ReportView({ report, title, boxSx = { height: '100%', py: 3 } }: Report
             caption={item.caption}
             barSettings={item.bar_settings}
             details={details}
+          />
+        );
+      } else if (item.type === 'graph') {
+        itemComponent = (
+          <CypherGraph
+            cypher={resolveQuery(item.cypher)}
+            params={params}
+            caption={item.caption}
+            graphSettings={item.graph_settings}
+            needInputs={needInputs}
           />
         );
       } else if (item.type === 'count') {

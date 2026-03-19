@@ -30,6 +30,15 @@ reports:
         MATCH (c:CVE)
         WITH c.base_severity AS severity, count(c.id) AS total
         RETURN {id: severity, value: total} AS details
+      cves-graph: |-
+        MATCH (c:CVE)
+        WHERE c.base_severity IS NOT NULL
+        WITH c LIMIT 50
+        WITH
+          collect(distinct {id: c.base_severity, label: c.base_severity, group: 'severity'}) AS severity_nodes,
+          collect({id: c.id, label: c.id, group: c.base_severity}) AS cve_nodes,
+          collect({source: c.id, target: c.base_severity}) AS links
+        RETURN {nodes: severity_nodes + cve_nodes, links: links} AS graph
     rows:
       - name: CVEs as count and progress panels
         panels:
@@ -37,13 +46,13 @@ reports:
             type: count
             caption: Total CVEs
             metric: cve.count
-            size: 2.4
+            size: 2
           - cypher: |-
               MATCH (c:CVE)
               RETURN count(c.id) AS total
             type: count
             caption: Total CVEs (direct)
-            size: 2.4
+            size: 2
           - cypher: cves-severity-of-total
             details_cypher: cves-severity-of-total-details
             type: progress
@@ -52,7 +61,7 @@ reports:
                 value: CRITICAL
             caption: Critical CVEs
             metric: cve.progress
-            size: 2.4
+            size: 2
             threshold: 0
           - cypher: cves-severity-of-total
             details_cypher: cves-severity-of-total-details
@@ -62,7 +71,7 @@ reports:
                 value: HIGH
             caption: High CVEs
             metric: cve.progress
-            size: 2.4
+            size: 2
             threshold: 0
           - cypher: cves-severity-of-total
             details_cypher: cves-severity-of-total-details
@@ -72,7 +81,7 @@ reports:
                 value: MEDIUM
             caption: Medium CVEs
             metric: cve.progress
-            size: 2.4
+            size: 2
             threshold: 0
           - cypher: cves-severity-of-total
             details_cypher: cves-severity-of-total-details
@@ -82,18 +91,39 @@ reports:
                 value: LOW
             caption: Low CVEs
             metric: cve.progress
-            size: 2.4
+            size: 2
             threshold: 0
       - name: CVEs as pie, bar panels
         panels:
           - cypher: cves-by-severity-as-rows
             type: pie
-            caption: CVE severities
+            caption: CVE severities (pie)
             size: 6
           - cypher: cves-by-severity-as-rows
             type: bar
-            caption: CVE severities
+            caption: CVE severities (bar)
             size: 6
+          - cypher: cves-by-severity-as-rows
+            type: pie
+            caption: CVE severities (pie, column legend)
+            size: 6
+            pie_settings:
+              legend: column
+          - cypher: cves-by-severity-as-rows
+            type: bar
+            caption: CVE severities (bar, row legend)
+            size: 6
+            bar_settings:
+              legend: row
+      - name: CVEs as graph
+        panels:
+          - cypher: cves-graph
+            type: graph
+            caption: CVE severity graph
+            size: 12
+            graph_settings:
+              node_label: label
+              node_color_by: group
   cves:
     name: CVEs
     queries:

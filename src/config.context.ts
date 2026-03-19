@@ -22,6 +22,7 @@ export interface Panel {
   params?: PanelParam[];
   pie_settings?: PieSettings;
   bar_settings?: BarSettings;
+  graph_settings?: GraphSettings;
   table_id?: string;
   legend?: string;
   markdown?: string;
@@ -34,6 +35,11 @@ export interface PieSettings {
 
 export interface BarSettings {
   legend?: string;
+}
+
+export interface GraphSettings {
+  node_label?: string;
+  node_color_by?: string;
 }
 
 export interface ColumnDef {
