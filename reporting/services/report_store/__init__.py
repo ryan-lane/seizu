@@ -86,6 +86,10 @@ def save_report_version(
     )
 
 
+def delete_report(report_id: str) -> bool:
+    return get_store().delete_report(report_id)
+
+
 def get_dashboard_report_id() -> Optional[str]:
     return get_store().get_dashboard_report_id()
 

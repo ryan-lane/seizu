@@ -48,11 +48,42 @@ reports:
             size: 3
 ```
 
-To change the dashboard at runtime, call the API:
+To change the dashboard at runtime, use the Reports list in the UI (see below) or call the API directly:
 
 ```bash
 curl -X PUT /api/v1/reports/<report_id>/dashboard
 ```
+
+## Managing Reports
+
+Reports can be created, edited, and deleted at runtime through the Seizu UI without modifying the YAML file or restarting the service.
+
+### Reports list
+
+Navigate to **Reports** in the sidebar to view all reports. From the list you can:
+
+- Click a report name to view it.
+- Open the **⋮** menu on any row to **Edit**, **Set as dashboard**, or **Delete** a report.
+- A **Dashboard** badge is shown inline on whichever report is currently set as the dashboard.
+
+### Creating a report
+
+Click **New report** on the Reports list page, enter a name, and confirm. An empty report is created immediately and opened in edit mode so you can start adding rows and panels.
+
+### Editing a report
+
+Click **Edit report** (top-right when viewing a report) or choose **Edit** from the ⋮ menu in the Reports list. Edit mode provides:
+
+- **Named Queries** — a collapsible section for defining reusable Cypher strings that panels can reference by key.
+- **Rows** — add, rename, and delete rows. Rows hold panels in a horizontal grid.
+- **Panels** — within each row, panels can be dragged to a new position (within a row or to a different row) and resized using the − / + column controls (1–12 grid columns). Use the pencil icon to open the panel editor, or the trash icon to remove a panel.
+- **Add panel** — opens the panel editor where you select the panel type and fill in the relevant fields. The form adapts to show only the fields applicable to the chosen type.
+
+Click **Save version** to commit your changes. Every save creates a new numbered version; existing versions are never overwritten.
+
+### Deleting a report
+
+Choose **Delete** from the ⋮ menu in the Reports list and confirm. This permanently removes the report and all its versions. If the report was set as the dashboard, the dashboard pointer is also cleared.
 
 ## Panels
 

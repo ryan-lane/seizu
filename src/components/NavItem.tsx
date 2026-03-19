@@ -72,29 +72,25 @@ function NavItem({ href, icon: Icon, title, subItems, ...rest }: NavItemProps) {
     );
   }
 
-  const handleClick = () => {
-    setOpen(!open);
-  };
-
   return (
     <div>
       <ListItem
         disableGutters
-        onClick={handleClick}
         sx={{
           display: 'flex',
-          py: 0,
-          cursor: 'pointer'
+          py: 0
         }}
       >
         <Button
+          component={href ? RouterLink : 'button'}
+          to={href}
           sx={{
             color: 'text.secondary',
             fontWeight: 'medium',
             justifyContent: 'flex-start',
             letterSpacing: 0,
             textTransform: 'none',
-            width: '100%',
+            flex: 1,
             '& svg': {
               mr: 1
             }
@@ -103,7 +99,12 @@ function NavItem({ href, icon: Icon, title, subItems, ...rest }: NavItemProps) {
         >
           <span>{title}</span>
         </Button>
-        {open ? <ExpandMore /> : <ExpandLess />}
+        <Button
+          onClick={() => setOpen(!open)}
+          sx={{ minWidth: 0, px: 0.5, color: 'text.secondary' }}
+        >
+          {open ? <ExpandMore /> : <ExpandLess />}
+        </Button>
       </ListItem>
       <Collapse in={open} timeout="auto" unmountOnExit>
         <List disablePadding>

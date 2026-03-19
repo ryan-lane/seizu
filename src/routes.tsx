@@ -4,6 +4,7 @@ import MainLayout from 'src/components/MainLayout';
 import OidcCallback from 'src/components/OidcCallback';
 import Dashboard from 'src/pages/Dashboard';
 import Reports from 'src/pages/Reports';
+import ReportsList from 'src/pages/ReportsList';
 import Documentation from 'src/pages/Documentation';
 import NotFound from 'src/pages/NotFound';
 
@@ -17,6 +18,7 @@ const routes = [
     element: <DashboardLayout />,
     children: [
       { path: 'dashboard', element: <Dashboard /> },
+      { path: 'reports', element: <ReportsList /> },
       { path: 'reports/:id', element: <Reports /> },
       { path: 'documentation', element: <Documentation /> },
       { path: '*', element: <Navigate to="/404" /> }
