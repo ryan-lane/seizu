@@ -1,16 +1,10 @@
 import { render, screen, fireEvent, waitFor, cleanup } from '@testing-library/react';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter, Routes, Route, useLocation } from 'react-router-dom';
 import { ThemeProvider, createTheme } from '@mui/material/styles';
 import ReportVersionView from 'src/pages/ReportVersionView';
 
 jest.mock('react-helmet', () => ({
   Helmet: ({ children }: { children: React.ReactNode }) => <>{children}</>
-}));
-
-jest.mock('react-router-dom', () => ({
-  ...jest.requireActual('react-router-dom'),
-  useParams: jest.fn(),
-  useNavigate: jest.fn()
 }));
 
 jest.mock('src/hooks/useReportsApi', () => ({
@@ -25,18 +19,33 @@ jest.mock('src/components/ReportView', () => ({
   default: ({ title }: { title: string }) => <div data-testid="report-view">{title}</div>
 }));
 
-const { useParams, useNavigate } = require('react-router-dom');
 const { useReportVersion, useReportVersionsList, useReportsMutations } =
   require('src/hooks/useReportsApi');
 
 const theme = createTheme();
-function Wrapper({ children }: { children: React.ReactNode }) {
-  return (
-    <MemoryRouter>
-      <ThemeProvider theme={theme}>{children}</ThemeProvider>
-    </MemoryRouter>
-  );
+
+// Tracks the current location so tests can observe navigate() calls.
+function TestLocation() {
+  const { pathname } = useLocation();
+  return <div data-testid="nav-location" style={{ display: 'none' }}>{pathname}</div>;
 }
+
+function makeWrapper(initialPath: string = '/app/reports/r1/versions/1') {
+  return function Wrapper({ children }: { children: React.ReactNode }) {
+    return (
+      <MemoryRouter initialEntries={[initialPath]}>
+        <ThemeProvider theme={theme}>
+          <TestLocation />
+          <Routes>
+            <Route path="/app/reports/:id/versions/:version" element={<>{children}</>} />
+          </Routes>
+        </ThemeProvider>
+      </MemoryRouter>
+    );
+  };
+}
+
+const Wrapper = makeWrapper();
 
 const VERSION_1 = {
   report_id: 'r1',
@@ -61,13 +70,10 @@ const VERSION_2 = {
 const ALL_VERSIONS = [VERSION_1, VERSION_2];
 
 describe('ReportVersionView', () => {
-  const mockNavigate = jest.fn();
   const mockSaveReportVersion = jest.fn();
 
   beforeEach(() => {
     jest.clearAllMocks();
-    useParams.mockReturnValue({ id: 'r1', version: '1' });
-    useNavigate.mockReturnValue(mockNavigate);
     useReportVersion.mockReturnValue({ reportVersion: VERSION_1, loading: false, error: null });
     useReportVersionsList.mockReturnValue({ versions: ALL_VERSIONS, loading: false, error: null });
     useReportsMutations.mockReturnValue({ saveReportVersion: mockSaveReportVersion });
@@ -125,11 +131,14 @@ describe('ReportVersionView', () => {
   // Back navigation
   // ---------------------------------------------------------------------------
 
-  it('navigates back to history list on "Back to history" click', () => {
+  it('navigates back to history list on "Back to history" click', async () => {
     render(<ReportVersionView />, { wrapper: Wrapper });
 
     fireEvent.click(screen.getByRole('button', { name: /back to history/i }));
-    expect(mockNavigate).toHaveBeenCalledWith('/app/reports/r1/history');
+
+    await waitFor(() => {
+      expect(screen.getByTestId('nav-location')).toHaveTextContent('/app/reports/r1/history');
+    });
   });
 
   // ---------------------------------------------------------------------------
@@ -143,9 +152,8 @@ describe('ReportVersionView', () => {
   });
 
   it('Restore button is disabled when viewing the latest version', () => {
-    useParams.mockReturnValue({ id: 'r1', version: '2' });
     useReportVersion.mockReturnValue({ reportVersion: VERSION_2, loading: false, error: null });
-    render(<ReportVersionView />, { wrapper: Wrapper });
+    render(<ReportVersionView />, { wrapper: makeWrapper('/app/reports/r1/versions/2') });
 
     expect(screen.getByRole('button', { name: /restore this version/i })).toBeDisabled();
   });
@@ -162,7 +170,10 @@ describe('ReportVersionView', () => {
         VERSION_1.config,
         'Restored from version 1'
       );
-      expect(mockNavigate).toHaveBeenCalledWith('/app/reports/r1');
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId('nav-location')).toHaveTextContent('/app/reports/r1');
     });
   });
 
@@ -175,8 +186,8 @@ describe('ReportVersionView', () => {
     await waitFor(() => {
       expect(screen.getByText('save failed')).toBeInTheDocument();
     });
-    // Should NOT navigate on failure
-    expect(mockNavigate).not.toHaveBeenCalled();
+    // Should NOT navigate on failure — still on original path
+    expect(screen.getByTestId('nav-location')).toHaveTextContent('/app/reports/r1/versions/1');
   });
 
   // ---------------------------------------------------------------------------
@@ -191,35 +202,39 @@ describe('ReportVersionView', () => {
     expect(olderBtn).toBeDisabled();
   });
 
-  it('newer button shows the next version number and navigates on click', () => {
+  it('newer button shows the next version number and navigates on click', async () => {
     // VERSION_1 → next is VERSION_2
     render(<ReportVersionView />, { wrapper: Wrapper });
 
     const newerBtn = screen.getByRole('button', { name: /v2/i });
     expect(newerBtn).not.toBeDisabled();
     fireEvent.click(newerBtn);
-    expect(mockNavigate).toHaveBeenCalledWith('/app/reports/r1/versions/2');
+
+    await waitFor(() => {
+      expect(screen.getByTestId('nav-location')).toHaveTextContent('/app/reports/r1/versions/2');
+    });
   });
 
   it('newer button is disabled and labeled "Newer" on the latest version', () => {
-    useParams.mockReturnValue({ id: 'r1', version: '2' });
     useReportVersion.mockReturnValue({ reportVersion: VERSION_2, loading: false, error: null });
-    render(<ReportVersionView />, { wrapper: Wrapper });
+    render(<ReportVersionView />, { wrapper: makeWrapper('/app/reports/r1/versions/2') });
 
     const newerBtn = screen.getByRole('button', { name: /newer/i });
     expect(newerBtn).toBeDisabled();
   });
 
-  it('older button shows the previous version number and navigates on click', () => {
+  it('older button shows the previous version number and navigates on click', async () => {
     // VERSION_2 → prev is VERSION_1
-    useParams.mockReturnValue({ id: 'r1', version: '2' });
     useReportVersion.mockReturnValue({ reportVersion: VERSION_2, loading: false, error: null });
-    render(<ReportVersionView />, { wrapper: Wrapper });
+    render(<ReportVersionView />, { wrapper: makeWrapper('/app/reports/r1/versions/2') });
 
     const olderBtn = screen.getByRole('button', { name: /v1/i });
     expect(olderBtn).not.toBeDisabled();
     fireEvent.click(olderBtn);
-    expect(mockNavigate).toHaveBeenCalledWith('/app/reports/r1/versions/1');
+
+    await waitFor(() => {
+      expect(screen.getByTestId('nav-location')).toHaveTextContent('/app/reports/r1/versions/1');
+    });
   });
 
   it('both nav buttons are disabled when only one version exists', () => {

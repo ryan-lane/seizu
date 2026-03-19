@@ -1,5 +1,5 @@
 import { render, screen, fireEvent, waitFor, cleanup } from '@testing-library/react';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter, Routes, Route, useLocation } from 'react-router-dom';
 import { ThemeProvider, createTheme } from '@mui/material/styles';
 import ReportHistory from 'src/pages/ReportHistory';
 
@@ -7,25 +7,30 @@ jest.mock('react-helmet', () => ({
   Helmet: ({ children }: { children: React.ReactNode }) => <>{children}</>
 }));
 
-jest.mock('react-router-dom', () => ({
-  ...jest.requireActual('react-router-dom'),
-  useParams: jest.fn(),
-  useNavigate: jest.fn()
-}));
-
 jest.mock('src/hooks/useReportsApi', () => ({
   useReportVersionsList: jest.fn(),
   useReportsMutations: jest.fn()
 }));
 
-const { useParams, useNavigate } = require('react-router-dom');
 const { useReportVersionsList, useReportsMutations } = require('src/hooks/useReportsApi');
 
 const theme = createTheme();
+
+// Tracks the current location so tests can observe navigate() calls.
+function TestLocation() {
+  const { pathname } = useLocation();
+  return <div data-testid="nav-location" style={{ display: 'none' }}>{pathname}</div>;
+}
+
 function Wrapper({ children }: { children: React.ReactNode }) {
   return (
-    <MemoryRouter>
-      <ThemeProvider theme={theme}>{children}</ThemeProvider>
+    <MemoryRouter initialEntries={['/app/reports/r1/history']}>
+      <ThemeProvider theme={theme}>
+        <TestLocation />
+        <Routes>
+          <Route path="/app/reports/:id/history" element={<>{children}</>} />
+        </Routes>
+      </ThemeProvider>
     </MemoryRouter>
   );
 }
@@ -51,13 +56,10 @@ const VERSION_2 = {
 };
 
 describe('ReportHistory', () => {
-  const mockNavigate = jest.fn();
   const mockSaveReportVersion = jest.fn();
 
   beforeEach(() => {
     jest.clearAllMocks();
-    useParams.mockReturnValue({ id: 'r1' });
-    useNavigate.mockReturnValue(mockNavigate);
     useReportVersionsList.mockReturnValue({
       versions: [VERSION_1, VERSION_2],
       loading: false,
@@ -119,11 +121,14 @@ describe('ReportHistory', () => {
     );
   });
 
-  it('navigates back to the report on "Back to report" click', () => {
+  it('navigates back to the report on "Back to report" click', async () => {
     render(<ReportHistory />, { wrapper: Wrapper });
 
     fireEvent.click(screen.getByRole('button', { name: /back to report/i }));
-    expect(mockNavigate).toHaveBeenCalledWith('/app/reports/r1');
+
+    await waitFor(() => {
+      expect(screen.getByTestId('nav-location')).toHaveTextContent('/app/reports/r1');
+    });
   });
 
   it('shows loading spinner while loading', () => {
@@ -151,7 +156,7 @@ describe('ReportHistory', () => {
     expect(screen.getByText('No versions found.')).toBeInTheDocument();
   });
 
-  it('opens the per-row menu and navigates to version view on View click', () => {
+  it('opens the per-row menu and navigates to version view on View click', async () => {
     render(<ReportHistory />, { wrapper: Wrapper });
 
     // Open menu for the first data row (v2, the current version)
@@ -159,7 +164,10 @@ describe('ReportHistory', () => {
     fireEvent.click(menuButtons[0]);
 
     fireEvent.click(screen.getByRole('menuitem', { name: /view/i }));
-    expect(mockNavigate).toHaveBeenCalledWith('/app/reports/r1/versions/2');
+
+    await waitFor(() => {
+      expect(screen.getByTestId('nav-location')).toHaveTextContent('/app/reports/r1/versions/2');
+    });
   });
 
   it('Restore menu item is disabled for the current version', () => {
@@ -203,7 +211,10 @@ describe('ReportHistory', () => {
         VERSION_1.config,
         'Restored from version 1'
       );
-      expect(mockNavigate).toHaveBeenCalledWith('/app/reports/r1');
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId('nav-location')).toHaveTextContent('/app/reports/r1');
     });
   });
 });
