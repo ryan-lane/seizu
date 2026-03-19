@@ -32,6 +32,7 @@ import {
 import Add from '@mui/icons-material/Add';
 import DeleteIcon from '@mui/icons-material/Delete';
 import EditIcon from '@mui/icons-material/Edit';
+import HistoryIcon from '@mui/icons-material/History';
 import DashboardIcon from '@mui/icons-material/Dashboard';
 import DashboardOutlinedIcon from '@mui/icons-material/DashboardOutlined';
 import MoreVertIcon from '@mui/icons-material/MoreVert';
@@ -53,10 +54,11 @@ interface RowMenuProps {
   isDashboard: boolean;
   onSetDashboard: () => void;
   onEdit: () => void;
+  onHistory: () => void;
   onDelete: () => void;
 }
 
-function RowMenu({ report: _report, isDashboard, onSetDashboard, onEdit, onDelete }: RowMenuProps) {
+function RowMenu({ report: _report, isDashboard, onSetDashboard, onEdit, onHistory, onDelete }: RowMenuProps) {
   const [anchor, setAnchor] = useState<null | HTMLElement>(null);
 
   const close = () => setAnchor(null);
@@ -82,6 +84,13 @@ function RowMenu({ report: _report, isDashboard, onSetDashboard, onEdit, onDelet
         >
           <ListItemIcon><EditIcon fontSize="small" /></ListItemIcon>
           <ListItemText>Edit</ListItemText>
+        </MenuItem>
+
+        <MenuItem
+          onClick={() => { onHistory(); close(); }}
+        >
+          <ListItemIcon><HistoryIcon fontSize="small" /></ListItemIcon>
+          <ListItemText>View history</ListItemText>
         </MenuItem>
 
         <MenuItem
@@ -259,6 +268,7 @@ function ReportsList() {
                           isDashboard={isDashboard}
                           onSetDashboard={() => handleSetDashboard(report.report_id)}
                           onEdit={() => navigate(`/app/reports/${report.report_id}?edit=true`)}
+                          onHistory={() => navigate(`/app/reports/${report.report_id}/history`)}
                           onDelete={() => setDeleteTarget(report)}
                         />
                       </TableCell>

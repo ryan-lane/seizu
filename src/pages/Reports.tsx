@@ -4,6 +4,7 @@ import { Box, Button, Typography } from '@mui/material';
 import { ThreeDots } from 'react-loader-spinner';
 import Error from '@mui/icons-material/Error';
 import EditIcon from '@mui/icons-material/Edit';
+import HistoryIcon from '@mui/icons-material/History';
 
 import ReportView from 'src/components/ReportView';
 import EditableReportView from 'src/components/EditableReportView';
@@ -82,7 +83,15 @@ function Reports() {
 
   return (
     <Box>
-      <Box sx={{ display: 'flex', justifyContent: 'flex-end', px: 3, pt: 2 }}>
+      <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1, px: 3, pt: 2 }}>
+        <Button
+          variant="outlined"
+          size="small"
+          startIcon={<HistoryIcon />}
+          onClick={() => navigate(`/app/reports/${id}/history`)}
+        >
+          History
+        </Button>
         <Button
           variant="outlined"
           size="small"
