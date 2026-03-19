@@ -63,12 +63,28 @@ Reports can be created, edited, and deleted at runtime through the Seizu UI with
 Navigate to **Reports** in the sidebar to view all reports. From the list you can:
 
 - Click a report name to view it.
-- Open the **⋮** menu on any row to **Edit**, **Set as dashboard**, or **Delete** a report.
+- Open the **⋮** menu on any row to **Edit**, **View history**, **Set as dashboard**, or **Delete** a report.
 - A **Dashboard** badge is shown inline on whichever report is currently set as the dashboard.
 
 ### Creating a report
 
 Click **New report** on the Reports list page, enter a name, and confirm. An empty report is created immediately and opened in edit mode so you can start adding rows and panels.
+
+### Version history
+
+Every save creates a new numbered version; the full history is always available. To access it:
+
+- Click **History** (top-right when viewing a report), or
+- Choose **View history** from the ⋮ menu in the Reports list.
+
+The history page lists all versions newest-first, showing the version number, save date, author, and save comment. The current (latest) version is labeled **current**.
+
+Click a version number to open a read-only view of that version. From the version view you can:
+
+- Use the **← v_N_** / **v_N_ →** buttons in the toolbar to step through older and newer versions without returning to the list.
+- Click **Restore this version** to save the historical config as a new latest version. The button is disabled when viewing the current version.
+
+Restoring a version never deletes history — it creates a new version whose config matches the restored one.
 
 ### Editing a report
 

@@ -266,6 +266,82 @@ export function useReportsMutations(): {
   return { createReport, saveReportVersion, setDashboardReport, deleteReport };
 }
 
+export function useReportVersionsList(reportId: string | undefined): {
+  versions: ReportVersion[];
+  loading: boolean;
+  error: Error | null;
+} {
+  const { accessToken } = useContext(AuthContext);
+  const { auth_required } = useContext(AuthConfigContext);
+  const [versions, setVersions] = useState<ReportVersion[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<Error | null>(null);
+
+  useEffect(() => {
+    if (!reportId) return;
+    if (auth_required && !accessToken) return;
+
+    setLoading(true);
+    fetch(`/api/v1/reports/${reportId}/versions`, { headers: getApiHeaders(accessToken) })
+      .then((res) => {
+        if (!res.ok) throw new Error(`Failed to load versions: ${res.status}`);
+        return res.json();
+      })
+      .then((data: { versions: ReportVersion[] }) => {
+        setVersions(data.versions ?? []);
+        setLoading(false);
+      })
+      .catch((err: Error) => {
+        setError(err);
+        setLoading(false);
+      });
+  }, [reportId, accessToken, auth_required]);
+
+  return { versions, loading, error };
+}
+
+export function useReportVersion(
+  reportId: string | undefined,
+  versionNum: string | undefined
+): {
+  reportVersion: ReportVersion | undefined;
+  loading: boolean;
+  error: Error | null;
+} {
+  const { accessToken } = useContext(AuthContext);
+  const { auth_required } = useContext(AuthConfigContext);
+  const [reportVersion, setReportVersion] = useState<ReportVersion | undefined>(undefined);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<Error | null>(null);
+
+  useEffect(() => {
+    if (!reportId || !versionNum) return;
+    if (auth_required && !accessToken) return;
+
+    setLoading(true);
+    setReportVersion(undefined);
+    setError(null);
+
+    fetch(`/api/v1/reports/${reportId}/versions/${versionNum}`, {
+      headers: getApiHeaders(accessToken)
+    })
+      .then((res) => {
+        if (!res.ok) throw new Error(`Failed to load version: ${res.status}`);
+        return res.json();
+      })
+      .then((data: ReportVersion) => {
+        setReportVersion(data);
+        setLoading(false);
+      })
+      .catch((err: Error) => {
+        setError(err);
+        setLoading(false);
+      });
+  }, [reportId, versionNum, accessToken, auth_required]);
+
+  return { reportVersion, loading, error };
+}
+
 export function useReport(reportId: string | undefined): {
   report: Report | undefined;
   name: string | undefined;
