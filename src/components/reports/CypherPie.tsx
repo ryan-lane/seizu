@@ -12,8 +12,9 @@ import { useTheme } from '@mui/material/styles';
 import Info from '@mui/icons-material/Info';
 import Error from '@mui/icons-material/Error';
 import { ThreeDots } from 'react-loader-spinner';
+import { PieChart } from '@mui/x-charts/PieChart';
+import { blueberryTwilightPalette } from '@mui/x-charts/colorPalettes';
 import { useLazyCypherQuery, QueryRecord } from 'src/hooks/useCypherQuery';
-import { ResponsivePie } from '@nivo/pie';
 import CypherDetails from 'src/components/reports/CypherDetails';
 import QueryValidationBadge from 'src/components/reports/QueryValidationBadge';
 
@@ -36,9 +37,6 @@ export default function CypherPie({
 }: CypherPieProps) {
   const theme = useTheme();
   const [open, setOpen] = useState(false);
-  const handleClickOpen = () => {
-    setOpen(true);
-  };
 
   const [runQuery, { loading, error, records, first, warnings, queryErrors }] =
     useLazyCypherQuery(cypher);
@@ -130,7 +128,7 @@ export default function CypherPie({
     );
   }
 
-  const mungedRecords = [];
+  const pieData: { id: string; value: number; label: string }[] = [];
   for (let i = 0; i < records.length; i++) {
     const data = records[i];
     let mungedData: Record<string, unknown>;
@@ -140,64 +138,14 @@ export default function CypherPie({
     } else {
       mungedData = dataDetails.properties;
     }
-    Object.keys(mungedData).forEach((key) => {
-      if (Array.isArray(mungedData[key])) {
-        mungedData[key] = (mungedData[key] as unknown[]).join(', ');
-      }
-    });
-    mungedRecords.push(mungedData);
-  }
-
-  const legends = [];
-  let enableArcLinkLabels = true;
-  let margin = {
-    top: 40,
-    right: 80,
-    bottom: 40,
-    left: 80
-  };
-
-  if (pieSettings?.legend === 'column') {
-    margin = {
-      top: 10,
-      right: 120,
-      bottom: 10,
-      left: 20
-    };
-    enableArcLinkLabels = false;
-    legends.push({
-      anchor: 'top-right',
-      direction: 'column',
-      justify: false,
-      translateX: 120,
-      translateY: 0,
-      itemWidth: 100,
-      itemHeight: 20,
-      itemsSpacing: 0,
-      symbolSize: 20,
-      itemDirection: 'left-to-right'
-    });
-  } else if (pieSettings?.legend === 'row') {
-    margin = {
-      top: 10,
-      right: 40,
-      bottom: 40,
-      left: 40
-    };
-    enableArcLinkLabels = false;
-    legends.push({
-      anchor: 'bottom',
-      direction: 'row',
-      justify: false,
-      translateX: 0,
-      translateY: 40,
-      itemWidth: 80,
-      itemHeight: 20,
-      itemsSpacing: 10,
-      symbolSize: 20,
-      itemDirection: 'left-to-right'
+    pieData.push({
+      id: String(mungedData['id'] ?? i),
+      value: Number(mungedData['value'] ?? 0),
+      label: String(mungedData['id'] ?? i)
     });
   }
+
+  const hasLegend = !!pieSettings?.legend;
 
   return (
     <>
@@ -206,38 +154,59 @@ export default function CypherPie({
           <CardHeader title={caption} />
         </Grid>
         <Divider />
-        <Button size="small" color="inherit" onClick={handleClickOpen}>
+        <Button size="small" color="inherit" onClick={() => setOpen(true)}>
           <Info />
         </Button>
         <QueryValidationBadge errors={queryErrors} warnings={warnings} />
 
-        <div style={{ height: 350 }}>
-          <ResponsivePie
-            data={mungedRecords}
-            animate
-            isInteractive
-            activeOuterRadiusOffset={8}
-            margin={margin}
-            enableArcLinkLabels={enableArcLinkLabels}
-            arcLabelsRadiusOffset={0.7}
-            theme={{
-              text: { fill: theme.palette.text.primary },
-              labels: { text: { fill: theme.palette.text.primary } },
-              tooltip: {
-                container: { background: theme.palette.background.paper }
+        <PieChart
+          series={[{
+            data: pieData,
+            // Donut style — looks cleaner with labels
+            innerRadius: '35%',
+            outerRadius: '80%',
+            paddingAngle: 2,
+            cornerRadius: 4,
+            // Show arc labels only when no legend is configured
+            arcLabel: hasLegend ? undefined : 'label',
+            arcLabelMinAngle: 20,
+            arcLabelRadius: '60%',
+            highlightScope: { fade: 'global', highlight: 'item' },
+            // faded.innerRadius only accepts number, not string
+            faded: { additionalRadius: -4, color: theme.palette.action.disabled },
+            valueFormatter: (item) => String(item.value)
+          }]}
+          colors={blueberryTwilightPalette}
+          hideLegend={!hasLegend}
+          height={350}
+          margin={
+            pieSettings?.legend === 'column'
+              ? { top: 16, right: 160, bottom: 16, left: 16 }
+              : pieSettings?.legend === 'row'
+                ? { top: 16, right: 16, bottom: 80, left: 16 }
+                : { top: 24, right: 24, bottom: 24, left: 24 }
+          }
+          slotProps={{
+            ...(hasLegend && {
+              legend: {
+                position:
+                  pieSettings?.legend === 'column'
+                    ? { vertical: 'middle', horizontal: 'end' }
+                    : { vertical: 'bottom', horizontal: 'center' },
+                direction: pieSettings?.legend === 'column' ? 'vertical' : 'horizontal'
               }
-            }}
-            arcLabelsTextColor={{ from: theme.palette.text.secondary }}
-            sortByValue
-            legends={legends}
-          />
-        </div>
+            }),
+            pieArcLabel: {
+              style: {
+                fontFamily: theme.typography.fontFamily ?? undefined,
+                fontSize: 12,
+                fontWeight: 500
+              }
+            }
+          }}
+        />
       </Card>
-      <CypherDetails
-        details={details}
-        open={open}
-        setOpen={setOpen}
-      />
+      <CypherDetails details={details} open={open} setOpen={setOpen} />
     </>
   );
 }

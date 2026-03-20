@@ -194,11 +194,17 @@ make down && make up   # apply after changing backends
 
 **Seeding reports** from the YAML config:
 ```bash
-make seed_reports                    # seed from .config/dev/seizu/reporting-dashboard.yaml
-make seed_reports ARGS="--force"     # re-seed, overwriting existing reports by name
-make seed_reports ARGS="--dry-run"   # preview without writing
+make seed_reports                         # seed from .config/dev/seizu/reporting-dashboard.yaml
+make seed_reports ARGS="seed --force"     # save a new version even if config is unchanged
+make seed_reports ARGS="seed --dry-run"   # preview without writing
+make seed_reports ARGS="export"           # export store reports back into the YAML file
+make seed_reports ARGS="export --dry-run" # preview the exported YAML without writing
 ```
 The seed script also sets the dashboard pointer if `dashboard:` is configured in the YAML.
+
+When seeding, existing reports whose latest stored version matches the YAML are skipped; if the config has changed, a new version is saved automatically.
+
+When exporting, existing YAML keys are reused when the report name matches; otherwise a slug derived from the report name is used. The `queries` and `scheduled_queries` sections of the YAML are preserved unchanged.
 
 Each `Report` in DynamoDB has a `queries` dict (named Cypher strings). Panel `cypher` fields are resolved against this dict at render time, falling back to the literal value as a direct Cypher string when no key matches. The `Report` TypeScript interface in `src/config.context.ts` must stay in sync with the Pydantic `Report` model in `reporting/schema/reporting_config.py`.
 

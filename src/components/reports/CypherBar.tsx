@@ -12,8 +12,9 @@ import { useTheme } from '@mui/material/styles';
 import Info from '@mui/icons-material/Info';
 import Error from '@mui/icons-material/Error';
 import { ThreeDots } from 'react-loader-spinner';
+import { BarChart } from '@mui/x-charts/BarChart';
+import { blueberryTwilightPalette } from '@mui/x-charts/colorPalettes';
 import { useLazyCypherQuery, QueryRecord } from 'src/hooks/useCypherQuery';
-import { ResponsiveBar } from '@nivo/bar';
 import CypherDetails from 'src/components/reports/CypherDetails';
 import QueryValidationBadge from 'src/components/reports/QueryValidationBadge';
 
@@ -40,9 +41,6 @@ export default function CypherBar({
 }: CypherBarProps) {
   const theme = useTheme();
   const [open, setOpen] = useState(false);
-  const handleClickOpen = () => {
-    setOpen(true);
-  };
 
   const [runQuery, { loading, error, records, first, warnings, queryErrors }] =
     useLazyCypherQuery(cypher);
@@ -134,7 +132,7 @@ export default function CypherBar({
     );
   }
 
-  const mungedRecords = [];
+  const mungedRecords: Record<string, string | number>[] = [];
   for (let i = 0; i < records.length; i++) {
     const data = records[i];
     let mungedData: Record<string, unknown>;
@@ -144,61 +142,27 @@ export default function CypherBar({
     } else {
       mungedData = dataDetails.properties;
     }
+    const flat: Record<string, string | number> = {};
     Object.keys(mungedData).forEach((key) => {
-      if (Array.isArray(mungedData[key])) {
-        mungedData[key] = (mungedData[key] as unknown[]).join(', ');
+      const val = mungedData[key];
+      if (Array.isArray(val)) {
+        flat[key] = (val as unknown[]).join(', ');
+      } else if (val === null || val === undefined) {
+        flat[key] = 0;
+      } else {
+        flat[key] = val as string | number;
       }
     });
-    mungedRecords.push(mungedData);
+    mungedRecords.push(flat);
   }
 
-  const legends = [];
-  let margin = {
-    top: 20,
-    right: 20,
-    bottom: 20,
-    left: 60
+  const hasLegend = !!barSettings?.legend;
+  // Object literal without explicit React.CSSProperties type — ChartsTextStyle is stricter
+  const tickLabelStyle = {
+    fill: theme.palette.text.secondary,
+    fontFamily: theme.typography.fontFamily,
+    fontSize: 12
   };
-
-  if (barSettings?.legend === 'column') {
-    margin = {
-      top: 20,
-      right: 80,
-      bottom: 20,
-      left: 60
-    };
-    legends.push({
-      anchor: 'top-right',
-      direction: 'column',
-      justify: false,
-      translateX: 120,
-      translateY: 0,
-      itemWidth: 100,
-      itemHeight: 20,
-      itemsSpacing: 0,
-      symbolSize: 20,
-      itemDirection: 'left-to-right'
-    });
-  } else if (barSettings?.legend === 'row') {
-    margin = {
-      top: 20,
-      right: 20,
-      bottom: 60,
-      left: 60
-    };
-    legends.push({
-      anchor: 'bottom',
-      direction: 'row',
-      justify: false,
-      translateX: 0,
-      translateY: 60,
-      itemWidth: 80,
-      itemHeight: 20,
-      itemsSpacing: 10,
-      symbolSize: 20,
-      itemDirection: 'left-to-right'
-    });
-  }
 
   return (
     <>
@@ -207,33 +171,59 @@ export default function CypherBar({
           <CardHeader title={caption} />
         </Grid>
         <Divider />
-        <Button size="small" color="inherit" onClick={handleClickOpen}>
+        <Button size="small" color="inherit" onClick={() => setOpen(true)}>
           <Info />
         </Button>
         <QueryValidationBadge errors={queryErrors} warnings={warnings} />
 
-        <div style={{ height: 350 }}>
-          <ResponsiveBar
-            data={mungedRecords}
-            animate
-            isInteractive
-            margin={margin}
-            theme={{
-              text: { fill: theme.palette.text.primary },
-              labels: { text: { fill: theme.palette.text.primary } },
-              tooltip: {
-                container: { background: theme.palette.background.paper }
-              }
-            }}
-            legends={legends}
-          />
-        </div>
+        <BarChart
+          dataset={mungedRecords}
+          xAxis={[{
+            scaleType: 'band',
+            dataKey: 'id',
+            disableLine: true,
+            disableTicks: true,
+            tickLabelStyle
+          }]}
+          yAxis={[{
+            disableLine: true,
+            disableTicks: true,
+            tickLabelStyle
+          }]}
+          series={[{
+            dataKey: 'value',
+            label: caption ?? 'Value'
+          }]}
+          borderRadius={6}
+          colors={blueberryTwilightPalette}
+          grid={{ horizontal: true }}
+          hideLegend={!hasLegend}
+          height={350}
+          margin={
+            barSettings?.legend === 'column'
+              ? { top: 16, right: 150, bottom: 40, left: 48 }
+              : barSettings?.legend === 'row'
+                ? { top: 16, right: 16, bottom: 72, left: 48 }
+                : { top: 16, right: 16, bottom: 40, left: 48 }
+          }
+          slotProps={hasLegend ? {
+            legend: {
+              position:
+                barSettings?.legend === 'column'
+                  ? { vertical: 'middle', horizontal: 'end' }
+                  : { vertical: 'bottom', horizontal: 'center' },
+              direction: barSettings?.legend === 'column' ? 'vertical' : 'horizontal'
+            }
+          } : undefined}
+          sx={{
+            '& .MuiChartsGrid-line': {
+              stroke: theme.palette.divider,
+              strokeDasharray: '4 4'
+            }
+          }}
+        />
       </Card>
-      <CypherDetails
-        details={details}
-        open={open}
-        setOpen={setOpen}
-      />
+      <CypherDetails details={details} open={open} setOpen={setOpen} />
     </>
   );
 }

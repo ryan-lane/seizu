@@ -135,6 +135,7 @@
                         "count",
                         "bar",
                         "pie",
+                        "graph",
                         "progress",
                         "markdown"
                     ],
@@ -297,6 +298,21 @@
                         "\n            .. code-block:: yaml\n\n              pie_settings:\n                legend: column\n            "
                     ]
                 },
+                "graph_settings": {
+                    "anyOf": [
+                        {
+                            "$ref": "#/$defs/GraphPanelSettings"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "description": "Settings specific to graph panels.",
+                    "examples": [
+                        "\n            .. code-block:: yaml\n\n              graph_settings:\n                node_label: label\n                node_color_by: group\n            "
+                    ]
+                },
                 "metric": {
                     "anyOf": [
                         {
@@ -365,6 +381,38 @@
                 "name"
             ],
             "title": "PanelParam",
+            "type": "object"
+        },
+        "GraphPanelSettings": {
+            "properties": {
+                "node_label": {
+                    "anyOf": [
+                        {
+                            "type": "string"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "description": "The node property to display as the node label. Defaults to ``label`` if unset.",
+                    "title": "Node Label"
+                },
+                "node_color_by": {
+                    "anyOf": [
+                        {
+                            "type": "string"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "description": "The node property to use for color grouping. Defaults to ``group`` if unset.",
+                    "title": "Node Color By"
+                }
+            },
+            "title": "GraphPanelSettings",
             "type": "object"
         },
         "PiePanelSettings": {

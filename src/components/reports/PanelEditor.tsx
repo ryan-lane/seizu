@@ -28,6 +28,7 @@ const PANEL_TYPES = [
   { value: 'count', label: 'Count' },
   { value: 'bar', label: 'Bar Chart' },
   { value: 'pie', label: 'Pie Chart' },
+  { value: 'graph', label: 'Graph' },
   { value: 'progress', label: 'Progress' },
   { value: 'markdown', label: 'Markdown' }
 ];
@@ -164,6 +165,7 @@ function PanelEditor({ open, panel, onClose, onSave }: PanelEditorProps) {
 
   const isMarkdown = form.type === 'markdown';
   const hasLegend = form.type === 'bar' || form.type === 'pie';
+  const hasGraphSettings = form.type === 'graph';
   const hasThreshold = form.type === 'count' || form.type === 'progress';
   const hasColumns = form.type === 'table';
   const hasTableId = form.type === 'vertical-table';
@@ -325,6 +327,38 @@ function PanelEditor({ open, panel, onClose, onSave }: PanelEditorProps) {
             </FormControl>
           )}
 
+          {/* Graph settings */}
+          {hasGraphSettings && (
+            <>
+              <TextField
+                size="small"
+                label="Node label field"
+                value={form.graph_settings?.node_label ?? ''}
+                onChange={(e) =>
+                  set('graph_settings', {
+                    ...form.graph_settings,
+                    node_label: e.target.value || undefined
+                  })
+                }
+                helperText="Node property to display as label (default: label)."
+                sx={{ width: 300 }}
+              />
+              <TextField
+                size="small"
+                label="Node color-by field"
+                value={form.graph_settings?.node_color_by ?? ''}
+                onChange={(e) =>
+                  set('graph_settings', {
+                    ...form.graph_settings,
+                    node_color_by: e.target.value || undefined
+                  })
+                }
+                helperText="Node property to use for color grouping (default: group)."
+                sx={{ width: 300 }}
+              />
+            </>
+          )}
+
           {/* Table ID for vertical-table */}
           {hasTableId && (
             <TextField
@@ -439,6 +473,7 @@ function cleanPanel(panel: Panel): Panel {
   if (panel.table_id) result.table_id = panel.table_id;
   if (panel.bar_settings) result.bar_settings = panel.bar_settings;
   if (panel.pie_settings) result.pie_settings = panel.pie_settings;
+  if (panel.graph_settings) result.graph_settings = panel.graph_settings;
   if (panel.params?.length) result.params = panel.params;
   if (panel.columns?.length) result.columns = panel.columns;
   return result;

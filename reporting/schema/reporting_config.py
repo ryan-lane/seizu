@@ -89,6 +89,24 @@ class PiePanelSettings(BaseModel):
     )
 
 
+class GraphPanelSettings(BaseModel):
+    node_label: Optional[str] = Field(
+        default=None,
+        description=(
+            "The node property to display as the node label."
+            " Defaults to ``label`` if unset."
+        ),
+    )
+
+    node_color_by: Optional[str] = Field(
+        default=None,
+        description=(
+            "The node property to use for color grouping."
+            " Defaults to ``group`` if unset."
+        ),
+    )
+
+
 class PanelParam(BaseModel):
     name: str = Field(
         description="The parameter name to use when passing this input into the query.",
@@ -123,6 +141,7 @@ class Panel(BaseModel):
         "count",
         "bar",
         "pie",
+        "graph",
         "progress",
         "markdown",
     ] = Field(
@@ -236,6 +255,20 @@ class Panel(BaseModel):
 
               pie_settings:
                 legend: column
+            """
+        ],
+    )
+
+    graph_settings: Optional[GraphPanelSettings] = Field(
+        default=None,
+        description="Settings specific to graph panels.",
+        examples=[
+            """
+            .. code-block:: yaml
+
+              graph_settings:
+                node_label: label
+                node_color_by: group
             """
         ],
     )
