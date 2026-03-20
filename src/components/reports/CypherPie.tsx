@@ -13,6 +13,7 @@ import Info from '@mui/icons-material/Info';
 import Error from '@mui/icons-material/Error';
 import { ThreeDots } from 'react-loader-spinner';
 import { PieChart } from '@mui/x-charts/PieChart';
+import { blueberryTwilightPalette } from '@mui/x-charts/colorPalettes';
 import { useLazyCypherQuery, QueryRecord } from 'src/hooks/useCypherQuery';
 import CypherDetails from 'src/components/reports/CypherDetails';
 import QueryValidationBadge from 'src/components/reports/QueryValidationBadge';
@@ -36,9 +37,6 @@ export default function CypherPie({
 }: CypherPieProps) {
   const theme = useTheme();
   const [open, setOpen] = useState(false);
-  const handleClickOpen = () => {
-    setOpen(true);
-  };
 
   const [runQuery, { loading, error, records, first, warnings, queryErrors }] =
     useLazyCypherQuery(cypher);
@@ -140,32 +138,14 @@ export default function CypherPie({
     } else {
       mungedData = dataDetails.properties;
     }
-    const idVal = String(mungedData['id'] ?? i);
-    const numVal = Number(mungedData['value'] ?? 0);
-    pieData.push({ id: idVal, value: numVal, label: idVal });
+    pieData.push({
+      id: String(mungedData['id'] ?? i),
+      value: Number(mungedData['value'] ?? 0),
+      label: String(mungedData['id'] ?? i)
+    });
   }
 
-  const hasLegend = pieSettings?.legend === 'column' || pieSettings?.legend === 'row';
-
-  type LegendPosition = {
-    position?: { vertical: 'top' | 'middle' | 'bottom'; horizontal: 'start' | 'center' | 'end' };
-    direction?: 'vertical' | 'horizontal';
-    hidden?: boolean;
-  };
-  let legendProps: LegendPosition = { hidden: true };
-  if (pieSettings?.legend === 'column') {
-    legendProps = {
-      position: { vertical: 'middle', horizontal: 'end' },
-      direction: 'vertical',
-      hidden: false
-    };
-  } else if (pieSettings?.legend === 'row') {
-    legendProps = {
-      position: { vertical: 'bottom', horizontal: 'center' },
-      direction: 'horizontal',
-      hidden: false
-    };
-  }
+  const hasLegend = !!pieSettings?.legend;
 
   return (
     <>
@@ -174,7 +154,7 @@ export default function CypherPie({
           <CardHeader title={caption} />
         </Grid>
         <Divider />
-        <Button size="small" color="inherit" onClick={handleClickOpen}>
+        <Button size="small" color="inherit" onClick={() => setOpen(true)}>
           <Info />
         </Button>
         <QueryValidationBadge errors={queryErrors} warnings={warnings} />
@@ -182,31 +162,51 @@ export default function CypherPie({
         <PieChart
           series={[{
             data: pieData,
-            arcLabel: hasLegend ? undefined : (item) => item.label,
+            // Donut style — looks cleaner with labels
+            innerRadius: '35%',
+            outerRadius: '80%',
+            paddingAngle: 2,
+            cornerRadius: 4,
+            // Show arc labels only when no legend is configured
+            arcLabel: hasLegend ? undefined : 'label',
             arcLabelMinAngle: 20,
+            arcLabelRadius: '60%',
             highlightScope: { fade: 'global', highlight: 'item' },
+            // faded.innerRadius only accepts number, not string
+            faded: { additionalRadius: -4, color: theme.palette.action.disabled },
             valueFormatter: (item) => String(item.value)
           }]}
+          colors={blueberryTwilightPalette}
+          hideLegend={!hasLegend}
           height={350}
           margin={
             pieSettings?.legend === 'column'
-              ? { top: 10, right: 160, bottom: 10, left: 10 }
+              ? { top: 16, right: 160, bottom: 16, left: 16 }
               : pieSettings?.legend === 'row'
-                ? { top: 10, right: 10, bottom: 80, left: 10 }
-                : { top: 40, right: 80, bottom: 40, left: 80 }
+                ? { top: 16, right: 16, bottom: 80, left: 16 }
+                : { top: 24, right: 24, bottom: 24, left: 24 }
           }
-          slotProps={{ legend: legendProps }}
-          sx={{
-            '& .MuiChartsArcLabel-root': { fill: theme.palette.text.primary },
-            '& .MuiChartsTooltip-root': { background: theme.palette.background.paper }
+          slotProps={{
+            ...(hasLegend && {
+              legend: {
+                position:
+                  pieSettings?.legend === 'column'
+                    ? { vertical: 'middle', horizontal: 'end' }
+                    : { vertical: 'bottom', horizontal: 'center' },
+                direction: pieSettings?.legend === 'column' ? 'vertical' : 'horizontal'
+              }
+            }),
+            pieArcLabel: {
+              style: {
+                fontFamily: theme.typography.fontFamily ?? undefined,
+                fontSize: 12,
+                fontWeight: 500
+              }
+            }
           }}
         />
       </Card>
-      <CypherDetails
-        details={details}
-        open={open}
-        setOpen={setOpen}
-      />
+      <CypherDetails details={details} open={open} setOpen={setOpen} />
     </>
   );
 }

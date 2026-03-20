@@ -13,6 +13,7 @@ import Info from '@mui/icons-material/Info';
 import Error from '@mui/icons-material/Error';
 import { ThreeDots } from 'react-loader-spinner';
 import { BarChart } from '@mui/x-charts/BarChart';
+import { blueberryTwilightPalette } from '@mui/x-charts/colorPalettes';
 import { useLazyCypherQuery, QueryRecord } from 'src/hooks/useCypherQuery';
 import CypherDetails from 'src/components/reports/CypherDetails';
 import QueryValidationBadge from 'src/components/reports/QueryValidationBadge';
@@ -40,9 +41,6 @@ export default function CypherBar({
 }: CypherBarProps) {
   const theme = useTheme();
   const [open, setOpen] = useState(false);
-  const handleClickOpen = () => {
-    setOpen(true);
-  };
 
   const [runQuery, { loading, error, records, first, warnings, queryErrors }] =
     useLazyCypherQuery(cypher);
@@ -158,26 +156,13 @@ export default function CypherBar({
     mungedRecords.push(flat);
   }
 
-  // Determine legend slot props based on barSettings
-  type LegendPosition = {
-    position?: { vertical: 'top' | 'middle' | 'bottom'; horizontal: 'start' | 'center' | 'end' };
-    direction?: 'vertical' | 'horizontal';
-    hidden?: boolean;
+  const hasLegend = !!barSettings?.legend;
+  // Object literal without explicit React.CSSProperties type — ChartsTextStyle is stricter
+  const tickLabelStyle = {
+    fill: theme.palette.text.secondary,
+    fontFamily: theme.typography.fontFamily,
+    fontSize: 12
   };
-  let legendProps: LegendPosition = { hidden: true };
-  if (barSettings?.legend === 'column') {
-    legendProps = {
-      position: { vertical: 'middle', horizontal: 'end' },
-      direction: 'vertical',
-      hidden: false
-    };
-  } else if (barSettings?.legend === 'row') {
-    legendProps = {
-      position: { vertical: 'bottom', horizontal: 'center' },
-      direction: 'horizontal',
-      hidden: false
-    };
-  }
 
   return (
     <>
@@ -186,7 +171,7 @@ export default function CypherBar({
           <CardHeader title={caption} />
         </Grid>
         <Divider />
-        <Button size="small" color="inherit" onClick={handleClickOpen}>
+        <Button size="small" color="inherit" onClick={() => setOpen(true)}>
           <Info />
         </Button>
         <QueryValidationBadge errors={queryErrors} warnings={warnings} />
@@ -196,32 +181,49 @@ export default function CypherBar({
           xAxis={[{
             scaleType: 'band',
             dataKey: 'id',
-            tickLabelStyle: { fill: theme.palette.text.primary }
+            disableLine: true,
+            disableTicks: true,
+            tickLabelStyle
           }]}
           yAxis={[{
-            tickLabelStyle: { fill: theme.palette.text.primary }
+            disableLine: true,
+            disableTicks: true,
+            tickLabelStyle
           }]}
-          series={[{ dataKey: 'value', label: caption ?? 'Value' }]}
+          series={[{
+            dataKey: 'value',
+            label: caption ?? 'Value'
+          }]}
+          borderRadius={6}
+          colors={blueberryTwilightPalette}
+          grid={{ horizontal: true }}
+          hideLegend={!hasLegend}
           height={350}
           margin={
             barSettings?.legend === 'column'
-              ? { top: 20, right: 140, bottom: 40, left: 60 }
+              ? { top: 16, right: 150, bottom: 40, left: 48 }
               : barSettings?.legend === 'row'
-                ? { top: 20, right: 20, bottom: 80, left: 60 }
-                : { top: 20, right: 20, bottom: 40, left: 60 }
+                ? { top: 16, right: 16, bottom: 72, left: 48 }
+                : { top: 16, right: 16, bottom: 40, left: 48 }
           }
-          slotProps={{ legend: legendProps }}
+          slotProps={hasLegend ? {
+            legend: {
+              position:
+                barSettings?.legend === 'column'
+                  ? { vertical: 'middle', horizontal: 'end' }
+                  : { vertical: 'bottom', horizontal: 'center' },
+              direction: barSettings?.legend === 'column' ? 'vertical' : 'horizontal'
+            }
+          } : undefined}
           sx={{
-            '& .MuiChartsAxis-tickLabel': { fill: theme.palette.text.primary },
-            '& .MuiChartsTooltip-root': { background: theme.palette.background.paper }
+            '& .MuiChartsGrid-line': {
+              stroke: theme.palette.divider,
+              strokeDasharray: '4 4'
+            }
           }}
         />
       </Card>
-      <CypherDetails
-        details={details}
-        open={open}
-        setOpen={setOpen}
-      />
+      <CypherDetails details={details} open={open} setOpen={setOpen} />
     </>
   );
 }
