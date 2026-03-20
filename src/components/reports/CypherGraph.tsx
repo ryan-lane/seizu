@@ -82,6 +82,64 @@ export default function CypherGraph({
     }
   }, [cypher, params, runQuery]);
 
+  // Derive theme-dependent values before any early returns so that the
+  // useCallback below is always called unconditionally (Rules of Hooks).
+  const nodeLabelKey = graphSettings?.node_label ?? 'label';
+  const nodeColorByKey = graphSettings?.node_color_by ?? 'group';
+  const colorMap = new Map<string, string>();
+
+  const isDark = theme.palette.mode === 'dark';
+  const bgColor = theme.palette.background.paper;
+  const textSecondary = theme.palette.text.secondary;
+  const linkCol = theme.palette.divider;
+  const arrowCol = isDark
+    ? alpha(theme.palette.text.secondary, 0.6)
+    : alpha(theme.palette.text.secondary, 0.5);
+
+  // Draw each node as a themed circle + label
+  const paintNode = useCallback(
+    (node: object, ctx: CanvasRenderingContext2D, globalScale: number) => {
+      const n = node as GraphNode;
+      const x = n.x as number ?? 0;
+      const y = n.y as number ?? 0;
+      const groupVal = String(n[nodeColorByKey] ?? 'default');
+      const nodeColor = colorForGroup(groupVal, colorMap);
+      const label = String(n[nodeLabelKey] ?? n.id ?? '');
+
+      // Node circle
+      ctx.beginPath();
+      ctx.arc(x, y, NODE_R, 0, 2 * Math.PI);
+      ctx.fillStyle = nodeColor;
+      ctx.fill();
+      // Subtle ring matching the paper bg so nodes pop on the background
+      ctx.strokeStyle = bgColor;
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+
+      // Label below the node — only render when zoomed in enough to be readable
+      const fontSize = Math.max(6, 11 / globalScale);
+      if (globalScale >= 0.6) {
+        ctx.font = `${fontSize}px ${theme.typography.fontFamily ?? 'sans-serif'}`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'top';
+        // Pill background so label is legible on any background
+        const textWidth = ctx.measureText(label).width;
+        const padding = 2 / globalScale;
+        const bx = x - textWidth / 2 - padding;
+        const by = y + NODE_R + 2 / globalScale;
+        const bw = textWidth + padding * 2;
+        const bh = fontSize + padding * 2;
+        ctx.fillStyle = alpha(bgColor, 0.75);
+        ctx.fillRect(bx, by, bw, bh);
+        ctx.fillStyle = textSecondary;
+        ctx.fillText(label, x, by + padding);
+      }
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [nodeLabelKey, nodeColorByKey, bgColor, textSecondary, theme.typography.fontFamily]
+  );
+
+  // Early returns must come after all hooks above.
   if (cypher === undefined) {
     return (
       <Card>
@@ -183,64 +241,6 @@ export default function CypherGraph({
       </Card>
     );
   }
-
-  const nodeLabelKey = graphSettings?.node_label ?? 'label';
-  const nodeColorByKey = graphSettings?.node_color_by ?? 'group';
-  const colorMap = new Map<string, string>();
-
-  const isDark = theme.palette.mode === 'dark';
-  const bgColor = theme.palette.background.paper;
-  const textColor = theme.palette.text.primary;
-  const textSecondary = theme.palette.text.secondary;
-  // Use the theme divider colour for links
-  const linkCol = theme.palette.divider;
-  // Arrow colour slightly more prominent
-  const arrowCol = isDark
-    ? alpha(theme.palette.text.secondary, 0.6)
-    : alpha(theme.palette.text.secondary, 0.5);
-
-  // Draw each node as a themed circle + label
-  const paintNode = useCallback(
-    (node: object, ctx: CanvasRenderingContext2D, globalScale: number) => {
-      const n = node as GraphNode;
-      const x = n.x as number ?? 0;
-      const y = n.y as number ?? 0;
-      const groupVal = String(n[nodeColorByKey] ?? 'default');
-      const nodeColor = colorForGroup(groupVal, colorMap);
-      const label = String(n[nodeLabelKey] ?? n.id ?? '');
-
-      // Node circle
-      ctx.beginPath();
-      ctx.arc(x, y, NODE_R, 0, 2 * Math.PI);
-      ctx.fillStyle = nodeColor;
-      ctx.fill();
-      // Subtle ring matching the paper bg so nodes pop on the background
-      ctx.strokeStyle = bgColor;
-      ctx.lineWidth = 1.5;
-      ctx.stroke();
-
-      // Label below the node — only render when zoomed in enough to be readable
-      const fontSize = Math.max(6, 11 / globalScale);
-      if (globalScale >= 0.6) {
-        ctx.font = `${fontSize}px ${theme.typography.fontFamily ?? 'sans-serif'}`;
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'top';
-        // Pill background so label is legible on any background
-        const textWidth = ctx.measureText(label).width;
-        const padding = 2 / globalScale;
-        const bx = x - textWidth / 2 - padding;
-        const by = y + NODE_R + 2 / globalScale;
-        const bw = textWidth + padding * 2;
-        const bh = fontSize + padding * 2;
-        ctx.fillStyle = alpha(bgColor, 0.75);
-        ctx.fillRect(bx, by, bw, bh);
-        ctx.fillStyle = textSecondary;
-        ctx.fillText(label, x, by + padding);
-      }
-    },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [nodeLabelKey, nodeColorByKey, bgColor, textSecondary, theme.typography.fontFamily]
-  );
 
   return (
     <Card>
