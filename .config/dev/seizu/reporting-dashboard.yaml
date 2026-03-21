@@ -38,7 +38,7 @@ reports:
           collect(distinct {id: c.base_severity, label: c.base_severity, group: 'severity'}) AS severity_nodes,
           collect({id: c.id, label: c.id, group: c.base_severity}) AS cve_nodes,
           collect({source: c.id, target: c.base_severity}) AS links
-        RETURN {nodes: severity_nodes + cve_nodes, links: links} AS graph
+        RETURN {nodes: severity_nodes + cve_nodes, links: links}
     rows:
       - name: CVEs as count and progress panels
         panels:
