@@ -489,18 +489,19 @@ def test_update_user_profile_updates_last_login_when_iat_is_newer(store, mocker)
         "reporting.services.report_store.sql.generate_report_id",
         return_value="uid1",
     )
-    old_iat = datetime(2024, 1, 1, tzinfo=timezone.utc)
-    new_iat = datetime(2024, 6, 1, tzinfo=timezone.utc)
+    # Use future dates so both are guaranteed newer than the creation-time `now`
+    first_iat = datetime(2030, 1, 1, tzinfo=timezone.utc)
+    second_iat = datetime(2030, 6, 1, tzinfo=timezone.utc)
     store.get_or_create_user(
         sub="sub123", iss="https://idp.example.com", email="alice@example.com"
     )
     store.update_user_profile(
-        user_id="uid1", email="alice@example.com", token_iat=old_iat
+        user_id="uid1", email="alice@example.com", token_iat=first_iat
     )
     user = store.update_user_profile(
-        user_id="uid1", email="alice@example.com", token_iat=new_iat
+        user_id="uid1", email="alice@example.com", token_iat=second_iat
     )
-    assert user.last_login == new_iat.isoformat()
+    assert user.last_login == second_iat.isoformat()
 
 
 def test_update_user_profile_does_not_update_last_login_when_iat_is_older(
@@ -512,18 +513,19 @@ def test_update_user_profile_does_not_update_last_login_when_iat_is_older(
         "reporting.services.report_store.sql.generate_report_id",
         return_value="uid1",
     )
-    new_iat = datetime(2024, 6, 1, tzinfo=timezone.utc)
-    old_iat = datetime(2024, 1, 1, tzinfo=timezone.utc)
+    # Use future dates so both are newer than creation-time `now`
+    newer_iat = datetime(2030, 6, 1, tzinfo=timezone.utc)
+    older_iat = datetime(2030, 1, 1, tzinfo=timezone.utc)
     store.get_or_create_user(
         sub="sub123", iss="https://idp.example.com", email="alice@example.com"
     )
     store.update_user_profile(
-        user_id="uid1", email="alice@example.com", token_iat=new_iat
+        user_id="uid1", email="alice@example.com", token_iat=newer_iat
     )
     user = store.update_user_profile(
-        user_id="uid1", email="alice@example.com", token_iat=old_iat
+        user_id="uid1", email="alice@example.com", token_iat=older_iat
     )
-    assert user.last_login == new_iat.isoformat()
+    assert user.last_login == newer_iat.isoformat()
 
 
 def test_get_or_create_user_different_sub_creates_separate_users(store, mocker):

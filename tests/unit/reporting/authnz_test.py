@@ -209,7 +209,9 @@ def test_get_user_extracts_sub_and_iss(mocker):
         "reporting.services.report_store.get_or_create_user",
         return_value=fake_user,
     )
-    result = reporting.authnz.get_user()
+    app = create_app({"SECRET_KEY": "fake", "PREFERRED_URL_SCHEME": "https"})
+    with app.test_request_context():
+        result = reporting.authnz.get_user()
     mock_get_or_create.assert_called_once_with(
         sub="sub123",
         iss="https://idp.example.com",
@@ -236,7 +238,9 @@ def test_get_user_auth_disabled_uses_dev_sub(mocker):
         "reporting.services.report_store.get_or_create_user",
         return_value=fake_user,
     )
-    reporting.authnz.get_user()
+    app = create_app({"SECRET_KEY": "fake", "PREFERRED_URL_SCHEME": "https"})
+    with app.test_request_context():
+        reporting.authnz.get_user()
     mock_get_or_create.assert_called_once_with(
         sub="devuser",
         iss="dev",

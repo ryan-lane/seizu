@@ -741,21 +741,21 @@ def test_get_or_create_user_returns_existing_user_on_lookup_hit(patch_table, sto
         "SK": "https://idp.example.com#sub123",
         "user_id": "uid1",
     }
-    # First get_item call: lookup hit
-    # update_item call: returns updated attributes
-    patch_table.get_item.return_value = {"Item": lookup_item}
-    patch_table.update_item.return_value = {
-        "Attributes": {
-            "PK": "USER#uid1",
-            "SK": "#METADATA",
-            "user_id": "uid1",
-            "sub": "sub123",
-            "iss": "https://idp.example.com",
-            "email": "alice@example.com",
-            "created_at": "2024-01-01T00:00:00+00:00",
-            "last_login": "2024-02-01T00:00:00+00:00",
-        }
+    profile_item = {
+        "PK": "USER#uid1",
+        "SK": "#METADATA",
+        "user_id": "uid1",
+        "sub": "sub123",
+        "iss": "https://idp.example.com",
+        "email": "alice@example.com",
+        "created_at": "2024-01-01T00:00:00+00:00",
+        "last_login": "2024-01-01T00:00:00+00:00",
     }
+    # First call: lookup hit; second call: profile fetch
+    patch_table.get_item.side_effect = [
+        {"Item": lookup_item},
+        {"Item": profile_item},
+    ]
 
     from reporting.schema.report_config import User
 
@@ -765,6 +765,7 @@ def test_get_or_create_user_returns_existing_user_on_lookup_hit(patch_table, sto
     assert isinstance(user, User)
     assert user.user_id == "uid1"
     patch_table.put_item.assert_not_called()
+    patch_table.update_item.assert_not_called()
 
 
 # ---------------------------------------------------------------------------
