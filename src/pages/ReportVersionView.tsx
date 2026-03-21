@@ -17,6 +17,7 @@ import RestoreIcon from '@mui/icons-material/Restore';
 import Error from '@mui/icons-material/Error';
 
 import ReportView from 'src/components/ReportView';
+import UserDisplay from 'src/components/UserDisplay';
 import { useReportVersion, useReportVersionsList, useReportsMutations } from 'src/hooks/useReportsApi';
 import { Report } from 'src/config.context';
 
@@ -141,7 +142,7 @@ function ReportVersionView() {
             {' · '}
             {new Date(reportVersion.created_at).toLocaleString()}
             {' · '}
-            {reportVersion.created_by}
+            <UserDisplay userId={reportVersion.created_by} />
             {reportVersion.comment && ` · "${reportVersion.comment}"`}
           </Typography>
         </Box>

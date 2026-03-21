@@ -671,3 +671,137 @@ def test_save_report_version_nested_none_config_produces_no_nones(patch_table, s
     items = patch_table.meta.client.transact_write_items.call_args[1]["TransactItems"]
     for item_op in items:
         assert not _contains_none(item_op["Put"]["Item"])
+
+
+# ---------------------------------------------------------------------------
+# get_or_create_user
+# ---------------------------------------------------------------------------
+
+
+def _user_profile_item(user_id="uid1"):
+    return {
+        "PK": f"USER#{user_id}",
+        "SK": "#METADATA",
+        "user_id": user_id,
+        "sub": "sub123",
+        "iss": "https://idp.example.com",
+        "email": "alice@example.com",
+        "display_name": "Alice",
+        "created_at": "2024-01-01T00:00:00+00:00",
+        "last_seen_at": "2024-01-01T00:00:00+00:00",
+    }
+
+
+def test_get_or_create_user_creates_new_user(patch_table, store, mocker):
+    mocker.patch(
+        "reporting.services.report_store.dynamodb.generate_report_id",
+        return_value="uid1",
+    )
+    # Lookup returns nothing (new user)
+    patch_table.get_item.return_value = {}
+
+    from reporting.schema.report_config import User
+
+    user = store.get_or_create_user(
+        sub="sub123",
+        iss="https://idp.example.com",
+        email="alice@example.com",
+        display_name="Alice",
+    )
+    assert isinstance(user, User)
+    assert user.user_id == "uid1"
+    assert user.sub == "sub123"
+    assert user.email == "alice@example.com"
+
+
+def test_get_or_create_user_creates_lookup_and_profile_items(
+    patch_table, store, mocker
+):
+    mocker.patch(
+        "reporting.services.report_store.dynamodb.generate_report_id",
+        return_value="uid1",
+    )
+    patch_table.get_item.return_value = {}
+
+    store.get_or_create_user(
+        sub="sub123", iss="https://idp.example.com", email="alice@example.com"
+    )
+
+    # put_item called twice: once for lookup (conditional), once for profile
+    assert patch_table.put_item.call_count == 2
+    call_items = [c[1]["Item"] for c in patch_table.put_item.call_args_list]
+    pks = {item["PK"] for item in call_items}
+    assert "USER_LOOKUP" in pks
+    assert "USER#uid1" in pks
+
+
+def test_get_or_create_user_returns_existing_user_on_lookup_hit(patch_table, store):
+    lookup_item = {
+        "PK": "USER_LOOKUP",
+        "SK": "https://idp.example.com#sub123",
+        "user_id": "uid1",
+    }
+    # First get_item call: lookup hit
+    # update_item call: returns updated attributes
+    patch_table.get_item.return_value = {"Item": lookup_item}
+    patch_table.update_item.return_value = {
+        "Attributes": {
+            "PK": "USER#uid1",
+            "SK": "#METADATA",
+            "user_id": "uid1",
+            "sub": "sub123",
+            "iss": "https://idp.example.com",
+            "email": "alice@example.com",
+            "created_at": "2024-01-01T00:00:00+00:00",
+            "last_seen_at": "2024-02-01T00:00:00+00:00",
+        }
+    }
+
+    from reporting.schema.report_config import User
+
+    user = store.get_or_create_user(
+        sub="sub123", iss="https://idp.example.com", email="alice@example.com"
+    )
+    assert isinstance(user, User)
+    assert user.user_id == "uid1"
+    patch_table.put_item.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# get_user
+# ---------------------------------------------------------------------------
+
+
+def test_get_user_not_found(patch_table, store):
+    patch_table.get_item.return_value = {}
+    assert store.get_user("nonexistent") is None
+
+
+def test_get_user_returns_user(patch_table, store):
+    patch_table.get_item.return_value = {"Item": _user_profile_item()}
+    from reporting.schema.report_config import User
+
+    user = store.get_user("uid1")
+    assert isinstance(user, User)
+    assert user.user_id == "uid1"
+    assert user.email == "alice@example.com"
+
+
+# ---------------------------------------------------------------------------
+# archive_user
+# ---------------------------------------------------------------------------
+
+
+def test_archive_user_returns_false_when_not_found(patch_table, store):
+    patch_table.get_item.return_value = {}
+    assert store.archive_user("nonexistent") is False
+
+
+def test_archive_user_updates_archived_at(patch_table, store):
+    patch_table.get_item.return_value = {"Item": _user_profile_item()}
+    result = store.archive_user("uid1")
+    assert result is True
+    patch_table.update_item.assert_called_once()
+    kwargs = patch_table.update_item.call_args[1]
+    assert kwargs["Key"] == {"PK": "USER#uid1", "SK": "#METADATA"}
+    assert "archived_at" in kwargs["UpdateExpression"]

@@ -75,3 +75,16 @@ class CreateVersionRequest(BaseModel):
 
     config: Dict[str, Any]
     comment: Optional[str] = None
+
+
+class User(BaseModel):
+    """A user record, created on first login (JIT provisioning)."""
+
+    user_id: str
+    sub: str
+    iss: str
+    email: str
+    display_name: Optional[str] = None
+    created_at: str
+    last_seen_at: str
+    archived_at: Optional[str] = None

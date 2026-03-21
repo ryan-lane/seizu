@@ -1,11 +1,16 @@
 import logging
+from functools import wraps
+from typing import Any
+from typing import Callable
 from typing import Dict
 
 import jwt
+from flask import g
 from flask import request
 from jwt import PyJWKClient
 
 from reporting import settings
+from reporting.schema.report_config import User
 
 logger = logging.getLogger(__name__)
 
@@ -65,3 +70,50 @@ def get_email() -> str:
         return email
     payload = _get_jwt_payload()
     return payload[settings.JWT_EMAIL_CLAIM]
+
+
+def get_user() -> User:
+    """Validate the JWT and return a persisted User, creating one on first login.
+
+    Extracts ``sub``, ``iss``, ``email``, and optionally ``name`` from the JWT
+    payload, then calls the report store's ``get_or_create_user`` to upsert
+    the user record.  In development mode (auth disabled) a synthetic dev user
+    is created using the configured ``DEVELOPMENT_ONLY_AUTH_USER_EMAIL``.
+    """
+    from reporting.services import report_store
+
+    if not settings.DEVELOPMENT_ONLY_REQUIRE_AUTH:
+        email = settings.DEVELOPMENT_ONLY_AUTH_USER_EMAIL
+        logger.warning(
+            "Authentication is disabled",
+            extra={"type": "AUDIT", "user": email},
+        )
+        return report_store.get_or_create_user(
+            sub=email,
+            iss="dev",
+            email=email,
+            display_name=None,
+        )
+    payload = _get_jwt_payload()
+    return report_store.get_or_create_user(
+        sub=payload[settings.JWT_SUB_CLAIM],
+        iss=payload[settings.JWT_ISS_CLAIM],
+        email=payload[settings.JWT_EMAIL_CLAIM],
+        display_name=payload.get("name"),
+    )
+
+
+def require_auth(f: Callable) -> Callable:
+    """Decorator that validates the JWT and populates ``flask.g.current_user``.
+
+    Apply to any route that requires authentication.  The resolved
+    :class:`~reporting.schema.report_config.User` is available inside the
+    decorated function as ``g.current_user``.
+    """
+
+    @wraps(f)
+    def decorated(*args: Any, **kwargs: Any) -> Any:
+        g.current_user = get_user()
+        return f(*args, **kwargs)
+
+    return decorated

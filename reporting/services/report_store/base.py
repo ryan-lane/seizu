@@ -7,6 +7,7 @@ from typing import Optional
 
 from reporting.schema.report_config import ReportListItem
 from reporting.schema.report_config import ReportVersion
+from reporting.schema.report_config import User
 
 
 class ReportStore(ABC):
@@ -77,3 +78,28 @@ class ReportStore(ABC):
     @abstractmethod
     def get_dashboard_report(self) -> Optional[ReportVersion]:
         """Return the latest version of the dashboard report, or None if not set."""
+
+    @abstractmethod
+    def get_or_create_user(
+        self,
+        sub: str,
+        iss: str,
+        email: str,
+        display_name: Optional[str] = None,
+    ) -> User:
+        """Get an existing user by (iss, sub) or create a new one on first login.
+
+        If the user already exists, ``email`` and ``last_seen_at`` are updated.
+        Returns the User model.
+        """
+
+    @abstractmethod
+    def get_user(self, user_id: str) -> Optional[User]:
+        """Return a user by their internal user_id, or None if not found."""
+
+    @abstractmethod
+    def archive_user(self, user_id: str) -> bool:
+        """Soft-delete a user by setting archived_at.
+
+        Returns False if the user does not exist.
+        """

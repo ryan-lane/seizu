@@ -35,6 +35,8 @@
     "@mui/material": "^7.3.9",
     "@mui/styles": "^6.4.8",
     "@mui/x-charts": "^8.27.5",
+    "@xyflow/react": "^12.0.0",
+    "boring-avatars": "^2.0.4",
     "formik": "^2.4.9",
     "history": "^5.0.0",
     "markdown-to-jsx": "^9.7.9",
@@ -49,8 +51,7 @@
     "react-helmet": "^6.1.0",
     "react-loader-spinner": "^8.0.2",
     "react-promise-tracker": "^2.1.1",
-    "react-router-dom": "^7.13.1",
-    "@xyflow/react": "^12.0.0"
+    "react-router-dom": "^7.13.1"
   },
   "devDependencies": {
     "@happy-dom/global-registrator": "^20.8.4",

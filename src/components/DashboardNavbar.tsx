@@ -6,14 +6,17 @@ import {
   Button,
   IconButton,
   Snackbar,
-  Toolbar
+  Toolbar,
+  Typography
 } from '@mui/material';
 import Cached from '@mui/icons-material/Cached';
 import MenuIcon from '@mui/icons-material/Menu';
 
 import { SeizuConfig } from 'src/config.context';
+import { useCurrentUser } from 'src/hooks/useCurrentUser';
 import Logo from './Logo';
 import Hidden from './Hidden';
+import UserAvatar from './UserAvatar';
 
 interface DashboardNavbarProps extends Omit<AppBarProps, 'children'> {
   configUpdate?: SeizuConfig;
@@ -29,6 +32,8 @@ function DashboardNavbar({
   onMobileNavOpen,
   ...rest
 }: DashboardNavbarProps) {
+  const currentUser = useCurrentUser();
+
   const handleRefresh = () => {
     if (configUpdate) {
       setConfig(configUpdate);
@@ -55,6 +60,14 @@ function DashboardNavbar({
           action={refresh}
         />
         <Box sx={{ flexGrow: 1 }} />
+        {currentUser && (
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, ml: 1 }}>
+            <Typography variant="body2" color="inherit">
+              {currentUser.display_name ?? currentUser.email}
+            </Typography>
+            <UserAvatar name={currentUser.display_name ?? currentUser.email} />
+          </Box>
+        )}
         <Hidden lgUp>
           <IconButton color="inherit" onClick={onMobileNavOpen}>
             <MenuIcon />

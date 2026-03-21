@@ -50,8 +50,8 @@ def _serialize_neo4j_value(value: Any) -> Any:
 
 
 @blueprint.route("/api/v1/query", methods=["POST"])
+@authnz.require_auth
 def query() -> Response:
-    authnz.get_email()
 
     if not request.is_json:
         resp = jsonify(error="Request must be JSON")

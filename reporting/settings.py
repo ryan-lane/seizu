@@ -47,6 +47,12 @@ ALLOWED_JWT_ALGORITHMS = list_env("ALLOWED_JWT_ALGORITHMS", ["RS256", "ES256", "
 JWT_HEADER_NAME = str_env("JWT_HEADER_NAME", "Authorization")
 # The JWT claim that contains the user's email address.
 JWT_EMAIL_CLAIM = str_env("JWT_EMAIL_CLAIM", "email")
+# The JWT claim that contains the user's subject identifier.
+# The OIDC standard claim is "sub" and it should not be changed in most cases.
+JWT_SUB_CLAIM = str_env("JWT_SUB_CLAIM", "sub")
+# The JWT claim that contains the token issuer.
+# The OIDC standard claim is "iss" and it should not be changed in most cases.
+JWT_ISS_CLAIM = str_env("JWT_ISS_CLAIM", "iss")
 # Optional issuer to validate in the JWT. Leave empty to skip issuer validation.
 JWT_ISSUER = str_env("JWT_ISSUER", "")
 # Optional audience to validate in the JWT. Leave empty to skip audience validation.

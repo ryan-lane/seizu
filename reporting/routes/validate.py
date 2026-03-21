@@ -12,8 +12,8 @@ blueprint = blueprints.Blueprint("validate", __name__)
 
 
 @blueprint.route("/api/v1/validate", methods=["POST"])
+@authnz.require_auth
 def validate() -> Response:
-    authnz.get_email()
 
     if not request.is_json:
         resp = jsonify(error="Request must be JSON")
