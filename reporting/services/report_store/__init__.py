@@ -1,4 +1,5 @@
 import logging
+from datetime import datetime
 from typing import Any
 from typing import Dict
 from typing import List
@@ -6,6 +7,7 @@ from typing import Optional
 
 from reporting.schema.report_config import ReportListItem
 from reporting.schema.report_config import ReportVersion
+from reporting.schema.report_config import User
 from reporting.services.report_store.base import ReportStore
 
 logger = logging.getLogger(__name__)
@@ -100,3 +102,39 @@ def set_dashboard_report(report_id: str) -> bool:
 
 def get_dashboard_report() -> Optional[ReportVersion]:
     return get_store().get_dashboard_report()
+
+
+def get_or_create_user(
+    sub: str,
+    iss: str,
+    email: str,
+    display_name: Optional[str] = None,
+) -> User:
+    return get_store().get_or_create_user(
+        sub=sub,
+        iss=iss,
+        email=email,
+        display_name=display_name,
+    )
+
+
+def update_user_profile(
+    user_id: str,
+    email: str,
+    display_name: Optional[str] = None,
+    token_iat: Optional[datetime] = None,
+) -> User:
+    return get_store().update_user_profile(
+        user_id=user_id,
+        email=email,
+        display_name=display_name,
+        token_iat=token_iat,
+    )
+
+
+def get_user(user_id: str) -> Optional[User]:
+    return get_store().get_user(user_id)
+
+
+def archive_user(user_id: str) -> bool:
+    return get_store().archive_user(user_id)

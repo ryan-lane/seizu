@@ -1,5 +1,15 @@
 from reporting.app import create_app
+from reporting.schema.report_config import User
 from reporting.services.query_validator import ValidationResult
+
+_FAKE_USER = User(
+    user_id="test-user-id",
+    sub="sub123",
+    iss="https://idp.example.com",
+    email="test@example.com",
+    created_at="2024-01-01T00:00:00+00:00",
+    last_login="2024-01-01T00:00:00+00:00",
+)
 
 
 def _app_settings():
@@ -23,8 +33,8 @@ def _mock_validate(mocker, errors=None, warnings=None):
 def test_validate_success(mocker):
     mocker.patch("reporting.settings.CSRF_DISABLE", True)
     mocker.patch(
-        "reporting.routes.validate.authnz.get_email",
-        return_value="test@example.com",
+        "reporting.routes.validate.authnz.get_user",
+        return_value=_FAKE_USER,
     )
     _mock_validate(mocker)
 
@@ -43,8 +53,8 @@ def test_validate_with_errors_still_returns_200(mocker):
     """Validation errors are returned in the body with 200; 400 is for bad requests."""
     mocker.patch("reporting.settings.CSRF_DISABLE", True)
     mocker.patch(
-        "reporting.routes.validate.authnz.get_email",
-        return_value="test@example.com",
+        "reporting.routes.validate.authnz.get_user",
+        return_value=_FAKE_USER,
     )
     _mock_validate(mocker, errors=["Write queries are not allowed"])
 
@@ -62,8 +72,8 @@ def test_validate_with_errors_still_returns_200(mocker):
 def test_validate_with_warnings(mocker):
     mocker.patch("reporting.settings.CSRF_DISABLE", True)
     mocker.patch(
-        "reporting.routes.validate.authnz.get_email",
-        return_value="test@example.com",
+        "reporting.routes.validate.authnz.get_user",
+        return_value=_FAKE_USER,
     )
     _mock_validate(mocker, warnings=["Unknown label: Foo", "Unknown property: bar"])
 
@@ -81,8 +91,8 @@ def test_validate_with_warnings(mocker):
 def test_validate_with_errors_and_warnings(mocker):
     mocker.patch("reporting.settings.CSRF_DISABLE", True)
     mocker.patch(
-        "reporting.routes.validate.authnz.get_email",
-        return_value="test@example.com",
+        "reporting.routes.validate.authnz.get_user",
+        return_value=_FAKE_USER,
     )
     _mock_validate(
         mocker,
@@ -104,8 +114,8 @@ def test_validate_with_errors_and_warnings(mocker):
 def test_validate_no_json_body(mocker):
     mocker.patch("reporting.settings.CSRF_DISABLE", True)
     mocker.patch(
-        "reporting.routes.validate.authnz.get_email",
-        return_value="test@example.com",
+        "reporting.routes.validate.authnz.get_user",
+        return_value=_FAKE_USER,
     )
 
     app = create_app(_app_settings())
@@ -122,8 +132,8 @@ def test_validate_no_json_body(mocker):
 def test_validate_missing_query_field(mocker):
     mocker.patch("reporting.settings.CSRF_DISABLE", True)
     mocker.patch(
-        "reporting.routes.validate.authnz.get_email",
-        return_value="test@example.com",
+        "reporting.routes.validate.authnz.get_user",
+        return_value=_FAKE_USER,
     )
 
     app = create_app(_app_settings())
@@ -140,8 +150,8 @@ def test_validate_no_csrf(mocker):
     mocker.patch("reporting.settings.CSRF_DISABLE", False)
     mocker.patch("reporting.settings.SECRET_KEY", "fake")
     mocker.patch(
-        "reporting.routes.validate.authnz.get_email",
-        return_value="test@example.com",
+        "reporting.routes.validate.authnz.get_user",
+        return_value=_FAKE_USER,
     )
 
     app = create_app(_app_settings())
@@ -157,8 +167,8 @@ def test_validate_with_csrf(mocker, helpers):
     mocker.patch("reporting.settings.CSRF_DISABLE", False)
     mocker.patch("reporting.settings.SECRET_KEY", "fake")
     mocker.patch(
-        "reporting.routes.validate.authnz.get_email",
-        return_value="test@example.com",
+        "reporting.routes.validate.authnz.get_user",
+        return_value=_FAKE_USER,
     )
     _mock_validate(mocker)
 

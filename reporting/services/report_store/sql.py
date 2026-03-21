@@ -22,6 +22,7 @@ from sqlmodel import SQLModel
 from reporting import settings
 from reporting.schema.report_config import ReportListItem
 from reporting.schema.report_config import ReportVersion
+from reporting.schema.report_config import User
 from reporting.services.report_store.base import ReportStore
 
 logger = logging.getLogger(__name__)
@@ -61,6 +62,19 @@ class ReportRecord(SQLModel, table=True):  # type: ignore
     current_version: int = 0
     created_at: str
     updated_at: str
+
+
+class UserRecord(SQLModel, table=True):  # type: ignore
+    __tablename__ = "users"
+    __table_args__ = (UniqueConstraint("iss", "sub"),)
+    user_id: str = Field(primary_key=True)
+    sub: str
+    iss: str
+    email: str
+    display_name: Optional[str] = None
+    created_at: str
+    last_login: str
+    archived_at: Optional[str] = None
 
 
 # ---------------------------------------------------------------------------
@@ -328,3 +342,109 @@ class SQLModelReportStore(ReportStore):
         if not report_id:
             return None
         return self.get_report_latest(report_id)
+
+    def get_or_create_user(
+        self,
+        sub: str,
+        iss: str,
+        email: str,
+        display_name: Optional[str] = None,
+    ) -> User:
+        now = datetime.now(tz=timezone.utc).isoformat()
+        with Session(_get_engine()) as session:
+            stmt = (
+                select(UserRecord)
+                .where(UserRecord.iss == iss)
+                .where(UserRecord.sub == sub)
+            )
+            record = session.exec(stmt).first()
+            if not record:
+                user_id = generate_report_id()
+                record = UserRecord(
+                    user_id=user_id,
+                    sub=sub,
+                    iss=iss,
+                    email=email,
+                    display_name=display_name,
+                    created_at=now,
+                    last_login=now,
+                    archived_at=None,
+                )
+                session.add(record)
+                session.commit()
+                session.refresh(record)
+        return User(
+            user_id=record.user_id,
+            sub=record.sub,
+            iss=record.iss,
+            email=record.email,
+            display_name=record.display_name,
+            created_at=record.created_at,
+            last_login=record.last_login,
+            archived_at=record.archived_at,
+        )
+
+    def update_user_profile(
+        self,
+        user_id: str,
+        email: str,
+        display_name: Optional[str] = None,
+        token_iat: Optional[datetime] = None,
+    ) -> User:
+        with Session(_get_engine()) as session:
+            record = session.get(UserRecord, user_id)
+            if not record:
+                raise ValueError(f"User {user_id!r} not found")
+            changed = False
+            if record.email != email:
+                record.email = email
+                changed = True
+            if display_name is not None and record.display_name != display_name:
+                record.display_name = display_name
+                changed = True
+            if token_iat is not None:
+                stored = datetime.fromisoformat(record.last_login)
+                if token_iat > stored:
+                    record.last_login = token_iat.isoformat()
+                    changed = True
+            if changed:
+                session.add(record)
+                session.commit()
+                session.refresh(record)
+        return User(
+            user_id=record.user_id,
+            sub=record.sub,
+            iss=record.iss,
+            email=record.email,
+            display_name=record.display_name,
+            created_at=record.created_at,
+            last_login=record.last_login,
+            archived_at=record.archived_at,
+        )
+
+    def get_user(self, user_id: str) -> Optional[User]:
+        with Session(_get_engine()) as session:
+            record = session.get(UserRecord, user_id)
+            if not record:
+                return None
+            return User(
+                user_id=record.user_id,
+                sub=record.sub,
+                iss=record.iss,
+                email=record.email,
+                display_name=record.display_name,
+                created_at=record.created_at,
+                last_login=record.last_login,
+                archived_at=record.archived_at,
+            )
+
+    def archive_user(self, user_id: str) -> bool:
+        now = datetime.now(tz=timezone.utc).isoformat()
+        with Session(_get_engine()) as session:
+            record = session.get(UserRecord, user_id)
+            if not record:
+                return False
+            record.archived_at = now
+            session.add(record)
+            session.commit()
+        return True

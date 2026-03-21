@@ -1,6 +1,17 @@
 from reporting.app import create_app
 from reporting.schema.report_config import ReportListItem
 from reporting.schema.report_config import ReportVersion
+from reporting.schema.report_config import User
+
+_FAKE_USER = User(
+    user_id="test-user-id",
+    sub="sub123",
+    iss="https://idp.example.com",
+    email="user@example.com",
+    display_name="Test User",
+    created_at="2024-01-01T00:00:00+00:00",
+    last_login="2024-01-01T00:00:00+00:00",
+)
 
 
 def _app_settings():
@@ -13,8 +24,8 @@ def _app_settings():
 def _make_app(mocker):
     mocker.patch("reporting.settings.CSRF_DISABLE", True)
     mocker.patch(
-        "reporting.routes.reports.authnz.get_email",
-        return_value="user@example.com",
+        "reporting.routes.reports.authnz.get_user",
+        return_value=_FAKE_USER,
     )
     mocker.patch("reporting.settings.DYNAMODB_CREATE_TABLE", False)
     return create_app(_app_settings())
@@ -246,7 +257,7 @@ def test_create_report_passes_fields_to_service(mocker):
     )
     mock_create.assert_called_once_with(
         name="My Report",
-        created_by="user@example.com",
+        created_by="test-user-id",
     )
 
 
@@ -303,7 +314,7 @@ def test_create_version_passes_fields_to_service(mocker):
     mock_save.assert_called_once_with(
         report_id="rid1",
         config={"rows": [{"name": "r"}]},
-        created_by="user@example.com",
+        created_by="test-user-id",
         comment="update",
     )
 

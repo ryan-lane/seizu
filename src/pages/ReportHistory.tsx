@@ -31,6 +31,7 @@ import Error from '@mui/icons-material/Error';
 
 import { ReportVersion, useReportVersionsList, useReportsMutations } from 'src/hooks/useReportsApi';
 import { Report } from 'src/config.context';
+import UserDisplay from 'src/components/UserDisplay';
 
 // ---------------------------------------------------------------------------
 // Per-row overflow menu
@@ -199,7 +200,7 @@ function ReportHistory() {
                       <TableCell sx={{ color: 'text.secondary', whiteSpace: 'nowrap' }}>
                         {new Date(v.created_at).toLocaleString()}
                       </TableCell>
-                      <TableCell sx={{ color: 'text.secondary' }}>{v.created_by}</TableCell>
+                      <TableCell sx={{ color: 'text.secondary' }}><UserDisplay userId={v.created_by} /></TableCell>
                       <TableCell sx={{ color: 'text.secondary' }}>
                         {v.comment ? (
                           <Tooltip title={v.comment}>

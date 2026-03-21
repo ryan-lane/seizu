@@ -12,6 +12,7 @@ from sqlmodel import SQLModel
 
 from reporting.schema.report_config import ReportListItem
 from reporting.schema.report_config import ReportVersion
+from reporting.schema.report_config import User
 from reporting.services.report_store import sql as sql_module
 from reporting.services.report_store.sql import SQLModelReportStore
 
@@ -69,6 +70,7 @@ def test_initialize_creates_tables(mocker):
     assert "report_versions" in table_names
     assert "dashboard_pointer" in table_names
     assert "reports" in table_names
+    assert "users" in table_names
 
 
 # ---------------------------------------------------------------------------
@@ -392,3 +394,195 @@ def test_delete_report_does_not_clear_other_dashboard_pointer(store, mocker):
     store.set_dashboard_report("rid2")
     store.delete_report("rid1")
     assert store.get_dashboard_report_id() == "rid2"
+
+
+# ---------------------------------------------------------------------------
+# get_or_create_user
+# ---------------------------------------------------------------------------
+
+
+def test_get_or_create_user_creates_new_user(store, mocker):
+    mocker.patch(
+        "reporting.services.report_store.sql.generate_report_id",
+        return_value="uid1",
+    )
+    user = store.get_or_create_user(
+        sub="sub123",
+        iss="https://idp.example.com",
+        email="alice@example.com",
+        display_name="Alice",
+    )
+    assert isinstance(user, User)
+    assert user.user_id == "uid1"
+    assert user.sub == "sub123"
+    assert user.iss == "https://idp.example.com"
+    assert user.email == "alice@example.com"
+    assert user.display_name == "Alice"
+    assert user.archived_at is None
+
+
+def test_get_or_create_user_returns_existing_user(store, mocker):
+    ids = iter(["uid1", "uid2"])
+    mocker.patch(
+        "reporting.services.report_store.sql.generate_report_id",
+        side_effect=lambda: next(ids),
+    )
+    store.get_or_create_user(
+        sub="sub123", iss="https://idp.example.com", email="alice@example.com"
+    )
+    # Second call with same (iss, sub) must not create a new user
+    user = store.get_or_create_user(
+        sub="sub123", iss="https://idp.example.com", email="alice@example.com"
+    )
+    assert user.user_id == "uid1"
+
+
+def test_get_or_create_user_returns_existing_without_update(store, mocker):
+    """Subsequent calls with a changed email must not update the stored record."""
+    ids = iter(["uid1", "uid2"])
+    mocker.patch(
+        "reporting.services.report_store.sql.generate_report_id",
+        side_effect=lambda: next(ids),
+    )
+    store.get_or_create_user(
+        sub="sub123", iss="https://idp.example.com", email="old@example.com"
+    )
+    user = store.get_or_create_user(
+        sub="sub123", iss="https://idp.example.com", email="new@example.com"
+    )
+    assert user.email == "old@example.com"
+
+
+# ---------------------------------------------------------------------------
+# update_user_profile
+# ---------------------------------------------------------------------------
+
+
+def test_update_user_profile_updates_email_when_changed(store, mocker):
+    mocker.patch(
+        "reporting.services.report_store.sql.generate_report_id",
+        return_value="uid1",
+    )
+    store.get_or_create_user(
+        sub="sub123", iss="https://idp.example.com", email="old@example.com"
+    )
+    user = store.update_user_profile(user_id="uid1", email="new@example.com")
+    assert user.email == "new@example.com"
+
+
+def test_update_user_profile_no_write_when_nothing_changed(store, mocker):
+    mocker.patch(
+        "reporting.services.report_store.sql.generate_report_id",
+        return_value="uid1",
+    )
+    store.get_or_create_user(
+        sub="sub123", iss="https://idp.example.com", email="alice@example.com"
+    )
+    user = store.update_user_profile(user_id="uid1", email="alice@example.com")
+    assert user.email == "alice@example.com"
+
+
+def test_update_user_profile_updates_last_login_when_iat_is_newer(store, mocker):
+    from datetime import datetime, timezone
+
+    mocker.patch(
+        "reporting.services.report_store.sql.generate_report_id",
+        return_value="uid1",
+    )
+    # Use future dates so both are guaranteed newer than the creation-time `now`
+    first_iat = datetime(2030, 1, 1, tzinfo=timezone.utc)
+    second_iat = datetime(2030, 6, 1, tzinfo=timezone.utc)
+    store.get_or_create_user(
+        sub="sub123", iss="https://idp.example.com", email="alice@example.com"
+    )
+    store.update_user_profile(
+        user_id="uid1", email="alice@example.com", token_iat=first_iat
+    )
+    user = store.update_user_profile(
+        user_id="uid1", email="alice@example.com", token_iat=second_iat
+    )
+    assert user.last_login == second_iat.isoformat()
+
+
+def test_update_user_profile_does_not_update_last_login_when_iat_is_older(
+    store, mocker
+):
+    from datetime import datetime, timezone
+
+    mocker.patch(
+        "reporting.services.report_store.sql.generate_report_id",
+        return_value="uid1",
+    )
+    # Use future dates so both are newer than creation-time `now`
+    newer_iat = datetime(2030, 6, 1, tzinfo=timezone.utc)
+    older_iat = datetime(2030, 1, 1, tzinfo=timezone.utc)
+    store.get_or_create_user(
+        sub="sub123", iss="https://idp.example.com", email="alice@example.com"
+    )
+    store.update_user_profile(
+        user_id="uid1", email="alice@example.com", token_iat=newer_iat
+    )
+    user = store.update_user_profile(
+        user_id="uid1", email="alice@example.com", token_iat=older_iat
+    )
+    assert user.last_login == newer_iat.isoformat()
+
+
+def test_get_or_create_user_different_sub_creates_separate_users(store, mocker):
+    ids = iter(["uid1", "uid2"])
+    mocker.patch(
+        "reporting.services.report_store.sql.generate_report_id",
+        side_effect=lambda: next(ids),
+    )
+    u1 = store.get_or_create_user(
+        sub="sub-alice", iss="https://idp.example.com", email="shared@example.com"
+    )
+    u2 = store.get_or_create_user(
+        sub="sub-bob", iss="https://idp.example.com", email="shared@example.com"
+    )
+    assert u1.user_id != u2.user_id
+
+
+# ---------------------------------------------------------------------------
+# get_user
+# ---------------------------------------------------------------------------
+
+
+def test_get_user_not_found(store):
+    assert store.get_user("nonexistent") is None
+
+
+def test_get_user_returns_created_user(store, mocker):
+    mocker.patch(
+        "reporting.services.report_store.sql.generate_report_id",
+        return_value="uid1",
+    )
+    store.get_or_create_user(
+        sub="sub123", iss="https://idp.example.com", email="alice@example.com"
+    )
+    user = store.get_user("uid1")
+    assert isinstance(user, User)
+    assert user.user_id == "uid1"
+    assert user.email == "alice@example.com"
+
+
+# ---------------------------------------------------------------------------
+# archive_user
+# ---------------------------------------------------------------------------
+
+
+def test_archive_user_returns_false_for_missing(store):
+    assert store.archive_user("nonexistent") is False
+
+
+def test_archive_user_sets_archived_at(store, mocker):
+    mocker.patch(
+        "reporting.services.report_store.sql.generate_report_id",
+        return_value="uid1",
+    )
+    store.get_or_create_user(
+        sub="sub123", iss="https://idp.example.com", email="alice@example.com"
+    )
+    assert store.archive_user("uid1") is True
+    user = store.get_user("uid1")
+    assert user.archived_at is not None

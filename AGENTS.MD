@@ -119,6 +119,13 @@ React 19 + TypeScript, built with Bun, using Material-UI for components, MUI X C
 - `src/components/QueryConsoleSchemaPanel.tsx` — collapsible database browser sidebar for the query console; queries `CALL db.labels()`, `CALL db.relationshipTypes()`, and `CALL db.propertyKeys()` to show available schema; clicking an item inserts and runs a discovery query
 - All POST requests must include the `X-CSRFToken` header
 
+**User identity display conventions:**
+- `src/hooks/useCurrentUser.ts` — `useCurrentUser()` fetches `GET /api/v1/me` and returns the logged-in user; works in both auth-enabled and auth-disabled modes
+- `src/hooks/useUser.ts` — `useUser(userId)` fetches `GET /api/v1/users/<userId>` to resolve an arbitrary user_id to a profile
+- `src/components/UserAvatar.tsx` — renders a `boring-avatars` pixel SVG avatar seeded by name/email; use `<UserAvatar name={...} />` wherever an avatar is needed
+- `src/components/UserDisplay.tsx` — resolves a stored `created_by` user_id (or legacy email string) to `display_name ?? email`; use `<UserDisplay userId={...} />` wherever a user name needs to be rendered from a stored ID
+- **Convention:** always show `display_name` when available, falling back to `email`. Never display raw user_ids or `sub` values in the UI.
+
 ### Backend (`reporting/`)
 
 Flask 2 app, Python 3.12, using Gunicorn+Gevent in production.
@@ -126,7 +133,7 @@ Flask 2 app, Python 3.12, using Gunicorn+Gevent in production.
 **Key files and patterns:**
 - `reporting/app.py` — Flask app factory (`create_app`)
 - `reporting/settings.py` — all configuration via env vars (Pydantic validators)
-- `reporting/routes/` — Flask blueprints: `config.py`, `query.py`, `reports.py`, `static.py`
+- `reporting/routes/` — Flask blueprints: `config.py`, `me.py`, `query.py`, `reports.py`, `static.py`, `users.py`
 - `reporting/services/` — business logic: `reporting_neo4j.py` (Neo4j driver + distributed locking), `report_store/` (pluggable report storage; see below), `query_validator.py` (multi-stage Cypher validation), `reporting_statsd.py`
 - `reporting/schema/reporting_config.py` — Pydantic models that validate the YAML config (`queries`, `dashboard`, `reports`, `scheduled_queries`)
 - `reporting/schema/report_config.py` — Pydantic models for DynamoDB report items and API request/response schemas
@@ -160,6 +167,8 @@ Warnings (non-blocking):
 | GET | `/api/v1/reports/<id>/versions/<n>` | Returns a specific version of a report |
 | POST | `/api/v1/reports/<id>/versions` | Saves a new version of a report; returns 201 |
 | DELETE | `/api/v1/reports/<id>` | Deletes a report and all its versions; clears dashboard pointer if needed |
+| GET | `/api/v1/me` | Returns the current authenticated user's profile (`user_id`, `sub`, `iss`, `email`, `display_name`, `created_at`, `last_seen_at`, `archived_at`) |
+| GET | `/api/v1/users/<user_id>` | Returns a user profile by internal `user_id`; 404 if not found |
 | GET | `/healthcheck` | Healthcheck |
 
 ### Configuration System

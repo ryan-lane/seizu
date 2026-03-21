@@ -13,6 +13,7 @@ from snowflake import SnowflakeGenerator
 from reporting import settings
 from reporting.schema.report_config import ReportListItem
 from reporting.schema.report_config import ReportVersion
+from reporting.schema.report_config import User
 from reporting.services import get_boto_resource
 from reporting.services.report_store.base import ReportStore
 
@@ -32,6 +33,8 @@ _SK_VERSION_PREFIX = "VERSION#"
 # Dashboard pointer — a single item that records which report is the default dashboard.
 _PK_DASHBOARD = "#DASHBOARD"
 _SK_DASHBOARD_POINTER = "#POINTER"
+# User lookup — PK is shared; SK encodes iss + sub for lookup by external identity.
+_PK_USER_LOOKUP = "USER_LOOKUP"
 
 
 # ---------------------------------------------------------------------------
@@ -84,6 +87,27 @@ def _version_sk(version: int) -> str:
 def generate_report_id() -> str:
     """Return a new unique snowflake ID string."""
     return str(next(_get_snowflake_gen()))
+
+
+def _user_pk(user_id: str) -> str:
+    return f"USER#{user_id}"
+
+
+def _user_lookup_sk(iss: str, sub: str) -> str:
+    return f"{iss}#{sub}"
+
+
+def _user_from_item(item: Dict) -> User:
+    return User(
+        user_id=item["user_id"],
+        sub=item["sub"],
+        iss=item["iss"],
+        email=item["email"],
+        display_name=item.get("display_name"),
+        created_at=item["created_at"],
+        last_login=item.get("last_login", item.get("last_seen_at", "")),
+        archived_at=item.get("archived_at"),
+    )
 
 
 def _strip_none(value: Any) -> Any:
@@ -379,3 +403,180 @@ class DynamoDBReportStore(ReportStore):
         if not report_id:
             return None
         return self.get_report_latest(report_id)
+
+    def _update_user_profile(
+        self,
+        table: Any,
+        user_id: str,
+        email: str,
+        display_name: Optional[str],
+        token_iat: Optional[datetime],
+    ) -> User:
+        """Apply an email/display_name update and conditionally advance last_login."""
+        update_exp = "SET email = :e"
+        exp_values: Dict = {":e": email}
+        if display_name is not None:
+            update_exp += ", display_name = :d"
+            exp_values[":d"] = display_name
+        if token_iat is not None:
+            iat_str = token_iat.isoformat()
+            try:
+                resp = table.update_item(
+                    Key={"PK": _user_pk(user_id), "SK": _SK_METADATA},
+                    UpdateExpression=update_exp + ", last_login = :t",
+                    ConditionExpression="last_login < :t",
+                    ExpressionAttributeValues={**exp_values, ":t": iat_str},
+                    ReturnValues="ALL_NEW",
+                )
+                return _user_from_item(resp["Attributes"])
+            except table.meta.client.exceptions.ConditionalCheckFailedException:
+                pass  # Token not newer — update email only
+        resp = table.update_item(
+            Key={"PK": _user_pk(user_id), "SK": _SK_METADATA},
+            UpdateExpression=update_exp,
+            ExpressionAttributeValues=exp_values,
+            ReturnValues="ALL_NEW",
+        )
+        return _user_from_item(resp["Attributes"])
+
+    def get_or_create_user(
+        self,
+        sub: str,
+        iss: str,
+        email: str,
+        display_name: Optional[str] = None,
+    ) -> User:
+        """Get an existing user by (iss, sub), or create one on first login.
+
+        Existing users are returned as-is; no fields are updated.
+        Uses a conditional put on the lookup item to handle concurrent
+        first-login requests for the same user without creating duplicates.
+        """
+        table = _get_table()
+        now = datetime.now(tz=timezone.utc).isoformat()
+        lookup_sk = _user_lookup_sk(iss, sub)
+
+        # Fast path: existing user — return without updating
+        lookup_resp = table.get_item(
+            Key={"PK": _PK_USER_LOOKUP, "SK": lookup_sk},
+        )
+        lookup_item = lookup_resp.get("Item")
+
+        if lookup_item:
+            user_id = lookup_item["user_id"]
+            profile_resp = table.get_item(
+                Key={"PK": _user_pk(user_id), "SK": _SK_METADATA},
+            )
+            return _user_from_item(profile_resp["Item"])
+
+        # New user — use a conditional put so concurrent first-logins are safe
+        user_id = generate_report_id()
+        profile_item = _strip_none(
+            {
+                "PK": _user_pk(user_id),
+                "SK": _SK_METADATA,
+                "user_id": user_id,
+                "sub": sub,
+                "iss": iss,
+                "email": email,
+                "display_name": display_name,
+                "created_at": now,
+                "last_login": now,
+                "archived_at": None,
+            }
+        )
+        new_lookup_item = {
+            "PK": _PK_USER_LOOKUP,
+            "SK": lookup_sk,
+            "user_id": user_id,
+        }
+
+        try:
+            table.put_item(
+                Item=new_lookup_item,
+                ConditionExpression="attribute_not_exists(PK)",
+            )
+            table.put_item(Item=profile_item)
+        except table.meta.client.exceptions.ConditionalCheckFailedException:
+            # Another worker created this user concurrently; read and return it
+            lookup_resp2 = table.get_item(
+                Key={"PK": _PK_USER_LOOKUP, "SK": lookup_sk},
+            )
+            user_id = lookup_resp2["Item"]["user_id"]
+            profile_resp = table.get_item(
+                Key={"PK": _user_pk(user_id), "SK": _SK_METADATA},
+            )
+            return _user_from_item(profile_resp["Item"])
+
+        return User(
+            user_id=user_id,
+            sub=sub,
+            iss=iss,
+            email=email,
+            display_name=display_name,
+            created_at=now,
+            last_login=now,
+            archived_at=None,
+        )
+
+    def update_user_profile(
+        self,
+        user_id: str,
+        email: str,
+        display_name: Optional[str] = None,
+        token_iat: Optional[datetime] = None,
+    ) -> User:
+        """Sync mutable profile fields, writing only what has changed."""
+        table = _get_table()
+        profile_resp = table.get_item(
+            Key={"PK": _user_pk(user_id), "SK": _SK_METADATA},
+        )
+        item = profile_resp.get("Item")
+        if not item:
+            raise ValueError(f"User {user_id!r} not found")
+        stored_user = _user_from_item(item)
+
+        email_changed = stored_user.email != email
+        name_changed = (
+            display_name is not None and stored_user.display_name != display_name
+        )
+        iat_newer = token_iat is not None and token_iat > datetime.fromisoformat(
+            stored_user.last_login
+        )
+
+        if not (email_changed or name_changed or iat_newer):
+            return stored_user
+
+        return self._update_user_profile(
+            table,
+            user_id,
+            email,
+            display_name if name_changed else None,
+            token_iat if iat_newer else None,
+        )
+
+    def get_user(self, user_id: str) -> Optional[User]:
+        """Return a user by their internal user_id, or None if not found."""
+        table = _get_table()
+        resp = table.get_item(Key={"PK": _user_pk(user_id), "SK": _SK_METADATA})
+        item = resp.get("Item")
+        if not item:
+            return None
+        return _user_from_item(item)
+
+    def archive_user(self, user_id: str) -> bool:
+        """Soft-delete a user by setting archived_at.
+
+        Returns False if the user does not exist.
+        """
+        table = _get_table()
+        resp = table.get_item(Key={"PK": _user_pk(user_id), "SK": _SK_METADATA})
+        if not resp.get("Item"):
+            return False
+        now = datetime.now(tz=timezone.utc).isoformat()
+        table.update_item(
+            Key={"PK": _user_pk(user_id), "SK": _SK_METADATA},
+            UpdateExpression="SET archived_at = :t",
+            ExpressionAttributeValues={":t": now},
+        )
+        return True

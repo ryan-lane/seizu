@@ -1,5 +1,6 @@
 from abc import ABC
 from abc import abstractmethod
+from datetime import datetime
 from typing import Any
 from typing import Dict
 from typing import List
@@ -7,6 +8,7 @@ from typing import Optional
 
 from reporting.schema.report_config import ReportListItem
 from reporting.schema.report_config import ReportVersion
+from reporting.schema.report_config import User
 
 
 class ReportStore(ABC):
@@ -77,3 +79,48 @@ class ReportStore(ABC):
     @abstractmethod
     def get_dashboard_report(self) -> Optional[ReportVersion]:
         """Return the latest version of the dashboard report, or None if not set."""
+
+    @abstractmethod
+    def get_or_create_user(
+        self,
+        sub: str,
+        iss: str,
+        email: str,
+        display_name: Optional[str] = None,
+    ) -> User:
+        """Get an existing user by (iss, sub), or create one on first login.
+
+        Existing users are returned as-is; no fields are updated.
+        Profile updates (email drift, last_login) are done separately via
+        ``update_user_profile``, called only from the ``/api/v1/me`` route.
+        Returns the User model.
+        """
+
+    @abstractmethod
+    def update_user_profile(
+        self,
+        user_id: str,
+        email: str,
+        display_name: Optional[str] = None,
+        token_iat: Optional[datetime] = None,
+    ) -> User:
+        """Sync mutable profile fields, writing only what has changed.
+
+        - ``email`` is written only when it differs from the stored value.
+        - ``display_name`` is written only when provided and differs from stored.
+        - ``last_login`` is written only when ``token_iat`` is provided and
+          newer than the stored value (i.e. a new credential was issued).
+
+        Returns the updated User.
+        """
+
+    @abstractmethod
+    def get_user(self, user_id: str) -> Optional[User]:
+        """Return a user by their internal user_id, or None if not found."""
+
+    @abstractmethod
+    def archive_user(self, user_id: str) -> bool:
+        """Soft-delete a user by setting archived_at.
+
+        Returns False if the user does not exist.
+        """
