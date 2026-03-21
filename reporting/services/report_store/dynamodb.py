@@ -11,10 +11,12 @@ from boto3.dynamodb.conditions import Key
 from snowflake import SnowflakeGenerator
 
 from reporting import settings
+from reporting.schema.report_config import PanelStat
 from reporting.schema.report_config import ReportListItem
 from reporting.schema.report_config import ReportVersion
 from reporting.schema.report_config import User
 from reporting.services import get_boto_resource
+from reporting.services.report_store.base import extract_panel_stats
 from reporting.services.report_store.base import ReportStore
 
 logger = logging.getLogger(__name__)
@@ -35,6 +37,10 @@ _PK_DASHBOARD = "#DASHBOARD"
 _SK_DASHBOARD_POINTER = "#POINTER"
 # User lookup — PK is shared; SK encodes iss + sub for lookup by external identity.
 _PK_USER_LOOKUP = "USER_LOOKUP"
+# Panel stats — pre-computed stat descriptors indexed under a single PK for efficient
+# listing; SK encodes report_id + sequential index so stats for one report can be
+# queried or deleted with a begins_with filter.
+_PK_PANEL_STATS = "PANEL_STATS"
 
 
 # ---------------------------------------------------------------------------
@@ -328,7 +334,47 @@ class DynamoDBReportStore(ReportStore):
         }
 
         _transact_put(table, version_item, latest_item, metadata_item, list_item)
+        self._replace_panel_stats(
+            table, report_id, extract_panel_stats(report_id, config)
+        )
         return ReportVersion(**version_item)
+
+    def _replace_panel_stats(
+        self, table: Any, report_id: str, stats: List[PanelStat]
+    ) -> None:
+        """Delete all existing panel stats for a report and write the new set.
+
+        Uses a single batch_writer to mix deletes and puts so that both
+        operations complete within one round-trip context.  Panel stats are
+        derived data (always recomputable from the latest config version), so
+        this does not need to be transactional with the report version write.
+        """
+        resp = table.query(
+            KeyConditionExpression=Key("PK").eq(_PK_PANEL_STATS)
+            & Key("SK").begins_with(f"REPORT#{report_id}#"),
+            ProjectionExpression="PK, SK",
+        )
+        existing = resp.get("Items", [])
+
+        with table.batch_writer() as batch:
+            for item in existing:
+                batch.delete_item(Key={"PK": item["PK"], "SK": item["SK"]})
+            for idx, stat in enumerate(stats):
+                batch.put_item(
+                    Item=_strip_none(
+                        {
+                            "PK": _PK_PANEL_STATS,
+                            "SK": f"REPORT#{report_id}#STAT#{idx:010d}",  # noqa: E231
+                            "report_id": stat.report_id,
+                            "metric": stat.metric,
+                            "panel_type": stat.panel_type,
+                            "cypher": stat.cypher,
+                            "static_params": _floats_to_decimal(stat.static_params),
+                            "input_param_name": stat.input_param_name,
+                            "input_cypher": stat.input_cypher,
+                        }
+                    )
+                )
 
     def delete_report(self, report_id: str) -> bool:
         """Delete a report and all its versions.
@@ -353,6 +399,15 @@ class DynamoDBReportStore(ReportStore):
         ]
         # Also delete the list-index entry
         keys_to_delete.append({"PK": _PK_REPORT_LIST, "SK": f"REPORT#{report_id}"})
+
+        # Collect all panel stat items for this report
+        stats_resp = table.query(
+            KeyConditionExpression=Key("PK").eq(_PK_PANEL_STATS)
+            & Key("SK").begins_with(f"REPORT#{report_id}#"),
+            ProjectionExpression="PK, SK",
+        )
+        for item in stats_resp.get("Items", []):
+            keys_to_delete.append({"PK": item["PK"], "SK": item["SK"]})
 
         # Clear dashboard pointer if it points to this report
         dashboard_resp = table.get_item(
@@ -403,6 +458,25 @@ class DynamoDBReportStore(ReportStore):
         if not report_id:
             return None
         return self.get_report_latest(report_id)
+
+    def list_panel_stats(self) -> List[PanelStat]:
+        """Return all PanelStat records across all reports."""
+        table = _get_table()
+        resp = table.query(
+            KeyConditionExpression=Key("PK").eq(_PK_PANEL_STATS),
+        )
+        return [
+            PanelStat(
+                report_id=item["report_id"],
+                metric=item["metric"],
+                panel_type=item["panel_type"],
+                cypher=item["cypher"],
+                static_params=item.get("static_params", {}),
+                input_param_name=item.get("input_param_name"),
+                input_cypher=item.get("input_cypher"),
+            )
+            for item in resp.get("Items", [])
+        ]
 
     def _update_user_profile(
         self,

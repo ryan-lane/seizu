@@ -4,6 +4,7 @@ from unittest.mock import patch
 
 import pytest
 
+from reporting.schema.report_config import PanelStat
 from reporting.schema.report_config import ReportListItem
 from reporting.schema.report_config import ReportVersion
 from reporting.services.report_store import dynamodb as dynamodb_module
@@ -806,3 +807,84 @@ def test_archive_user_updates_archived_at(patch_table, store):
     kwargs = patch_table.update_item.call_args[1]
     assert kwargs["Key"] == {"PK": "USER#uid1", "SK": "#METADATA"}
     assert "archived_at" in kwargs["UpdateExpression"]
+
+
+# ---------------------------------------------------------------------------
+# list_panel_stats
+# ---------------------------------------------------------------------------
+
+
+def test_list_panel_stats_returns_empty_when_none(patch_table, store):
+    patch_table.query.return_value = {"Items": []}
+    result = store.list_panel_stats()
+    assert result == []
+
+
+def test_list_panel_stats_returns_stat_records(patch_table, store):
+    patch_table.query.return_value = {
+        "Items": [
+            {
+                "PK": "PANEL_STATS",
+                "SK": "REPORT#rid1#STAT#0000000000",
+                "report_id": "rid1",
+                "metric": "cve.count",
+                "panel_type": "count",
+                "cypher": "MATCH (c:CVE) RETURN count(c.id) AS total",
+                "static_params": {"severity": "CRITICAL"},
+                "input_param_name": None,
+                "input_cypher": None,
+            }
+        ]
+    }
+    result = store.list_panel_stats()
+    assert len(result) == 1
+    assert isinstance(result[0], PanelStat)
+    assert result[0].report_id == "rid1"
+    assert result[0].metric == "cve.count"
+    assert result[0].panel_type == "count"
+    assert result[0].static_params == {"severity": "CRITICAL"}
+    assert result[0].input_param_name is None
+
+
+def test_list_panel_stats_queries_correct_pk(patch_table, store):
+    patch_table.query.return_value = {"Items": []}
+    store.list_panel_stats()
+    call_kwargs = patch_table.query.call_args[1]
+    from boto3.dynamodb.conditions import Key as CondKey
+
+    assert call_kwargs["KeyConditionExpression"] == CondKey("PK").eq("PANEL_STATS")
+
+
+def test_save_report_version_writes_panel_stats(patch_table, store):
+    patch_table.get_item.return_value = {"Item": _metadata_item(current_version=0)}
+    config = {
+        "name": "Test",
+        "queries": {"cves-total": "MATCH (c:CVE) RETURN count(c.id) AS total"},
+        "inputs": [],
+        "rows": [
+            {
+                "name": "row",
+                "panels": [
+                    {
+                        "type": "count",
+                        "cypher": "cves-total",
+                        "params": [{"name": "severity", "value": "CRITICAL"}],
+                        "metric": "cve.count",
+                        "size": 3,
+                    }
+                ],
+            }
+        ],
+    }
+    # Set up the stats query (called by _replace_panel_stats) to return empty
+    patch_table.query.return_value = {"Items": []}
+    store.save_report_version(report_id="123", config=config, created_by="u@x.com")
+    # batch_writer should have been called to write the new stat
+    patch_table.batch_writer.assert_called_once()
+    batch = patch_table.batch_writer.return_value.__enter__.return_value
+    put_calls = [c for c in batch.put_item.call_args_list]
+    assert len(put_calls) == 1
+    item = put_calls[0][1]["Item"]
+    assert item["PK"] == "PANEL_STATS"
+    assert item["metric"] == "cve.count"
+    assert item["panel_type"] == "count"

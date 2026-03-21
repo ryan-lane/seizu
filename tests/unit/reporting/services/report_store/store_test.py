@@ -122,3 +122,10 @@ def test_get_dashboard_report_delegates(mock_store):
     mock_store.get_dashboard_report.return_value = None
     report_store.get_dashboard_report()
     mock_store.get_dashboard_report.assert_called_once()
+
+
+def test_list_panel_stats_delegates(mock_store):
+    mock_store.list_panel_stats.return_value = []
+    result = report_store.list_panel_stats()
+    mock_store.list_panel_stats.assert_called_once()
+    assert result == []

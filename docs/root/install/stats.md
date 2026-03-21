@@ -14,6 +14,10 @@ See the [backend configuration for statsd](backend.html#statsd-configuration)
 
 ### Set ``metric`` on panels
 
+Panel configurations, including the ``metric`` field, are stored in the report store (DynamoDB or SQLModel).
+Configure panels through the Seizu UI or by seeding from the YAML file with ``make seed_reports``.
+When a report version is saved, the stats worker's index is updated automatically — no separate step is needed.
+
 The ``metric`` setting on a panel is the prefix of the metric.
 The full name of the metrics being pushed depend on the panel type.
 For example, the following panel configuration would take the the ``total`` value from the ``count`` panel and push it to the ``cves.count.total`` metric.
@@ -65,6 +69,9 @@ The worker can be run as a flask CLI command:
 $> export FLASK_APP=reporting.dashboard_stats
 $> flask worker dashboard-stats
 ```
+
+The worker reads pre-computed stat descriptors directly from the configured report store (DynamoDB or SQLModel), so it needs access to the same store backend as the main seizu service.
+It does **not** read the YAML configuration file.
 
 This worker runs and exits, so to push stats on a schedule, the worker should be run as a cron on the preferred schedule.
 

@@ -29,7 +29,7 @@ seizu passes configuration to the frontend via a configuration endpoint.
 Bind mount the YAML configuration file into the container at the location defined in ``REPORTING_CONFIG_FILE``.
 Report and dashboard configurations are stored in DynamoDB and are not part of the YAML file.
 
-* ``REPORTING_CONFIG_FILE``: location of the YAML configuration file (queries and scheduled queries); default: ``/reporting-dashboard.conf``
+* ``REPORTING_CONFIG_FILE``: location of the YAML configuration file (named queries used by scheduled queries, and the seed source for report configs); default: ``/reporting-dashboard.conf``. Not used by the ``dashboard-stats`` worker.
 * ``SECRET_KEY``: Flask session secret key for sessions and CSRF. Set to some long, random string; default: ``None``
 
 ### Neo4j configuration
