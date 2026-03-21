@@ -294,14 +294,15 @@ def test_save_report_version_increments_version(patch_table, store):
     assert result.comment == "v4"
 
 
-def test_save_report_version_writes_four_items_transactionally(patch_table, store):
+def test_save_report_version_writes_five_items_transactionally(patch_table, store):
     patch_table.get_item.return_value = {"Item": _metadata_item(current_version=1)}
 
     store.save_report_version(report_id="123", config={}, created_by="u@x.com")
 
     patch_table.meta.client.transact_write_items.assert_called_once()
     items = patch_table.meta.client.transact_write_items.call_args[1]["TransactItems"]
-    assert len(items) == 4
+    # version, latest, metadata, list, panel_stats = 5 items
+    assert len(items) == 5
     patch_table.update_item.assert_not_called()
 
 
@@ -825,14 +826,16 @@ def test_list_panel_stats_returns_stat_records(patch_table, store):
         "Items": [
             {
                 "PK": "PANEL_STATS",
-                "SK": "REPORT#rid1#STAT#0000000000",
+                "SK": "REPORT#rid1",
                 "report_id": "rid1",
-                "metric": "cve.count",
-                "panel_type": "count",
-                "cypher": "MATCH (c:CVE) RETURN count(c.id) AS total",
-                "static_params": {"severity": "CRITICAL"},
-                "input_param_name": None,
-                "input_cypher": None,
+                "stats": [
+                    {
+                        "metric": "cve.count",
+                        "panel_type": "count",
+                        "cypher": "MATCH (c:CVE) RETURN count(c.id) AS total",
+                        "static_params": {"severity": "CRITICAL"},
+                    }
+                ],
             }
         ]
     }
@@ -876,15 +879,18 @@ def test_save_report_version_writes_panel_stats(patch_table, store):
             }
         ],
     }
-    # Set up the stats query (called by _replace_panel_stats) to return empty
-    patch_table.query.return_value = {"Items": []}
     store.save_report_version(report_id="123", config=config, created_by="u@x.com")
-    # batch_writer should have been called to write the new stat
-    patch_table.batch_writer.assert_called_once()
-    batch = patch_table.batch_writer.return_value.__enter__.return_value
-    put_calls = [c for c in batch.put_item.call_args_list]
-    assert len(put_calls) == 1
-    item = put_calls[0][1]["Item"]
-    assert item["PK"] == "PANEL_STATS"
-    assert item["metric"] == "cve.count"
-    assert item["panel_type"] == "count"
+    # Stats are written as part of the transact_write, not via batch_writer
+    patch_table.batch_writer.assert_not_called()
+    transact_call = patch_table.meta.client.transact_write_items.call_args
+    items = transact_call[1]["TransactItems"]
+    # version, latest, metadata, list, stats = 5 items
+    assert len(items) == 5
+    stats_put = next(
+        i["Put"] for i in items if i["Put"]["Item"].get("PK") == "PANEL_STATS"
+    )
+    assert stats_put["Item"]["SK"] == "REPORT#123"
+    stats_list = stats_put["Item"]["stats"]
+    assert len(stats_list) == 1
+    assert stats_list[0]["metric"] == "cve.count"
+    assert stats_list[0]["panel_type"] == "count"

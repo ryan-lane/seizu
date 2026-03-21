@@ -37,9 +37,9 @@ _PK_DASHBOARD = "#DASHBOARD"
 _SK_DASHBOARD_POINTER = "#POINTER"
 # User lookup — PK is shared; SK encodes iss + sub for lookup by external identity.
 _PK_USER_LOOKUP = "USER_LOOKUP"
-# Panel stats — pre-computed stat descriptors indexed under a single PK for efficient
-# listing; SK encodes report_id + sequential index so stats for one report can be
-# queried or deleted with a begins_with filter.
+# Panel stats — pre-computed stat descriptors; one item per report stored under a
+# single shared PK for efficient full listing.  SK encodes report_id so the item
+# can be targeted directly for updates and deletes without a query.
 _PK_PANEL_STATS = "PANEL_STATS"
 
 
@@ -333,48 +333,27 @@ class DynamoDBReportStore(ReportStore):
             "updated_at": now,
         }
 
-        _transact_put(table, version_item, latest_item, metadata_item, list_item)
-        self._replace_panel_stats(
-            table, report_id, extract_panel_stats(report_id, config)
+        stats = extract_panel_stats(report_id, config)
+        stats_item = {
+            "PK": _PK_PANEL_STATS,
+            "SK": f"REPORT#{report_id}",
+            "report_id": report_id,
+            "stats": [
+                {
+                    "metric": s.metric,
+                    "panel_type": s.panel_type,
+                    "cypher": s.cypher,
+                    "static_params": _floats_to_decimal(s.static_params),
+                    "input_param_name": s.input_param_name,
+                    "input_cypher": s.input_cypher,
+                }
+                for s in stats
+            ],
+        }
+        _transact_put(
+            table, version_item, latest_item, metadata_item, list_item, stats_item
         )
         return ReportVersion(**version_item)
-
-    def _replace_panel_stats(
-        self, table: Any, report_id: str, stats: List[PanelStat]
-    ) -> None:
-        """Delete all existing panel stats for a report and write the new set.
-
-        Uses a single batch_writer to mix deletes and puts so that both
-        operations complete within one round-trip context.  Panel stats are
-        derived data (always recomputable from the latest config version), so
-        this does not need to be transactional with the report version write.
-        """
-        resp = table.query(
-            KeyConditionExpression=Key("PK").eq(_PK_PANEL_STATS)
-            & Key("SK").begins_with(f"REPORT#{report_id}#"),
-            ProjectionExpression="PK, SK",
-        )
-        existing = resp.get("Items", [])
-
-        with table.batch_writer() as batch:
-            for item in existing:
-                batch.delete_item(Key={"PK": item["PK"], "SK": item["SK"]})
-            for idx, stat in enumerate(stats):
-                batch.put_item(
-                    Item=_strip_none(
-                        {
-                            "PK": _PK_PANEL_STATS,
-                            "SK": f"REPORT#{report_id}#STAT#{idx:010d}",  # noqa: E231
-                            "report_id": stat.report_id,
-                            "metric": stat.metric,
-                            "panel_type": stat.panel_type,
-                            "cypher": stat.cypher,
-                            "static_params": _floats_to_decimal(stat.static_params),
-                            "input_param_name": stat.input_param_name,
-                            "input_cypher": stat.input_cypher,
-                        }
-                    )
-                )
 
     def delete_report(self, report_id: str) -> bool:
         """Delete a report and all its versions.
@@ -397,17 +376,9 @@ class DynamoDBReportStore(ReportStore):
         keys_to_delete = [
             {"PK": item["PK"], "SK": item["SK"]} for item in items_resp.get("Items", [])
         ]
-        # Also delete the list-index entry
+        # Also delete the list-index entry and the panel stats record
         keys_to_delete.append({"PK": _PK_REPORT_LIST, "SK": f"REPORT#{report_id}"})
-
-        # Collect all panel stat items for this report
-        stats_resp = table.query(
-            KeyConditionExpression=Key("PK").eq(_PK_PANEL_STATS)
-            & Key("SK").begins_with(f"REPORT#{report_id}#"),
-            ProjectionExpression="PK, SK",
-        )
-        for item in stats_resp.get("Items", []):
-            keys_to_delete.append({"PK": item["PK"], "SK": item["SK"]})
+        keys_to_delete.append({"PK": _PK_PANEL_STATS, "SK": f"REPORT#{report_id}"})
 
         # Clear dashboard pointer if it points to this report
         dashboard_resp = table.get_item(
@@ -465,18 +436,22 @@ class DynamoDBReportStore(ReportStore):
         resp = table.query(
             KeyConditionExpression=Key("PK").eq(_PK_PANEL_STATS),
         )
-        return [
-            PanelStat(
-                report_id=item["report_id"],
-                metric=item["metric"],
-                panel_type=item["panel_type"],
-                cypher=item["cypher"],
-                static_params=item.get("static_params", {}),
-                input_param_name=item.get("input_param_name"),
-                input_cypher=item.get("input_cypher"),
-            )
-            for item in resp.get("Items", [])
-        ]
+        result = []
+        for item in resp.get("Items", []):
+            report_id = item["report_id"]
+            for stat_data in item.get("stats", []):
+                result.append(
+                    PanelStat(
+                        report_id=report_id,
+                        metric=stat_data["metric"],
+                        panel_type=stat_data["panel_type"],
+                        cypher=stat_data["cypher"],
+                        static_params=stat_data.get("static_params", {}),
+                        input_param_name=stat_data.get("input_param_name"),
+                        input_cypher=stat_data.get("input_cypher"),
+                    )
+                )
+        return result
 
     def _update_user_profile(
         self,
