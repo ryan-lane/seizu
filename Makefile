@@ -128,20 +128,20 @@ logs:
 
 .PHONY: sync_aws
 sync_aws:
-	docker compose run cartography --neo4j-uri=bolt://neo4j:7687 --selected-modules=aws --aws-sync-all-profiles --permission-relationships-file=/etc/cartography/permission_relationships.yaml
+	docker compose run cartography --neo4j-uri=bolt://neo4j:7687 --selected-modules=create-indexes,aws,analysis --aws-sync-all-profiles --permission-relationships-file=/etc/cartography/permission_relationships.yaml
 
 .PHONY: sync_k8s
 sync_k8s:
-	docker compose run cartography --neo4j-uri=bolt://neo4j:7687 --selected-modules=kubernetes --k8s-kubeconfig=/etc/cartography/kube.config
+	docker compose run cartography --neo4j-uri=bolt://neo4j:7687 --selected-modules=create-indexes,kubernetes,analysis --k8s-kubeconfig=/etc/cartography/kube.config
 
 .PHONY: sync_crowdstrike
 sync_crowdstrike:
-	docker compose run cartography --neo4j-uri=bolt://neo4j:7687 --selected-modules=crowdstrike --crowdstrike-client-id-env-var=CROWDSTRIKE_CLIENT_ID --crowdstrike-client-secret-env-var=CROWDSTRIKE_CLIENT_SECRET
+	docker compose run cartography --neo4j-uri=bolt://neo4j:7687 --selected-modules=create-indexes,crowdstrike,analysis --crowdstrike-client-id-env-var=CROWDSTRIKE_CLIENT_ID --crowdstrike-client-secret-env-var=CROWDSTRIKE_CLIENT_SECRET
 
 .PHONY: sync_github
 sync_github:
-	docker compose run cartography --neo4j-uri=bolt://neo4j:7687 --selected-modules=github --github-config-env-var=GITHUB_TOKEN
+	docker compose run cartography --neo4j-uri=bolt://neo4j:7687 --selected-modules=create-indexes,github,analysis --github-config-env-var=GITHUB_TOKEN
 
 .PHONY: sync_cve
 sync_cve:
-	docker compose run cartography --neo4j-uri=bolt://neo4j:7687 --selected-modules=cve --cve-enabled
+	docker compose run cartography --neo4j-uri=bolt://neo4j:7687 --selected-modules=create-indexes,cve,analysis --cve-enabled
