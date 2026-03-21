@@ -87,14 +87,31 @@ class ReportStore(ABC):
         iss: str,
         email: str,
         display_name: Optional[str] = None,
+    ) -> User:
+        """Get an existing user by (iss, sub), or create one on first login.
+
+        Existing users are returned as-is; no fields are updated.
+        Profile updates (email drift, last_login) are done separately via
+        ``update_user_profile``, called only from the ``/api/v1/me`` route.
+        Returns the User model.
+        """
+
+    @abstractmethod
+    def update_user_profile(
+        self,
+        user_id: str,
+        email: str,
+        display_name: Optional[str] = None,
         token_iat: Optional[datetime] = None,
     ) -> User:
-        """Get an existing user by (iss, sub) or create a new one on first login.
+        """Sync mutable profile fields, writing only what has changed.
 
-        If the user already exists, ``email`` is always updated.  ``last_login``
-        is updated only when ``token_iat`` is provided and is newer than the
-        stored value, i.e. the credential has been refreshed.
-        Returns the User model.
+        - ``email`` is written only when it differs from the stored value.
+        - ``display_name`` is written only when provided and differs from stored.
+        - ``last_login`` is written only when ``token_iat`` is provided and
+          newer than the stored value (i.e. a new credential was issued).
+
+        Returns the updated User.
         """
 
     @abstractmethod

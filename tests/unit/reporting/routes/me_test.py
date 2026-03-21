@@ -19,11 +19,15 @@ def _app_settings():
     }
 
 
-def _make_app(mocker):
+def _make_app(mocker, synced_user=_FAKE_USER):
     mocker.patch("reporting.settings.CSRF_DISABLE", True)
     mocker.patch(
         "reporting.routes.me.authnz.get_user",
         return_value=_FAKE_USER,
+    )
+    mocker.patch(
+        "reporting.routes.me.authnz.sync_user_profile",
+        return_value=synced_user,
     )
     return create_app(_app_settings())
 
@@ -38,3 +42,15 @@ def test_get_current_user_success(mocker):
     assert ret.json["sub"] == "sub123"
     assert ret.json["iss"] == "https://idp.example.com"
     assert ret.json["archived_at"] is None
+
+
+def test_get_current_user_returns_synced_profile(mocker):
+    """The route should return the result of sync_user_profile, not the raw lookup."""
+    updated_user = _FAKE_USER.model_copy(
+        update={"email": "alice-new@example.com", "display_name": "Alice Updated"}
+    )
+    app = _make_app(mocker, synced_user=updated_user)
+    ret = app.test_client().get("/api/v1/me")
+    assert ret.status_code == 200
+    assert ret.json["email"] == "alice-new@example.com"
+    assert ret.json["display_name"] == "Alice Updated"

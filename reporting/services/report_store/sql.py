@@ -349,7 +349,6 @@ class SQLModelReportStore(ReportStore):
         iss: str,
         email: str,
         display_name: Optional[str] = None,
-        token_iat: Optional[datetime] = None,
     ) -> User:
         now = datetime.now(tz=timezone.utc).isoformat()
         with Session(_get_engine()) as session:
@@ -359,18 +358,7 @@ class SQLModelReportStore(ReportStore):
                 .where(UserRecord.sub == sub)
             )
             record = session.exec(stmt).first()
-            if record:
-                record.email = email
-                if display_name is not None:
-                    record.display_name = display_name
-                if token_iat is not None:
-                    stored = datetime.fromisoformat(record.last_login)
-                    if token_iat > stored:
-                        record.last_login = token_iat.isoformat()
-                session.add(record)
-                session.commit()
-                session.refresh(record)
-            else:
+            if not record:
                 user_id = generate_report_id()
                 record = UserRecord(
                     user_id=user_id,
@@ -382,6 +370,44 @@ class SQLModelReportStore(ReportStore):
                     last_login=now,
                     archived_at=None,
                 )
+                session.add(record)
+                session.commit()
+                session.refresh(record)
+        return User(
+            user_id=record.user_id,
+            sub=record.sub,
+            iss=record.iss,
+            email=record.email,
+            display_name=record.display_name,
+            created_at=record.created_at,
+            last_login=record.last_login,
+            archived_at=record.archived_at,
+        )
+
+    def update_user_profile(
+        self,
+        user_id: str,
+        email: str,
+        display_name: Optional[str] = None,
+        token_iat: Optional[datetime] = None,
+    ) -> User:
+        with Session(_get_engine()) as session:
+            record = session.get(UserRecord, user_id)
+            if not record:
+                raise ValueError(f"User {user_id!r} not found")
+            changed = False
+            if record.email != email:
+                record.email = email
+                changed = True
+            if display_name is not None and record.display_name != display_name:
+                record.display_name = display_name
+                changed = True
+            if token_iat is not None:
+                stored = datetime.fromisoformat(record.last_login)
+                if token_iat > stored:
+                    record.last_login = token_iat.isoformat()
+                    changed = True
+            if changed:
                 session.add(record)
                 session.commit()
                 session.refresh(record)

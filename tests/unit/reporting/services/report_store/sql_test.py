@@ -437,10 +437,12 @@ def test_get_or_create_user_returns_existing_user(store, mocker):
     assert user.user_id == "uid1"
 
 
-def test_get_or_create_user_updates_email_on_return(store, mocker):
+def test_get_or_create_user_returns_existing_without_update(store, mocker):
+    """Subsequent calls with a changed email must not update the stored record."""
+    ids = iter(["uid1", "uid2"])
     mocker.patch(
         "reporting.services.report_store.sql.generate_report_id",
-        return_value="uid1",
+        side_effect=lambda: next(ids),
     )
     store.get_or_create_user(
         sub="sub123", iss="https://idp.example.com", email="old@example.com"
@@ -448,10 +450,39 @@ def test_get_or_create_user_updates_email_on_return(store, mocker):
     user = store.get_or_create_user(
         sub="sub123", iss="https://idp.example.com", email="new@example.com"
     )
+    assert user.email == "old@example.com"
+
+
+# ---------------------------------------------------------------------------
+# update_user_profile
+# ---------------------------------------------------------------------------
+
+
+def test_update_user_profile_updates_email_when_changed(store, mocker):
+    mocker.patch(
+        "reporting.services.report_store.sql.generate_report_id",
+        return_value="uid1",
+    )
+    store.get_or_create_user(
+        sub="sub123", iss="https://idp.example.com", email="old@example.com"
+    )
+    user = store.update_user_profile(user_id="uid1", email="new@example.com")
     assert user.email == "new@example.com"
 
 
-def test_get_or_create_user_updates_last_login_when_iat_is_newer(store, mocker):
+def test_update_user_profile_no_write_when_nothing_changed(store, mocker):
+    mocker.patch(
+        "reporting.services.report_store.sql.generate_report_id",
+        return_value="uid1",
+    )
+    store.get_or_create_user(
+        sub="sub123", iss="https://idp.example.com", email="alice@example.com"
+    )
+    user = store.update_user_profile(user_id="uid1", email="alice@example.com")
+    assert user.email == "alice@example.com"
+
+
+def test_update_user_profile_updates_last_login_when_iat_is_newer(store, mocker):
     from datetime import datetime, timezone
 
     mocker.patch(
@@ -461,21 +492,20 @@ def test_get_or_create_user_updates_last_login_when_iat_is_newer(store, mocker):
     old_iat = datetime(2024, 1, 1, tzinfo=timezone.utc)
     new_iat = datetime(2024, 6, 1, tzinfo=timezone.utc)
     store.get_or_create_user(
-        sub="sub123",
-        iss="https://idp.example.com",
-        email="alice@example.com",
-        token_iat=old_iat,
+        sub="sub123", iss="https://idp.example.com", email="alice@example.com"
     )
-    user = store.get_or_create_user(
-        sub="sub123",
-        iss="https://idp.example.com",
-        email="alice@example.com",
-        token_iat=new_iat,
+    store.update_user_profile(
+        user_id="uid1", email="alice@example.com", token_iat=old_iat
+    )
+    user = store.update_user_profile(
+        user_id="uid1", email="alice@example.com", token_iat=new_iat
     )
     assert user.last_login == new_iat.isoformat()
 
 
-def test_get_or_create_user_does_not_update_last_login_when_iat_is_older(store, mocker):
+def test_update_user_profile_does_not_update_last_login_when_iat_is_older(
+    store, mocker
+):
     from datetime import datetime, timezone
 
     mocker.patch(
@@ -485,16 +515,13 @@ def test_get_or_create_user_does_not_update_last_login_when_iat_is_older(store, 
     new_iat = datetime(2024, 6, 1, tzinfo=timezone.utc)
     old_iat = datetime(2024, 1, 1, tzinfo=timezone.utc)
     store.get_or_create_user(
-        sub="sub123",
-        iss="https://idp.example.com",
-        email="alice@example.com",
-        token_iat=new_iat,
+        sub="sub123", iss="https://idp.example.com", email="alice@example.com"
     )
-    user = store.get_or_create_user(
-        sub="sub123",
-        iss="https://idp.example.com",
-        email="alice@example.com",
-        token_iat=old_iat,
+    store.update_user_profile(
+        user_id="uid1", email="alice@example.com", token_iat=new_iat
+    )
+    user = store.update_user_profile(
+        user_id="uid1", email="alice@example.com", token_iat=old_iat
     )
     assert user.last_login == new_iat.isoformat()
 

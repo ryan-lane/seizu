@@ -445,18 +445,18 @@ class DynamoDBReportStore(ReportStore):
         iss: str,
         email: str,
         display_name: Optional[str] = None,
-        token_iat: Optional[datetime] = None,
     ) -> User:
-        """Get an existing user by (iss, sub) or create one on first login.
+        """Get an existing user by (iss, sub), or create one on first login.
 
-        Uses a conditional put on the lookup item to handle concurrent first-login
-        requests for the same user without creating duplicates.
+        Existing users are returned as-is; no fields are updated.
+        Uses a conditional put on the lookup item to handle concurrent
+        first-login requests for the same user without creating duplicates.
         """
         table = _get_table()
         now = datetime.now(tz=timezone.utc).isoformat()
         lookup_sk = _user_lookup_sk(iss, sub)
 
-        # Fast path: existing user
+        # Fast path: existing user — return without updating
         lookup_resp = table.get_item(
             Key={"PK": _PK_USER_LOOKUP, "SK": lookup_sk},
         )
@@ -464,9 +464,10 @@ class DynamoDBReportStore(ReportStore):
 
         if lookup_item:
             user_id = lookup_item["user_id"]
-            return self._update_user_profile(
-                table, user_id, email, display_name, token_iat
+            profile_resp = table.get_item(
+                Key={"PK": _user_pk(user_id), "SK": _SK_METADATA},
             )
+            return _user_from_item(profile_resp["Item"])
 
         # New user — use a conditional put so concurrent first-logins are safe
         user_id = generate_report_id()
@@ -516,6 +517,42 @@ class DynamoDBReportStore(ReportStore):
             created_at=now,
             last_login=now,
             archived_at=None,
+        )
+
+    def update_user_profile(
+        self,
+        user_id: str,
+        email: str,
+        display_name: Optional[str] = None,
+        token_iat: Optional[datetime] = None,
+    ) -> User:
+        """Sync mutable profile fields, writing only what has changed."""
+        table = _get_table()
+        profile_resp = table.get_item(
+            Key={"PK": _user_pk(user_id), "SK": _SK_METADATA},
+        )
+        item = profile_resp.get("Item")
+        if not item:
+            raise ValueError(f"User {user_id!r} not found")
+        stored_user = _user_from_item(item)
+
+        email_changed = stored_user.email != email
+        name_changed = (
+            display_name is not None and stored_user.display_name != display_name
+        )
+        iat_newer = token_iat is not None and token_iat > datetime.fromisoformat(
+            stored_user.last_login
+        )
+
+        if not (email_changed or name_changed or iat_newer):
+            return stored_user
+
+        return self._update_user_profile(
+            table,
+            user_id,
+            email,
+            display_name if name_changed else None,
+            token_iat if iat_newer else None,
         )
 
     def get_user(self, user_id: str) -> Optional[User]:

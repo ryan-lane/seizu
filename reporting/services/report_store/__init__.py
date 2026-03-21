@@ -109,11 +109,23 @@ def get_or_create_user(
     iss: str,
     email: str,
     display_name: Optional[str] = None,
-    token_iat: Optional[datetime] = None,
 ) -> User:
     return get_store().get_or_create_user(
         sub=sub,
         iss=iss,
+        email=email,
+        display_name=display_name,
+    )
+
+
+def update_user_profile(
+    user_id: str,
+    email: str,
+    display_name: Optional[str] = None,
+    token_iat: Optional[datetime] = None,
+) -> User:
+    return get_store().update_user_profile(
+        user_id=user_id,
         email=email,
         display_name=display_name,
         token_iat=token_iat,
