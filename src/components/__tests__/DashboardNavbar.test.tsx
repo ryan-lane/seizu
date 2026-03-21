@@ -78,12 +78,12 @@ describe('DashboardNavbar', () => {
 
   it('renders no user info when currentUser is null', () => {
     mockUseCurrentUser.mockReturnValue(null);
-    render(
+    const { container } = render(
       <Wrapper contextValue={{}}>
         <DashboardNavbar {...defaultProps} />
       </Wrapper>
     );
-    expect(screen.queryByRole('img')).toBeNull();
+    expect(container.querySelector('svg')).toBeNull();
     expect(screen.queryByText(/@/)).toBeNull();
   });
 
