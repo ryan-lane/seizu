@@ -451,6 +451,54 @@ def test_get_or_create_user_updates_email_on_return(store, mocker):
     assert user.email == "new@example.com"
 
 
+def test_get_or_create_user_updates_last_login_when_iat_is_newer(store, mocker):
+    from datetime import datetime, timezone
+
+    mocker.patch(
+        "reporting.services.report_store.sql.generate_report_id",
+        return_value="uid1",
+    )
+    old_iat = datetime(2024, 1, 1, tzinfo=timezone.utc)
+    new_iat = datetime(2024, 6, 1, tzinfo=timezone.utc)
+    store.get_or_create_user(
+        sub="sub123",
+        iss="https://idp.example.com",
+        email="alice@example.com",
+        token_iat=old_iat,
+    )
+    user = store.get_or_create_user(
+        sub="sub123",
+        iss="https://idp.example.com",
+        email="alice@example.com",
+        token_iat=new_iat,
+    )
+    assert user.last_login == new_iat.isoformat()
+
+
+def test_get_or_create_user_does_not_update_last_login_when_iat_is_older(store, mocker):
+    from datetime import datetime, timezone
+
+    mocker.patch(
+        "reporting.services.report_store.sql.generate_report_id",
+        return_value="uid1",
+    )
+    new_iat = datetime(2024, 6, 1, tzinfo=timezone.utc)
+    old_iat = datetime(2024, 1, 1, tzinfo=timezone.utc)
+    store.get_or_create_user(
+        sub="sub123",
+        iss="https://idp.example.com",
+        email="alice@example.com",
+        token_iat=new_iat,
+    )
+    user = store.get_or_create_user(
+        sub="sub123",
+        iss="https://idp.example.com",
+        email="alice@example.com",
+        token_iat=old_iat,
+    )
+    assert user.last_login == new_iat.isoformat()
+
+
 def test_get_or_create_user_different_sub_creates_separate_users(store, mocker):
     ids = iter(["uid1", "uid2"])
     mocker.patch(

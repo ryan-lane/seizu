@@ -73,7 +73,7 @@ class UserRecord(SQLModel, table=True):  # type: ignore
     email: str
     display_name: Optional[str] = None
     created_at: str
-    last_seen_at: str
+    last_login: str
     archived_at: Optional[str] = None
 
 
@@ -349,6 +349,7 @@ class SQLModelReportStore(ReportStore):
         iss: str,
         email: str,
         display_name: Optional[str] = None,
+        token_iat: Optional[datetime] = None,
     ) -> User:
         now = datetime.now(tz=timezone.utc).isoformat()
         with Session(_get_engine()) as session:
@@ -360,9 +361,12 @@ class SQLModelReportStore(ReportStore):
             record = session.exec(stmt).first()
             if record:
                 record.email = email
-                record.last_seen_at = now
                 if display_name is not None:
                     record.display_name = display_name
+                if token_iat is not None:
+                    stored = datetime.fromisoformat(record.last_login)
+                    if token_iat > stored:
+                        record.last_login = token_iat.isoformat()
                 session.add(record)
                 session.commit()
                 session.refresh(record)
@@ -375,7 +379,7 @@ class SQLModelReportStore(ReportStore):
                     email=email,
                     display_name=display_name,
                     created_at=now,
-                    last_seen_at=now,
+                    last_login=now,
                     archived_at=None,
                 )
                 session.add(record)
@@ -388,7 +392,7 @@ class SQLModelReportStore(ReportStore):
             email=record.email,
             display_name=record.display_name,
             created_at=record.created_at,
-            last_seen_at=record.last_seen_at,
+            last_login=record.last_login,
             archived_at=record.archived_at,
         )
 
@@ -404,7 +408,7 @@ class SQLModelReportStore(ReportStore):
                 email=record.email,
                 display_name=record.display_name,
                 created_at=record.created_at,
-                last_seen_at=record.last_seen_at,
+                last_login=record.last_login,
                 archived_at=record.archived_at,
             )
 

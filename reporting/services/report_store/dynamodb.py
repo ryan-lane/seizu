@@ -105,7 +105,7 @@ def _user_from_item(item: Dict) -> User:
         email=item["email"],
         display_name=item.get("display_name"),
         created_at=item["created_at"],
-        last_seen_at=item["last_seen_at"],
+        last_login=item["last_login"],
         archived_at=item.get("archived_at"),
     )
 
@@ -404,12 +404,48 @@ class DynamoDBReportStore(ReportStore):
             return None
         return self.get_report_latest(report_id)
 
+    def _update_user_profile(
+        self,
+        table: Any,
+        user_id: str,
+        email: str,
+        display_name: Optional[str],
+        token_iat: Optional[datetime],
+    ) -> User:
+        """Apply an email/display_name update and conditionally advance last_login."""
+        update_exp = "SET email = :e"
+        exp_values: Dict = {":e": email}
+        if display_name is not None:
+            update_exp += ", display_name = :d"
+            exp_values[":d"] = display_name
+        if token_iat is not None:
+            iat_str = token_iat.isoformat()
+            try:
+                resp = table.update_item(
+                    Key={"PK": _user_pk(user_id), "SK": _SK_METADATA},
+                    UpdateExpression=update_exp + ", last_login = :t",
+                    ConditionExpression="last_login < :t",
+                    ExpressionAttributeValues={**exp_values, ":t": iat_str},
+                    ReturnValues="ALL_NEW",
+                )
+                return _user_from_item(resp["Attributes"])
+            except table.meta.client.exceptions.ConditionalCheckFailedException:
+                pass  # Token not newer — update email only
+        resp = table.update_item(
+            Key={"PK": _user_pk(user_id), "SK": _SK_METADATA},
+            UpdateExpression=update_exp,
+            ExpressionAttributeValues=exp_values,
+            ReturnValues="ALL_NEW",
+        )
+        return _user_from_item(resp["Attributes"])
+
     def get_or_create_user(
         self,
         sub: str,
         iss: str,
         email: str,
         display_name: Optional[str] = None,
+        token_iat: Optional[datetime] = None,
     ) -> User:
         """Get an existing user by (iss, sub) or create one on first login.
 
@@ -428,18 +464,9 @@ class DynamoDBReportStore(ReportStore):
 
         if lookup_item:
             user_id = lookup_item["user_id"]
-            update_exp = "SET email = :e, last_seen_at = :t"
-            exp_values: Dict = {":e": email, ":t": now}
-            if display_name is not None:
-                update_exp += ", display_name = :d"
-                exp_values[":d"] = display_name
-            resp = table.update_item(
-                Key={"PK": _user_pk(user_id), "SK": _SK_METADATA},
-                UpdateExpression=update_exp,
-                ExpressionAttributeValues=exp_values,
-                ReturnValues="ALL_NEW",
+            return self._update_user_profile(
+                table, user_id, email, display_name, token_iat
             )
-            return _user_from_item(resp["Attributes"])
 
         # New user — use a conditional put so concurrent first-logins are safe
         user_id = generate_report_id()
@@ -453,7 +480,7 @@ class DynamoDBReportStore(ReportStore):
                 "email": email,
                 "display_name": display_name,
                 "created_at": now,
-                "last_seen_at": now,
+                "last_login": now,
                 "archived_at": None,
             }
         )
@@ -487,7 +514,7 @@ class DynamoDBReportStore(ReportStore):
             email=email,
             display_name=display_name,
             created_at=now,
-            last_seen_at=now,
+            last_login=now,
             archived_at=None,
         )
 

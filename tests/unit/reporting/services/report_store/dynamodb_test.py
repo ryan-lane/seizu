@@ -688,7 +688,7 @@ def _user_profile_item(user_id="uid1"):
         "email": "alice@example.com",
         "display_name": "Alice",
         "created_at": "2024-01-01T00:00:00+00:00",
-        "last_seen_at": "2024-01-01T00:00:00+00:00",
+        "last_login": "2024-01-01T00:00:00+00:00",
     }
 
 
@@ -753,7 +753,7 @@ def test_get_or_create_user_returns_existing_user_on_lookup_hit(patch_table, sto
             "iss": "https://idp.example.com",
             "email": "alice@example.com",
             "created_at": "2024-01-01T00:00:00+00:00",
-            "last_seen_at": "2024-02-01T00:00:00+00:00",
+            "last_login": "2024-02-01T00:00:00+00:00",
         }
     }
 

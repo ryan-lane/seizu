@@ -183,7 +183,10 @@ def test__get_jwt_payload_aud_in_token_but_not_configured(mocker):
 
 
 def test_get_user_extracts_sub_and_iss(mocker):
+    from datetime import datetime, timezone
+
     mocker.patch("reporting.settings.DEVELOPMENT_ONLY_REQUIRE_AUTH", True)
+    iat_ts = 1704067200  # 2024-01-01T00:00:00Z
     mocker.patch(
         "reporting.authnz._get_jwt_payload",
         return_value={
@@ -191,6 +194,7 @@ def test_get_user_extracts_sub_and_iss(mocker):
             "sub": "sub123",
             "iss": "https://idp.example.com",
             "name": "Alice",
+            "iat": iat_ts,
         },
     )
     from reporting.schema.report_config import User
@@ -202,7 +206,7 @@ def test_get_user_extracts_sub_and_iss(mocker):
         email="alice@example.com",
         display_name="Alice",
         created_at="2024-01-01T00:00:00+00:00",
-        last_seen_at="2024-01-01T00:00:00+00:00",
+        last_login="2024-01-01T00:00:00+00:00",
     )
     mock_get_or_create = mocker.patch(
         "reporting.services.report_store.get_or_create_user",
@@ -214,6 +218,7 @@ def test_get_user_extracts_sub_and_iss(mocker):
         iss="https://idp.example.com",
         email="alice@example.com",
         display_name="Alice",
+        token_iat=datetime.fromtimestamp(iat_ts, tz=timezone.utc),
     )
     assert result.user_id == "uid1"
 
@@ -229,7 +234,7 @@ def test_get_user_auth_disabled_uses_dev_sub(mocker):
         iss="dev",
         email="devuser",
         created_at="2024-01-01T00:00:00+00:00",
-        last_seen_at="2024-01-01T00:00:00+00:00",
+        last_login="2024-01-01T00:00:00+00:00",
     )
     mock_get_or_create = mocker.patch(
         "reporting.services.report_store.get_or_create_user",
@@ -241,4 +246,5 @@ def test_get_user_auth_disabled_uses_dev_sub(mocker):
         iss="dev",
         email="devuser",
         display_name=None,
+        token_iat=None,
     )

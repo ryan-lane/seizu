@@ -1,5 +1,6 @@
 from abc import ABC
 from abc import abstractmethod
+from datetime import datetime
 from typing import Any
 from typing import Dict
 from typing import List
@@ -86,10 +87,13 @@ class ReportStore(ABC):
         iss: str,
         email: str,
         display_name: Optional[str] = None,
+        token_iat: Optional[datetime] = None,
     ) -> User:
         """Get an existing user by (iss, sub) or create a new one on first login.
 
-        If the user already exists, ``email`` and ``last_seen_at`` are updated.
+        If the user already exists, ``email`` is always updated.  ``last_login``
+        is updated only when ``token_iat`` is provided and is newer than the
+        stored value, i.e. the credential has been refreshed.
         Returns the User model.
         """
 

@@ -86,5 +86,5 @@ class User(BaseModel):
     email: str
     display_name: Optional[str] = None
     created_at: str
-    last_seen_at: str
+    last_login: str
     archived_at: Optional[str] = None

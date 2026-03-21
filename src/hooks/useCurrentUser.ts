@@ -9,7 +9,7 @@ export interface CurrentUser {
   email: string;
   display_name: string | null;
   created_at: string;
-  last_seen_at: string;
+  last_login: string;
   archived_at: string | null;
 }
 

@@ -1,4 +1,5 @@
 import logging
+from datetime import datetime
 from typing import Any
 from typing import Dict
 from typing import List
@@ -108,12 +109,14 @@ def get_or_create_user(
     iss: str,
     email: str,
     display_name: Optional[str] = None,
+    token_iat: Optional[datetime] = None,
 ) -> User:
     return get_store().get_or_create_user(
         sub=sub,
         iss=iss,
         email=email,
         display_name=display_name,
+        token_iat=token_iat,
     )
 
 

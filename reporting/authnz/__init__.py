@@ -1,4 +1,6 @@
 import logging
+from datetime import datetime
+from datetime import timezone
 from functools import wraps
 from typing import Any
 from typing import Callable
@@ -95,11 +97,18 @@ def get_user() -> User:
             display_name=None,
         )
     payload = _get_jwt_payload()
+    raw_iat = payload.get("iat")
+    token_iat = (
+        datetime.fromtimestamp(raw_iat, tz=timezone.utc)
+        if raw_iat is not None
+        else None
+    )
     return report_store.get_or_create_user(
         sub=payload[settings.JWT_SUB_CLAIM],
         iss=payload[settings.JWT_ISS_CLAIM],
         email=payload[settings.JWT_EMAIL_CLAIM],
         display_name=payload.get("name"),
+        token_iat=token_iat,
     )
 
 

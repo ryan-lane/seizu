@@ -95,7 +95,7 @@ describe('DashboardNavbar', () => {
       email: 'alice@example.com',
       display_name: 'Alice Smith',
       created_at: '2024-01-01T00:00:00+00:00',
-      last_seen_at: '2024-01-01T00:00:00+00:00',
+      last_login: '2024-01-01T00:00:00+00:00',
       archived_at: null,
     });
     render(
@@ -114,7 +114,7 @@ describe('DashboardNavbar', () => {
       email: 'alice@example.com',
       display_name: null,
       created_at: '2024-01-01T00:00:00+00:00',
-      last_seen_at: '2024-01-01T00:00:00+00:00',
+      last_login: '2024-01-01T00:00:00+00:00',
       archived_at: null,
     });
     render(
@@ -133,7 +133,7 @@ describe('DashboardNavbar', () => {
       email: 'alice@example.com',
       display_name: 'Alice Smith',
       created_at: '2024-01-01T00:00:00+00:00',
-      last_seen_at: '2024-01-01T00:00:00+00:00',
+      last_login: '2024-01-01T00:00:00+00:00',
       archived_at: null,
     });
     const { container } = render(
@@ -152,7 +152,7 @@ describe('DashboardNavbar', () => {
       email: 'dev@example.com',
       display_name: null,
       created_at: '2024-01-01T00:00:00+00:00',
-      last_seen_at: '2024-01-01T00:00:00+00:00',
+      last_login: '2024-01-01T00:00:00+00:00',
       archived_at: null,
     });
     render(

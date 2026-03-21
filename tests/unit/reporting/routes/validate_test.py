@@ -8,7 +8,7 @@ _FAKE_USER = User(
     iss="https://idp.example.com",
     email="test@example.com",
     created_at="2024-01-01T00:00:00+00:00",
-    last_seen_at="2024-01-01T00:00:00+00:00",
+    last_login="2024-01-01T00:00:00+00:00",
 )
 
 

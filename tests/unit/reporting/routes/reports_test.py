@@ -10,7 +10,7 @@ _FAKE_USER = User(
     email="user@example.com",
     display_name="Test User",
     created_at="2024-01-01T00:00:00+00:00",
-    last_seen_at="2024-01-01T00:00:00+00:00",
+    last_login="2024-01-01T00:00:00+00:00",
 )
 
 
