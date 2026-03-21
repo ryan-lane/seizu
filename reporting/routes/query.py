@@ -79,6 +79,7 @@ def query() -> Response:
         results = reporting_neo4j.run_query(
             query_request.query, parameters=query_request.params
         )
+        logger.info(results)
         serialized = [
             {key: _serialize_neo4j_value(value) for key, value in record.items()}
             for record in results

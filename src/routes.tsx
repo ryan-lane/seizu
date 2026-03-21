@@ -9,6 +9,7 @@ import ReportVersionView from 'src/pages/ReportVersionView';
 import ReportsList from 'src/pages/ReportsList';
 import Documentation from 'src/pages/Documentation';
 import NotFound from 'src/pages/NotFound';
+import QueryConsole from 'src/pages/QueryConsole';
 
 const routes = [
   {
@@ -24,6 +25,7 @@ const routes = [
       { path: 'reports/:id', element: <Reports /> },
       { path: 'reports/:id/history', element: <ReportHistory /> },
       { path: 'reports/:id/versions/:version', element: <ReportVersionView /> },
+      { path: 'query-console', element: <QueryConsole /> },
       { path: 'documentation', element: <Documentation /> },
       { path: '*', element: <Navigate to="/404" /> }
     ]

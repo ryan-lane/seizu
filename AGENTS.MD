@@ -100,7 +100,7 @@ Setup and configuration for adjacent development services (e.g., Neo4j, Redis, o
 
 ### Frontend (`src/`)
 
-React 19 + TypeScript, built with Bun, using Material-UI for components and Nivo for charts.
+React 19 + TypeScript, built with Bun, using Material-UI for components, MUI X Charts for bar/pie charts, and `@xyflow/react` for interactive graph (node-link) visualization.
 
 **Key files and patterns:**
 - `src/config.context.ts` — central ConfigContext loaded from `GET /api/v1/config`; holds OIDC and stats config; Cypher query resolution is now per-report (see `Report.queries`)
@@ -113,6 +113,10 @@ React 19 + TypeScript, built with Bun, using Material-UI for components and Nivo
 - `src/hooks/useReportsApi.ts` — hooks for fetching reports from DynamoDB: `useReportsList()`, `useReport(id)`, `useDashboardReport()`, `useDashboardReportId()`, `useAllReports()`, `useReportVersionsList(id)`, `useReportVersion(id, version)`; `useReportsMutations()` returns async functions for create/save-version/set-dashboard/delete operations
 - `src/components/ReportView.tsx` — shared report rendering component used by both `Dashboard` and `Reports` pages; accepts a `Report` object; resolves panel `cypher` fields against `report.queries` with fallback to literal Cypher string
 - `src/components/reports/` — panel components (`CypherCount`, `CypherTable`, `CypherBar`, etc.) are rendered dynamically based on the config panel type
+- `src/components/reports/CypherGraph.tsx` — graph visualization panel using `@xyflow/react`; supports Graph/Table/Raw tabs; accepts explicit map format (`RETURN {nodes, links}`), Neo4j path format (`RETURN path`), or any query format (Table/Raw tabs always available); collapsible detail panel shows selected node/relationship properties or a graph summary
+- `src/components/reports/GraphDetailPanel.tsx` — detail and summary panels rendered inside `CypherGraph`; `GraphDetailPanel` shows properties of a selected node or relationship; `GraphSummaryPanel` shows node counts by group and relationship counts by type
+- `src/pages/QueryConsole.tsx` — ad-hoc query console at `/app/query-console`; query editor with Ctrl+Enter shortcut, graph visualization of results, Graph/Table/Raw tabs
+- `src/components/QueryConsoleSchemaPanel.tsx` — collapsible database browser sidebar for the query console; queries `CALL db.labels()`, `CALL db.relationshipTypes()`, and `CALL db.propertyKeys()` to show available schema; clicking an item inserts and runs a discovery query
 - All POST requests must include the `X-CSRFToken` header
 
 ### Backend (`reporting/`)
