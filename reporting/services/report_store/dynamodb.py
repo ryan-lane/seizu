@@ -105,7 +105,7 @@ def _user_from_item(item: Dict) -> User:
         email=item["email"],
         display_name=item.get("display_name"),
         created_at=item["created_at"],
-        last_login=item["last_login"],
+        last_login=item.get("last_login", item.get("last_seen_at", "")),
         archived_at=item.get("archived_at"),
     )
 
