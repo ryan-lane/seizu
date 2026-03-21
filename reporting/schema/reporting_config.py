@@ -159,8 +159,9 @@ class Panel(BaseModel):
         default=None,
         description=(
             "A reference to a cypher from the cypher section of the configuration."
-            " Must return ``details``. Used in the details section of the panel, as"
-            " a table."
+            " Used in the details section of the panel, as a table."
+            " The query can return rows in any of the formats supported by the"
+            " ``table`` panel type."
         ),
         examples=["cves-details"],
     )

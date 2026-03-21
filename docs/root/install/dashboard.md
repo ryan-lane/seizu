@@ -115,7 +115,7 @@ To simply display a count of a particular query, use a ``count`` panel.
 | Field | Description |
 |-------|-------------|
 | cypher | A cypher query to use for this panel. Either a key from the report's `queries` dict, or a direct Cypher string. The query must return the count as ``total``. |
-| details\_cypher | A cypher to use for displaying a table view of the data, in a details view. Either a key from the report's `queries` dict, or a direct Cypher string. The query must return the rows as ``details``. |
+| details\_cypher | A cypher to use for displaying a table view of the data, in a details view. Either a key from the report's `queries` dict, or a direct Cypher string. Supports the same return formats as the ``table`` panel. |
 | params | A list of parameters to pass into the query. See [the PanelParam schema](schema.html#panelparam) for more info. |
 | caption | The caption to show as the title of this panel. |
 | type | The type of panel. ``count``, for this panel type. |
@@ -143,7 +143,7 @@ By default, this panel will color the progress data based on a threshold of <70%
 | Field | Description |
 |-------|-------------|
 | cypher | A cypher query to use for this panel. Either a key from the report's `queries` dict, or a direct Cypher string. The query must return the counts as ``numerator`` and ``denominator``. |
-| details\_cypher | A cypher to use for displaying a table view of the data, in a details view. Either a key from the report's `queries` dict, or a direct Cypher string. The query must return the rows as ``details``. |
+| details\_cypher | A cypher to use for displaying a table view of the data, in a details view. Either a key from the report's `queries` dict, or a direct Cypher string. Supports the same return formats as the ``table`` panel. |
 | params | A list of parameters to pass into the query. See [the PanelParam schema](schema.html#panelparam) for more info. |
 | caption | The caption to show as the title of this panel. |
 | type | The type of panel. ``progress``, for this panel type. |
@@ -173,8 +173,8 @@ To display a pie graph, use a ``pie`` panel.
 
 | Field | Description |
 |-------|-------------|
-| cypher | A cypher query to use for this panel. Either a key from the report's `queries` dict, or a direct Cypher string. The query must return rows, formatted as a dictionary, with keys ``id`` and ``value``, as a detail; example: ``RETURN {id: c.base_severity, value: count(c.id)} AS details``
-| details\_cypher | A cypher to use for displaying a table view of the data, in a details view. Either a key from the report's `queries` dict, or a direct Cypher string. The query must return the rows as ``details``. |
+| cypher | A cypher query to use for this panel. Either a key from the report's `queries` dict, or a direct Cypher string. The query must return rows with keys ``id`` and ``value``; example: ``RETURN {id: c.base_severity, value: count(c.id)} AS details`` |
+| details\_cypher | A cypher to use for displaying a table view of the data, in a details view. Either a key from the report's `queries` dict, or a direct Cypher string. Supports the same return formats as the ``table`` panel. |
 | params | A list of parameters to pass into the query. See [the PanelParam schema](schema.html#panelparam) for more info. |
 | caption | The caption to show as the title of this panel. |
 | type | The type of panel. ``pie``, for this panel type. |
@@ -201,8 +201,8 @@ To display a bar graph, use a ``bar`` panel.
 
 | Field | Description |
 |-------|-------------|
-| cypher | A cypher query to use for this panel. Either a key from the report's `queries` dict, or a direct Cypher string. The query must return rows, formatted as a dictionary, with keys ``id`` and ``value``, as a detail; example: ``RETURN {id: c.base_severity, value: count(c.id)} AS details``
-| details\_cypher | A cypher to use for displaying a table view of the data, in a details view. Either a key from the report's `queries` dict, or a direct Cypher string. The query must return the rows as ``details``. |
+| cypher | A cypher query to use for this panel. Either a key from the report's `queries` dict, or a direct Cypher string. The query must return rows with keys ``id`` and ``value``; example: ``RETURN {id: c.base_severity, value: count(c.id)} AS details`` |
+| details\_cypher | A cypher to use for displaying a table view of the data, in a details view. Either a key from the report's `queries` dict, or a direct Cypher string. Supports the same return formats as the ``table`` panel. |
 | params | A list of parameters to pass into the query. See [the PanelParam schema](schema.html#panelparam) for more info. |
 | caption | The caption to show as the title of this panel. |
 | type | The type of panel. ``bar``, for this panel type. |
@@ -227,9 +227,18 @@ To display rows in a paged table, use a ``table`` panel.
 
 ![a table panel example](/images/table-panel.png)
 
+The table panel auto-detects columns from the query results. It supports three return formats:
+
+- **Named columns** — `RETURN n.name AS name, n.org AS org` (explicit `columns` config maps to these)
+- **Map** — `RETURN {name: n.name, org: n.org}` (or with any alias, e.g. `AS row`)
+- **Node** — `RETURN n` (properties are unwrapped automatically)
+
+When `columns` is specified in the panel config, those column names are read directly from the record keys.
+
 | Field | Description |
 |-------|-------------|
-| cypher | A cypher query to use for this panel. Either a key from the report's `queries` dict, or a direct Cypher string. The query must return the rows as ``details``. |
+| cypher | A cypher query to use for this panel. Either a key from the report's `queries` dict, or a direct Cypher string. Columns are auto-detected from the result; no specific return alias is required. |
+| columns | Optional list of `{name, label}` objects to explicitly define which columns to show and their display labels. When omitted, columns are derived from the first result row. |
 | params | A list of parameters to pass into the query. See [the PanelParam schema](schema.html#panelparam) for more info. |
 | caption | The caption to show as the title of this panel. |
 | type | The type of panel. ``table``, for this panel type. |
@@ -255,13 +264,15 @@ Note: the caption per-row is set via the ``table_id`` field, and if unset, will 
 
 ![a vertical table panel example](/images/vertical-table-panel.png)
 
+Supports the same return formats as the ``table`` panel (named columns, map, or bare node).
+
 | Field | Description |
 |-------|-------------|
-| cypher | A cypher query to use for this panel. Either a key from the report's `queries` dict, or a direct Cypher string. The query must return the rows as ``details``. |
+| cypher | A cypher query to use for this panel. Either a key from the report's `queries` dict, or a direct Cypher string. Columns are auto-detected from the result; no specific return alias is required. |
 | params | A list of parameters to pass into the query. See [the PanelParam schema](schema.html#panelparam) for more info. |
 | caption | The caption to show as the title of this panel. |
 | type | The type of panel. ``vertical-table``, for this panel type. |
-| table\_id | The attribute inside of the ``details`` dictionary to use as a caption for each row. If not set, row captions will show as ``undefined``. |
+| table\_id | The attribute in the result row to use as a caption for each row. If not set, row captions will show as ``undefined``. |
 | size | The width of this panel. |
 
 #### Example
@@ -278,6 +289,63 @@ Note: the caption per-row is set via the ``table_id`` field, and if unset, will 
             size: 12
 ```
 
+
+### graph
+
+To display graph data as an interactive node-link diagram, use a ``graph`` panel.
+
+The panel has three tabs:
+
+- **Graph** — interactive node-link visualization. Only shown when the query returns graph-compatible data (see formats below).
+- **Table** — tabular view of the raw results. Always available. Columns are auto-detected from the result shape.
+- **Raw** — JSON dump of the full API response. Always available.
+
+Clicking a node or relationship opens a collapsible detail panel on the right showing its properties. Clicking the canvas background deselects and returns to a graph summary view. The detail panel can also be toggled via the info icon at the top of the toggle handle.
+
+The **Graph** tab supports two query return formats:
+
+**Option 1 — explicit map** (full control over labels and grouping):
+
+```cypher
+MATCH (org:GitHubOrganization)-[:OWNER]->(repo:GitHubRepository)
+WITH
+  collect(DISTINCT {id: id(org), label: org.id, group: 'Org'}) +
+  collect(DISTINCT {id: id(repo), label: repo.name, group: 'Repository'}) AS nodes,
+  collect({source: id(org), target: id(repo), type: 'OWNER'}) AS links
+RETURN {nodes: nodes, links: links}
+```
+
+**Option 2 — `RETURN path`** (simplest; labels use the ``node_label`` property, defaulting to ``name`` then node id):
+
+```cypher
+MATCH path = (:GitHubOrganization)-[:OWNER]->(:GitHubRepository)
+RETURN path LIMIT 100
+```
+
+If the query does not return graph-compatible data (e.g. ``RETURN n`` or a plain property query), the Graph tab is hidden and the Table tab is shown by default.
+
+| Field | Description |
+|-------|-------------|
+| cypher | A cypher query to use for this panel. Either a key from the report's `queries` dict, or a direct Cypher string. See formats above. |
+| params | A list of parameters to pass into the query. See [the PanelParam schema](schema.html#panelparam) for more info. |
+| caption | The caption to show as the title of this panel. |
+| type | The type of panel. ``graph``, for this panel type. |
+| graph\_settings | An object of settings specific to graph panels. |
+| graph\_settings.node\_label | The node property to display as the node label. Defaults to ``label`` (explicit map) or ``name`` then node id (path format). |
+| graph\_settings.node\_color\_by | The node property to use for color grouping. Defaults to ``group`` (explicit map) or the first label (path format). |
+| size | The width of this panel. |
+
+#### Example
+
+```yaml
+        - cypher: github-org-repos
+          caption: GitHub Repositories
+          type: graph
+          graph_settings:
+            node_label: name
+            node_color_by: group
+          size: 12
+```
 
 ### markdown
 

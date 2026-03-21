@@ -13,6 +13,7 @@ It is well suited for building reporting for tools like `cartography <https://gi
 Seizu includes:
 
 * A configuration-driven react/mui frontend, with support for a dashboard, arbitrary reports, using a row/panel based layout with various panel types for visualizing data
+* An interactive **Query Console** for running ad-hoc Cypher queries, with graph, table, and raw result views, and a collapsible database schema browser showing available node labels, relationship types, and property keys
 * A backend worker that can run queries on a schedule, or triggered by graph events, with action plugins that can use the results; for example, sending query results to a slack channel, or an sqs queue
 * A backend worker that can push query results from panels into statsd, for historical data tracking purposes
 * A mechanism of providing SSO for Neo4j, when Seizu is placed behind an OAuth2 proxy
@@ -27,6 +28,7 @@ Documentation
 
 * `Installation documentation <https://mappedsky.github.io/seizu/install/backend.html>`_
 * `Dashboard configuration <https://mappedsky.github.io/seizu/install/dashboard.html>`_
+* `Query Console <https://mappedsky.github.io/seizu/install/query-console.html>`_
 * `Scheduled query documentation <https://mappedsky.github.io/seizu/install/scheduled-queries.html>`_
 * `Basic development documentation <https://mappedsky.github.io/seizu/dev/docker-compose.html>`_
 
@@ -36,6 +38,7 @@ Documentation
 
     install/backend
     install/dashboard
+    install/query-console
     install/schema
     install/scheduled-queries
     install/stats

@@ -15,6 +15,72 @@ import Fullscreen from '@mui/icons-material/Fullscreen';
 import CloseFullscreen from '@mui/icons-material/CloseFullscreen';
 
 import { useLazyCypherQuery, QueryRecord } from 'src/hooks/useCypherQuery';
+
+/**
+ * Format any value for display in a table cell.
+ *
+ * Understands the Neo4j serialization shapes produced by the backend:
+ *  - Node:         {id, labels, properties}  → "(Label) name"
+ *  - Relationship: {id, type, start_node_id} → "[TYPE]"
+ *  - Path:         {nodes, relationships}    → node labels joined with " → "
+ *  - Array:        each element formatted recursively, joined with ", "
+ *  - Plain object: "key: value" pairs joined with ", "
+ *  - Primitive:    String(value)
+ */
+function formatValue(val: unknown): string {
+  if (val === null || val === undefined) return '';
+  if (typeof val !== 'object') return String(val);
+  if (Array.isArray(val)) return val.map(formatValue).join(', ');
+
+  const obj = val as Record<string, unknown>;
+
+  // Neo4j node: {id, labels: [...], properties: {...}}
+  if (Array.isArray(obj.labels) && typeof obj.properties === 'object' && obj.properties !== null) {
+    const label = (obj.labels as string[])[0] ?? '';
+    const props = obj.properties as Record<string, unknown>;
+    const name = props['name'] ?? props['id'] ?? obj['id'];
+    return label ? `(${label}) ${String(name)}` : String(name);
+  }
+
+  // Neo4j relationship: {type, start_node_id, end_node_id, ...}
+  if (typeof obj['type'] === 'string' && 'start_node_id' in obj) {
+    return `[${obj['type']}]`;
+  }
+
+  // Path: {nodes: [...], relationships: [...]}
+  if (Array.isArray(obj['nodes']) && Array.isArray(obj['relationships'])) {
+    return (obj['nodes'] as unknown[]).map(formatValue).join(' → ');
+  }
+
+  // Generic object: "key: value" pairs
+  return Object.entries(obj)
+    .filter(([, v]) => v !== null && v !== undefined)
+    .map(([k, v]) => `${k}: ${formatValue(v)}`)
+    .join(', ');
+}
+
+/**
+ * Flatten a query record into a plain key→value map suitable for table display.
+ *
+ * Handles three shapes:
+ *  - Multiple columns: `RETURN n.name AS name, n.org AS org`  → use record as-is
+ *  - Single key, plain object: `RETURN {name: n.name} AS row` → unwrap the value
+ *  - Single key, Neo4j node: `RETURN n` or `RETURN n AS x`   → unwrap `.properties`
+ */
+function flattenRecord(record: QueryRecord): QueryRecord {
+  const keys = Object.keys(record);
+  if (keys.length === 1) {
+    const val = record[keys[0]];
+    if (val && typeof val === 'object' && !Array.isArray(val)) {
+      const obj = val as QueryRecord;
+      if (obj.properties && typeof obj.properties === 'object' && !Array.isArray(obj.properties)) {
+        return obj.properties as QueryRecord;
+      }
+      return obj;
+    }
+  }
+  return record;
+}
 import CypherDetails from 'src/components/reports/CypherDetails';
 import QueryValidationBadge from 'src/components/reports/QueryValidationBadge';
 
@@ -175,58 +241,22 @@ export default function CypherTable({
     return <MUIDataTable data={[]} columns={[]} options={options} />;
   }
 
-  let useDetails;
   const mungedColumns = [];
   if (columns === undefined) {
-    useDetails = true;
-    let columnKeys;
-    let firstObject;
-    try {
-      firstObject = first['details'] as QueryRecord & { properties?: QueryRecord };
-      if (firstObject === null || firstObject === undefined) {
-        return <MUIDataTable data={[]} columns={[]} options={options} />;
-      }
-      if (firstObject.properties === undefined) {
-        columnKeys = Object.keys(firstObject);
-      } else {
-        columnKeys = Object.keys(firstObject.properties);
-      }
-    } catch (err) {
-      console.log(err);
-      return <Typography variant="body2">No records.</Typography>;
-    }
-    columnKeys.forEach((column) => {
-      const columnData = {
-        name: column,
-        label: column
-      };
-      mungedColumns.push(columnData);
+    Object.keys(flattenRecord(first)).forEach((column) => {
+      mungedColumns.push({ name: column, label: column });
     });
   } else {
-    useDetails = false;
-    columns.forEach((column) => {
-      const mungedColumn = column;
-      mungedColumns.push(mungedColumn);
-    });
+    columns.forEach((column) => mungedColumns.push(column));
   }
 
   const mungedRecords = [];
   for (let i = 0; i < records.length; i++) {
-    const data = records[i];
-    let mungedData: Record<string, unknown>;
-    if (useDetails) {
-      const dataDetails = data['details'] as QueryRecord & { properties?: QueryRecord };
-      if (dataDetails.properties === undefined) {
-        mungedData = dataDetails;
-      } else {
-        mungedData = dataDetails.properties;
-      }
-    } else {
-      mungedData = data;
-    }
+    const mungedData = columns === undefined ? flattenRecord(records[i]) : { ...records[i] };
     Object.keys(mungedData).forEach((key) => {
-      if (Array.isArray(mungedData[key])) {
-        mungedData[key] = (mungedData[key] as unknown[]).join(', ');
+      const val = mungedData[key];
+      if (typeof val === 'object' && val !== null) {
+        mungedData[key] = formatValue(val);
       }
     });
     mungedRecords.push(mungedData);

@@ -17,6 +17,25 @@ import Error from '@mui/icons-material/Error';
 import { ThreeDots } from 'react-loader-spinner';
 
 import { useLazyCypherQuery, QueryRecord } from 'src/hooks/useCypherQuery';
+
+/**
+ * Flatten a query record into a plain key→value map.
+ * Handles: bare multi-column records, single-key plain objects, and Neo4j node objects (with .properties).
+ */
+function flattenRecord(record: QueryRecord): QueryRecord {
+  const keys = Object.keys(record);
+  if (keys.length === 1) {
+    const val = record[keys[0]];
+    if (val && typeof val === 'object' && !Array.isArray(val)) {
+      const obj = val as QueryRecord;
+      if (obj.properties && typeof obj.properties === 'object' && !Array.isArray(obj.properties)) {
+        return obj.properties as QueryRecord;
+      }
+      return obj;
+    }
+  }
+  return record;
+}
 import CypherDetails from 'src/components/reports/CypherDetails';
 import QueryValidationBadge from 'src/components/reports/QueryValidationBadge';
 
@@ -172,14 +191,8 @@ export default function CypherVerticalTable({
 
   const tables = [];
   for (let i = 0; i < records.length; i++) {
-    let mungedData: Record<string, unknown>;
     const record = records[i];
-    const dataDetails = record['details'] as QueryRecord & { properties?: QueryRecord };
-    if (dataDetails.properties === undefined) {
-      mungedData = dataDetails;
-    } else {
-      mungedData = dataDetails.properties;
-    }
+    const mungedData = flattenRecord(record);
     const caption = String(mungedData[id]);
     const table = makeTable(mungedData);
     tables.push(

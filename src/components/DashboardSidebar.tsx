@@ -4,6 +4,7 @@ import Insights from '@mui/icons-material/Insights';
 import Article from '@mui/icons-material/Article';
 import MenuBook from '@mui/icons-material/MenuBook';
 import AddCircleOutlineIcon from '@mui/icons-material/AddCircleOutline';
+import Terminal from '@mui/icons-material/Terminal';
 import NavItem from 'src/components/NavItem';
 import Hidden from 'src/components/Hidden';
 import { NavItemData } from 'src/components/NavItem';
@@ -40,6 +41,11 @@ function DashboardSidebar({ onMobileClose = () => {}, openMobile = false }: Dash
       icon: Insights,
       title: 'Reports',
       subItems: reportSubitems
+    },
+    {
+      href: '/app/query-console',
+      icon: Terminal,
+      title: 'Query Console'
     }
   ];
 
