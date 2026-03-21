@@ -10,6 +10,7 @@ from sqlalchemy.pool import StaticPool
 from sqlmodel import create_engine
 from sqlmodel import SQLModel
 
+from reporting.schema.report_config import PanelStat
 from reporting.schema.report_config import ReportListItem
 from reporting.schema.report_config import ReportVersion
 from reporting.schema.report_config import User
@@ -71,6 +72,7 @@ def test_initialize_creates_tables(mocker):
     assert "dashboard_pointer" in table_names
     assert "reports" in table_names
     assert "users" in table_names
+    assert "panel_stats" in table_names
 
 
 # ---------------------------------------------------------------------------
@@ -586,3 +588,83 @@ def test_archive_user_sets_archived_at(store, mocker):
     assert store.archive_user("uid1") is True
     user = store.get_user("uid1")
     assert user.archived_at is not None
+
+
+# ---------------------------------------------------------------------------
+# list_panel_stats
+# ---------------------------------------------------------------------------
+
+_STAT_CONFIG = {
+    "name": "Test Report",
+    "queries": {
+        "cves-total": "MATCH (c:CVE) RETURN count(c.id) AS total",
+    },
+    "inputs": [],
+    "rows": [
+        {
+            "name": "CVEs",
+            "panels": [
+                {
+                    "type": "count",
+                    "cypher": "cves-total",
+                    "params": [{"name": "severity", "value": "CRITICAL"}],
+                    "metric": "cve.count",
+                    "size": 3,
+                }
+            ],
+        }
+    ],
+}
+
+
+def test_list_panel_stats_empty(store):
+    assert store.list_panel_stats() == []
+
+
+def test_list_panel_stats_populated_on_save_version(store, mocker):
+    mocker.patch(
+        "reporting.services.report_store.sql.generate_report_id",
+        return_value="rid1",
+    )
+    store.create_report(name="Test", created_by="u@x.com")
+    store.save_report_version(
+        report_id="rid1", config=_STAT_CONFIG, created_by="u@x.com"
+    )
+    stats = store.list_panel_stats()
+    assert len(stats) == 1
+    assert isinstance(stats[0], PanelStat)
+    assert stats[0].report_id == "rid1"
+    assert stats[0].metric == "cve.count"
+    assert stats[0].panel_type == "count"
+    assert stats[0].static_params == {"severity": "CRITICAL"}
+    assert stats[0].input_param_name is None
+
+
+def test_list_panel_stats_replaced_on_new_version(store, mocker):
+    mocker.patch(
+        "reporting.services.report_store.sql.generate_report_id",
+        return_value="rid1",
+    )
+    store.create_report(name="Test", created_by="u@x.com")
+    store.save_report_version(
+        report_id="rid1", config=_STAT_CONFIG, created_by="u@x.com"
+    )
+    # Save a version with no stat panels — stats should be cleared
+    store.save_report_version(
+        report_id="rid1", config={"name": "Test", "rows": []}, created_by="u@x.com"
+    )
+    assert store.list_panel_stats() == []
+
+
+def test_list_panel_stats_cleared_on_delete(store, mocker):
+    mocker.patch(
+        "reporting.services.report_store.sql.generate_report_id",
+        return_value="rid1",
+    )
+    store.create_report(name="Test", created_by="u@x.com")
+    store.save_report_version(
+        report_id="rid1", config=_STAT_CONFIG, created_by="u@x.com"
+    )
+    assert len(store.list_panel_stats()) == 1
+    store.delete_report("rid1")
+    assert store.list_panel_stats() == []

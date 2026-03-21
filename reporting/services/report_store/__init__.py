@@ -5,6 +5,7 @@ from typing import Dict
 from typing import List
 from typing import Optional
 
+from reporting.schema.report_config import PanelStat
 from reporting.schema.report_config import ReportListItem
 from reporting.schema.report_config import ReportVersion
 from reporting.schema.report_config import User
@@ -138,3 +139,7 @@ def get_user(user_id: str) -> Optional[User]:
 
 def archive_user(user_id: str) -> bool:
     return get_store().archive_user(user_id)
+
+
+def list_panel_stats() -> List[PanelStat]:
+    return get_store().list_panel_stats()

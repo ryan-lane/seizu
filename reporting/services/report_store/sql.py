@@ -20,9 +20,11 @@ from sqlmodel import Session
 from sqlmodel import SQLModel
 
 from reporting import settings
+from reporting.schema.report_config import PanelStat
 from reporting.schema.report_config import ReportListItem
 from reporting.schema.report_config import ReportVersion
 from reporting.schema.report_config import User
+from reporting.services.report_store.base import extract_panel_stats
 from reporting.services.report_store.base import ReportStore
 
 logger = logging.getLogger(__name__)
@@ -75,6 +77,20 @@ class UserRecord(SQLModel, table=True):  # type: ignore
     created_at: str
     last_login: str
     archived_at: Optional[str] = None
+
+
+class PanelStatRecord(SQLModel, table=True):  # type: ignore
+    __tablename__ = "panel_stats"
+    id: Optional[int] = Field(default=None, primary_key=True)
+    report_id: str = Field(index=True)
+    metric: str
+    panel_type: str
+    cypher: str
+    static_params: Dict[str, Any] = Field(
+        default={}, sa_column=Column(JSON, nullable=False)
+    )
+    input_param_name: Optional[str] = None
+    input_cypher: Optional[str] = None
 
 
 # ---------------------------------------------------------------------------
@@ -274,6 +290,26 @@ class SQLModelReportStore(ReportStore):
             report.current_version = version
             report.updated_at = now
             session.add(report)
+
+            # Replace panel stats for this report atomically with the version write.
+            old_stats_stmt = select(PanelStatRecord).where(
+                PanelStatRecord.report_id == report_id
+            )
+            for old_stat in session.exec(old_stats_stmt).all():
+                session.delete(old_stat)
+            for stat in extract_panel_stats(report_id, config):
+                session.add(
+                    PanelStatRecord(
+                        report_id=report_id,
+                        metric=stat.metric,
+                        panel_type=stat.panel_type,
+                        cypher=stat.cypher,
+                        static_params=stat.static_params,
+                        input_param_name=stat.input_param_name,
+                        input_cypher=stat.input_cypher,
+                    )
+                )
+
             session.commit()
 
         return ReportVersion(
@@ -307,6 +343,13 @@ class SQLModelReportStore(ReportStore):
             )
             for version_record in session.exec(stmt).all():
                 session.delete(version_record)
+
+            # Delete all panel stats for this report
+            stats_stmt = select(PanelStatRecord).where(
+                PanelStatRecord.report_id == report_id
+            )
+            for stat_record in session.exec(stats_stmt).all():
+                session.delete(stat_record)
 
             session.delete(report)
             session.commit()
@@ -342,6 +385,23 @@ class SQLModelReportStore(ReportStore):
         if not report_id:
             return None
         return self.get_report_latest(report_id)
+
+    def list_panel_stats(self) -> List[PanelStat]:
+        """Return all PanelStat records across all reports."""
+        with Session(_get_engine()) as session:
+            rows = session.exec(select(PanelStatRecord)).all()
+            return [
+                PanelStat(
+                    report_id=r.report_id,
+                    metric=r.metric,
+                    panel_type=r.panel_type,
+                    cypher=r.cypher,
+                    static_params=r.static_params or {},
+                    input_param_name=r.input_param_name,
+                    input_cypher=r.input_cypher,
+                )
+                for r in rows
+            ]
 
     def get_or_create_user(
         self,

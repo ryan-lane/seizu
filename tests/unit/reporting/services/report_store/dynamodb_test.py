@@ -4,6 +4,7 @@ from unittest.mock import patch
 
 import pytest
 
+from reporting.schema.report_config import PanelStat
 from reporting.schema.report_config import ReportListItem
 from reporting.schema.report_config import ReportVersion
 from reporting.services.report_store import dynamodb as dynamodb_module
@@ -293,14 +294,15 @@ def test_save_report_version_increments_version(patch_table, store):
     assert result.comment == "v4"
 
 
-def test_save_report_version_writes_four_items_transactionally(patch_table, store):
+def test_save_report_version_writes_five_items_transactionally(patch_table, store):
     patch_table.get_item.return_value = {"Item": _metadata_item(current_version=1)}
 
     store.save_report_version(report_id="123", config={}, created_by="u@x.com")
 
     patch_table.meta.client.transact_write_items.assert_called_once()
     items = patch_table.meta.client.transact_write_items.call_args[1]["TransactItems"]
-    assert len(items) == 4
+    # version, latest, metadata, list, panel_stats = 5 items
+    assert len(items) == 5
     patch_table.update_item.assert_not_called()
 
 
@@ -806,3 +808,89 @@ def test_archive_user_updates_archived_at(patch_table, store):
     kwargs = patch_table.update_item.call_args[1]
     assert kwargs["Key"] == {"PK": "USER#uid1", "SK": "#METADATA"}
     assert "archived_at" in kwargs["UpdateExpression"]
+
+
+# ---------------------------------------------------------------------------
+# list_panel_stats
+# ---------------------------------------------------------------------------
+
+
+def test_list_panel_stats_returns_empty_when_none(patch_table, store):
+    patch_table.query.return_value = {"Items": []}
+    result = store.list_panel_stats()
+    assert result == []
+
+
+def test_list_panel_stats_returns_stat_records(patch_table, store):
+    patch_table.query.return_value = {
+        "Items": [
+            {
+                "PK": "PANEL_STATS",
+                "SK": "REPORT#rid1",
+                "report_id": "rid1",
+                "stats": [
+                    {
+                        "metric": "cve.count",
+                        "panel_type": "count",
+                        "cypher": "MATCH (c:CVE) RETURN count(c.id) AS total",
+                        "static_params": {"severity": "CRITICAL"},
+                    }
+                ],
+            }
+        ]
+    }
+    result = store.list_panel_stats()
+    assert len(result) == 1
+    assert isinstance(result[0], PanelStat)
+    assert result[0].report_id == "rid1"
+    assert result[0].metric == "cve.count"
+    assert result[0].panel_type == "count"
+    assert result[0].static_params == {"severity": "CRITICAL"}
+    assert result[0].input_param_name is None
+
+
+def test_list_panel_stats_queries_correct_pk(patch_table, store):
+    patch_table.query.return_value = {"Items": []}
+    store.list_panel_stats()
+    call_kwargs = patch_table.query.call_args[1]
+    from boto3.dynamodb.conditions import Key as CondKey
+
+    assert call_kwargs["KeyConditionExpression"] == CondKey("PK").eq("PANEL_STATS")
+
+
+def test_save_report_version_writes_panel_stats(patch_table, store):
+    patch_table.get_item.return_value = {"Item": _metadata_item(current_version=0)}
+    config = {
+        "name": "Test",
+        "queries": {"cves-total": "MATCH (c:CVE) RETURN count(c.id) AS total"},
+        "inputs": [],
+        "rows": [
+            {
+                "name": "row",
+                "panels": [
+                    {
+                        "type": "count",
+                        "cypher": "cves-total",
+                        "params": [{"name": "severity", "value": "CRITICAL"}],
+                        "metric": "cve.count",
+                        "size": 3,
+                    }
+                ],
+            }
+        ],
+    }
+    store.save_report_version(report_id="123", config=config, created_by="u@x.com")
+    # Stats are written as part of the transact_write, not via batch_writer
+    patch_table.batch_writer.assert_not_called()
+    transact_call = patch_table.meta.client.transact_write_items.call_args
+    items = transact_call[1]["TransactItems"]
+    # version, latest, metadata, list, stats = 5 items
+    assert len(items) == 5
+    stats_put = next(
+        i["Put"] for i in items if i["Put"]["Item"].get("PK") == "PANEL_STATS"
+    )
+    assert stats_put["Item"]["SK"] == "REPORT#123"
+    stats_list = stats_put["Item"]["stats"]
+    assert len(stats_list) == 1
+    assert stats_list[0]["metric"] == "cve.count"
+    assert stats_list[0]["panel_type"] == "count"
