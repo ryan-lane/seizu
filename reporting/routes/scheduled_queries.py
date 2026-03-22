@@ -15,6 +15,7 @@ from reporting import authnz
 from reporting import scheduled_query_modules
 from reporting.schema.report_config import CreateScheduledQueryRequest
 from reporting.services import report_store
+from reporting.services.query_validator import validate_query
 
 logger = logging.getLogger(__name__)
 blueprint = blueprints.Blueprint("scheduled_queries", __name__)
@@ -78,6 +79,11 @@ def create_scheduled_query() -> Response:
         resp = jsonify(error=err)
         resp.status_code = 400
         return resp
+    validation = validate_query(body.cypher)
+    if validation.has_errors:
+        resp = jsonify(errors=validation.errors, warnings=validation.warnings)
+        resp.status_code = 400
+        return resp
     item = report_store.create_scheduled_query(
         name=body.name,
         cypher=body.cypher,
@@ -109,6 +115,11 @@ def update_scheduled_query(sq_id: str) -> Response:
     err = _validate_action_configs(body.actions)
     if err:
         resp = jsonify(error=err)
+        resp.status_code = 400
+        return resp
+    validation = validate_query(body.cypher)
+    if validation.has_errors:
+        resp = jsonify(errors=validation.errors, warnings=validation.warnings)
         resp.status_code = 400
         return resp
     item = report_store.update_scheduled_query(

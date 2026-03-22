@@ -4,6 +4,7 @@ from reporting.app import create_app
 from reporting.schema.report_config import ScheduledQueryItem
 from reporting.schema.report_config import ScheduledQueryVersion
 from reporting.schema.report_config import User
+from reporting.services.query_validator import ValidationResult
 
 _FAKE_USER = User(
     user_id="test-user-id",
@@ -145,6 +146,10 @@ def test_create_scheduled_query_success(mocker):
         "reporting.routes.scheduled_queries.scheduled_query_modules.get_action_schemas",
         return_value={},
     )
+    mocker.patch(
+        "reporting.routes.scheduled_queries.validate_query",
+        return_value=ValidationResult(),
+    )
     ret = app.test_client().post(
         "/api/v1/scheduled-queries",
         data=json.dumps(_VALID_SQ_BODY),
@@ -152,6 +157,26 @@ def test_create_scheduled_query_success(mocker):
     )
     assert ret.status_code == 201
     assert ret.json["scheduled_query_id"] == _SQ_ID
+
+
+def test_create_scheduled_query_cypher_validation_error(mocker):
+    app = _make_app(mocker)
+    mocker.patch(
+        "reporting.routes.scheduled_queries.scheduled_query_modules.get_action_schemas",
+        return_value={},
+    )
+    mocker.patch(
+        "reporting.routes.scheduled_queries.validate_query",
+        return_value=ValidationResult(errors=["Write queries are not allowed"]),
+    )
+    ret = app.test_client().post(
+        "/api/v1/scheduled-queries",
+        data=json.dumps(_VALID_SQ_BODY),
+        content_type="application/json",
+    )
+    assert ret.status_code == 400
+    assert "errors" in ret.json
+    assert ret.json["errors"] == ["Write queries are not allowed"]
 
 
 def test_create_scheduled_query_not_json(mocker):
@@ -220,6 +245,10 @@ def test_update_scheduled_query_success(mocker):
         "reporting.routes.scheduled_queries.scheduled_query_modules.get_action_schemas",
         return_value={},
     )
+    mocker.patch(
+        "reporting.routes.scheduled_queries.validate_query",
+        return_value=ValidationResult(),
+    )
     ret = app.test_client().put(
         f"/api/v1/scheduled-queries/{_SQ_ID}",
         data=json.dumps(_VALID_SQ_BODY),
@@ -227,6 +256,26 @@ def test_update_scheduled_query_success(mocker):
     )
     assert ret.status_code == 200
     assert ret.json["current_version"] == 2
+
+
+def test_update_scheduled_query_cypher_validation_error(mocker):
+    app = _make_app(mocker)
+    mocker.patch(
+        "reporting.routes.scheduled_queries.scheduled_query_modules.get_action_schemas",
+        return_value={},
+    )
+    mocker.patch(
+        "reporting.routes.scheduled_queries.validate_query",
+        return_value=ValidationResult(errors=["Write queries are not allowed"]),
+    )
+    ret = app.test_client().put(
+        f"/api/v1/scheduled-queries/{_SQ_ID}",
+        data=json.dumps(_VALID_SQ_BODY),
+        content_type="application/json",
+    )
+    assert ret.status_code == 400
+    assert "errors" in ret.json
+    assert ret.json["errors"] == ["Write queries are not allowed"]
 
 
 def test_update_scheduled_query_not_found(mocker):
@@ -238,6 +287,10 @@ def test_update_scheduled_query_not_found(mocker):
     mocker.patch(
         "reporting.routes.scheduled_queries.scheduled_query_modules.get_action_schemas",
         return_value={},
+    )
+    mocker.patch(
+        "reporting.routes.scheduled_queries.validate_query",
+        return_value=ValidationResult(),
     )
     ret = app.test_client().put(
         f"/api/v1/scheduled-queries/{_SQ_ID}",
