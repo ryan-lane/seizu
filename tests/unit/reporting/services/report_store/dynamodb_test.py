@@ -894,3 +894,193 @@ def test_save_report_version_writes_panel_stats(patch_table, store):
     assert len(stats_list) == 1
     assert stats_list[0]["metric"] == "cve.count"
     assert stats_list[0]["panel_type"] == "count"
+
+
+# ---------------------------------------------------------------------------
+# Scheduled queries
+# ---------------------------------------------------------------------------
+
+
+def _sq_metadata_item(sq_id="sq1", current_version=1):
+    return {
+        "PK": f"SQ#{sq_id}",
+        "SK": "#METADATA",
+        "scheduled_query_id": sq_id,
+        "name": "My Query",
+        "cypher": "MATCH (n) RETURN n",
+        "params": [],
+        "frequency": 60,
+        "watch_scans": [],
+        "enabled": True,
+        "actions": [{"action_type": "log", "action_config": {}}],
+        "current_version": current_version,
+        "created_at": "2024-01-01T00:00:00+00:00",
+        "updated_at": "2024-01-01T00:00:00+00:00",
+        "created_by": "user@example.com",
+        "updated_by": "user@example.com",
+    }
+
+
+def _sq_version_dynamo_item(sq_id="sq1", version=1):
+    return {
+        "PK": f"SQ#{sq_id}",
+        "SK": f"VERSION#{version:010d}",  # noqa: E231
+        "scheduled_query_id": sq_id,
+        "name": "My Query",
+        "version": version,
+        "cypher": "MATCH (n) RETURN n",
+        "params": [],
+        "frequency": 60,
+        "watch_scans": [],
+        "enabled": True,
+        "actions": [{"action_type": "log", "action_config": {}}],
+        "created_at": "2024-01-01T00:00:00+00:00",
+        "created_by": "user@example.com",
+        "comment": None,
+    }
+
+
+_SQ_KWARGS = dict(
+    name="My Query",
+    cypher="MATCH (n) RETURN n",
+    params=[],
+    frequency=60,
+    watch_scans=[],
+    enabled=True,
+    actions=[{"action_type": "log", "action_config": {}}],
+    created_by="user@example.com",
+)
+
+
+def test_list_scheduled_queries_empty(patch_table, store):
+    patch_table.query.return_value = {"Items": []}
+    result = store.list_scheduled_queries()
+    assert result == []
+
+
+def test_list_scheduled_queries_returns_items(patch_table, store):
+    patch_table.query.return_value = {"Items": [_sq_metadata_item()]}
+    result = store.list_scheduled_queries()
+    assert len(result) == 1
+    assert result[0].scheduled_query_id == "sq1"
+    assert result[0].name == "My Query"
+    assert result[0].current_version == 1
+
+
+def test_get_scheduled_query_success(patch_table, store):
+    patch_table.get_item.return_value = {"Item": _sq_metadata_item()}
+    result = store.get_scheduled_query("sq1")
+    assert result is not None
+    assert result.scheduled_query_id == "sq1"
+    assert result.name == "My Query"
+
+
+def test_get_scheduled_query_not_found(patch_table, store):
+    patch_table.get_item.return_value = {}
+    result = store.get_scheduled_query("nonexistent")
+    assert result is None
+
+
+def test_create_scheduled_query(patch_table, store, mocker):
+    mocker.patch(
+        "reporting.services.report_store.dynamodb.generate_report_id",
+        return_value="sq1",
+    )
+    patch_table.meta.client.transact_write_items = MagicMock()
+    result = store.create_scheduled_query(**_SQ_KWARGS)
+    assert result.scheduled_query_id == "sq1"
+    assert result.current_version == 1
+    assert result.created_by == "user@example.com"
+    assert result.updated_by == "user@example.com"
+    assert patch_table.meta.client.transact_write_items.call_count == 1
+
+
+def test_update_scheduled_query_success(patch_table, store):
+    patch_table.get_item.return_value = {"Item": _sq_metadata_item(current_version=1)}
+    patch_table.meta.client.transact_write_items = MagicMock()
+    result = store.update_scheduled_query(
+        sq_id="sq1",
+        name="Updated",
+        cypher="MATCH (n) RETURN n LIMIT 1",
+        params=[],
+        frequency=120,
+        watch_scans=[],
+        enabled=False,
+        actions=[],
+        updated_by="editor@example.com",
+        comment="v2",
+    )
+    assert result is not None
+    assert result.current_version == 2
+    assert result.updated_by == "editor@example.com"
+
+
+def test_update_scheduled_query_not_found(patch_table, store):
+    patch_table.get_item.return_value = {}
+    result = store.update_scheduled_query(
+        sq_id="nonexistent",
+        name="X",
+        cypher="MATCH (n) RETURN n",
+        params=[],
+        frequency=60,
+        watch_scans=[],
+        enabled=True,
+        actions=[],
+        updated_by="u@x.com",
+    )
+    assert result is None
+
+
+def test_list_scheduled_query_versions_empty(patch_table, store):
+    patch_table.query.return_value = {"Items": []}
+    result = store.list_scheduled_query_versions("sq1")
+    assert result == []
+
+
+def test_list_scheduled_query_versions_returns_items(patch_table, store):
+    patch_table.query.return_value = {
+        "Items": [
+            _sq_version_dynamo_item(version=2),
+            _sq_version_dynamo_item(version=1),
+        ]
+    }
+    result = store.list_scheduled_query_versions("sq1")
+    assert len(result) == 2
+    assert result[0].version == 2
+    assert result[1].version == 1
+
+
+def test_get_scheduled_query_version_success(patch_table, store):
+    patch_table.get_item.return_value = {"Item": _sq_version_dynamo_item(version=1)}
+    result = store.get_scheduled_query_version("sq1", 1)
+    assert result is not None
+    assert result.version == 1
+    assert result.scheduled_query_id == "sq1"
+
+
+def test_get_scheduled_query_version_not_found(patch_table, store):
+    patch_table.get_item.return_value = {}
+    result = store.get_scheduled_query_version("sq1", 99)
+    assert result is None
+
+
+def test_delete_scheduled_query_success(patch_table, store):
+    patch_table.get_item.return_value = {"Item": _sq_metadata_item()}
+    patch_table.query.return_value = {
+        "Items": [
+            {"PK": "SQ#sq1", "SK": "#METADATA"},
+            {"PK": "SQ#sq1", "SK": "VERSION#0000000001"},
+        ]
+    }
+    batch_mock = MagicMock()
+    patch_table.batch_writer.return_value.__enter__ = MagicMock(return_value=batch_mock)
+    patch_table.batch_writer.return_value.__exit__ = MagicMock(return_value=False)
+    result = store.delete_scheduled_query("sq1")
+    assert result is True
+    assert batch_mock.delete_item.call_count == 3  # 2 items + 1 list item
+
+
+def test_delete_scheduled_query_not_found(patch_table, store):
+    patch_table.get_item.return_value = {}
+    result = store.delete_scheduled_query("nonexistent")
+    assert result is False

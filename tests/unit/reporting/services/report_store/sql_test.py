@@ -668,3 +668,171 @@ def test_list_panel_stats_cleared_on_delete(store, mocker):
     assert len(store.list_panel_stats()) == 1
     store.delete_report("rid1")
     assert store.list_panel_stats() == []
+
+
+# ---------------------------------------------------------------------------
+# Scheduled queries
+# ---------------------------------------------------------------------------
+
+_SQ_KWARGS = dict(
+    name="Test Query",
+    cypher="MATCH (n) RETURN n",
+    params=[],
+    frequency=60,
+    watch_scans=[],
+    enabled=True,
+    actions=[{"action_type": "log", "action_config": {}}],
+    created_by="user@example.com",
+)
+
+
+def test_list_scheduled_queries_empty(store):
+    assert store.list_scheduled_queries() == []
+
+
+def test_create_scheduled_query(store, mocker):
+    mocker.patch(
+        "reporting.services.report_store.sql.generate_report_id",
+        return_value="sq1",
+    )
+    result = store.create_scheduled_query(**_SQ_KWARGS)
+    assert result.scheduled_query_id == "sq1"
+    assert result.name == "Test Query"
+    assert result.current_version == 1
+    assert result.created_by == "user@example.com"
+    assert result.updated_by == "user@example.com"
+
+
+def test_list_scheduled_queries_returns_created(store, mocker):
+    mocker.patch(
+        "reporting.services.report_store.sql.generate_report_id",
+        return_value="sq1",
+    )
+    store.create_scheduled_query(**_SQ_KWARGS)
+    items = store.list_scheduled_queries()
+    assert len(items) == 1
+    assert items[0].scheduled_query_id == "sq1"
+
+
+def test_get_scheduled_query_success(store, mocker):
+    mocker.patch(
+        "reporting.services.report_store.sql.generate_report_id",
+        return_value="sq1",
+    )
+    store.create_scheduled_query(**_SQ_KWARGS)
+    item = store.get_scheduled_query("sq1")
+    assert item is not None
+    assert item.name == "Test Query"
+    assert item.current_version == 1
+
+
+def test_get_scheduled_query_not_found(store):
+    assert store.get_scheduled_query("nonexistent") is None
+
+
+def test_update_scheduled_query_success(store, mocker):
+    mocker.patch(
+        "reporting.services.report_store.sql.generate_report_id",
+        return_value="sq1",
+    )
+    store.create_scheduled_query(**_SQ_KWARGS)
+    result = store.update_scheduled_query(
+        sq_id="sq1",
+        name="Updated Query",
+        cypher="MATCH (n) RETURN n LIMIT 1",
+        params=[],
+        frequency=120,
+        watch_scans=[],
+        enabled=False,
+        actions=[],
+        updated_by="editor@example.com",
+        comment="Updated for testing",
+    )
+    assert result is not None
+    assert result.name == "Updated Query"
+    assert result.current_version == 2
+    assert result.updated_by == "editor@example.com"
+    assert result.created_by == "user@example.com"
+
+
+def test_update_scheduled_query_not_found(store):
+    result = store.update_scheduled_query(
+        sq_id="nonexistent",
+        name="X",
+        cypher="MATCH (n) RETURN n",
+        params=[],
+        frequency=60,
+        watch_scans=[],
+        enabled=True,
+        actions=[],
+        updated_by="u@x.com",
+    )
+    assert result is None
+
+
+def test_list_scheduled_query_versions(store, mocker):
+    mocker.patch(
+        "reporting.services.report_store.sql.generate_report_id",
+        return_value="sq1",
+    )
+    store.create_scheduled_query(**_SQ_KWARGS)
+    store.update_scheduled_query(
+        sq_id="sq1",
+        name="Updated",
+        cypher="MATCH (n) RETURN n LIMIT 1",
+        params=[],
+        frequency=60,
+        watch_scans=[],
+        enabled=True,
+        actions=[],
+        updated_by="u@x.com",
+        comment="v2",
+    )
+    versions = store.list_scheduled_query_versions("sq1")
+    assert len(versions) == 2
+    assert versions[0].version == 2  # descending order
+    assert versions[1].version == 1
+
+
+def test_list_scheduled_query_versions_not_found(store):
+    assert store.list_scheduled_query_versions("nonexistent") == []
+
+
+def test_get_scheduled_query_version_success(store, mocker):
+    mocker.patch(
+        "reporting.services.report_store.sql.generate_report_id",
+        return_value="sq1",
+    )
+    store.create_scheduled_query(**_SQ_KWARGS)
+    v = store.get_scheduled_query_version("sq1", 1)
+    assert v is not None
+    assert v.version == 1
+    assert v.name == "Test Query"
+
+
+def test_get_scheduled_query_version_not_found(store, mocker):
+    mocker.patch(
+        "reporting.services.report_store.sql.generate_report_id",
+        return_value="sq1",
+    )
+    store.create_scheduled_query(**_SQ_KWARGS)
+    assert store.get_scheduled_query_version("sq1", 99) is None
+
+
+def test_get_scheduled_query_version_sq_not_found(store):
+    assert store.get_scheduled_query_version("nonexistent", 1) is None
+
+
+def test_delete_scheduled_query_success(store, mocker):
+    mocker.patch(
+        "reporting.services.report_store.sql.generate_report_id",
+        return_value="sq1",
+    )
+    store.create_scheduled_query(**_SQ_KWARGS)
+    assert store.delete_scheduled_query("sq1") is True
+    assert store.get_scheduled_query("sq1") is None
+    assert store.list_scheduled_query_versions("sq1") == []
+
+
+def test_delete_scheduled_query_not_found(store):
+    assert store.delete_scheduled_query("nonexistent") is False
