@@ -7,9 +7,14 @@ on:
     branches:
       - master
 
+# Deny all permissions by default; grant only what each job needs.
+permissions: {}
+
 jobs:
   unit:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read  # for actions/checkout
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -22,6 +27,8 @@ jobs:
           make test_unit
   frontend:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read  # for actions/checkout
     steps:
       - uses: actions/checkout@v4
       - uses: oven-sh/setup-bun@v1
@@ -37,6 +44,8 @@ jobs:
         run: bun test --watchAll=false
   linter:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read  # for actions/checkout
     steps:
       - uses: actions/checkout@v4
         with:

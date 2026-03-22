@@ -9,6 +9,9 @@ on:
 env:
   DEFAULT_BRANCH: "master"
 
+# Deny all permissions by default; grant only what each job needs.
+permissions: {}
+
 jobs:
   build-and-deploy:
     name: Build and gh-pages
