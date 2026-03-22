@@ -9,6 +9,8 @@ from typing import Optional
 from reporting.schema.report_config import PanelStat
 from reporting.schema.report_config import ReportListItem
 from reporting.schema.report_config import ReportVersion
+from reporting.schema.report_config import ScheduledQueryItem
+from reporting.schema.report_config import ScheduledQueryVersion
 from reporting.schema.report_config import User
 
 
@@ -203,3 +205,55 @@ class ReportStore(ABC):
         ``save_report_version`` call.  The stats worker uses this to avoid
         loading every full report config on each run.
         """
+
+    @abstractmethod
+    def list_scheduled_queries(self) -> List[ScheduledQueryItem]:
+        """Return all scheduled queries."""
+
+    @abstractmethod
+    def get_scheduled_query(self, sq_id: str) -> Optional[ScheduledQueryItem]:
+        """Return a scheduled query by ID, or None if not found."""
+
+    @abstractmethod
+    def create_scheduled_query(
+        self,
+        name: str,
+        cypher: str,
+        params: List[Dict[str, Any]],
+        frequency: Optional[int],
+        watch_scans: List[Dict[str, Any]],
+        enabled: bool,
+        actions: List[Dict[str, Any]],
+        created_by: str,
+    ) -> ScheduledQueryItem:
+        """Create a new scheduled query (at version 1) and return it."""
+
+    @abstractmethod
+    def update_scheduled_query(
+        self,
+        sq_id: str,
+        name: str,
+        cypher: str,
+        params: List[Dict[str, Any]],
+        frequency: Optional[int],
+        watch_scans: List[Dict[str, Any]],
+        enabled: bool,
+        actions: List[Dict[str, Any]],
+        updated_by: str,
+        comment: Optional[str] = None,
+    ) -> Optional[ScheduledQueryItem]:
+        """Save a new version of an existing scheduled query. Returns None if not found."""
+
+    @abstractmethod
+    def list_scheduled_query_versions(self, sq_id: str) -> List[ScheduledQueryVersion]:
+        """Return all stored versions for a scheduled query, newest first."""
+
+    @abstractmethod
+    def get_scheduled_query_version(
+        self, sq_id: str, version: int
+    ) -> Optional[ScheduledQueryVersion]:
+        """Return a specific version of a scheduled query, or None if not found."""
+
+    @abstractmethod
+    def delete_scheduled_query(self, sq_id: str) -> bool:
+        """Delete a scheduled query and all its versions. Returns False if not found."""

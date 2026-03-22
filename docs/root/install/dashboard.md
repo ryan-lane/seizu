@@ -18,7 +18,7 @@ Each report has its own `queries` dict for named Cypher strings used by its pane
 To populate DynamoDB from the YAML file during initial setup or development:
 
 ```bash
-make seed_reports
+make seed_dashboard
 ```
 
 The `dashboard` key in the YAML file is a string that names a report in the `reports` section to use as the default dashboard:

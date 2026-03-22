@@ -14,6 +14,8 @@ from reporting import settings
 from reporting.schema.report_config import PanelStat
 from reporting.schema.report_config import ReportListItem
 from reporting.schema.report_config import ReportVersion
+from reporting.schema.report_config import ScheduledQueryItem
+from reporting.schema.report_config import ScheduledQueryVersion
 from reporting.schema.report_config import User
 from reporting.services import get_boto_resource
 from reporting.services.report_store.base import extract_panel_stats
@@ -41,6 +43,8 @@ _PK_USER_LOOKUP = "USER_LOOKUP"
 # single shared PK for efficient full listing.  SK encodes report_id so the item
 # can be targeted directly for updates and deletes without a query.
 _PK_PANEL_STATS = "PANEL_STATS"
+# Scheduled queries — list index PK for listing all scheduled queries.
+_PK_SCHEDULED_QUERY_LIST = "SCHEDULED_QUERY_LIST"
 
 
 # ---------------------------------------------------------------------------
@@ -93,6 +97,50 @@ def _version_sk(version: int) -> str:
 def generate_report_id() -> str:
     """Return a new unique snowflake ID string."""
     return str(next(_get_snowflake_gen()))
+
+
+def _sq_pk(sq_id: str) -> str:
+    return f"SQ#{sq_id}"
+
+
+def _sq_version_sk(version: int) -> str:
+    """Zero-pad version numbers so lexicographic sort matches numeric sort."""
+    return f"{_SK_VERSION_PREFIX}{version:010d}"  # noqa: E231
+
+
+def _sq_from_item(item: Dict) -> ScheduledQueryItem:
+    return ScheduledQueryItem(
+        scheduled_query_id=item["scheduled_query_id"],
+        name=item["name"],
+        cypher=item["cypher"],
+        params=item.get("params", []),
+        frequency=item.get("frequency"),
+        watch_scans=item.get("watch_scans", []),
+        enabled=item.get("enabled", True),
+        actions=item.get("actions", []),
+        current_version=item.get("current_version", 0),
+        created_at=item["created_at"],
+        updated_at=item["updated_at"],
+        created_by=item["created_by"],
+        updated_by=item.get("updated_by"),
+    )
+
+
+def _sq_version_from_item(item: Dict) -> ScheduledQueryVersion:
+    return ScheduledQueryVersion(
+        scheduled_query_id=item["scheduled_query_id"],
+        name=item["name"],
+        version=item["version"],
+        cypher=item["cypher"],
+        params=item.get("params", []),
+        frequency=item.get("frequency"),
+        watch_scans=item.get("watch_scans", []),
+        enabled=item.get("enabled", True),
+        actions=item.get("actions", []),
+        created_at=item["created_at"],
+        created_by=item["created_by"],
+        comment=item.get("comment"),
+    )
 
 
 def _user_pk(user_id: str) -> str:
@@ -452,6 +500,175 @@ class DynamoDBReportStore(ReportStore):
                     )
                 )
         return result
+
+    def list_scheduled_queries(self) -> List[ScheduledQueryItem]:
+        table = _get_table()
+        resp = table.query(
+            KeyConditionExpression=Key("PK").eq(_PK_SCHEDULED_QUERY_LIST),
+        )
+        return [_sq_from_item(item) for item in resp.get("Items", [])]
+
+    def get_scheduled_query(self, sq_id: str) -> Optional[ScheduledQueryItem]:
+        table = _get_table()
+        resp = table.get_item(Key={"PK": _sq_pk(sq_id), "SK": _SK_METADATA})
+        item = resp.get("Item")
+        if not item:
+            return None
+        return _sq_from_item(item)
+
+    def create_scheduled_query(
+        self,
+        name: str,
+        cypher: str,
+        params: List[Dict[str, Any]],
+        frequency: Optional[int],
+        watch_scans: List[Dict[str, Any]],
+        enabled: bool,
+        actions: List[Dict[str, Any]],
+        created_by: str,
+    ) -> ScheduledQueryItem:
+        sq_id = generate_report_id()
+        now = datetime.now(tz=timezone.utc).isoformat()
+        version = 1
+        base = _strip_none(
+            {
+                "scheduled_query_id": sq_id,
+                "name": name,
+                "cypher": cypher,
+                "params": _floats_to_decimal(params),
+                "frequency": frequency,
+                "watch_scans": _floats_to_decimal(watch_scans),
+                "enabled": enabled,
+                "actions": _floats_to_decimal(actions),
+                "current_version": version,
+                "created_at": now,
+                "updated_at": now,
+                "created_by": created_by,
+                "updated_by": created_by,
+            }
+        )
+        metadata_item = {"PK": _sq_pk(sq_id), "SK": _SK_METADATA, **base}
+        list_item = {"PK": _PK_SCHEDULED_QUERY_LIST, "SK": _sq_pk(sq_id), **base}
+        version_item = _strip_none(
+            {
+                "PK": _sq_pk(sq_id),
+                "SK": _sq_version_sk(version),
+                "scheduled_query_id": sq_id,
+                "name": name,
+                "version": version,
+                "cypher": cypher,
+                "params": _floats_to_decimal(params),
+                "frequency": frequency,
+                "watch_scans": _floats_to_decimal(watch_scans),
+                "enabled": enabled,
+                "actions": _floats_to_decimal(actions),
+                "created_at": now,
+                "created_by": created_by,
+                "comment": None,
+            }
+        )
+        table = _get_table()
+        _transact_put(table, metadata_item, list_item, version_item)
+        return _sq_from_item(base)
+
+    def update_scheduled_query(
+        self,
+        sq_id: str,
+        name: str,
+        cypher: str,
+        params: List[Dict[str, Any]],
+        frequency: Optional[int],
+        watch_scans: List[Dict[str, Any]],
+        enabled: bool,
+        actions: List[Dict[str, Any]],
+        updated_by: str,
+        comment: Optional[str] = None,
+    ) -> Optional[ScheduledQueryItem]:
+        table = _get_table()
+        resp = table.get_item(Key={"PK": _sq_pk(sq_id), "SK": _SK_METADATA})
+        if not resp.get("Item"):
+            return None
+        existing = resp["Item"]
+        current_version = int(existing.get("current_version", 0))
+        version = current_version + 1
+        now = datetime.now(tz=timezone.utc).isoformat()
+        base = _strip_none(
+            {
+                "scheduled_query_id": sq_id,
+                "name": name,
+                "cypher": cypher,
+                "params": _floats_to_decimal(params),
+                "frequency": frequency,
+                "watch_scans": _floats_to_decimal(watch_scans),
+                "enabled": enabled,
+                "actions": _floats_to_decimal(actions),
+                "current_version": version,
+                "created_at": existing["created_at"],
+                "updated_at": now,
+                "created_by": existing["created_by"],
+                "updated_by": updated_by,
+            }
+        )
+        metadata_item = {"PK": _sq_pk(sq_id), "SK": _SK_METADATA, **base}
+        list_item = {"PK": _PK_SCHEDULED_QUERY_LIST, "SK": _sq_pk(sq_id), **base}
+        version_item = _strip_none(
+            {
+                "PK": _sq_pk(sq_id),
+                "SK": _sq_version_sk(version),
+                "scheduled_query_id": sq_id,
+                "name": name,
+                "version": version,
+                "cypher": cypher,
+                "params": _floats_to_decimal(params),
+                "frequency": frequency,
+                "watch_scans": _floats_to_decimal(watch_scans),
+                "enabled": enabled,
+                "actions": _floats_to_decimal(actions),
+                "created_at": now,
+                "created_by": updated_by,
+                "comment": comment,
+            }
+        )
+        _transact_put(table, metadata_item, list_item, version_item)
+        return _sq_from_item(base)
+
+    def list_scheduled_query_versions(self, sq_id: str) -> List[ScheduledQueryVersion]:
+        table = _get_table()
+        resp = table.query(
+            KeyConditionExpression=Key("PK").eq(_sq_pk(sq_id))
+            & Key("SK").begins_with(_SK_VERSION_PREFIX),
+            ScanIndexForward=False,
+        )
+        return [_sq_version_from_item(item) for item in resp.get("Items", [])]
+
+    def get_scheduled_query_version(
+        self, sq_id: str, version: int
+    ) -> Optional[ScheduledQueryVersion]:
+        table = _get_table()
+        resp = table.get_item(Key={"PK": _sq_pk(sq_id), "SK": _sq_version_sk(version)})
+        item = resp.get("Item")
+        if not item:
+            return None
+        return _sq_version_from_item(item)
+
+    def delete_scheduled_query(self, sq_id: str) -> bool:
+        table = _get_table()
+        resp = table.get_item(Key={"PK": _sq_pk(sq_id), "SK": _SK_METADATA})
+        if not resp.get("Item"):
+            return False
+        # Collect all items under this SQ PK (metadata + all versions)
+        items_resp = table.query(
+            KeyConditionExpression=Key("PK").eq(_sq_pk(sq_id)),
+            ProjectionExpression="PK, SK",
+        )
+        keys_to_delete = [
+            {"PK": item["PK"], "SK": item["SK"]} for item in items_resp.get("Items", [])
+        ]
+        keys_to_delete.append({"PK": _PK_SCHEDULED_QUERY_LIST, "SK": _sq_pk(sq_id)})
+        with table.batch_writer() as batch:
+            for key in keys_to_delete:
+                batch.delete_item(Key=key)
+        return True
 
     def _update_user_profile(
         self,

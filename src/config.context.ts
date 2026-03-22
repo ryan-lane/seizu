@@ -79,9 +79,21 @@ export interface AppConfig {
   [key: string]: unknown;
 }
 
+export interface ActionConfigFieldDef {
+  name: string;
+  label: string;
+  type: 'string' | 'text' | 'number' | 'boolean' | 'string_list' | 'select';
+  required?: boolean;
+  description?: string;
+  default?: unknown;
+  options?: string[];
+}
+
 export interface SeizuConfig {
   config: AppConfig;
   stats: StatsConfig;
+  scheduled_query_action_types: string[];
+  scheduled_query_action_schemas: Record<string, ActionConfigFieldDef[]>;
 }
 
 export interface ConfigContextValue {

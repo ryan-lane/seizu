@@ -240,17 +240,27 @@ services:
     depends_on:
       neo4j:
         condition: service_healthy
+      dynamodb:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+        required: false
     environment:
       - NEO4J_URI=bolt://neo4j:7687
       - AWS_ACCESS_KEY_ID=fake
       - AWS_SECRET_ACCESS_KEY=fake
-      - AWS_REGION=ap-northeast-1
-      - AWS_DEFAULT_REGION=ap-northeast-1
+      - AWS_DEFAULT_REGION=us-east-1
       - "SQS_CREATE_SCHEDULED_QUERY_QUEUES=true"
       - SQS_URL=http://sqs:9324
       - FLASK_APP=reporting.scheduled_queries
       - SCHEDULED_QUERY_MODULES=reporting.scheduled_query_modules.sqs,reporting.scheduled_query_modules.slack,reporting.scheduled_query_modules.log
       - SLACK_OAUTH_BOT_TOKEN
+      - REPORT_STORE_BACKEND
+      - DYNAMODB_TABLE_NAME=seizu-reports
+      - DYNAMODB_ENDPOINT_URL=http://dynamodb:8000
+      - DYNAMODB_REGION=us-east-1
+      - DYNAMODB_CREATE_TABLE=true
+      - SQL_DATABASE_URL=postgresql://seizu:seizu@postgres:5432/seizu
     command: flask worker schedule-queries
     volumes:
       - .:/home/seizu/seizu

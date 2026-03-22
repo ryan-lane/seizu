@@ -7,6 +7,7 @@ from typing import Optional
 import yaml
 from pydantic import BaseModel
 from pydantic import Field
+from pydantic import field_validator
 
 
 class InputDefault(BaseModel):
@@ -643,30 +644,35 @@ class ReportingConfig(BaseModel):
         ],
     )
 
-    scheduled_queries: Dict[str, ScheduledQuery] = Field(
-        default_factory=dict,
-        description="The scheduled queries to use for the report.",
+    scheduled_queries: List[ScheduledQuery] = Field(
+        default_factory=list,
+        description="The scheduled queries to run.",
         examples=[
             """
             .. code-block:: yaml
 
               scheduled_queries:
-                cves-by-severity:
-                  name: CVEs by severity
+                - name: CVEs by severity
+                  cypher: recent-cves
                   frequency: 1440
                   watch_scans:
                     - grouptype: CVE
                       syncedtype: recent
                   actions:
                     - action_type: slack
-                      title: Recently published HIGH/CRITICAL CVEs
-                      initial_comment: |
-                        The following HIGH/CRITICAL CVEs have been published in the last 24 hours.
-                      channels:
-                        - C0000000000
+                      action_config:
+                        title: Recently published HIGH/CRITICAL CVEs
             """
         ],
     )
+
+    @field_validator("scheduled_queries", mode="before")
+    @classmethod
+    def coerce_scheduled_queries(cls, v: Any) -> Any:
+        """Accept old dict format (key -> ScheduledQuery) as well as the new list format."""
+        if isinstance(v, dict):
+            return list(v.values())
+        return v
 
 
 def output_json_schema() -> Dict[str, Any]:

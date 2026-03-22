@@ -10,6 +10,8 @@ import ReportsList from 'src/pages/ReportsList';
 import Documentation from 'src/pages/Documentation';
 import NotFound from 'src/pages/NotFound';
 import QueryConsole from 'src/pages/QueryConsole';
+import ScheduledQueries from 'src/pages/ScheduledQueries';
+import ScheduledQueryHistory from 'src/pages/ScheduledQueryHistory';
 
 const routes = [
   {
@@ -26,6 +28,8 @@ const routes = [
       { path: 'reports/:id/history', element: <ReportHistory /> },
       { path: 'reports/:id/versions/:version', element: <ReportVersionView /> },
       { path: 'query-console', element: <QueryConsole /> },
+      { path: 'scheduled-queries', element: <ScheduledQueries /> },
+      { path: 'scheduled-queries/:id/history', element: <ScheduledQueryHistory /> },
       { path: 'documentation', element: <Documentation /> },
       { path: '*', element: <Navigate to="/404" /> }
     ]

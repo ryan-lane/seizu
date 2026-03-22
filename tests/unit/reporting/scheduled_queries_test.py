@@ -1,6 +1,5 @@
-import json
-
 from reporting import scheduled_queries
+from reporting.schema.report_config import ScheduledQueryItem
 from reporting.schema.reporting_config import ScheduledQuery
 from reporting.schema.reporting_config import ScheduledQueryAction
 
@@ -21,13 +20,10 @@ def test_schedule_query(mocker):
             ),
         ],
     )
-    queries = {
-        "test-query": "TEST",
-    }
     lock_scheduled_query_mock = mocker.patch(
         "reporting.scheduled_queries.lock_scheduled_query"
     )
-    scheduled_queries.schedule_query(sq_id, sq, queries)
+    scheduled_queries.schedule_query(sq_id, sq)
     assert lock_scheduled_query_mock.call_count == 0
 
     sq.enabled = True
@@ -35,7 +31,7 @@ def test_schedule_query(mocker):
     mocker.patch("reporting.scheduled_queries.lock_scheduled_query", return_value=False)
     result_mock = mocker.patch("reporting.scheduled_queries.run_query_with_retry")
 
-    scheduled_queries.schedule_query(sq_id, sq, queries)
+    scheduled_queries.schedule_query(sq_id, sq)
     assert result_mock.call_count == 0
 
     handle_results_mock = mocker.patch("reporting.scheduled_queries._handle_results")
@@ -51,7 +47,7 @@ def test_schedule_query(mocker):
         "reporting.scheduled_queries.reset_scheduled_query_fail_count"
     )
 
-    scheduled_queries.schedule_query(sq_id, sq, queries)
+    scheduled_queries.schedule_query(sq_id, sq)
     assert handle_results_mock.call_count == 1
     assert reset_mock.call_count == 1
 
@@ -62,7 +58,7 @@ def test_schedule_query(mocker):
     incr_mock = mocker.patch(
         "reporting.scheduled_queries.incr_scheduled_query_fail_count"
     )
-    scheduled_queries.schedule_query(sq_id, sq, queries)
+    scheduled_queries.schedule_query(sq_id, sq)
     assert incr_mock.call_count == 1
 
 
@@ -94,33 +90,33 @@ def test___handle_results(mocker):
     assert mod_mock.call_count == 1
 
 
+def _make_sq_item(sq_id: str, name: str) -> ScheduledQueryItem:
+    return ScheduledQueryItem(
+        scheduled_query_id=sq_id,
+        name=name,
+        cypher="TEST",
+        enabled=False,
+        frequency=5,
+        params=[],
+        watch_scans=[],
+        actions=[{"action_type": "sqs", "action_config": {"sqs_queue": "test"}}],
+        created_at="2024-01-01T00:00:00",
+        updated_at="2024-01-01T00:00:00",
+        created_by="seed-script",
+    )
+
+
 def test__schedule_queries(mocker):
-    config = {
-        "scheduled_queries": {
-            "test_query": {
-                "name": "test name",
-                "cypher": "test-query",
-                "enabled": False,
-                "frequency": 5,
-                "actions": [
-                    {"action_type": "sqs", "action_config": {"sqs_queue": "test"}},
-                ],
-            },
-            "test_query2": {
-                "name": "test name",
-                "cypher": "test-query",
-                "enabled": False,
-                "frequency": 5,
-                "actions": [
-                    {"action_type": "sqs", "action_config": {"sqs_queue": "test"}},
-                ],
-            },
-        },
-        "queries": {
-            "test-query": "TEST",
-        },
-    }
-    mocker.patch("builtins.open", mocker.mock_open(read_data=json.dumps(config)))
+    item1 = _make_sq_item("sq1", "test name")
+    item2 = _make_sq_item("sq2", "test name 2")
+    mocker.patch(
+        "reporting.scheduled_queries.report_store.list_scheduled_queries",
+        return_value=[item1, item2],
+    )
+    mocker.patch(
+        "reporting.scheduled_queries.reporting_config.load_file",
+        return_value=mocker.MagicMock(),
+    )
     load_modules_mock = mocker.patch("reporting.scheduled_query_modules.load_modules")
     bootstrap_mock = mocker.patch("reporting.scheduled_queries._bootstrap")
     shutdown_mock = mocker.patch(

@@ -3,6 +3,7 @@ from typing import Any
 from typing import Dict
 from typing import List
 
+from reporting.schema.report_config import ActionConfigFieldDef
 from reporting.schema.reporting_config import ScheduledQueryAction
 
 logger = logging.getLogger(__name__)
@@ -10,6 +11,41 @@ logger = logging.getLogger(__name__)
 
 def action_name() -> str:
     return "log"
+
+
+def action_config_schema() -> List[ActionConfigFieldDef]:
+    return [
+        ActionConfigFieldDef(
+            name="log_attrs",
+            label="Log attributes",
+            type="string_list",
+            required=True,
+            description="Attributes from each query result row to include in the log entry.",
+        ),
+        ActionConfigFieldDef(
+            name="query_return_attribute",
+            label="Query return attribute",
+            type="string",
+            required=False,
+            description="Top-level attribute of each result row that contains the data map.",
+            default="details",
+        ),
+        ActionConfigFieldDef(
+            name="message",
+            label="Message",
+            type="string",
+            required=False,
+            description="Log message. Defaults to the scheduled query ID.",
+        ),
+        ActionConfigFieldDef(
+            name="level",
+            label="Log level",
+            type="select",
+            required=False,
+            default="info",
+            options=["debug", "info", "warning", "error"],
+        ),
+    ]
 
 
 def setup(config: Dict[str, Any]) -> None:

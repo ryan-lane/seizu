@@ -2,7 +2,9 @@ import json
 import logging
 from typing import Any
 from typing import Dict
+from typing import List
 
+from reporting.schema.report_config import ActionConfigFieldDef
 from reporting.schema.reporting_config import ReportingConfig
 from reporting.schema.reporting_config import ScheduledQueryAction
 from reporting.services import get_boto_client
@@ -30,11 +32,30 @@ def action_name() -> str:
     return "sqs"
 
 
+def action_config_schema() -> List[ActionConfigFieldDef]:
+    return [
+        ActionConfigFieldDef(
+            name="sqs_queue",
+            label="SQS queue name",
+            type="string",
+            required=True,
+            description="Name of the SQS queue to send result messages to.",
+        ),
+        ActionConfigFieldDef(
+            name="query_return_attribute",
+            label="Query return attribute",
+            type="string",
+            required=False,
+            description="Top-level attribute of each result row to send as the message body.",
+            default="details",
+        ),
+    ]
+
+
 def setup(config: ReportingConfig) -> None:
     if not _SQS_CREATE_SCHEDULED_QUERY_QUEUES:
         return
-    scheduled_queries = config.scheduled_queries
-    for scheduled_query_id, scheduled_query in scheduled_queries.items():
+    for scheduled_query in config.scheduled_queries:
         for action in scheduled_query.actions:
             if action.action_type == "sqs":
                 sqs_client = _get_client()

@@ -85,10 +85,10 @@ $> make sync_cve
 Report and dashboard configurations are stored in DynamoDB Local. After starting the stack for the first time, seed the example reports from the YAML config:
 
 ```bash
-make seed_reports
+make seed_dashboard
 ```
 
-This reads `.config/dev/seizu/reporting-dashboard.yaml`, creates each report in DynamoDB, and sets the dashboard pointer. After resetting the DynamoDB volume, re-run `make seed_reports` to repopulate.
+This reads `.config/dev/seizu/reporting-dashboard.yaml`, creates each report in DynamoDB, and sets the dashboard pointer. After resetting the DynamoDB volume, re-run `make seed_dashboard` to repopulate.
 
 To reset the DynamoDB data volume:
 
@@ -96,7 +96,7 @@ To reset the DynamoDB data volume:
 docker compose down
 docker volume rm seizu_dynamodb_data
 docker compose up
-make seed_reports
+make seed_dashboard
 ```
 
 ## Updating configuration

@@ -7,6 +7,7 @@ from typing import List
 
 from slack_sdk import WebClient
 
+from reporting.schema.report_config import ActionConfigFieldDef
 from reporting.schema.reporting_config import ScheduledQueryAction
 from reporting.utils.settings import str_env
 
@@ -28,6 +29,40 @@ def _get_client() -> Any:
 
 def action_name() -> str:
     return "slack"
+
+
+def action_config_schema() -> List[ActionConfigFieldDef]:
+    return [
+        ActionConfigFieldDef(
+            name="channels",
+            label="Channels",
+            type="string_list",
+            required=True,
+            description="Slack channel IDs to post results to.",
+        ),
+        ActionConfigFieldDef(
+            name="title",
+            label="Title",
+            type="string",
+            required=True,
+            description="Title of the uploaded CSV file.",
+        ),
+        ActionConfigFieldDef(
+            name="initial_comment",
+            label="Initial comment",
+            type="string",
+            required=True,
+            description="Message posted alongside the file upload.",
+        ),
+        ActionConfigFieldDef(
+            name="query_return_attribute",
+            label="Query return attribute",
+            type="string",
+            required=False,
+            description="Top-level attribute of each result row that contains the data map.",
+            default="details",
+        ),
+    ]
 
 
 def setup(config: Dict[str, Any]) -> None:

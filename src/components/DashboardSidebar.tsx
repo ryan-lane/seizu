@@ -5,6 +5,7 @@ import Article from '@mui/icons-material/Article';
 import MenuBook from '@mui/icons-material/MenuBook';
 import AddCircleOutlineIcon from '@mui/icons-material/AddCircleOutline';
 import Terminal from '@mui/icons-material/Terminal';
+import Schedule from '@mui/icons-material/Schedule';
 import NavItem from 'src/components/NavItem';
 import Hidden from 'src/components/Hidden';
 import { NavItemData } from 'src/components/NavItem';
@@ -46,6 +47,11 @@ function DashboardSidebar({ onMobileClose = () => {}, openMobile = false }: Dash
       href: '/app/query-console',
       icon: Terminal,
       title: 'Query Console'
+    },
+    {
+      href: '/app/scheduled-queries',
+      icon: Schedule,
+      title: 'Scheduled Queries'
     }
   ];
 
