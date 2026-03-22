@@ -1,6 +1,8 @@
 from decimal import Decimal
 from typing import Any
 from typing import Dict
+from typing import List
+from typing import Literal
 from typing import Optional
 
 from pydantic import BaseModel
@@ -111,3 +113,87 @@ class User(BaseModel):
     created_at: str
     last_login: str
     archived_at: Optional[str] = None
+
+
+class ScheduledQueryItem(BaseModel):
+    """A scheduled query record stored in the database."""
+
+    scheduled_query_id: str
+    name: str
+    cypher: str
+    params: List[Dict[str, Any]] = Field(default_factory=list)
+    frequency: Optional[int] = None
+    watch_scans: List[Dict[str, Any]] = Field(default_factory=list)
+    enabled: bool = True
+    actions: List[Dict[str, Any]] = Field(default_factory=list)
+    current_version: int = 0
+    created_at: str
+    updated_at: str
+    created_by: str
+    updated_by: Optional[str] = None
+
+    @field_validator("current_version", mode="before")
+    @classmethod
+    def coerce_current_version(cls, v: Any) -> int:
+        if isinstance(v, Decimal):
+            return int(v)
+        return int(v) if v is not None else 0
+
+    @field_validator("params", "watch_scans", "actions", mode="before")
+    @classmethod
+    def coerce_json_fields(cls, v: Any) -> List[Dict[str, Any]]:
+        return _coerce_decimal(v) if v is not None else []
+
+
+class ScheduledQueryVersion(BaseModel):
+    """A point-in-time snapshot of a scheduled query's configuration."""
+
+    scheduled_query_id: str
+    name: str
+    version: int
+    cypher: str
+    params: List[Dict[str, Any]] = Field(default_factory=list)
+    frequency: Optional[int] = None
+    watch_scans: List[Dict[str, Any]] = Field(default_factory=list)
+    enabled: bool = True
+    actions: List[Dict[str, Any]] = Field(default_factory=list)
+    created_at: str
+    created_by: str
+    comment: Optional[str] = None
+
+    @field_validator("version", mode="before")
+    @classmethod
+    def coerce_version(cls, v: Any) -> int:
+        if isinstance(v, Decimal):
+            return int(v)
+        return int(v)
+
+    @field_validator("params", "watch_scans", "actions", mode="before")
+    @classmethod
+    def coerce_json_fields(cls, v: Any) -> List[Dict[str, Any]]:
+        return _coerce_decimal(v) if v is not None else []
+
+
+class CreateScheduledQueryRequest(BaseModel):
+    """Request body for POST/PUT /api/v1/scheduled-queries."""
+
+    name: str
+    cypher: str
+    params: List[Dict[str, Any]] = Field(default_factory=list)
+    frequency: Optional[int] = None
+    watch_scans: List[Dict[str, Any]] = Field(default_factory=list)
+    enabled: bool = True
+    actions: List[Dict[str, Any]] = Field(default_factory=list)
+    comment: Optional[str] = None
+
+
+class ActionConfigFieldDef(BaseModel):
+    """Describes a single field in an action module's config schema."""
+
+    name: str
+    label: str
+    type: Literal["string", "text", "number", "boolean", "string_list", "select"]
+    required: bool = False
+    description: Optional[str] = None
+    default: Optional[Any] = None
+    options: Optional[List[str]] = None

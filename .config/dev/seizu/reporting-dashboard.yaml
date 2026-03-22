@@ -1,12 +1,3 @@
-queries:
-  recent-cves: |-
-    MATCH (s:SyncMetadata)
-    WHERE s.grouptype = "CVE" AND s.syncedtype IN $syncedtype
-    WITH datetime({epochSeconds: s.lastupdated}) - duration({hours: 24}) AS feedupdatetime
-    MATCH (c:CVE)
-    WHERE (datetime(c.published_date)) > feedupdatetime AND c.base_severity IN $base_severity
-    RETURN {id: c.id, base_severity: c.base_severity, base_score: c.base_score, description: c.description_en} AS details
-
 dashboard: dashboard
 
 reports:
@@ -156,9 +147,14 @@ reports:
             size: 12
 
 scheduled_queries:
-  recent-cves-by-severity:
-    name: Recently published HIGH/CRITICAL CVEs
-    cypher: recent-cves
+  - name: Recently published HIGH/CRITICAL CVEs
+    cypher: |-
+      MATCH (s:SyncMetadata)
+      WHERE s.grouptype = "CVE" AND s.syncedtype IN $syncedtype
+      WITH datetime({epochSeconds: s.lastupdated}) - duration({hours: 24}) AS feedupdatetime
+      MATCH (c:CVE)
+      WHERE (datetime(c.published_date)) > feedupdatetime AND c.base_severity IN $base_severity
+      RETURN {id: c.id, base_severity: c.base_severity, base_score: c.base_score, description: c.description} AS details
     params:
       - name: syncedtype
         value:

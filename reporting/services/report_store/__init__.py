@@ -8,6 +8,8 @@ from typing import Optional
 from reporting.schema.report_config import PanelStat
 from reporting.schema.report_config import ReportListItem
 from reporting.schema.report_config import ReportVersion
+from reporting.schema.report_config import ScheduledQueryItem
+from reporting.schema.report_config import ScheduledQueryVersion
 from reporting.schema.report_config import User
 from reporting.services.report_store.base import ReportStore
 
@@ -143,3 +145,73 @@ def archive_user(user_id: str) -> bool:
 
 def list_panel_stats() -> List[PanelStat]:
     return get_store().list_panel_stats()
+
+
+def list_scheduled_queries() -> List[ScheduledQueryItem]:
+    return get_store().list_scheduled_queries()
+
+
+def get_scheduled_query(sq_id: str) -> Optional[ScheduledQueryItem]:
+    return get_store().get_scheduled_query(sq_id)
+
+
+def create_scheduled_query(
+    name: str,
+    cypher: str,
+    params: List[Dict[str, Any]],
+    frequency: Optional[int],
+    watch_scans: List[Dict[str, Any]],
+    enabled: bool,
+    actions: List[Dict[str, Any]],
+    created_by: str,
+) -> ScheduledQueryItem:
+    return get_store().create_scheduled_query(
+        name=name,
+        cypher=cypher,
+        params=params,
+        frequency=frequency,
+        watch_scans=watch_scans,
+        enabled=enabled,
+        actions=actions,
+        created_by=created_by,
+    )
+
+
+def update_scheduled_query(
+    sq_id: str,
+    name: str,
+    cypher: str,
+    params: List[Dict[str, Any]],
+    frequency: Optional[int],
+    watch_scans: List[Dict[str, Any]],
+    enabled: bool,
+    actions: List[Dict[str, Any]],
+    updated_by: str,
+    comment: Optional[str] = None,
+) -> Optional[ScheduledQueryItem]:
+    return get_store().update_scheduled_query(
+        sq_id=sq_id,
+        name=name,
+        cypher=cypher,
+        params=params,
+        frequency=frequency,
+        watch_scans=watch_scans,
+        enabled=enabled,
+        actions=actions,
+        updated_by=updated_by,
+        comment=comment,
+    )
+
+
+def delete_scheduled_query(sq_id: str) -> bool:
+    return get_store().delete_scheduled_query(sq_id)
+
+
+def list_scheduled_query_versions(sq_id: str) -> List[ScheduledQueryVersion]:
+    return get_store().list_scheduled_query_versions(sq_id)
+
+
+def get_scheduled_query_version(
+    sq_id: str, version: int
+) -> Optional[ScheduledQueryVersion]:
+    return get_store().get_scheduled_query_version(sq_id, version)

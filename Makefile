@@ -64,10 +64,10 @@ drop_db: down
 		echo "Removing dynamodb_data volume..."; \
 		docker volume rm seizu_dynamodb_data; \
 	fi
-	@echo "Done. Run 'make up' to recreate and 'make seed_reports' to reseed."
+	@echo "Done. Run 'make up' to recreate and 'make seed_dashboard' to reseed."
 
-.PHONY: seed_reports
-seed_reports:
+.PHONY: seed_dashboard
+seed_dashboard:
 	docker compose $(COMPOSE_PROFILES) run --rm seizu bash -c "pipenv sync --dev && PYTHONPATH=/home/seizu/seizu pipenv run python scripts/seed_reports_from_yaml.py --config .config/dev/seizu/reporting-dashboard.yaml $(ARGS)"
 
 .PHONY: schema

@@ -10,6 +10,7 @@ from reporting.routes import config
 from reporting.routes import me
 from reporting.routes import query
 from reporting.routes import reports
+from reporting.routes import scheduled_queries
 from reporting.routes import static
 from reporting.routes import users
 from reporting.routes import validate
@@ -51,6 +52,7 @@ def create_app(override_settings: Optional[Dict] = None) -> Flask:
     app.register_blueprint(me.blueprint)
     app.register_blueprint(query.blueprint)
     app.register_blueprint(reports.blueprint)
+    app.register_blueprint(scheduled_queries.blueprint)
     app.register_blueprint(users.blueprint)
     app.register_blueprint(validate.blueprint)
     app.register_blueprint(static.blueprint)

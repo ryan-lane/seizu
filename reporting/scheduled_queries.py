@@ -12,8 +12,12 @@ from reporting import scheduled_query_modules
 from reporting import settings
 from reporting import setup_logging  # noqa:F401
 from reporting.schema import reporting_config
+from reporting.schema.report_config import ScheduledQueryItem
 from reporting.schema.reporting_config import ScheduledQuery
 from reporting.schema.reporting_config import ScheduledQueryAction
+from reporting.schema.reporting_config import ScheduledQueryParam
+from reporting.schema.reporting_config import ScheduledQueryWatchScan
+from reporting.services import report_store
 from reporting.services.reporting_neo4j import incr_scheduled_query_fail_count
 from reporting.services.reporting_neo4j import lock_scheduled_query
 from reporting.services.reporting_neo4j import reset_scheduled_query_fail_count
@@ -32,18 +36,12 @@ app.cli.add_command(user_cli)
 
 def _is_shutdown() -> bool:
     global STATE
-
     return STATE["shutdown"]
 
 
 def _bootstrap() -> None:
     global STATE
 
-    # To exit cleanly, let's catch a SIGTERM signal and set the state to shutdown.
-    # This will cause the infinite loop to exit on next run
-
-    # not going to lie, I'm too lazy to find the typing here and it's a
-    # known documented pattern
     def finalizer(signal, frame):  # type: ignore
         logger.info("SIGTERM caught, shutting down")
         STATE["shutdown"] = True
@@ -51,10 +49,22 @@ def _bootstrap() -> None:
     signal.signal(signal.SIGTERM, finalizer)
 
 
+def _item_to_scheduled_query(item: ScheduledQueryItem) -> ScheduledQuery:
+    """Convert a DB ScheduledQueryItem into a ScheduledQuery model for the worker."""
+    return ScheduledQuery(
+        name=item.name,
+        cypher=item.cypher,
+        params=[ScheduledQueryParam(**p) for p in item.params],
+        frequency=item.frequency,
+        watch_scans=[ScheduledQueryWatchScan(**ws) for ws in item.watch_scans],
+        enabled=item.enabled,
+        actions=[ScheduledQueryAction(**a) for a in item.actions],
+    )
+
+
 def schedule_query(
     scheduled_query_id: str,
     scheduled_query: ScheduledQuery,
-    queries: Dict[str, str],
 ) -> None:
     if not scheduled_query.enabled:
         logger.debug(
@@ -67,7 +77,7 @@ def schedule_query(
             "Got lock for query", extra={"scheduled_query_id": scheduled_query_id}
         )
         try:
-            query_str = queries[scheduled_query.cypher]
+            query_str = scheduled_query.cypher
             params = {d.name: d.value for d in scheduled_query.params}
             results = run_query_with_retry(query_str, params)
             for action in scheduled_query.actions:
@@ -122,14 +132,19 @@ def _handle_results(
 
 def _schedule_queries() -> None:
     _bootstrap()
+    should_init = settings.DYNAMODB_CREATE_TABLE or (
+        settings.REPORT_STORE_BACKEND == "sqlmodel"
+    )
+    if should_init:
+        report_store.initialize()
     config = reporting_config.load_file(settings.REPORTING_CONFIG_FILE)
-    scheduled_queries = config.scheduled_queries
     scheduled_query_modules.load_modules(config)
     while not _is_shutdown():
         logger.debug("Checking queries to schedule...")
-        for scheduled_query_id, scheduled_query in scheduled_queries.items():
-            schedule_query(scheduled_query_id, scheduled_query, config.queries)
-        # check again that we're not shutdown, so we don't wait around for a minute for no reason.
+        sq_items = report_store.list_scheduled_queries()
+        for item in sq_items:
+            sq = _item_to_scheduled_query(item)
+            schedule_query(item.scheduled_query_id, sq)
         if not _is_shutdown():
             time.sleep(settings.SCHEDULED_QUERY_FREQUENCY)
 

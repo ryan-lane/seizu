@@ -7,41 +7,77 @@ Dashboards are a good visual representation of a system, for when you want to ac
 Seizu can run queries on a set schedule, or when the SyncMetadata graph data changes.
 It can take the query results and pass them into a list of configurable actions.
 
-## Configuration
+## Managing Scheduled Queries
 
-Scheduled queries are configured as part of the dashboard configuration.
+Scheduled queries are stored in the database and managed through the Seizu UI or API. They are not read directly from the YAML configuration file at runtime.
+
+### Scheduled Queries list
+
+Navigate to **Scheduled Queries** in the sidebar to view all scheduled queries. From the list you can:
+
+- Click a query name to view its current configuration in a read-only detail dialog.
+- Open the **⋮** menu on any row to **Edit**, **View history**, or **Delete** a query.
+- The table shows the trigger type, configured actions, enabled status, current version, latest update timestamp, and who last updated each query.
+
+### Creating a scheduled query
+
+Click **New scheduled query** on the Scheduled Queries page. The form includes:
 
 | Field | Description |
 |-------|-------------|
 | name | A user-friendly name for the scheduled query. |
-| cypher | A cypher query to use for this scheduled query. This is a reference to a query in the queries configuration section. The query must return the data as ``details`` |
-| params | A list of parameters to pass into the query. See [the PanelParam schema](schema.html#panelparam) for more info. |
-| frequency | The frequency, in minutes, to run this query. Mutually exclusive with ``watch_scans``. |
-| watch\_scans | A list of SyncMetadata types that will be watched to trigger this query. Each list item is a dictionary, which takes ``grouptype`` and ``syncedtype``. The query will be triggered if any list item matches. Mutually exclusive with ``frequency``. |
-| enabled | Whether or not this scheduled query will be run. |
-| actions | A list of actions to run, for the query results. See the built-in actions section, or the documentation specific for a custom action for details on how to configure this. |
+| cypher | A Cypher query to run. The query must return the data as `details` (or as configured via `query_return_attribute` in the action config). |
+| enabled | Whether the query will be run by the worker. |
+| trigger | Choose **Fixed frequency** (run every N minutes) or **Watch scans** (run when matching SyncMetadata nodes are updated). |
+| frequency | Minutes between runs. Used when trigger is **Fixed frequency**. |
+| watch scans | List of SyncMetadata filters. Each entry takes `grouptype`, `syncedtype`, and `groupid` (all support `.*` as a wildcard). Used when trigger is **Watch scans**. |
+| params | Query parameters. Each param has a name and a value. Toggle the **list** button to switch between a single value and a comma-separated list of values. |
+| actions | One or more actions to run with the query results. See the Built-in Actions section below. |
 
-### Scheduling
+### Editing a scheduled query
 
-To schedule a job to run on a frequency, use the ``frequency`` setting.
-This setting is based on minutes.
-The following scheduled query will run every 24 hours:
+Choose **Edit** from the **⋮** menu. The form is the same as creation. An optional **Comment** field is shown when editing, allowing you to describe what changed.
+
+Every save creates a new numbered version; existing versions are never overwritten.
+
+### Version history
+
+Every save creates a new numbered version. To view the history:
+
+- Choose **View history** from the **⋮** menu in the Scheduled Queries list.
+
+The history page lists all versions newest-first, showing the version number, save date, who created that version, and the save comment. The current (latest) version is labeled **current**.
+
+Click a version number to view the full configuration at that point in time. From the overflow menu on any version row you can **Restore** to save that historical configuration as a new latest version.
+
+Restoring a version never deletes history — it creates a new version whose config matches the restored one, with a comment of `Restored from version N`.
+
+### Deleting a scheduled query
+
+Choose **Delete** from the **⋮** menu and confirm. This permanently removes the query and all its versions.
+
+## YAML Configuration (for seeding)
+
+The YAML configuration file is used only as a seed source — it is not read at runtime by the scheduled query worker.
+Scheduled queries can be seeded from the YAML file using:
+
+```bash
+make seed_dashboard
+```
+
+The `scheduled_queries` section in the YAML uses a **list** format:
 
 ```yaml
-  recent-cves-by-severity:
-    name: Recently published HIGH/CRITICAL CVEs
-    cypher: recent-cves
+scheduled_queries:
+  - name: Recently published HIGH/CRITICAL CVEs
+    cypher: recent-cves          # reference to a key in the top-level queries dict
     params:
-      - name: syncedtype
-        value:
-          - recent
       - name: base_severity
         value:
           - HIGH
           - CRITICAL
-    # every 24 hours
-    frequency: 1440
-    enabled: True
+    frequency: 1440              # every 24 hours
+    enabled: true
     actions:
       - action_type: slack
         action_config:
@@ -49,99 +85,124 @@ The following scheduled query will run every 24 hours:
           initial_comment: |
             The following HIGH/CRITICAL CVEs have been published in the last 2 hours.
           channels:
-            # vulnerabilities-alert
             - C00000000
-```
 
-If you are using cartography, you can also have a query schedule itself based on a change in the SyncMetadata for a particular type of sync.
-The following scheduled query will be triggered when a kubernetes sync successfully completes:
-
-```yaml
-  images-with-no-scan:
-    name: K8s container images with no vulnerability scans
+  - name: K8s container images with no vulnerability scans
     cypher: k8s-images-without-scans
     watch_scans:
       - grouptype: KubernetesCluster
         syncedtype: KubernetesCluster
-    enabled: True
+    enabled: true
     actions:
       - action_type: sqs
         action_config:
           sqs_queue: k8s-image-scanner
 ```
 
-``watch_scans`` works by tracking the schedule query in the graph, and comparing the time of the SyncMetadata nodes to the last time the scheduled query ran.
-Due to this, when a new query is added, it will be run immediately, and then only run again after changes are detected.
+The `cypher` field is resolved against the top-level `queries` dict; if no matching key is found, the value is used as a literal Cypher string.
 
-### Built-in Actions
+Seeding is idempotent by name: existing queries are skipped unless their content has changed or `--force` is passed.
 
-#### slack
+## Scheduling
 
-The ``slack`` scheduled query action module can take query results, and attach them as a CSV to a slack message.
+### Fixed frequency
 
-The following settings can be set in ``action_config`` for this module:
+Use the `frequency` field (minutes) to run a query on a regular schedule:
 
-| Field | Description |
-|-------|-------------|
-| title | The title of the slack message to send. Required. |
-| initial\_comment | The message contents. The CSV will be attached to this message. Required. |
-| channels | A list of channel IDs to send this message to. This must be channel IDs and not channel names. Required. |
+```yaml
+  - name: Recently published HIGH/CRITICAL CVEs
+    frequency: 1440   # every 24 hours
+```
 
-This action module requires the following environment variable configuration to be set:
+### Watch scans
 
-* `SLACK_OAUTH_BOT_TOKEN`: The slack oauth API bot token, for authentication.
+Use `watch_scans` to trigger a query when Cartography SyncMetadata nodes are updated:
 
-#### sqs
+```yaml
+  - name: K8s container images with no vulnerability scans
+    watch_scans:
+      - grouptype: KubernetesCluster
+        syncedtype: KubernetesCluster
+```
 
-The ``sqs`` scheduled query action module can take query results and enqueue each result into a specified SQS queue.
+`watch_scans` works by tracking when the query last ran and comparing that time to the SyncMetadata node timestamps. A newly created query will run immediately, then only again after a matching sync is detected.
 
-The following settings can be set in ``action_config`` for this module:
+`frequency` and `watch_scans` are mutually exclusive.
 
-| Field | Description |
-|-------|-------------|
-| sqs\_queue | The SQS queue name to enqueue results into. Required. |
+## Built-in Actions
 
-For local development purposes, the ``sqs`` module also has two configuration options:
+Action configuration forms in the UI are generated dynamically from the schema declared by each module. Required fields are marked with `*`.
 
-* `SQS_CREATE_SCHEDULED_QUERY_QUEUES`: Whether or not to attempt to automatically create the configured queues.
-* `SQS_URL`: URL for the SQS server. For use when running a local/fake SQS server.
+### slack
 
-#### log
+The `slack` action takes query results and attaches them as a CSV to a Slack message.
 
-The ``log`` scheduled query action module can take query results and log the results.
+| Field | Required | Description |
+|-------|----------|-------------|
+| title | Yes | The title of the Slack message. |
+| initial\_comment | Yes | The message body. The CSV is attached to this message. |
+| channels | Yes | A list of channel IDs (not names) to send the message to. |
+| query\_return\_attribute | No | The attribute in each result row to include. Default: `details` |
 
-The following settings can be set in ``action_config`` for this module:
+Requires the following environment variable:
 
-| Field | Description |
-|-------|-------------|
-| message | The log message to log. Default: ``Result for <scheduled_query_id>`` |
-| level | The log level to use. Valid values: ``debug``, ``info``, ``warning``, ``error``, ``critical``. Default: ``info`` |
-| log\_attrs | A list of attributes from the returned data to log. Required. |
+- `SLACK_OAUTH_BOT_TOKEN`: Slack OAuth bot token for authentication.
 
-This module is primarily intended for test and development, so it is not enabled by default.
+### sqs
 
-### Custom actions
+The `sqs` action enqueues each query result row into an SQS queue.
 
-Custom actions can be included through python modules.
-This is configured through the ``SCHEDULED_QUERY_MODULES`` setting, which is a comma separated list, with a default of ``reporting.scheduled_query_modules.sqs,reporting.scheduled_query_modules.slack``.
+| Field | Required | Description |
+|-------|----------|-------------|
+| sqs\_queue | Yes | The SQS queue name to enqueue results into. |
+| query\_return\_attribute | No | The attribute in each result row to enqueue. Default: `details` |
 
-The custom action module must implement the action ModuleInterface:
+Local development options:
+
+- `SQS_CREATE_SCHEDULED_QUERY_QUEUES`: Automatically create the configured queues if they don't exist.
+- `SQS_URL`: URL for a local/fake SQS server.
+
+### log
+
+The `log` action logs query results using Python's standard logger. Intended for development and testing; not enabled by default.
+
+| Field | Required | Description |
+|-------|----------|-------------|
+| log\_attrs | Yes | A list of attributes from each result row to include in the log message. |
+| query\_return\_attribute | No | The attribute in each result row to read. Default: `details` |
+| message | No | The log message prefix. Default: `Result for <scheduled_query_id>` |
+| level | No | Log level: `debug`, `info`, `warning`, `error`. Default: `info` |
+
+To enable the `log` module, add it to `SCHEDULED_QUERY_MODULES`:
+
+```
+SCHEDULED_QUERY_MODULES=reporting.scheduled_query_modules.sqs,reporting.scheduled_query_modules.slack,reporting.scheduled_query_modules.log
+```
+
+## Custom Actions
+
+Custom actions can be included through Python modules, configured via the `SCHEDULED_QUERY_MODULES` setting (comma-separated module paths; default includes `sqs` and `slack`).
+
+The module must implement the `ModuleInterface`:
 
 .. literalinclude:: ../../../reporting/scheduled_query_modules/__init__.py
     :pyobject: ModuleInterface
 
-Note that the above is a type hint for a module itself.
-So, these functions should be implemented directly in the module, and not as a subclass.
-For example:
+Key methods:
+
+- `action_name()` — returns the string identifier used in `action_type`
+- `setup()` — called once at worker startup for initialisation (e.g. creating SQS queues)
+- `handle_results()` — called with each set of query results
+- `action_config_schema()` — **optional but recommended**; returns a list of `ActionConfigFieldDef` objects describing the action's config fields. The UI uses this to generate typed input forms instead of a raw JSON textarea. Required and optional fields, types (`string`, `text`, `number`, `boolean`, `string_list`, `select`), defaults, and help text are all declared here.
+
+Example minimal module:
 
 ```python
 def action_name() -> str:
     return "print"
 
-
 def setup() -> None:
     return
-
 
 def handle_results(
     scheduled_query_id: str,
@@ -150,9 +211,12 @@ def handle_results(
 ) -> None:
     for result in results:
         print(result)
+
+def action_config_schema():
+    return []
 ```
 
-Settings for the modules should be fetched within the module itself, for example:
+Settings for modules should be fetched within the module itself:
 
 ```python
 from reporting.utils.settings import str_env
@@ -160,13 +224,15 @@ from reporting.utils.settings import str_env
 _SLACK_OAUTH_BOT_TOKEN = str_env("SLACK_OAUTH_BOT_TOKEN")
 ```
 
-## Run the ``schedule-queries`` worker
+## Run the Scheduled Queries Worker
 
-The worker can be run as a flask CLI command:
+The worker runs as a Flask CLI command:
 
 ```bash
-$> export FLASK_APP=reporting.reporting.scheduled_queries
-$> flask worker schedule-queries
+export FLASK_APP=reporting.reporting.scheduled_queries
+flask worker schedule-queries
 ```
 
-This worker runs until it is explicitly terminated.
+Or via Docker Compose (the `seizu-scheduled-queries` service).
+
+The worker runs continuously until terminated.

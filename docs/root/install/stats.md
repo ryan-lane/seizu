@@ -15,7 +15,7 @@ See the [backend configuration for statsd](backend.html#statsd-configuration)
 ### Set ``metric`` on panels
 
 Panel configurations, including the ``metric`` field, are stored in the report store (DynamoDB or SQLModel).
-Configure panels through the Seizu UI or by seeding from the YAML file with ``make seed_reports``.
+Configure panels through the Seizu UI or by seeding from the YAML file with ``make seed_dashboard``.
 When a report version is saved, the stats worker's index is updated automatically — no separate step is needed.
 
 The ``metric`` setting on a panel is the prefix of the metric.

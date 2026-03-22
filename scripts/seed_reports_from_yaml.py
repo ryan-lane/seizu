@@ -1,12 +1,16 @@
 #!/usr/bin/env python3
-"""Seed or export DynamoDB reports using a YAML dashboard config file.
+"""Seed or export dashboard config using a YAML config file.
 
 Subcommands
 -----------
 seed (default)
-    Import reports from a YAML file into the store.  Idempotent: existing
-    reports whose latest version matches the YAML are skipped; changed ones
-    get a new version.  Use ``--force`` to save a new version unconditionally.
+    Import reports and scheduled queries from a YAML file into the store.
+    Reports: idempotent — existing reports whose latest version matches the
+    YAML are skipped; changed ones get a new version.  Use ``--force`` to
+    save a new version unconditionally.
+    Scheduled queries: missing ones are created; existing ones are updated
+    only if their content has changed.  Use ``--force`` to update all
+    unconditionally.
 
 export
     Export the latest version of every report from the store back into the
@@ -29,11 +33,11 @@ Usage (inside the seizu container)::
 
 Or via the Makefile shortcut::
 
-    make seed_reports
-    make seed_reports ARGS="seed --force"
-    make seed_reports ARGS="seed --dry-run"
-    make seed_reports ARGS="export"
-    make seed_reports ARGS="export --dry-run"
+    make seed_dashboard
+    make seed_dashboard ARGS="seed --force"
+    make seed_dashboard ARGS="seed --dry-run"
+    make seed_dashboard ARGS="export"
+    make seed_dashboard ARGS="export --dry-run"
 
 Environment variables (all optional; defaults match docker-compose dev setup):
 
@@ -78,12 +82,12 @@ def _existing_reports() -> dict:
 def seed(config_file: str, force: bool, dry_run: bool) -> None:
     config = reporting_config.load_file(config_file)
 
-    if not config.reports:
-        print("No reports found in config file. Nothing to do.")
-        return
-
     if settings.DYNAMODB_CREATE_TABLE and not dry_run:
         report_store.initialize()
+
+    if not config.reports and not config.scheduled_queries:
+        print("No reports or scheduled queries found in config file. Nothing to do.")
+        return
 
     existing = _existing_reports()
 
@@ -167,10 +171,123 @@ def seed(config_file: str, force: bool, dry_run: bool) -> None:
                 " (already existed or not found); dashboard pointer not updated"
             )
 
-    print(
-        f"\nDone. created={created} updated={updated} skipped={skipped}"
-        + (" (dry-run, no writes performed)" if dry_run else "")
+    print(f"\nReports: created={created} updated={updated} skipped={skipped}")
+
+    print("\nSeeding scheduled queries...")
+    seed_scheduled_queries(config, force=force, dry_run=dry_run)
+
+    if dry_run:
+        print("\n(dry-run, no writes performed)")
+
+
+def _sq_content_changed(  # type: ignore
+    existing, resolved_cypher, params, frequency, watch_scans, enabled, actions
+) -> bool:
+    """Return True if any content field differs from what is stored."""
+    return (
+        existing.cypher != resolved_cypher
+        or existing.params != params
+        or existing.frequency != frequency
+        or existing.watch_scans != watch_scans
+        or existing.enabled != enabled
+        or existing.actions != actions
     )
+
+
+def seed_scheduled_queries(
+    config: "reporting_config.ReportingConfig", force: bool, dry_run: bool
+) -> None:
+    """Seed scheduled queries from a loaded config into the store.
+
+    Missing queries are always created.  Existing ones are updated only when
+    their content has changed (or when ``force`` is True).
+    """
+    if not config.scheduled_queries:
+        print("  No scheduled queries in config, skipping.")
+        return
+
+    # Build a name -> existing item map
+    try:
+        existing_items = {
+            item.name: item for item in report_store.list_scheduled_queries()
+        }
+    except Exception as exc:
+        print(
+            f"[warn] Could not fetch existing scheduled queries: {exc}", file=sys.stderr
+        )
+        existing_items = {}
+
+    created = 0
+    updated = 0
+    skipped = 0
+
+    for sq in config.scheduled_queries:
+        # Resolve cypher reference against the top-level queries dict
+        resolved_cypher = config.queries.get(sq.cypher, sq.cypher)
+        params = [p.model_dump() for p in sq.params]
+        watch_scans = [ws.model_dump() for ws in sq.watch_scans]
+        actions = [a.model_dump() for a in sq.actions]
+        enabled = sq.enabled if sq.enabled is not None else True
+
+        existing = existing_items.get(sq.name)
+
+        if existing:
+            changed = force or _sq_content_changed(
+                existing,
+                resolved_cypher,
+                params,
+                sq.frequency,
+                watch_scans,
+                enabled,
+                actions,
+            )
+            if not changed:
+                print(f"  [skip] scheduled query '{sq.name}' (unchanged)")
+                skipped += 1
+                continue
+            if dry_run:
+                print(f"  [dry-run] would update scheduled query '{sq.name}'")
+                updated += 1
+                continue
+            report_store.update_scheduled_query(
+                sq_id=existing.scheduled_query_id,
+                name=sq.name,
+                cypher=resolved_cypher,
+                params=params,
+                frequency=sq.frequency,
+                watch_scans=watch_scans,
+                enabled=enabled,
+                actions=actions,
+                updated_by=SEED_USER,
+                comment=SEED_UPDATE_COMMENT,
+            )
+            print(
+                f"  [updated] scheduled query '{existing.scheduled_query_id}' name='{sq.name}'"
+            )
+            updated += 1
+            continue
+
+        if dry_run:
+            print(f"  [dry-run] would create scheduled query '{sq.name}'")
+            created += 1
+            continue
+
+        result = report_store.create_scheduled_query(
+            name=sq.name,
+            cypher=resolved_cypher,
+            params=params,
+            frequency=sq.frequency,
+            watch_scans=watch_scans,
+            enabled=enabled,
+            actions=actions,
+            created_by=SEED_USER,
+        )
+        print(
+            f"  [created] scheduled query '{result.scheduled_query_id}' name='{sq.name}'"
+        )
+        created += 1
+
+    print(f"  Scheduled queries: created={created} updated={updated} skipped={skipped}")
 
 
 def export_cmd(config_file: str, dry_run: bool) -> None:
@@ -278,12 +395,12 @@ def main() -> None:
 
     seed_parser = subparsers.add_parser(
         "seed",
-        help="Import reports from the YAML file into the store (default action).",
+        help="Import reports and scheduled queries from the YAML file (default action).",
     )
     seed_parser.add_argument(
         "--force",
         action="store_true",
-        help="Save a new version of existing reports even if the config is unchanged.",
+        help="Update existing records even if content is unchanged.",
     )
     seed_parser.add_argument(
         "--dry-run",

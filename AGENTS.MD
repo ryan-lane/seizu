@@ -7,7 +7,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 Seizu (星図) is a configuration-driven reporting platform for Neo4j graph data. It has three main runtimes:
 
 - **Flask web app** (`reporting/`) — serves the React frontend and a REST API
-- **Scheduled query worker** (`reporting/scheduled_queries.py`) — runs Cypher queries on a schedule with pluggable action plugins (SQS, Slack, log)
+- **Scheduled query worker** (`reporting/scheduled_queries.py`) — runs Cypher queries on a schedule with pluggable action plugins (SQS, Slack, log); reads scheduled queries from the database (not the YAML config file)
 - **Dashboard stats worker** (`reporting/dashboard_stats.py`) — pushes panel metrics into StatsD/Telegraf
 
 ## Running Commands with Docker
@@ -61,7 +61,7 @@ make test_unit      # backend unit tests only
 make test_frontend  # frontend type-check only
 make lint           # pre-commit on all files
 make schema           # regenerate schema/reporting-schema.json from Pydantic models
-make seed_reports     # seed report store from .config/dev/seizu/reporting-dashboard.yaml
+make seed_dashboard   # seed reports + scheduled queries from .config/dev/seizu/reporting-dashboard.yaml
 make auth_enable      # start Authentik, enable auth, restart services
 make auth_disable     # disable auth, restart services, stop Authentik
 make sqlmodel_enable  # switch to SQLModel/PostgreSQL backend, restart with postgres container
@@ -169,6 +169,13 @@ Warnings (non-blocking):
 | DELETE | `/api/v1/reports/<id>` | Deletes a report and all its versions; clears dashboard pointer if needed |
 | GET | `/api/v1/me` | Returns the current authenticated user's profile (`user_id`, `sub`, `iss`, `email`, `display_name`, `created_at`, `last_seen_at`, `archived_at`) |
 | GET | `/api/v1/users/<user_id>` | Returns a user profile by internal `user_id`; 404 if not found |
+| GET | `/api/v1/scheduled-queries` | Lists all scheduled queries |
+| POST | `/api/v1/scheduled-queries` | Creates a new scheduled query; returns 201 |
+| GET | `/api/v1/scheduled-queries/<id>` | Returns a scheduled query by ID |
+| PUT | `/api/v1/scheduled-queries/<id>` | Updates a scheduled query |
+| DELETE | `/api/v1/scheduled-queries/<id>` | Deletes a scheduled query |
+| GET | `/api/v1/scheduled-queries/<id>/versions` | Lists all versions of a scheduled query |
+| GET | `/api/v1/scheduled-queries/<id>/versions/<n>` | Returns a specific version of a scheduled query |
 | GET | `/healthcheck` | Healthcheck |
 
 ### Configuration System
@@ -178,8 +185,8 @@ Dashboard and report configurations are stored in DynamoDB. The YAML config file
 **YAML top-level sections:**
 - `queries` — named Cypher query strings used only by `scheduled_queries` cypher references; not served to the frontend
 - `dashboard` — a string key pointing to the report in `reports` that should be used as the default dashboard (e.g. `dashboard: dashboard`)
-- `reports` — report definitions used to seed DynamoDB via `make seed_reports`; each report has its own `queries` dict for named Cypher strings used by its panels; not served directly to the frontend
-- `scheduled_queries` — recurring query definitions with action plugins (SQS, Slack, log)
+- `reports` — report definitions used to seed DynamoDB via `make seed_dashboard`; each report has its own `queries` dict for named Cypher strings used by its panels; not served directly to the frontend
+- `scheduled_queries` — recurring query definitions with action plugins (SQS, Slack, log); **list** format (not a dict); used only to seed scheduled queries into the database via `make seed_dashboard`
 
 **Report storage abstraction** (`reporting/services/report_store/`): a pluggable storage layer for report configurations.
 - `base.py` — `ReportStore` ABC defining the full public interface (`list_reports`, `get_report_latest`, `create_report`, `set_dashboard_report`, `initialize`, etc.)
@@ -198,22 +205,25 @@ make down && make up   # apply after changing backends
 ```
 `make up` automatically includes `--profile sqlmodel` when `REPORT_STORE_BACKEND=sqlmodel` is set in `.env` (same pattern as `--profile auth`).
 
-**DynamoDB storage** (`reporting/services/report_store/dynamodb.py`): reports and their version history are stored in a single DynamoDB table using a composite key design:
+**DynamoDB storage** (`reporting/services/report_store/dynamodb.py`): reports, scheduled queries, and their version histories are stored in a single DynamoDB table using a composite key design:
 - Each report has a `#METADATA` item, a `#LATEST` pointer, and `VERSION#<n>` items
+- Each scheduled query has a `#METADATA` item under `SQ#<id>`, a list index item under `SCHEDULED_QUERY_LIST`, and `VERSION#<n>` items
 - A `#DASHBOARD/#POINTER` item records which report is the default dashboard
 - Machine IDs for the Snowflake ID generator are set via `SNOWFLAKE_MACHINE_ID`
 
-**SQLModel storage** (`reporting/services/report_store/sql.py`): three tables — `reports`, `report_versions`, `dashboard_pointer`. Uses SQLAlchemy JSON column for config storage; `initialize()` runs `SQLModel.metadata.create_all()`. Configured via `SQL_DATABASE_URL`.
+**SQLModel storage** (`reporting/services/report_store/sql.py`): five tables — `reports`, `report_versions`, `dashboard_pointer`, `scheduled_queries`, `scheduled_query_versions`. Uses SQLAlchemy JSON column for config storage; `initialize()` runs `SQLModel.metadata.create_all()`. Configured via `SQL_DATABASE_URL`.
 
-**Seeding reports** from the YAML config:
+**Seeding reports and scheduled queries** from the YAML config:
 ```bash
-make seed_reports                         # seed from .config/dev/seizu/reporting-dashboard.yaml
-make seed_reports ARGS="seed --force"     # save a new version even if config is unchanged
-make seed_reports ARGS="seed --dry-run"   # preview without writing
-make seed_reports ARGS="export"           # export store reports back into the YAML file
-make seed_reports ARGS="export --dry-run" # preview the exported YAML without writing
+make seed_dashboard                              # seed reports + scheduled queries from .config/dev/seizu/reporting-dashboard.yaml
+make seed_dashboard ARGS="seed --force"          # save a new version even if config is unchanged
+make seed_dashboard ARGS="seed --dry-run"        # preview without writing
+make seed_dashboard ARGS="export"                # export store reports back into the YAML file
+make seed_dashboard ARGS="export --dry-run"      # preview the exported YAML without writing
 ```
-The seed script also sets the dashboard pointer if `dashboard:` is configured in the YAML.
+The seed script seeds both reports and scheduled queries in a single run, and sets the dashboard pointer if `dashboard:` is configured in the YAML.
+
+**Seeding scheduled queries:** Scheduled queries are stored in the database with Snowflake IDs and full version history. The `cypher` field in the YAML is resolved against the top-level `queries` dict (falling back to the literal string if no key matches). Matching is by name; existing queries are skipped unless their content has changed or `--force` is passed.
 
 When seeding, existing reports whose latest stored version matches the YAML are skipped; if the config has changed, a new version is saved automatically.
 
@@ -237,7 +247,15 @@ The cartography image entrypoint is already `cartography` — do not prefix the 
 
 ### Scheduled Query Action Plugins
 
-Located in `reporting/scheduled_query_modules/`. Each module implements a standard interface. When adding a new action type, add a new module here and register it in the scheduler.
+Located in `reporting/scheduled_query_modules/`. Each module implements the `ModuleInterface` defined in `__init__.py`. When adding a new action type, add a new module here and add it to `_BUILTIN_MODULES` or configure it via `SCHEDULED_QUERY_MODULES`.
+
+Key methods every module must implement:
+- `action_name()` — the string used in `action_type` when configuring an action
+- `setup()` — called once at worker startup for initialisation
+- `handle_results(scheduled_query_id, action, results)` — processes query results
+- `action_config_schema()` — returns `List[ActionConfigFieldDef]` describing the config fields; the frontend renders typed input forms from this schema instead of a raw JSON textarea. The `ActionConfigFieldDef` type is declared in `reporting/schema/report_config.py` and supports field types: `string`, `text`, `number`, `boolean`, `string_list`, `select`.
+
+Action schemas are served to the frontend via `GET /api/v1/config` as `scheduled_query_action_schemas`.
 
 ### Docker Services
 
@@ -271,7 +289,7 @@ docker volume rm seizu_neo4j_data     # reset Neo4j graph data
 docker volume rm seizu_dynamodb_data  # reset DynamoDB report configs
 docker compose up
 ```
-After resetting DynamoDB, re-seed reports with `make seed_reports`.
+After resetting DynamoDB, re-seed reports with `make seed_dashboard`.
 
 ### Authentication
 
@@ -342,6 +360,79 @@ Default dev credentials:
 **Backend:** pytest + pytest-mock. Tests live in `tests/unit/reporting/`, mirroring `reporting/` structure. Use the Flask `test_client()` pattern — see `tests/unit/reporting/routes/query_test.py` for a reference example.
 
 **Frontend:** React Testing Library + Jest (via Bun). Test files are co-located in `__tests__/` subdirectories next to the components they test.
+
+## Frontend Style Guide
+
+### List View Pattern
+
+All list views (reports, scheduled queries, users, etc.) follow a consistent structure. When building a new list view or modifying an existing one, adhere to these conventions.
+
+#### Layout
+
+- Top bar: page title (`<Typography variant="h1">`) on the left, primary action button (`<Button variant="contained">`) on the right.
+- Loading state: `<CircularProgress />` rendered inline (no full-page spinner).
+- Error state: `<Error />` icon + `<Typography>` message side-by-side in a flex row.
+- Table: `<TableContainer component={Paper} variant="outlined">` wrapping a `<Table>`.
+
+#### Table structure
+
+- Every list view uses a `<Table>` with explicit `<TableHead>` and `<TableBody>`.
+- Empty state is a `<TableRow>` with a single `<TableCell colSpan={N}>` containing a muted `<Typography color="text.secondary">` message. Do not render a separate card or placeholder outside the table.
+- Row hover: `<TableRow hover>` on every data row.
+- Secondary/metadata columns use `sx={{ color: 'text.secondary' }}` on the `<TableCell>`.
+- Dates are formatted with `new Date(value).toLocaleString()`.
+- User references are rendered with `<UserDisplay userId={...} />` — never raw IDs or emails.
+
+#### Column naming conventions
+
+| Content | Header label |
+|---------|-------------|
+| Timestamp of last write | **Latest Update** |
+| User who last wrote | **Updated By** |
+| User who created a record | **Created By** |
+| Version number | **Version** |
+| Enabled/disabled state | **Status** |
+
+#### Per-row actions
+
+Use a `RowMenu` component (three-dot overflow menu) rather than inline icon buttons:
+
+- Trigger: `<IconButton size="small"><MoreVertIcon /></IconButton>` wrapped in a `<Tooltip title="More actions">`.
+- Menu anchor: `anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}`, `transformOrigin={{ vertical: 'top', horizontal: 'right' }}`.
+- `slotProps={{ paper: { sx: { minWidth: 180 } } }}`.
+- Destructive actions (Delete) go at the bottom, separated by a `<Divider />`, and use `sx={{ color: 'error.main' }}` with a `<DeleteIcon color="error" />`.
+- Disabled items (e.g. "already current version") should be wrapped in a `<Tooltip>` explaining why, with a `<span>` wrapper around the `<MenuItem>` so the tooltip renders correctly when the item is disabled.
+
+#### Clickable names
+
+- Make the primary identifier (name, version number, etc.) clickable to show details.
+- For list rows: use `sx={{ cursor: 'pointer', '&:hover': { textDecoration: 'underline' } }}` on a `<Typography>`, not a `<Link>`, when the click opens a dialog rather than navigating.
+- For history rows where a version can be viewed: same pattern — click opens a read-only detail dialog.
+
+#### Detail dialogs (read-only view)
+
+- Use a shared dialog component (e.g. `ScheduledQueryDetailDialog`) exported from `src/components/`.
+- Title bar: name + optional secondary label (e.g. version), close `<IconButton>` on the right.
+- A `<Divider />` separates the title from the content.
+- Sections use a consistent `Section` sub-component: subtitle label in `color="text.secondary"`, content below.
+- Code/Cypher blocks use `<Box component="pre">` with `bgcolor: 'action.hover'`, `fontFamily: 'monospace'`, `whiteSpace: 'pre-wrap'`, `wordBreak: 'break-word'`.
+
+#### Dialogs (create / delete)
+
+- Create dialogs: `maxWidth="sm" fullWidth`.
+- Delete confirmation dialogs: `maxWidth="xs" fullWidth`; use `<DialogContentText>` with the record name in `<strong>`.
+- Always show a `<CircularProgress size={20} />` inside the submit button while the async operation is in flight; keep the button disabled.
+- Error messages go in an `<Alert severity="error">` at the top of `<DialogContent>`, not in a separate snackbar.
+
+#### Version history pages
+
+- Route pattern: `<entity>/:id/history` (e.g. `reports/:id/history`, `scheduled-queries/:id/history`).
+- Back button at top using `<Button startIcon={<ArrowBackIcon />}>` navigating to the parent list.
+- Page title: `<HistoryIcon color="action" />` + `<Typography variant="h1">Version history – {name}</Typography>`.
+- Table columns: **Version**, **Saved**, **Created By**, **Comment**, actions menu.
+- Current version row: version label in bold with a `"current"` caption in `color="primary"`.
+- Restore action: disabled on the current version with a tooltip explaining why; restoring calls the update API with `comment: \`Restored from version ${version}\``.
+- Helmet title: `History – {name} | Seizu`.
 
 ## Keeping Supporting Files Up to Date
 
