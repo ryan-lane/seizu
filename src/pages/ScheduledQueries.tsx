@@ -309,8 +309,9 @@ function ScheduledQueryDialog({ open, onClose, onSave, initial }: ScheduledQuery
     try {
       await onSave(req);
       handleClose();
-    } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : 'Failed to save.');
+    } catch (err) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      setError((err as any)?.message ?? 'Failed to save.');
     } finally {
       setSaving(false);
     }
