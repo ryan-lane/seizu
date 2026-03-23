@@ -364,6 +364,15 @@ Default dev credentials:
 
 **Frontend:** React Testing Library + Jest (via Bun). Test files are co-located in `__tests__/` subdirectories next to the components they test.
 
+### Typing
+
+Python code targets strict mypy with `check_untyped_defs = true` and `disallow_untyped_defs = true` (see `setup.cfg`). When writing or modifying Python code:
+
+- All functions must have complete type annotations.
+- Prefer fixing type errors over suppressing them. Do not add `# type: ignore` or `ignore_errors = true` without a genuine reason (e.g., broken third-party stubs with no alternative).
+- When you encounter existing `# type: ignore` comments in code you are changing, fix the underlying type issue and remove the comment rather than propagating it.
+- Use `typing.cast` only when the type system cannot express a known-safe invariant (e.g., casting a `str` to a `Literal` type constrained by settings validation).
+
 ## Frontend Style Guide
 
 ### List View Pattern
