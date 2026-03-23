@@ -1,6 +1,7 @@
 import logging
 from typing import Any
 
+import neo4j.exceptions
 from apiflask import APIBlueprint
 from flask import jsonify
 from flask import make_response
@@ -82,8 +83,11 @@ def query(body: QueryRequest) -> Any:
             "warnings": [str(w) for w in validation.warnings],
             "errors": [],
         }
-    except Exception as e:
+    except neo4j.exceptions.Neo4jError as e:
         logger.exception("Query execution failed")
         return make_response(
-            jsonify(error="Query execution failed", details=str(e)), 500
+            jsonify(error="Query execution failed", code=e.code, details=e.message), 500
         )
+    except Exception:
+        logger.exception("Query execution failed")
+        return make_response(jsonify(error="Query execution failed"), 500)
