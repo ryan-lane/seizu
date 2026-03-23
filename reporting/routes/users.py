@@ -1,17 +1,20 @@
-from flask import blueprints
-from flask import jsonify
-from flask import Response
+from apiflask import abort
+from apiflask import APIBlueprint
 
-from reporting import authnz
+from reporting import authnz  # noqa: F401
+from reporting.authnz import bearer_auth
+from reporting.schema.report_config import User
 from reporting.services import report_store
 
-blueprint = blueprints.Blueprint("users", __name__)
+blueprint = APIBlueprint("users", __name__)
 
 
-@blueprint.route("/api/v1/users/<user_id>", methods=["GET"])
-@authnz.require_auth
-def get_user(user_id: str) -> Response:
+@blueprint.get("/api/v1/users/<user_id>")
+@blueprint.auth_required(bearer_auth)
+@blueprint.output(User)
+def get_user(user_id: str) -> User:
+    """Return a user profile by internal user_id."""
     user = report_store.get_user(user_id)
     if user is None:
-        return jsonify({"error": "User not found"}), 404
-    return jsonify(user.model_dump())
+        abort(404, message="User not found")
+    return user

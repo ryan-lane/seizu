@@ -13,3 +13,10 @@ class QueryRequest(BaseModel):
 
 class QueryResponse(BaseModel):
     results: List[Dict[str, Any]]
+    errors: List[str] = []
+    warnings: List[str] = []
+
+
+class ValidationResponse(BaseModel):
+    errors: List[str]
+    warnings: List[str]

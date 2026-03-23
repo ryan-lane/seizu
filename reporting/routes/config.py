@@ -1,4 +1,4 @@
-from flask import blueprints
+from apiflask import APIBlueprint
 from flask import jsonify
 from flask import Response
 
@@ -6,34 +6,13 @@ from reporting import scheduled_query_modules
 from reporting import settings
 from reporting.schema import reporting_config
 
-blueprint = blueprints.Blueprint("config", __name__)
+blueprint = APIBlueprint("config", __name__)
 
 
-@blueprint.route("/api/v1/config", methods=["GET"])
+@blueprint.get("/api/v1/config")
+@blueprint.doc(hide=True)
 def get_config() -> Response:
-    """
-    Get frontend configuration.
-
-    .. :quickref: config; get frontend configuration data
-
-    **Example request**:
-
-    .. sourcecode:: http
-
-       GET /api/v1/config
-
-    **Example response**:
-
-    .. sourcecode:: http
-
-    HTTP/1.1 200 OK
-    Content-Type: application/json
-
-    {}
-
-    :resheader Content-Type: application/json
-    :statuscode 200: success
-    """
+    """Get frontend configuration."""
     schema = reporting_config.output_json_schema()
     oidc_config = None
     if settings.OIDC_AUTHORITY:

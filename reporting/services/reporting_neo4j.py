@@ -1,12 +1,15 @@
 import logging
 import time
 from datetime import datetime
+from typing import cast
 from typing import Dict
 from typing import List
+from typing import Literal
 
 import neo4j.exceptions
+from neo4j import Driver
 from neo4j import GraphDatabase
-from neo4j import Result
+from neo4j import Record
 from neo4j import Transaction
 from neo4j.exceptions import TransactionError
 
@@ -19,7 +22,7 @@ logger = logging.getLogger(__name__)
 _CLIENT_CACHE = None
 
 
-def _get_neo4j_client() -> GraphDatabase:
+def _get_neo4j_client() -> Driver:
     global _CLIENT_CACHE
     if _CLIENT_CACHE is None:
         neo4j_auth = None
@@ -29,12 +32,15 @@ def _get_neo4j_client() -> GraphDatabase:
             settings.NEO4J_URI,
             auth=neo4j_auth,
             max_connection_lifetime=settings.NEO4J_MAX_CONNECTION_LIFETIME,
-            notifications_min_severity=settings.NEO4J_NOTIFICATIONS_MIN_SEVERITY,
+            notifications_min_severity=cast(
+                Literal["OFF", "WARNING", "INFORMATION"],
+                settings.NEO4J_NOTIFICATIONS_MIN_SEVERITY,
+            ),
         )
     return _CLIENT_CACHE
 
 
-def run_query(cypher: str, parameters: Dict = None) -> Result:
+def run_query(cypher: str, parameters: Dict = None) -> List[Record]:
     results = []
     driver = _get_neo4j_client()
     with driver.session() as session:
@@ -44,7 +50,7 @@ def run_query(cypher: str, parameters: Dict = None) -> Result:
     return results
 
 
-def run_query_with_retry(cypher: str, parameters: Dict = None) -> Result:
+def run_query_with_retry(cypher: str, parameters: Dict = None) -> List[Record]:
     attempt = 1
     while True:
         try:
@@ -56,7 +62,7 @@ def run_query_with_retry(cypher: str, parameters: Dict = None) -> Result:
         attempt = attempt + 1
 
 
-def run_tx(tx: Transaction, cypher: str, parameters: Dict = None) -> Result:
+def run_tx(tx: Transaction, cypher: str, parameters: Dict = None) -> List[Record]:
     results = []
     query_results = tx.run(cypher, parameters=parameters)
     for result in query_results:
@@ -64,7 +70,9 @@ def run_tx(tx: Transaction, cypher: str, parameters: Dict = None) -> Result:
     return results
 
 
-def run_tx_with_retry(tx: Transaction, cypher: str, parameters: Dict = None) -> Result:
+def run_tx_with_retry(
+    tx: Transaction, cypher: str, parameters: Dict = None
+) -> List[Record]:
     attempt = 1
     while True:
         try:

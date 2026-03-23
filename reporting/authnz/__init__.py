@@ -5,8 +5,10 @@ from functools import wraps
 from typing import Any
 from typing import Callable
 from typing import Dict
+from typing import Optional
 
 import jwt
+from apiflask import HTTPTokenAuth
 from flask import g
 from flask import request
 from jwt import PyJWKClient
@@ -17,6 +19,18 @@ from reporting.schema.report_config import User
 logger = logging.getLogger(__name__)
 
 _jwks_client: PyJWKClient | None = None
+
+bearer_auth = HTTPTokenAuth(scheme="Bearer")
+
+
+@bearer_auth.verify_token
+def _verify_bearer(token: str) -> Optional[User]:
+    try:
+        user = get_user()
+        g.current_user = user
+        return user
+    except Exception:
+        return None
 
 
 def _get_jwks_client() -> PyJWKClient:

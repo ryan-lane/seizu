@@ -128,12 +128,13 @@ React 19 + TypeScript, built with Bun, using Material-UI for components, MUI X C
 
 ### Backend (`reporting/`)
 
-Flask 2 app, Python 3.12, using Gunicorn+Gevent in production.
+APIFlask app (built on Flask 2), Python 3.12, using Gunicorn+Gevent in production.
 
 **Key files and patterns:**
-- `reporting/app.py` — Flask app factory (`create_app`)
+- `reporting/app.py` — APIFlask app factory (`create_app`); serves OpenAPI spec at `/api/openapi.json` and Swagger UI at `/api/docs`
 - `reporting/settings.py` — all configuration via env vars (Pydantic validators)
-- `reporting/routes/` — Flask blueprints: `config.py`, `me.py`, `query.py`, `reports.py`, `static.py`, `users.py`
+- `reporting/routes/` — APIFlask blueprints (`APIBlueprint`): `config.py`, `me.py`, `query.py`, `reports.py`, `users.py`, `validate.py`, `scheduled_queries.py`; `static.py` remains a regular Flask blueprint (excluded from OpenAPI spec)
+- `reporting/authnz/__init__.py` — `bearer_auth = HTTPTokenAuth(scheme="Bearer")` is the auth object used by `@blueprint.auth_required(bearer_auth)` on all protected routes; `_verify_bearer` calls `get_user()` which handles both JWT validation (prod) and dev-mode bypass; routes keep `from reporting import authnz  # noqa: F401` so tests can mock `authnz.get_user` via the route module path
 - `reporting/services/` — business logic: `reporting_neo4j.py` (Neo4j driver + distributed locking), `report_store/` (pluggable report storage; see below), `query_validator.py` (multi-stage Cypher validation), `reporting_statsd.py`
 - `reporting/schema/reporting_config.py` — Pydantic models that validate the YAML config (`queries`, `dashboard`, `reports`, `scheduled_queries`)
 - `reporting/schema/report_config.py` — Pydantic models for DynamoDB report items and API request/response schemas
@@ -177,6 +178,8 @@ Warnings (non-blocking):
 | GET | `/api/v1/scheduled-queries/<id>/versions` | Lists all versions of a scheduled query |
 | GET | `/api/v1/scheduled-queries/<id>/versions/<n>` | Returns a specific version of a scheduled query |
 | GET | `/healthcheck` | Healthcheck |
+| GET | `/api/openapi.json` | OpenAPI 3.x specification (machine-readable, use with openapi-generator for CLI/client generation) |
+| GET | `/api/docs` | Swagger UI (bearer token auth required for protected routes; CSP may restrict in browser) |
 
 ### Configuration System
 
@@ -261,7 +264,7 @@ Action schemas are served to the frontend via `GET /api/v1/config` as `scheduled
 
 | Service | Role |
 |---------|------|
-| `seizu` | Flask backend + static frontend |
+| `seizu` | APIFlask backend + static frontend |
 | `seizu-node` | Bun dev server (frontend only) |
 | `seizu-dashboard-stats` | Stats aggregation worker |
 | `seizu-scheduled-queries` | Scheduled query worker |
@@ -360,6 +363,15 @@ Default dev credentials:
 **Backend:** pytest + pytest-mock. Tests live in `tests/unit/reporting/`, mirroring `reporting/` structure. Use the Flask `test_client()` pattern — see `tests/unit/reporting/routes/query_test.py` for a reference example.
 
 **Frontend:** React Testing Library + Jest (via Bun). Test files are co-located in `__tests__/` subdirectories next to the components they test.
+
+### Typing
+
+Python code targets strict mypy with `check_untyped_defs = true` and `disallow_untyped_defs = true` (see `setup.cfg`). When writing or modifying Python code:
+
+- All functions must have complete type annotations.
+- Prefer fixing type errors over suppressing them. Do not add `# type: ignore` or `ignore_errors = true` without a genuine reason (e.g., broken third-party stubs with no alternative).
+- When you encounter existing `# type: ignore` comments in code you are changing, fix the underlying type issue and remove the comment rather than propagating it.
+- Use `typing.cast` only when the type system cannot express a known-safe invariant (e.g., casting a `str` to a `Literal` type constrained by settings validation).
 
 ## Frontend Style Guide
 

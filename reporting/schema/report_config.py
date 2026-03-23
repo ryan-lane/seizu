@@ -89,6 +89,30 @@ class PanelStat(BaseModel):
         return _coerce_decimal(v)
 
 
+class ReportListResponse(BaseModel):
+    reports: List["ReportListItem"]
+
+
+class ReportVersionListResponse(BaseModel):
+    versions: List["ReportVersion"]
+
+
+class ReportIdResponse(BaseModel):
+    report_id: str
+
+
+class ScheduledQueryListResponse(BaseModel):
+    scheduled_queries: List["ScheduledQueryItem"]
+
+
+class ScheduledQueryVersionListResponse(BaseModel):
+    versions: List["ScheduledQueryVersion"]
+
+
+class ScheduledQueryIdResponse(BaseModel):
+    scheduled_query_id: str
+
+
 class CreateReportRequest(BaseModel):
     """Request body for POST /api/v1/reports."""
 

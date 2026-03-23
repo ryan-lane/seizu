@@ -376,7 +376,7 @@ services:
     environment:
       - "STATSD_ENABLED=true"
       - STATSD_HOST=telegraf
-      - GITHUB_TOKEN
+      - GITHUB_TOKEN=${CARTOGRAPHY_GITHUB_TOKEN}
       - CROWDSTRIKE_CLIENT_ID
       - CROWDSTRIKE_CLIENT_SECRET
       - PAGERDUTY_API_KEY
