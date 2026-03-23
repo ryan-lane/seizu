@@ -1,22 +1,22 @@
 import logging
 from typing import Any
 
-from flask import blueprints
+from apiflask import APIBlueprint
 from flask import jsonify
-from flask import request
-from flask import Response
+from flask import make_response
 from neo4j.graph import Node
 from neo4j.graph import Path
 from neo4j.graph import Relationship
-from pydantic import ValidationError
 
-from reporting import authnz
+from reporting import authnz  # noqa: F401
+from reporting.authnz import bearer_auth
 from reporting.schema.query import QueryRequest
+from reporting.schema.query import QueryResponse
 from reporting.services import reporting_neo4j
 from reporting.services.query_validator import validate_query
 
 logger = logging.getLogger(__name__)
-blueprint = blueprints.Blueprint("query", __name__)
+blueprint = APIBlueprint("query", __name__)
 
 
 def _serialize_neo4j_value(value: Any) -> Any:
@@ -30,8 +30,8 @@ def _serialize_neo4j_value(value: Any) -> Any:
         return {
             "id": value.id,
             "type": value.type,
-            "start_node_id": value.start_node.id,
-            "end_node_id": value.end_node.id,
+            "start_node_id": value.start_node.id,  # type: ignore
+            "end_node_id": value.end_node.id,  # type: ignore
             "properties": {k: _serialize_neo4j_value(v) for k, v in value.items()},
         }
     elif isinstance(value, Path):
@@ -49,48 +49,39 @@ def _serialize_neo4j_value(value: Any) -> Any:
         return str(value)
 
 
-@blueprint.route("/api/v1/query", methods=["POST"])
-@authnz.require_auth
-def query() -> Response:
-
-    if not request.is_json:
-        resp = jsonify(error="Request must be JSON")
-        resp.status_code = 400
-        return resp
-
-    try:
-        query_request = QueryRequest.model_validate(request.get_json())
-    except ValidationError as e:
-        resp = jsonify(error="Invalid request", details=e.errors())
-        resp.status_code = 400
-        return resp
-
-    validation = validate_query(query_request.query, params=query_request.params)
+@blueprint.post("/api/v1/query")
+@blueprint.auth_required(bearer_auth)
+@blueprint.input(QueryRequest, arg_name="body")
+@blueprint.output(QueryResponse)
+def query(body: QueryRequest) -> Any:
+    """Execute a validated read-only Cypher query."""
+    validation = validate_query(body.query, params=body.params)
 
     if validation.has_errors:
-        resp = jsonify(
-            errors=[str(err) for err in validation.errors],
-            warnings=[str(w) for w in validation.warnings],
+        # Return Cypher validation errors in the original envelope so the
+        # frontend can display them inline.  Returning a Response object
+        # bypasses APIFlask's @output serialisation wrapper.
+        return make_response(
+            jsonify(
+                errors=[str(err) for err in validation.errors],
+                warnings=[str(w) for w in validation.warnings],
+            ),
+            400,
         )
-        resp.status_code = 400
-        return resp
 
     try:
-        results = reporting_neo4j.run_query(
-            query_request.query, parameters=query_request.params
-        )
+        results = reporting_neo4j.run_query(body.query, parameters=body.params)
         serialized = [
             {key: _serialize_neo4j_value(value) for key, value in record.items()}
             for record in results
         ]
-        resp = jsonify(
-            results=serialized,
-            warnings=[str(w) for w in validation.warnings],
-            errors=[],
-        )
-        return resp
+        return {
+            "results": serialized,
+            "warnings": [str(w) for w in validation.warnings],
+            "errors": [],
+        }
     except Exception as e:
         logger.exception("Query execution failed")
-        resp = jsonify(error="Query execution failed", details=str(e))
-        resp.status_code = 500
-        return resp
+        return make_response(
+            jsonify(error="Query execution failed", details=str(e)), 500
+        )

@@ -1,15 +1,16 @@
-from flask import blueprints
+from apiflask import APIBlueprint
 from flask import g
-from flask import jsonify
-from flask import Response
 
-from reporting import authnz
+from reporting import authnz  # noqa: F401
+from reporting.authnz import bearer_auth
+from reporting.schema.report_config import User
 
-blueprint = blueprints.Blueprint("me", __name__)
+blueprint = APIBlueprint("me", __name__)
 
 
-@blueprint.route("/api/v1/me", methods=["GET"])
-@authnz.require_auth
-def get_current_user() -> Response:
-    user = authnz.sync_user_profile(g.current_user)
-    return jsonify(user.model_dump())
+@blueprint.get("/api/v1/me")
+@blueprint.auth_required(bearer_auth)
+@blueprint.output(User)
+def get_current_user() -> User:
+    """Return the current authenticated user's profile."""
+    return authnz.sync_user_profile(g.current_user)

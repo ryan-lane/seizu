@@ -9,10 +9,6 @@ AUTH_PROFILE := $(shell grep -q 'DEVELOPMENT_ONLY_REQUIRE_AUTH=true' .env 2>/dev
 SQL_PROFILE := $(shell grep -q 'REPORT_STORE_BACKEND=sqlmodel' .env 2>/dev/null && echo '--profile sqlmodel' || echo '')
 COMPOSE_PROFILES := $(AUTH_PROFILE) $(SQL_PROFILE)
 
-.PHONY: clean
-clean:
-	find . -name "*.pyc" -delete
-
 .PHONY: pipenv_install
 pipenv_install:
 	pipenv install --dev
@@ -24,7 +20,7 @@ junit:
 test: test_unit test_frontend
 
 .PHONY: test_unit
-test_unit: clean junit pipenv_install
+test_unit: junit pipenv_install
 	pipenv run pytest --strict --junitxml=coverage/unit.xml --cov=reporting --cov-report=html:coverage/cov_html --cov-report=xml:coverage/cov.xml --cov-report=term --no-cov-on-fail tests/unit
 
 .PHONY: test_integration
@@ -46,10 +42,6 @@ lock_update:
 .PHONY: lock_dev
 lock_dev:
 	docker compose run --rm seizu bash -c "cd /home/seizu/seizu && pipenv requirements --dev-only" > test-requirements.txt
-
-.PHONY: build
-build: clean
-	docker build . -t mappedsky/seizu
 
 .PHONY: rebuild
 rebuild:

@@ -28,6 +28,7 @@ CyVer = ">=2.0.0"
 snowflake-id = "*"
 sqlmodel = "*"
 psycopg2-binary = "*"
+apiflask = "*"
 
 [dev-packages]
 pre-commit = ">=2.17.0"

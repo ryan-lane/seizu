@@ -1,7 +1,8 @@
+from typing import Any
 from typing import Dict
 from typing import Optional
 
-from flask import Flask
+from apiflask import APIFlask
 from flask_seasurf import SeaSurf
 from flask_talisman import Talisman
 
@@ -26,15 +27,27 @@ CSP_POLICY = {
 }
 
 
-def create_app(override_settings: Optional[Dict] = None) -> Flask:
-    app = Flask(
+def create_app(override_settings: Optional[Dict] = None) -> APIFlask:
+    app = APIFlask(
         __name__,
+        title="Seizu",
+        version="1.0.0",
+        spec_path="/api/openapi.json",
+        docs_path="/api/docs",
         template_folder=settings.STATIC_FOLDER,
         static_folder=f"{settings.STATIC_FOLDER}/static",
     )
+    app.config["VALIDATION_ERROR_STATUS_CODE"] = 400
     app.config.from_object(settings)
     if override_settings:
         app.config.update(override_settings)
+
+    @app.error_processor
+    def error_processor(error: Any) -> Any:  # noqa: F811
+        body: Dict[str, Any] = {"error": error.message}
+        if error.detail:
+            body["details"] = error.detail
+        return body, error.status_code, error.headers
 
     csp = Talisman()
     csp.init_app(
