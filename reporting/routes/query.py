@@ -30,8 +30,10 @@ def _serialize_neo4j_value(value: Any) -> Any:
         return {
             "id": value.id,
             "type": value.type,
-            "start_node_id": value.start_node.id,  # type: ignore
-            "end_node_id": value.end_node.id,  # type: ignore
+            "start_node_id": value.start_node.id
+            if value.start_node is not None
+            else None,
+            "end_node_id": value.end_node.id if value.end_node is not None else None,
             "properties": {k: _serialize_neo4j_value(v) for k, v in value.items()},
         }
     elif isinstance(value, Path):
