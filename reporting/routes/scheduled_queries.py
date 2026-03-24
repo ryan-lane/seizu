@@ -37,7 +37,9 @@ def _validate_action_configs(
         action_type = action.get("action_type", "")
         action_config = action.get("action_config", {})
         if action_type not in schemas:
-            continue
+            return (
+                f"Unknown action type '{action_type}'. Valid types: {sorted(schemas)}."
+            )
         for field in schemas[action_type]:
             if not field.required:
                 continue
