@@ -46,6 +46,7 @@ lock_dev:
 .PHONY: rebuild
 rebuild:
 	docker compose build seizu
+	docker compose run --rm seizu-node bun run build
 
 .PHONY: drop_db
 drop_db: down

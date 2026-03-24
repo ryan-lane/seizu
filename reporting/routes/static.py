@@ -30,4 +30,6 @@ def index(path: str) -> Union[Response, str]:
             os.path.join(current_app.root_path, settings.STATIC_FOLDER),
             path,
         )
-    return render_template("index.html")
+    resp = current_app.make_response(render_template("index.html"))
+    resp.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+    return resp
