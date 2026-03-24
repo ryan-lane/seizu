@@ -94,13 +94,15 @@ def login_cmd() -> None:
     in your browser, enter the code, and the CLI will receive an access
     token automatically.
 
-    The token is stored in ~/.config/seizu/credentials.json and loaded
-    automatically on subsequent commands.
+    The token is stored in the OS-native keyring and loaded automatically on
+    subsequent commands. Pass --credentials-file PATH to store in a plain JSON
+    file instead.
 
     \b
     Example:
         seizu login
         seizu --api-url https://seizu.example.com login
+        seizu --credentials-file ~/seizu-creds.json login
     """
     auth_commands.login()
 

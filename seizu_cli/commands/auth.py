@@ -26,12 +26,15 @@ def login() -> None:
     """Authenticate via the Device Authorization Grant (RFC 8628).
 
     Opens a browser-friendly URL for you to authorize, then stores the
-    access token in ~/.config/seizu/credentials.json keyed by API URL.
+    access token in the OS-native keyring (macOS Keychain, Windows Credential
+    Manager, Linux SecretService/KWallet). Pass --credentials-file PATH to
+    store in a plain JSON file instead.
 
     \b
     Example:
         seizu login
         seizu --api-url https://seizu.example.com login
+        seizu --credentials-file ~/seizu-creds.json login
     """
     api_url = state.api_url
     console.print(f"Authenticating with [bold]{api_url}[/bold]")
