@@ -1,11 +1,7 @@
 from reporting.app import create_app
 
 
-def test_config(mocker):
-    mocker.patch(
-        "reporting.settings.REPORTING_CONFIG_FILE",
-        "tests/data/reporting-dashboard.conf",
-    )
+def test_config():
     settings = {
         "PREFERRED_URL_SCHEME": "https",
         "SECRET_KEY": "fake",
@@ -23,10 +19,6 @@ def test_config(mocker):
 
 
 def test_config_auth_required_true(mocker):
-    mocker.patch(
-        "reporting.settings.REPORTING_CONFIG_FILE",
-        "tests/data/reporting-dashboard.conf",
-    )
     mocker.patch("reporting.settings.DEVELOPMENT_ONLY_REQUIRE_AUTH", True)
     app = create_app({"PREFERRED_URL_SCHEME": "https", "SECRET_KEY": "fake"})
     ret = app.test_client().get("/api/v1/config", follow_redirects=False)
@@ -34,10 +26,6 @@ def test_config_auth_required_true(mocker):
 
 
 def test_config_auth_required_false(mocker):
-    mocker.patch(
-        "reporting.settings.REPORTING_CONFIG_FILE",
-        "tests/data/reporting-dashboard.conf",
-    )
     mocker.patch("reporting.settings.DEVELOPMENT_ONLY_REQUIRE_AUTH", False)
     app = create_app({"PREFERRED_URL_SCHEME": "https", "SECRET_KEY": "fake"})
     ret = app.test_client().get("/api/v1/config", follow_redirects=False)
@@ -45,10 +33,6 @@ def test_config_auth_required_false(mocker):
 
 
 def test_config_oidc_included_when_auth_required(mocker):
-    mocker.patch(
-        "reporting.settings.REPORTING_CONFIG_FILE",
-        "tests/data/reporting-dashboard.conf",
-    )
     mocker.patch("reporting.settings.DEVELOPMENT_ONLY_REQUIRE_AUTH", True)
     mocker.patch("reporting.settings.OIDC_AUTHORITY", "https://idp.example.com/o/app")
     mocker.patch("reporting.settings.OIDC_CLIENT_ID", "myapp")
@@ -69,10 +53,6 @@ def test_config_oidc_included_when_auth_required(mocker):
 def test_config_oidc_included_when_auth_not_required(mocker):
     """oidc config is returned regardless of auth_required so the frontend
     can self-configure even in no-auth dev mode."""
-    mocker.patch(
-        "reporting.settings.REPORTING_CONFIG_FILE",
-        "tests/data/reporting-dashboard.conf",
-    )
     mocker.patch("reporting.settings.DEVELOPMENT_ONLY_REQUIRE_AUTH", False)
     mocker.patch("reporting.settings.OIDC_AUTHORITY", "https://idp.example.com/o/app")
     mocker.patch("reporting.settings.OIDC_CLIENT_ID", "myapp")
@@ -87,10 +67,6 @@ def test_config_oidc_included_when_auth_not_required(mocker):
 
 
 def test_config_oidc_null_when_authority_not_configured(mocker):
-    mocker.patch(
-        "reporting.settings.REPORTING_CONFIG_FILE",
-        "tests/data/reporting-dashboard.conf",
-    )
     mocker.patch("reporting.settings.DEVELOPMENT_ONLY_REQUIRE_AUTH", True)
     mocker.patch("reporting.settings.OIDC_AUTHORITY", "")
     app = create_app({"PREFERRED_URL_SCHEME": "https", "SECRET_KEY": "fake"})

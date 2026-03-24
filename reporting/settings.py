@@ -142,9 +142,6 @@ CSRF_CHECK_REFERER = bool_env("CSRF_CHECK_REFERER", True)
 # Setting that can be used to disable CSRF protection
 CSRF_DISABLE = bool_env("CSRF_DISABLE", False)
 
-# YAML config used for dashboard generation and stat reporting
-REPORTING_CONFIG_FILE = str_env("REPORTING_CONFIG_FILE", "/reporting-dashboard.conf")
-
 # Maximum number of stats we will generate for panels with inputs
 DASHBOARD_STATS_MAX_INPUT_RESULTS = int_env("DASHBOARD_STATS_MAX_INPUT_RESULTS", 100)
 

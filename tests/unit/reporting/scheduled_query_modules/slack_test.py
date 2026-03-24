@@ -6,8 +6,8 @@ def test_action_name():
     assert slack.action_name() == "slack"
 
 
-def test_setup(mocker):
-    assert slack.setup({}) is None
+def test_setup():
+    assert slack.setup() is None
 
 
 def test_handle_results(mocker):

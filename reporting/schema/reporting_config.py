@@ -4,7 +4,6 @@ from typing import List
 from typing import Literal
 from typing import Optional
 
-import yaml
 from pydantic import BaseModel
 from pydantic import Field
 from pydantic import field_validator
@@ -679,16 +678,3 @@ def output_json_schema() -> Dict[str, Any]:
     schema = ReportingConfig.model_json_schema()
     schema["$schema"] = "https://json-schema.org/draft/2020-12/schema"
     return schema
-
-
-def load(reporting_config: Dict[str, Any]) -> ReportingConfig:
-    return ReportingConfig.model_validate(reporting_config)
-
-
-def load_yaml(reporting_config_yaml: str) -> ReportingConfig:
-    return load(yaml.safe_load(reporting_config_yaml))
-
-
-def load_file(reporting_config_file: str) -> ReportingConfig:
-    with open(reporting_config_file, "r") as f:
-        return load_yaml(f.read())

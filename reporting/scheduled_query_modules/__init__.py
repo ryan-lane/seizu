@@ -5,7 +5,6 @@ from typing import List
 
 from reporting import settings
 from reporting.schema.report_config import ActionConfigFieldDef
-from reporting.schema.reporting_config import ReportingConfig
 from reporting.schema.reporting_config import ScheduledQueryAction
 
 _MODULES = {}
@@ -46,7 +45,7 @@ class ModuleInterface:
         return ""
 
     @staticmethod
-    def setup(config: ReportingConfig) -> None:
+    def setup() -> None:
         """
         Called when the scheduled queries worker is started. This function
         can be used for any setup that your module may need to do, like creating
@@ -75,7 +74,7 @@ class ModuleInterface:
         return
 
 
-def load_modules(config: ReportingConfig) -> None:
+def load_modules() -> None:
     global _MODULES
 
     for module_name in settings.SCHEDULED_QUERY_MODULES:
@@ -85,7 +84,7 @@ def load_modules(config: ReportingConfig) -> None:
         module: ModuleInterface = cast(
             ModuleInterface, __import__(module_name, fromlist=["_fake"])
         )
-        module.setup(config)
+        module.setup()
         _MODULES[module.action_name()] = module
 
 
