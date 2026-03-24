@@ -5,6 +5,7 @@ from typing import Optional
 import typer
 
 from seizu_cli import auth
+from seizu_cli import config as cli_config
 from seizu_cli import state
 from seizu_cli.commands import auth as auth_commands
 from seizu_cli.commands import reports
@@ -22,11 +23,13 @@ app.add_typer(auth_commands.app, name="auth")
 
 @app.callback()
 def main(
-    api_url: str = typer.Option(
-        "http://localhost:8080",
+    api_url: Optional[str] = typer.Option(
+        None,
         envvar="SEIZU_API_URL",
-        help="Seizu API base URL.",
-        show_default=True,
+        help=(
+            "Seizu API base URL. "
+            "Overrides the 'api_url' setting in ~/.config/seizu/seizu.conf."
+        ),
     ),
     token: Optional[str] = typer.Option(
         None,
@@ -44,13 +47,28 @@ def main(
             "Forces file-based token storage even if an OS keyring is available."
         ),
     ),
+    config_file: Optional[Path] = typer.Option(
+        None,
+        "--config-file",
+        envvar="SEIZU_CONFIG_FILE",
+        help=(
+            "Path to the CLI config file. " "Defaults to ~/.config/seizu/seizu.conf."
+        ),
+    ),
 ) -> None:
     """Seizu CLI — manage reports and scheduled queries via the Seizu API.
 
+    Configuration is read from ~/.config/seizu/seizu.conf (YAML).
+    CLI flags and environment variables take precedence over config-file values.
+
+    \b
+    Example ~/.config/seizu/seizu.conf:
+        api_url: https://seizu.example.com
+        seed_file: ~/dashboards/reporting.yaml
+
     Authentication is handled via the Device Authorization Grant flow.
-    Run 'seizu login' once; credentials are stored in
-    ~/.config/seizu/credentials.json and loaded automatically on every
-    subsequent command.
+    Run 'seizu login' once; credentials are stored in the OS-native keyring
+    and loaded automatically on every subsequent command.
 
     \b
     Quick start:
@@ -72,15 +90,21 @@ def main(
 
     See https://openapi-generator.tech/docs/generators for all supported languages.
     """
-    state.api_url = api_url
+    cfg = cli_config.load_config(config_file)
+
+    # Resolution order: CLI flag → env var → config file → built-in default
+    resolved_api_url = api_url or cfg.api_url or "http://localhost:8080"
+
+    state.api_url = resolved_api_url
     state.credentials_file = credentials_file
+    state.seed_file = cfg.seed_file
 
     if token:
         # Explicit --token / SEIZU_TOKEN takes precedence over stored credentials.
         state.token = token
     else:
         # Fall back to stored credentials for this API URL.
-        state.token = auth.load_token(api_url, credentials_file)
+        state.token = auth.load_token(resolved_api_url, credentials_file)
 
     state.reset_client()
 
@@ -121,11 +145,14 @@ def whoami_cmd() -> None:
 
 @app.command("seed")
 def seed_cmd(
-    config: str = typer.Option(
-        ".config/dev/seizu/reporting-dashboard.yaml",
+    config: Optional[str] = typer.Option(
+        None,
         envvar="REPORTING_CONFIG_FILE",
-        help="Path to the YAML dashboard config file.",
-        show_default=True,
+        help=(
+            "Path to the YAML dashboard config file. "
+            "Defaults to 'seed_file' in ~/.config/seizu/seizu.conf, "
+            "then ~/.config/seizu/reporting-dashboard.yaml."
+        ),
     ),
     force: bool = typer.Option(
         False,
@@ -137,16 +164,20 @@ def seed_cmd(
     ),
 ) -> None:
     """Seed reports and scheduled queries from a YAML config file via the API."""
-    seed.seed_cmd(config=config, force=force, dry_run=dry_run)
+    resolved_config = config or state.seed_file or cli_config.default_seed_file()
+    seed.seed_cmd(config=resolved_config, force=force, dry_run=dry_run)
 
 
 @app.command("export")
 def export_cmd(
-    config: str = typer.Option(
-        ".config/dev/seizu/reporting-dashboard.yaml",
+    config: Optional[str] = typer.Option(
+        None,
         envvar="REPORTING_CONFIG_FILE",
-        help="Path to the YAML dashboard config file.",
-        show_default=True,
+        help=(
+            "Path to the YAML dashboard config file. "
+            "Defaults to 'seed_file' in ~/.config/seizu/seizu.conf, "
+            "then ~/.config/seizu/reporting-dashboard.yaml."
+        ),
     ),
     dry_run: bool = typer.Option(
         False,
@@ -154,4 +185,5 @@ def export_cmd(
     ),
 ) -> None:
     """Export the latest version of every report from the API back into a YAML config file."""
-    seed.export_cmd(config=config, dry_run=dry_run)
+    resolved_config = config or state.seed_file or cli_config.default_seed_file()
+    seed.export_cmd(config=resolved_config, dry_run=dry_run)

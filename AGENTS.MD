@@ -188,14 +188,28 @@ Warnings (non-blocking):
 The Seizu CLI is a Typer application that calls the REST API over HTTP. It lives in `seizu_cli/` and is invoked via `python -m seizu_cli` (or via the Makefile targets).
 
 **Key files:**
-- `seizu_cli/main.py` — Typer app entry point; defines the `--api-url` / `--token` global options and registers sub-apps and top-level commands
+- `seizu_cli/main.py` — Typer app entry point; defines global options (`--api-url`, `--token`, `--credentials-file`, `--config-file`) and registers sub-apps and top-level commands; loads `seizu.conf` via `cli_config.load_config()`
+- `seizu_cli/config.py` — `SeizuConfig` Pydantic model + `load_config()` that reads `~/.config/seizu/seizu.conf`; `default_seed_file()` returns `~/.config/seizu/reporting-dashboard.yaml`
 - `seizu_cli/client.py` — `SeizuClient` wrapper around `requests`; handles Bearer token auth and CSRF token bootstrapping
 - `seizu_cli/state.py` — module-level state shared between the callback and commands; `get_client()` creates the client lazily
 - `seizu_cli/commands/reports.py` — `reports list/get/create/delete/set-dashboard/versions/version-get`
 - `seizu_cli/commands/scheduled_queries.py` — `scheduled-queries list/get/delete/versions/version-get`
-- `seizu_cli/commands/seed.py` — `seed` / `export` implementation (requires the `reporting` package on the path)
-- `seizu_cli/auth.py` — token storage (`~/.config/seizu/credentials.json`) and Device Authorization Grant flow
+- `seizu_cli/commands/seed.py` — `seed` / `export` implementation
+- `seizu_cli/auth.py` — token storage (OS-native keyring or `--credentials-file` fallback) and Device Authorization Grant flow
 - `seizu_cli/commands/auth.py` — `auth login/logout/whoami` (also exposed as top-level `login/logout/whoami`)
+
+**CLI config file (`~/.config/seizu/seizu.conf`):**
+
+A YAML file that sets persistent defaults for the CLI. All values can be overridden by CLI flags or environment variables.
+
+```yaml
+api_url: https://seizu.example.com   # default --api-url
+seed_file: ~/dashboards/reporting.yaml  # default seed/export config path
+```
+
+Resolution order for each setting: `CLI flag` → `env var` → `seizu.conf` → built-in default.
+
+Use `--config-file PATH` (or `SEIZU_CONFIG_FILE`) to point at a non-default config file.
 
 **Authentication (Device Authorization Grant, RFC 8628):**
 
@@ -204,7 +218,7 @@ The CLI uses the Device Authorization Grant so users don't need to copy/paste to
 2. Posts to the device authorization endpoint; displays a short URL + code to the user
 3. User opens the URL in a browser, logs in via Authentik, approves the request
 4. CLI polls the token endpoint until it receives an access token
-5. Token is saved to `~/.config/seizu/credentials.json` (keyed by API URL)
+5. Token is saved to the OS-native keyring (or to a JSON file when `--credentials-file` is used), keyed by API URL
 6. All subsequent commands auto-load the stored token — no `--token` flag needed
 
 ```bash

@@ -9,6 +9,7 @@ if TYPE_CHECKING:
 api_url: str = "http://localhost:8080"
 token: Optional[str] = None
 credentials_file: Optional[Path] = None
+seed_file: Optional[str] = None
 _client: Optional["SeizuClient"] = None
 
 
