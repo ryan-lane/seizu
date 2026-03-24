@@ -52,6 +52,8 @@ docker compose run --rm seizu pipenv install <package>
 ```
 
 > **Why `pipenv sync --dev` before pytest?** The Docker image's system Python has packages baked in at image-build time. When new packages are added, the `.venv` (stored in the project directory and therefore persisted on the host) must be synced from `Pipfile.lock` before running tests. `pipenv sync --dev` does this and ensures `pipenv run pytest` uses the virtualenv's pytest (with all current dependencies) rather than the system-level one.
+>
+> **Critical: always regenerate `Pipfile.lock` after editing `Pipfile`.** `pipenv sync` installs *only* what is in `Pipfile.lock` — packages added to `Pipfile` but not yet locked will silently be absent at runtime, causing `ModuleNotFoundError`. After changing `Pipfile`, always run `docker compose run --rm seizu pipenv lock` followed by `make lock` to update `requirements.txt`, then commit both files.
 
 ### Makefile shortcuts
 
@@ -555,7 +557,7 @@ When making changes to the codebase, always review and update the following file
 - **`Dockerfile` and `docker-compose.yml`** — update if new files, build steps, services, or environment variables are introduced
 - **`.pre-commit-config.yaml`** — update hooks or dependencies if linting/formatting tooling changes
 - **`.eslintrc`** (or other lint/format configs) — update if new file types, parsers, or plugins are needed
-- **`Pipfile`** — add or remove Python dependencies when adding or removing backend features; run `docker compose run --rm seizu pipenv install <pkg>` to add, edit `Pipfile` directly then run `docker compose run --rm seizu pipenv lock` to update `Pipfile.lock`, then run `make lock` to regenerate `requirements.txt`
+- **`Pipfile` and `Pipfile.lock`** — add or remove Python dependencies when adding or removing backend features; run `docker compose run --rm seizu pipenv install <pkg>` to add, or edit `Pipfile` directly then run `docker compose run --rm seizu pipenv lock` to update `Pipfile.lock`, then run `make lock` to regenerate `requirements.txt`. **Always commit both `Pipfile` and `Pipfile.lock` together** — `pipenv sync` installs only what is in the lockfile, so a package in `Pipfile` but missing from `Pipfile.lock` will cause `ModuleNotFoundError` at runtime.
 - **`docs/`** — update documentation when adding, changing, or removing features, panel types, API endpoints, configuration options, or any user-facing behavior. Always grep docs/ for references to anything you are removing to ensure nothing is left stale.
 - **`schema/reporting-schema.json`** — regenerate via `make schema` (or manually update) when the Pydantic config schema changes
 - **`.env.example`** — add new env vars; remove or relocate vars when features are removed
