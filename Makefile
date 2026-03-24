@@ -60,11 +60,38 @@ drop_db: down
 
 .PHONY: seed_dashboard
 seed_dashboard:
-	docker compose $(COMPOSE_PROFILES) run --rm seizu bash -c "pipenv sync --dev && PYTHONPATH=/home/seizu/seizu pipenv run python scripts/seed_reports_from_yaml.py --config .config/dev/seizu/reporting-dashboard.yaml $(ARGS)"
+	docker compose $(COMPOSE_PROFILES) run --rm seizu bash -c "pipenv sync --dev && PYTHONPATH=/home/seizu/seizu pipenv run python -m seizu_cli --api-url http://seizu:8080 seed --config .config/dev/seizu/reporting-dashboard.yaml $(ARGS)"
 
 .PHONY: schema
-schema:
+schema: generate_openapi
 	FLASK_APP=reporting.schema.cli pipenv run flask schema export > schema/reporting-schema.json
+
+# Export the OpenAPI spec from the running APIFlask app (no backend connections required).
+.PHONY: generate_openapi
+generate_openapi:
+	FLASK_APP=reporting.app:create_app DYNAMODB_CREATE_TABLE=false pipenv run flask spec --output schema/openapi.json
+
+# Generate a client library from schema/openapi.json using openapi-generator-cli.
+# Usage: make generate_client LANG=go
+#        make generate_client LANG=typescript-fetch
+#        make generate_client LANG=java
+# See https://openapi-generator.tech/docs/generators for all supported languages.
+LANG ?= python
+.PHONY: generate_client
+generate_client: generate_openapi
+	docker run --rm \
+		-v $(PWD):/local \
+		openapitools/openapi-generator-cli generate \
+		-i /local/schema/openapi.json \
+		-g $(LANG) \
+		-o /local/generated/$(LANG)-client \
+		--package-name seizu_client
+
+# Build the seizu-cli pip-installable distribution (wheel + sdist).
+# Output lands in dist/. Requires the `build` package (pip install build).
+.PHONY: build_cli
+build_cli:
+	docker compose run --rm seizu bash -c "pip install --quiet build && python -m build"
 
 .PHONY: docs
 docs: schema

@@ -1,0 +1,78 @@
+"""CLI commands for authentication (login / logout / whoami)."""
+import sys
+
+import typer
+from rich.console import Console
+
+from seizu_cli import auth
+from seizu_cli import state
+from seizu_cli.client import APIError
+
+app = typer.Typer(help="Authenticate with the Seizu API.", no_args_is_help=True)
+console = Console()
+err_console = Console(stderr=True)
+
+
+def _die(exc: Exception) -> None:
+    if isinstance(exc, APIError):
+        err_console.print(f"[red]Error {exc.status_code}[/red]: {exc}")
+    else:
+        err_console.print(f"[red]Error[/red]: {exc}")
+    sys.exit(1)
+
+
+@app.command("login")
+def login() -> None:
+    """Authenticate via the Device Authorization Grant (RFC 8628).
+
+    Opens a browser-friendly URL for you to authorize, then stores the
+    access token in ~/.config/seizu/credentials.json keyed by API URL.
+
+    \b
+    Example:
+        seizu login
+        seizu --api-url https://seizu.example.com login
+    """
+    api_url = state.api_url
+    console.print(f"Authenticating with [bold]{api_url}[/bold]")
+
+    try:
+        token = auth.device_authorize(api_url)
+    except Exception as exc:
+        _die(exc)
+        return
+
+    store = auth.get_store(state.credentials_file)
+    store.save_token(api_url, token)
+    console.print(
+        f"\n[green]Logged in.[/green] "
+        f"Token saved to [dim]{store.description()}[/dim]"
+    )
+
+
+@app.command("logout")
+def logout() -> None:
+    """Remove stored credentials for the current API URL."""
+    api_url = state.api_url
+    store = auth.get_store(state.credentials_file)
+    removed = store.clear_token(api_url)
+    if removed:
+        console.print(f"[yellow]Logged out[/yellow] from [bold]{api_url}[/bold]")
+    else:
+        console.print(f"No stored credentials found for [bold]{api_url}[/bold]")
+
+
+@app.command("whoami")
+def whoami() -> None:
+    """Show the currently authenticated user."""
+    try:
+        data = state.get_client().get("/api/v1/me")
+    except Exception as exc:
+        _die(exc)
+        return
+
+    console.print(f"[bold]User ID[/bold]: {data['user_id']}")
+    if data.get("display_name"):
+        console.print(f"[bold]Name[/bold]: {data['display_name']}")
+    console.print(f"[bold]Email[/bold]: {data['email']}")
+    console.print(f"[bold]Last login[/bold]: {data.get('last_login', '')}")

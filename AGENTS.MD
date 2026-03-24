@@ -60,12 +60,14 @@ make test           # run all tests
 make test_unit      # backend unit tests only
 make test_frontend  # frontend type-check only
 make lint           # pre-commit on all files
-make schema           # regenerate schema/reporting-schema.json from Pydantic models
-make seed_dashboard   # seed reports + scheduled queries from .config/dev/seizu/reporting-dashboard.yaml
-make auth_enable      # start Authentik, enable auth, restart services
-make auth_disable     # disable auth, restart services, stop Authentik
-make sqlmodel_enable  # switch to SQLModel/PostgreSQL backend, restart with postgres container
-make sqlmodel_disable # switch back to DynamoDB backend
+make schema             # regenerate schema/reporting-schema.json and schema/openapi.json
+make generate_openapi   # export OpenAPI spec to schema/openapi.json (no running server needed)
+make generate_client LANG=go  # generate a client library from schema/openapi.json
+make seed_dashboard     # seed reports + scheduled queries via the API (requires `make up` first)
+make auth_enable        # start Authentik, enable auth, restart services
+make auth_disable       # disable auth, restart services, stop Authentik
+make sqlmodel_enable    # switch to SQLModel/PostgreSQL backend, restart with postgres container
+make sqlmodel_disable   # switch back to DynamoDB backend
 ```
 
 ### Linting (pre-commit)
@@ -181,6 +183,75 @@ Warnings (non-blocking):
 | GET | `/api/openapi.json` | OpenAPI 3.x specification (machine-readable, use with openapi-generator for CLI/client generation) |
 | GET | `/api/docs` | Swagger UI (bearer token auth required for protected routes; CSP may restrict in browser) |
 
+### CLI (`seizu_cli/`)
+
+The Seizu CLI is a Typer application that calls the REST API over HTTP. It lives in `seizu_cli/` and is invoked via `python -m seizu_cli` (or via the Makefile targets).
+
+**Key files:**
+- `seizu_cli/main.py` — Typer app entry point; defines the `--api-url` / `--token` global options and registers sub-apps and top-level commands
+- `seizu_cli/client.py` — `SeizuClient` wrapper around `requests`; handles Bearer token auth and CSRF token bootstrapping
+- `seizu_cli/state.py` — module-level state shared between the callback and commands; `get_client()` creates the client lazily
+- `seizu_cli/commands/reports.py` — `reports list/get/create/delete/set-dashboard/versions/version-get`
+- `seizu_cli/commands/scheduled_queries.py` — `scheduled-queries list/get/delete/versions/version-get`
+- `seizu_cli/commands/seed.py` — `seed` / `export` implementation (requires the `reporting` package on the path)
+- `seizu_cli/auth.py` — token storage (`~/.config/seizu/credentials.json`) and Device Authorization Grant flow
+- `seizu_cli/commands/auth.py` — `auth login/logout/whoami` (also exposed as top-level `login/logout/whoami`)
+
+**Authentication (Device Authorization Grant, RFC 8628):**
+
+The CLI uses the Device Authorization Grant so users don't need to copy/paste tokens manually. The flow:
+1. `seizu login` fetches the OIDC discovery doc via `GET /api/v1/config` + `/.well-known/openid-configuration`
+2. Posts to the device authorization endpoint; displays a short URL + code to the user
+3. User opens the URL in a browser, logs in via Authentik, approves the request
+4. CLI polls the token endpoint until it receives an access token
+5. Token is saved to `~/.config/seizu/credentials.json` (keyed by API URL)
+6. All subsequent commands auto-load the stored token — no `--token` flag needed
+
+```bash
+seizu login                          # authenticate (Device Authorization Grant)
+seizu whoami                         # verify who you are
+seizu logout                         # clear stored credentials
+seizu --api-url https://... login    # authenticate against a different deployment
+```
+
+**Usage (inside the seizu container):**
+```bash
+# Show help
+PYTHONPATH=/home/seizu/seizu pipenv run python -m seizu_cli --help
+
+# Authenticate (runs Device Authorization Grant)
+PYTHONPATH=/home/seizu/seizu pipenv run python -m seizu_cli --api-url http://seizu:8080 login
+
+# List reports (auto-loads stored token)
+PYTHONPATH=/home/seizu/seizu pipenv run python -m seizu_cli --api-url http://seizu:8080 reports list
+
+# Seed from YAML
+PYTHONPATH=/home/seizu/seizu pipenv run python -m seizu_cli --api-url http://seizu:8080 seed
+PYTHONPATH=/home/seizu/seizu pipenv run python -m seizu_cli --api-url http://seizu:8080 seed --force
+PYTHONPATH=/home/seizu/seizu pipenv run python -m seizu_cli --api-url http://seizu:8080 seed --dry-run
+
+# Export to YAML
+PYTHONPATH=/home/seizu/seizu pipenv run python -m seizu_cli --api-url http://seizu:8080 export
+```
+
+Or via the Makefile (preferred):
+```bash
+make seed_dashboard
+make seed_dashboard ARGS="--force"
+make seed_dashboard ARGS="export"
+```
+
+**CSRF handling:** The client calls `GET /api/v1/config` first to bootstrap the CSRF token cookie, then includes `X-CSRFToken` in all mutating requests. No backend changes are needed.
+
+**Generating clients in other languages:** The OpenAPI spec is the canonical interface definition. Generate clients with:
+```bash
+make generate_openapi                    # exports schema/openapi.json
+make generate_client LANG=go             # generates a Go client in generated/go-client/
+make generate_client LANG=typescript-fetch  # TypeScript
+make generate_client LANG=java           # Java
+```
+Uses `openapitools/openapi-generator-cli` via Docker. See https://openapi-generator.tech/docs/generators for all supported languages.
+
 ### Configuration System
 
 Dashboard and report configurations are stored in DynamoDB. The YAML config file (mounted as `/reporting-dashboard.yaml` in the container; example at `.config/dev/seizu/reporting-dashboard.yaml`) is used for `queries` and `scheduled_queries`, and as a seed source for populating DynamoDB.
@@ -216,15 +287,21 @@ make down && make up   # apply after changing backends
 
 **SQLModel storage** (`reporting/services/report_store/sql.py`): five tables — `reports`, `report_versions`, `dashboard_pointer`, `scheduled_queries`, `scheduled_query_versions`. Uses SQLAlchemy JSON column for config storage; `initialize()` runs `SQLModel.metadata.create_all()`. Configured via `SQL_DATABASE_URL`.
 
-**Seeding reports and scheduled queries** from the YAML config:
+**Seeding reports and scheduled queries** from the YAML config (requires the API to be running via `make up`):
 ```bash
-make seed_dashboard                              # seed reports + scheduled queries from .config/dev/seizu/reporting-dashboard.yaml
-make seed_dashboard ARGS="seed --force"          # save a new version even if config is unchanged
-make seed_dashboard ARGS="seed --dry-run"        # preview without writing
-make seed_dashboard ARGS="export"                # export store reports back into the YAML file
-make seed_dashboard ARGS="export --dry-run"      # preview the exported YAML without writing
+make seed_dashboard                                  # seed reports + scheduled queries from .config/dev/seizu/reporting-dashboard.yaml
+make seed_dashboard ARGS="--force"                   # save a new version even if config is unchanged
+make seed_dashboard ARGS="--dry-run"                 # preview without writing
+make up && make seed_dashboard                       # typical first-run workflow
 ```
-The seed script seeds both reports and scheduled queries in a single run, and sets the dashboard pointer if `dashboard:` is configured in the YAML.
+
+**Exporting** reports from the store back into YAML:
+```bash
+make seed_dashboard ARGS="export"                    # export store reports back into the YAML file
+make seed_dashboard ARGS="export --dry-run"          # preview the exported YAML without writing
+```
+
+`make seed_dashboard` calls the Typer CLI (`seizu_cli`) which talks to the running API at `http://seizu:8080`. The CLI seeds both reports and scheduled queries in a single run, and sets the dashboard pointer if `dashboard:` is configured in the YAML.
 
 **Seeding scheduled queries:** Scheduled queries are stored in the database with Snowflake IDs and full version history. The `cypher` field in the YAML is resolved against the top-level `queries` dict (falling back to the literal string if no key matches). Matching is by name; existing queries are skipped unless their content has changed or `--force` is passed.
 
@@ -336,11 +413,20 @@ Setup is fully automated — no browser wizard needed. The following happen auto
 
 Visit `http://localhost:3000`. You will be redirected to Authentik at `http://localhost:9000`. Log in as `developer` / `devpassword`. Authentik redirects back to `http://localhost:3000/auth/callback`, completes the PKCE exchange, and the app loads with a valid session.
 
-**How the auth flow works:**
+**How the auth flows work:**
+
+*Browser (Authorization Code + PKCE):*
 - The frontend performs an OIDC Authorization Code + PKCE flow against `http://localhost:9000/application/o/seizu`
 - The access token is sent as `Authorization: Bearer <token>` on every API request
 - The backend validates the JWT against the JWKS endpoint at `http://authentik-server:9000/application/o/seizu/jwks/` (internal Docker hostname)
 - The user's email is read from the `email` JWT claim
+
+*CLI (Device Authorization Grant, RFC 8628):*
+- `seizu login` hits `POST http://localhost:9000/application/o/seizu/device/` to obtain a `device_code` and `user_code`
+- The user visits the verification URL in a browser (pre-filled with the code) and logs in
+- The CLI polls `POST http://localhost:9000/application/o/seizu/token/` until the user approves
+- The access token is stored in `~/.config/seizu/credentials.json` and auto-loaded on subsequent commands
+- The Authentik blueprint enables this via `device_code_flow: !Find [slug, default-provider-device-code]`
 
 **Reverting to no-auth dev mode:**
 ```bash
