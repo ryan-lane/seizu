@@ -1,10 +1,4 @@
-"""seed / export commands — bulk-load or dump YAML config via the Seizu API.
-
-These commands require the ``reporting`` package to be on the Python path
-(i.e. they must run inside the seizu container, or in an environment where
-``reporting`` is installed) because they use the same YAML schema models that
-the server itself uses.
-"""
+"""seed / export commands — bulk-load or dump YAML config via the Seizu API."""
 import re
 import sys
 from typing import Any
@@ -14,6 +8,7 @@ from typing import Optional
 
 from rich.console import Console
 
+from seizu_cli import schema
 from seizu_cli import state
 from seizu_cli.client import APIError
 
@@ -78,16 +73,7 @@ def _sq_content_changed(
 
 def seed_cmd(config: str, force: bool, dry_run: bool) -> None:
     """Seed reports and scheduled queries from *config* YAML into the store via the API."""
-    try:
-        from reporting.schema import reporting_config
-    except ImportError:
-        err_console.print(
-            "[red]Error:[/red] The 'reporting' package is not available on the Python path.\n"
-            "Run this command inside the seizu container (e.g. via 'make seed_dashboard')."
-        )
-        sys.exit(1)
-
-    loaded = reporting_config.load_file(config)
+    loaded = schema.load_file(config)
 
     if not loaded.reports and not loaded.scheduled_queries:
         console.print(
@@ -305,21 +291,12 @@ def _seed_scheduled_queries(
 def export_cmd(config: str, dry_run: bool) -> None:
     """Export latest report versions from the API back into *config* YAML."""
     try:
-        from reporting.schema import reporting_config
-    except ImportError:
-        err_console.print(
-            "[red]Error:[/red] The 'reporting' package is not available on the Python path.\n"
-            "Run this command inside the seizu container (e.g. via 'make seed_dashboard')."
-        )
-        sys.exit(1)
-
-    try:
-        existing_cfg = reporting_config.load_file(config)
+        existing_cfg = schema.load_file(config)
     except FileNotFoundError:
         err_console.print(
             f"[yellow][warn][/yellow] Config file '{config}' not found, starting from empty config."
         )
-        existing_cfg = reporting_config.ReportingConfig()
+        existing_cfg = schema.ReportingConfig()
 
     name_to_key = {r.name: k for k, r in existing_cfg.reports.items()}
 
@@ -353,7 +330,7 @@ def export_cmd(config: str, dry_run: bool) -> None:
             continue
 
         try:
-            report_obj = reporting_config.Report.model_validate(latest["config"])
+            report_obj = schema.Report.model_validate(latest["config"])
         except Exception as exc:
             err_console.print(
                 f"[yellow][warn][/yellow] Invalid config for '{item['name']}': {exc} — skipping."
@@ -374,7 +351,7 @@ def export_cmd(config: str, dry_run: bool) -> None:
         console.print(f"[green][export][/green] '{item['name']}' → key='{key}'")
         exported += 1
 
-    updated_cfg = reporting_config.ReportingConfig(
+    updated_cfg = schema.ReportingConfig(
         queries=existing_cfg.queries,
         dashboard=dashboard_key
         if dashboard_key is not None
@@ -382,7 +359,7 @@ def export_cmd(config: str, dry_run: bool) -> None:
         reports=new_reports,
         scheduled_queries=existing_cfg.scheduled_queries,
     )
-    yaml_content = reporting_config.dump_yaml(updated_cfg)
+    yaml_content = schema.dump_yaml(updated_cfg)
 
     if dry_run:
         console.print("\n--- YAML output (dry-run, not written) ---\n")
