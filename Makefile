@@ -21,7 +21,7 @@ test: test_unit test_frontend
 
 .PHONY: test_unit
 test_unit: junit pipenv_install
-	pipenv run pytest --strict --junitxml=coverage/unit.xml --cov=reporting --cov-report=html:coverage/cov_html --cov-report=xml:coverage/cov.xml --cov-report=term --no-cov-on-fail tests/unit
+	pipenv run pytest --strict --junitxml=coverage/unit.xml --cov=reporting --cov=seizu_schema --cov-report=html:coverage/cov_html --cov-report=xml:coverage/cov.xml --cov-report=term --no-cov-on-fail tests/unit
 
 .PHONY: test_integration
 test_integration:

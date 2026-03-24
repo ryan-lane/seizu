@@ -264,7 +264,6 @@ services:
     command: flask worker schedule-queries
     volumes:
       - .:/home/seizu/seizu
-      - ./.config/dev/seizu/reporting-dashboard.yaml:/reporting-dashboard.conf
     networks:
       stats:
       database:
@@ -336,7 +335,6 @@ services:
       retries: 5
     volumes:
       - .:/home/seizu/seizu
-      - ./.config/dev/seizu/reporting-dashboard.yaml:/reporting-dashboard.conf
     ports:
       - 8080:8080
     # Start from /run/seizu so the gunicorn arbiter control socket (gunicorn.ctl)
