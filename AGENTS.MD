@@ -439,7 +439,7 @@ Visit `http://localhost:3000`. You will be redirected to Authentik at `http://lo
 - `seizu login` hits `POST http://localhost:9000/application/o/seizu/device/` to obtain a `device_code` and `user_code`
 - The user visits the verification URL in a browser (pre-filled with the code) and logs in
 - The CLI polls `POST http://localhost:9000/application/o/seizu/token/` until the user approves
-- The access token is stored in `~/.config/seizu/credentials.json` and auto-loaded on subsequent commands
+- The access token is stored in the OS-native keyring (or in a JSON file when `--credentials-file` is used) and auto-loaded on subsequent commands
 - The Authentik blueprint enables this via `device_code_flow: !Find [slug, default-provider-device-code]`
 
 **Reverting to no-auth dev mode:**
