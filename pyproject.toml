@@ -19,6 +19,6 @@ dependencies = [
 seizu = "seizu_cli.main:app"
 
 [tool.hatch.build.targets.wheel]
-# Only ship the CLI package — the reporting/ backend is not part of the
-# pip-installable distribution.
-packages = ["seizu_cli"]
+# Ship the CLI package and the shared schema package.
+# The reporting/ backend is not part of the pip-installable distribution.
+packages = ["seizu_cli", "seizu_schema"]

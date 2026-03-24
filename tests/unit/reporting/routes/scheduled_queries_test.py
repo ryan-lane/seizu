@@ -219,7 +219,7 @@ def test_create_scheduled_query_unknown_action_type(mocker):
         content_type="application/json",
     )
     assert ret.status_code == 400
-    assert "not_a_real_module" in ret.json["message"]
+    assert "not_a_real_module" in ret.json["error"]
 
 
 def test_create_scheduled_query_action_config_error(mocker):
