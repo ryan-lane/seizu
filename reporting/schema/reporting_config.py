@@ -681,14 +681,6 @@ def output_json_schema() -> Dict[str, Any]:
     return schema
 
 
-def dump_yaml(reporting_config: ReportingConfig) -> str:
-    return yaml.dump(
-        reporting_config.model_dump(),
-        default_flow_style=False,
-        allow_unicode=True,
-    )
-
-
 def load(reporting_config: Dict[str, Any]) -> ReportingConfig:
     return ReportingConfig.model_validate(reporting_config)
 
