@@ -12,6 +12,31 @@ on:
 permissions: {}
 
 jobs:
+  publish-cli:
+    # Publish the seizu-cli pip package to PyPI on every release.
+    # Requires a PyPI Trusted Publisher configured at:
+    #   https://pypi.org/manage/account/publishing/
+    # with publisher: GitHub Actions, repo: this repo, workflow: publish.yml
+    if: github.event_name == 'release'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read   # for actions/checkout
+      id-token: write  # for OIDC trusted publisher (no API token needed)
+    environment:
+      name: pypi
+      url: https://pypi.org/p/seizu-cli
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install build
+        run: pip install build
+      - name: Build CLI package
+        run: python -m build
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+
   build-and-publish-to-ghcr:
     permissions:
       contents: read   # for actions/checkout

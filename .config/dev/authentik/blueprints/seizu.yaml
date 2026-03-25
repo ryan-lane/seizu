@@ -2,8 +2,9 @@
 # development. Applied automatically on worker startup via the blueprint
 # directory mount.
 #
-# The provider uses the Authorization Code flow with PKCE (public client),
-# which is the recommended setup for browser-based SPAs.
+# The provider uses the Authorization Code flow with PKCE (public client)
+# for browser-based SPAs, and the Device Authorization Grant (RFC 8628) for
+# the CLI (seizu_cli/commands/auth.py → seizu login).
 version: 1
 metadata:
   name: Seizu Development OIDC Provider
@@ -28,14 +29,17 @@ entries:
       is_active: true
       password: devpassword
 
-  # OAuth2/OIDC provider (public PKCE client)
+  # OAuth2/OIDC provider — supports two grant types:
+  #   1. Authorization Code + PKCE  (browser SPA, frontend)
+  #   2. Device Authorization Grant (CLI, seizu login)
   - model: authentik_providers_oauth2.oauth2provider
     state: present
     identifiers:
       name: seizu
     attrs:
       name: seizu
-      # Public client: no client secret, uses PKCE instead
+      # Public client: no client secret; uses PKCE for browser flows and
+      # device_code for CLI flows.
       client_type: public
       client_id: seizu
       authorization_flow: !Find
@@ -83,10 +87,18 @@ entries:
   - model: authentik_brands.brand
     state: present
     identifiers:
-      domain: localhost
+      domain: "localhost:9000"
     attrs:
-      domain: localhost
+      domain: "localhost:9000"
       branding_title: Seizu
+      # Required for the Device Authorization Grant: Authentik checks
+      # brand.flow_device_code before processing /device?code=... requests.
+      # The implicit-consent flow is used as the entry flow; when the code
+      # is pre-filled in the URL, Authentik skips this flow and routes
+      # directly through the provider's authorization_flow.
+      flow_device_code: !Find
+        - authentik_flows.flow
+        - [slug, default-provider-authorization-implicit-consent]
       branding_custom_css: |
         /* ── Seizu theme for Authentik ───────────────────────────────────────
            Matches the Material-UI palette used by the Seizu React frontend.

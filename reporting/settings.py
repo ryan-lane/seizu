@@ -113,6 +113,11 @@ SCHEDULED_QUERY_MODULES = list_env(
 # Whether to redirect HTTP requests to HTTPS (via Flask-Talisman).
 # Disable in development or when running behind an SSL-terminating load balancer.
 TALISMAN_FORCE_HTTPS = bool_env("TALISMAN_FORCE_HTTPS", True)
+# Whether the Flask session cookie should require HTTPS (Secure flag).
+# Defaults to True (same as TALISMAN_FORCE_HTTPS). Set to False in development
+# when running over plain HTTP so the CLI's requests.Session can send the
+# session cookie and CSRF validation succeeds.
+SESSION_COOKIE_SECURE = bool_env("SESSION_COOKIE_SECURE", True)
 
 # CSRF settings
 
@@ -141,9 +146,6 @@ else:
 CSRF_CHECK_REFERER = bool_env("CSRF_CHECK_REFERER", True)
 # Setting that can be used to disable CSRF protection
 CSRF_DISABLE = bool_env("CSRF_DISABLE", False)
-
-# YAML config used for dashboard generation and stat reporting
-REPORTING_CONFIG_FILE = str_env("REPORTING_CONFIG_FILE", "/reporting-dashboard.conf")
 
 # Maximum number of stats we will generate for panels with inputs
 DASHBOARD_STATS_MAX_INPUT_RESULTS = int_env("DASHBOARD_STATS_MAX_INPUT_RESULTS", 100)

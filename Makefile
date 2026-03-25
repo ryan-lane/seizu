@@ -21,7 +21,7 @@ test: test_unit test_frontend
 
 .PHONY: test_unit
 test_unit: junit pipenv_install
-	pipenv run pytest --strict --junitxml=coverage/unit.xml --cov=reporting --cov-report=html:coverage/cov_html --cov-report=xml:coverage/cov.xml --cov-report=term --no-cov-on-fail tests/unit
+	pipenv run pytest --strict --junitxml=coverage/unit.xml --cov=reporting --cov=seizu_schema --cov-report=html:coverage/cov_html --cov-report=xml:coverage/cov.xml --cov-report=term --no-cov-on-fail tests/unit
 
 .PHONY: test_integration
 test_integration:
@@ -46,6 +46,7 @@ lock_dev:
 .PHONY: rebuild
 rebuild:
 	docker compose build seizu
+	docker compose run --rm seizu-node bun run build
 
 .PHONY: drop_db
 drop_db: down
@@ -60,11 +61,38 @@ drop_db: down
 
 .PHONY: seed_dashboard
 seed_dashboard:
-	docker compose $(COMPOSE_PROFILES) run --rm seizu bash -c "pipenv sync --dev && PYTHONPATH=/home/seizu/seizu pipenv run python scripts/seed_reports_from_yaml.py --config .config/dev/seizu/reporting-dashboard.yaml $(ARGS)"
+	docker compose $(COMPOSE_PROFILES) run --rm seizu bash -c "pipenv sync --dev && PYTHONPATH=/home/seizu/seizu pipenv run python -m seizu_cli --api-url http://seizu:8080 seed --config .config/dev/seizu/reporting-dashboard.yaml $(ARGS)"
 
 .PHONY: schema
-schema:
+schema: generate_openapi
 	FLASK_APP=reporting.schema.cli pipenv run flask schema export > schema/reporting-schema.json
+
+# Export the OpenAPI spec from the running APIFlask app (no backend connections required).
+.PHONY: generate_openapi
+generate_openapi:
+	FLASK_APP=reporting.app:create_app DYNAMODB_CREATE_TABLE=false pipenv run flask spec --output schema/openapi.json
+
+# Generate a client library from schema/openapi.json using openapi-generator-cli.
+# Usage: make generate_client LANG=go
+#        make generate_client LANG=typescript-fetch
+#        make generate_client LANG=java
+# See https://openapi-generator.tech/docs/generators for all supported languages.
+LANG ?= python
+.PHONY: generate_client
+generate_client: generate_openapi
+	docker run --rm \
+		-v $(PWD):/local \
+		openapitools/openapi-generator-cli generate \
+		-i /local/schema/openapi.json \
+		-g $(LANG) \
+		-o /local/generated/$(LANG)-client \
+		--package-name seizu_client
+
+# Build the seizu-cli pip-installable distribution (wheel + sdist).
+# Output lands in dist/. Requires the `build` package (pip install build).
+.PHONY: build_cli
+build_cli:
+	docker compose run --rm seizu bash -c "pip install --quiet build && python -m build"
 
 .PHONY: docs
 docs: schema
@@ -88,25 +116,25 @@ down:
 
 .PHONY: auth_enable
 auth_enable:
-	@sed -i '' 's/DEVELOPMENT_ONLY_REQUIRE_AUTH=false/DEVELOPMENT_ONLY_REQUIRE_AUTH=true/' .env
+	@perl -pi -e 's/DEVELOPMENT_ONLY_REQUIRE_AUTH=false/DEVELOPMENT_ONLY_REQUIRE_AUTH=true/' .env
 	@echo "Auth enabled in .env. Run 'make down && make up' to apply."
 
 .PHONY: auth_disable
 auth_disable:
-	@sed -i '' 's/DEVELOPMENT_ONLY_REQUIRE_AUTH=true/DEVELOPMENT_ONLY_REQUIRE_AUTH=false/' .env
+	@perl -pi -e 's/DEVELOPMENT_ONLY_REQUIRE_AUTH=true/DEVELOPMENT_ONLY_REQUIRE_AUTH=false/' .env
 	@echo "Auth disabled in .env. Run 'make down && make up' to apply."
 
 .PHONY: sqlmodel_enable
 sqlmodel_enable:
 	@grep -q 'REPORT_STORE_BACKEND=' .env 2>/dev/null \
-		&& sed -i '' 's/REPORT_STORE_BACKEND=.*/REPORT_STORE_BACKEND=sqlmodel/' .env \
+		&& perl -pi -e 's/REPORT_STORE_BACKEND=.*/REPORT_STORE_BACKEND=sqlmodel/' .env \
 		|| echo 'REPORT_STORE_BACKEND=sqlmodel' >> .env
 	@echo "SQLModel backend enabled in .env. Run 'make down && make up' to apply."
 
 .PHONY: sqlmodel_disable
 sqlmodel_disable:
 	@grep -q 'REPORT_STORE_BACKEND=' .env 2>/dev/null \
-		&& sed -i '' 's/REPORT_STORE_BACKEND=.*/REPORT_STORE_BACKEND=dynamodb/' .env \
+		&& perl -pi -e 's/REPORT_STORE_BACKEND=.*/REPORT_STORE_BACKEND=dynamodb/' .env \
 		|| echo 'REPORT_STORE_BACKEND=dynamodb' >> .env
 	@echo "DynamoDB backend restored in .env. Run 'make down && make up' to apply."
 

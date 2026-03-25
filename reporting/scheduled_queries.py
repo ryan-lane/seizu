@@ -11,7 +11,6 @@ from flask.cli import AppGroup
 from reporting import scheduled_query_modules
 from reporting import settings
 from reporting import setup_logging  # noqa:F401
-from reporting.schema import reporting_config
 from reporting.schema.report_config import ScheduledQueryItem
 from reporting.schema.reporting_config import ScheduledQuery
 from reporting.schema.reporting_config import ScheduledQueryAction
@@ -137,8 +136,7 @@ def _schedule_queries() -> None:
     )
     if should_init:
         report_store.initialize()
-    config = reporting_config.load_file(settings.REPORTING_CONFIG_FILE)
-    scheduled_query_modules.load_modules(config)
+    scheduled_query_modules.load_modules()
     while not _is_shutdown():
         logger.debug("Checking queries to schedule...")
         sq_items = report_store.list_scheduled_queries()

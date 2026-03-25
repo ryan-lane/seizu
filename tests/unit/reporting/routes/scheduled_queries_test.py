@@ -144,7 +144,7 @@ def test_create_scheduled_query_success(mocker):
     )
     mocker.patch(
         "reporting.routes.scheduled_queries.scheduled_query_modules.get_action_schemas",
-        return_value={},
+        return_value={"log": []},
     )
     mocker.patch(
         "reporting.routes.scheduled_queries.validate_query",
@@ -163,7 +163,7 @@ def test_create_scheduled_query_cypher_validation_error(mocker):
     app = _make_app(mocker)
     mocker.patch(
         "reporting.routes.scheduled_queries.scheduled_query_modules.get_action_schemas",
-        return_value={},
+        return_value={"log": []},
     )
     mocker.patch(
         "reporting.routes.scheduled_queries.validate_query",
@@ -194,7 +194,7 @@ def test_create_scheduled_query_invalid_body(mocker):
     app = _make_app(mocker)
     mocker.patch(
         "reporting.routes.scheduled_queries.scheduled_query_modules.get_action_schemas",
-        return_value={},
+        return_value={"log": []},
     )
     ret = app.test_client().post(
         "/api/v1/scheduled-queries",
@@ -203,6 +203,23 @@ def test_create_scheduled_query_invalid_body(mocker):
     )
     assert ret.status_code == 400
     assert "error" in ret.json
+
+
+def test_create_scheduled_query_unknown_action_type(mocker):
+    app = _make_app(mocker)
+    mocker.patch(
+        "reporting.routes.scheduled_queries.scheduled_query_modules.get_action_schemas",
+        return_value={"log": []},
+    )
+    body = dict(_VALID_SQ_BODY)
+    body["actions"] = [{"action_type": "not_a_real_module", "action_config": {}}]
+    ret = app.test_client().post(
+        "/api/v1/scheduled-queries",
+        data=json.dumps(body),
+        content_type="application/json",
+    )
+    assert ret.status_code == 400
+    assert "not_a_real_module" in ret.json["error"]
 
 
 def test_create_scheduled_query_action_config_error(mocker):
@@ -243,7 +260,7 @@ def test_update_scheduled_query_success(mocker):
     )
     mocker.patch(
         "reporting.routes.scheduled_queries.scheduled_query_modules.get_action_schemas",
-        return_value={},
+        return_value={"log": []},
     )
     mocker.patch(
         "reporting.routes.scheduled_queries.validate_query",
@@ -262,7 +279,7 @@ def test_update_scheduled_query_cypher_validation_error(mocker):
     app = _make_app(mocker)
     mocker.patch(
         "reporting.routes.scheduled_queries.scheduled_query_modules.get_action_schemas",
-        return_value={},
+        return_value={"log": []},
     )
     mocker.patch(
         "reporting.routes.scheduled_queries.validate_query",
@@ -286,7 +303,7 @@ def test_update_scheduled_query_not_found(mocker):
     )
     mocker.patch(
         "reporting.routes.scheduled_queries.scheduled_query_modules.get_action_schemas",
-        return_value={},
+        return_value={"log": []},
     )
     mocker.patch(
         "reporting.routes.scheduled_queries.validate_query",
@@ -314,7 +331,7 @@ def test_update_scheduled_query_invalid_body(mocker):
     app = _make_app(mocker)
     mocker.patch(
         "reporting.routes.scheduled_queries.scheduled_query_modules.get_action_schemas",
-        return_value={},
+        return_value={"log": []},
     )
     ret = app.test_client().put(
         f"/api/v1/scheduled-queries/{_SQ_ID}",

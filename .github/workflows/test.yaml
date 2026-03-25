@@ -42,6 +42,24 @@ jobs:
         run: bun run type-check
       - name: Run tests
         run: bun test --watchAll=false
+  build-cli:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read  # for actions/checkout
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install build
+        run: pip install build
+      - name: Build CLI package
+        run: python -m build
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cli-dist
+          path: dist/
+          retention-days: 7
   linter:
     runs-on: ubuntu-latest
     permissions:

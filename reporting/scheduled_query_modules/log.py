@@ -48,7 +48,7 @@ def action_config_schema() -> List[ActionConfigFieldDef]:
     ]
 
 
-def setup(config: Dict[str, Any]) -> None:
+def setup() -> None:
     return
 
 

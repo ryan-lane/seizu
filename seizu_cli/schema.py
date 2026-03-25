@@ -1,9 +1,8 @@
 """Re-exports from ``seizu_schema.reporting_config``.
 
-The authoritative model definitions live in the ``seizu_schema`` package so
-they can be shared by both the backend and the ``seizu-cli`` pip package.
-This module re-exports everything for backwards-compatible imports within the
-``reporting`` package.
+The authoritative model definitions live in the shared ``seizu_schema``
+package.  This module re-exports everything so that existing imports within
+``seizu_cli`` continue to work unchanged.
 """
 from seizu_schema.reporting_config import BarPanelSettings  # noqa: F401
 from seizu_schema.reporting_config import dump_yaml  # noqa: F401

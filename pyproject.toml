@@ -1,0 +1,24 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "seizu-cli"
+version = "0.1.0"
+description = "Command-line interface for the Seizu reporting platform"
+requires-python = ">=3.12"
+dependencies = [
+    "keyring>=24.0.0",
+    "pydantic>=2.0.0",
+    "pyyaml>=6.0.0",
+    "requests>=2.27.1",
+    "typer[all]>=0.9.0",
+]
+
+[project.scripts]
+seizu = "seizu_cli.main:app"
+
+[tool.hatch.build.targets.wheel]
+# Ship the CLI package and the shared schema package.
+# The reporting/ backend is not part of the pip-installable distribution.
+packages = ["seizu_cli", "seizu_schema"]

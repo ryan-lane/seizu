@@ -113,10 +113,6 @@ def test__schedule_queries(mocker):
         "reporting.scheduled_queries.report_store.list_scheduled_queries",
         return_value=[item1, item2],
     )
-    mocker.patch(
-        "reporting.scheduled_queries.reporting_config.load_file",
-        return_value=mocker.MagicMock(),
-    )
     load_modules_mock = mocker.patch("reporting.scheduled_query_modules.load_modules")
     bootstrap_mock = mocker.patch("reporting.scheduled_queries._bootstrap")
     shutdown_mock = mocker.patch(

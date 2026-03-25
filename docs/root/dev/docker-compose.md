@@ -101,4 +101,4 @@ make seed_dashboard
 
 ## Updating configuration
 
-The ``up`` make target, prior to running docker-compose, copies a number of default configuration files into a git and docker ignored ``.compose`` directory. Once these initial files are copied in, they won't be overwritten or modified. If you need to change the YAML configuration (queries, scheduled queries), update ``.compose/seizu/reporting-dashboard.yaml``. Report and dashboard configurations are managed via the API or the seed script.
+The ``up`` make target, prior to running docker-compose, copies a number of default configuration files into a git and docker ignored ``.compose`` directory. Once these initial files are copied in, they won't be overwritten or modified. If you need to change the YAML configuration (queries, scheduled queries), update ``.compose/seizu/reporting-dashboard.yaml``. Report and dashboard configurations are managed via the API or the ``seizu`` CLI (``make seed_dashboard``).

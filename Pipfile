@@ -29,6 +29,8 @@ snowflake-id = "*"
 sqlmodel = "*"
 psycopg2-binary = "*"
 apiflask = "*"
+typer = {version = "*", extras = ["all"]}
+keyring = "*"
 
 [dev-packages]
 pre-commit = ">=2.17.0"

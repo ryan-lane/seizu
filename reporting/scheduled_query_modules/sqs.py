@@ -5,9 +5,9 @@ from typing import Dict
 from typing import List
 
 from reporting.schema.report_config import ActionConfigFieldDef
-from reporting.schema.reporting_config import ReportingConfig
 from reporting.schema.reporting_config import ScheduledQueryAction
 from reporting.services import get_boto_client
+from reporting.services import report_store
 from reporting.utils.settings import bool_env
 from reporting.utils.settings import str_env
 
@@ -52,14 +52,14 @@ def action_config_schema() -> List[ActionConfigFieldDef]:
     ]
 
 
-def setup(config: ReportingConfig) -> None:
+def setup() -> None:
     if not _SQS_CREATE_SCHEDULED_QUERY_QUEUES:
         return
-    for scheduled_query in config.scheduled_queries:
-        for action in scheduled_query.actions:
-            if action.action_type == "sqs":
+    for item in report_store.list_scheduled_queries():
+        for action in item.actions:
+            if action.get("action_type") == "sqs":
                 sqs_client = _get_client()
-                sqs_client.create_queue(QueueName=action.action_config["sqs_queue"])
+                sqs_client.create_queue(QueueName=action["action_config"]["sqs_queue"])
 
 
 def handle_results(
