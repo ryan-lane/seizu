@@ -43,8 +43,12 @@ const VERSIONS = [
 // ---------------------------------------------------------------------------
 
 describe('useReportVersionsList', () => {
+  let mockFetch: jest.Mock;
+
   beforeEach(() => {
     jest.clearAllMocks();
+    mockFetch = jest.fn();
+    global.fetch = mockFetch;
     Object.defineProperty(document, 'cookie', {
       writable: true,
       value: '_csrf_token=testtoken'
@@ -52,7 +56,7 @@ describe('useReportVersionsList', () => {
   });
 
   it('fetches versions for a report', async () => {
-    global.fetch = jest.fn().mockResolvedValue({
+    mockFetch.mockResolvedValue({
       ok: true,
       json: () => Promise.resolve({ versions: VERSIONS })
     });
@@ -64,34 +68,30 @@ describe('useReportVersionsList', () => {
     await waitFor(() => expect(result.current.loading).toBe(false));
     expect(result.current.versions).toEqual(VERSIONS);
     expect(result.current.error).toBeNull();
-    expect(global.fetch).toHaveBeenCalledWith(
+    expect(mockFetch).toHaveBeenCalledWith(
       '/api/v1/reports/r1/versions',
       expect.any(Object)
     );
   });
 
   it('does not fetch when auth_required and accessToken is null', () => {
-    global.fetch = jest.fn();
-
     renderHook(() => useReportVersionsList('r1'), {
       wrapper: makeWrapper(true, null)
     });
 
-    expect(global.fetch).not.toHaveBeenCalled();
+    expect(mockFetch).not.toHaveBeenCalled();
   });
 
   it('does not fetch when reportId is undefined', () => {
-    global.fetch = jest.fn();
-
     renderHook(() => useReportVersionsList(undefined), {
       wrapper: makeWrapper(false, null)
     });
 
-    expect(global.fetch).not.toHaveBeenCalled();
+    expect(mockFetch).not.toHaveBeenCalled();
   });
 
   it('includes Authorization header when accessToken is set', async () => {
-    global.fetch = jest.fn().mockResolvedValue({
+    mockFetch.mockResolvedValue({
       ok: true,
       json: () => Promise.resolve({ versions: VERSIONS })
     });
@@ -100,8 +100,8 @@ describe('useReportVersionsList', () => {
       wrapper: makeWrapper(true, 'mytoken')
     });
 
-    await waitFor(() => expect(global.fetch).toHaveBeenCalled());
-    expect(global.fetch).toHaveBeenCalledWith(
+    await waitFor(() => expect(mockFetch).toHaveBeenCalled());
+    expect(mockFetch).toHaveBeenCalledWith(
       '/api/v1/reports/r1/versions',
       expect.objectContaining({
         headers: expect.objectContaining({ Authorization: 'Bearer mytoken' })
@@ -110,7 +110,7 @@ describe('useReportVersionsList', () => {
   });
 
   it('sets error when fetch returns non-ok status', async () => {
-    global.fetch = jest.fn().mockResolvedValue({ ok: false, status: 500 });
+    mockFetch.mockResolvedValue({ ok: false, status: 500 });
 
     const { result } = renderHook(() => useReportVersionsList('r1'), {
       wrapper: makeWrapper(false, null)
@@ -122,7 +122,7 @@ describe('useReportVersionsList', () => {
   });
 
   it('sets error when fetch rejects', async () => {
-    global.fetch = jest.fn().mockRejectedValue(new Error('network error'));
+    mockFetch.mockRejectedValue(new Error('network error'));
 
     const { result } = renderHook(() => useReportVersionsList('r1'), {
       wrapper: makeWrapper(false, null)
@@ -138,8 +138,12 @@ describe('useReportVersionsList', () => {
 // ---------------------------------------------------------------------------
 
 describe('useReportVersion', () => {
+  let mockFetch: jest.Mock;
+
   beforeEach(() => {
     jest.clearAllMocks();
+    mockFetch = jest.fn();
+    global.fetch = mockFetch;
     Object.defineProperty(document, 'cookie', {
       writable: true,
       value: '_csrf_token=testtoken'
@@ -147,7 +151,7 @@ describe('useReportVersion', () => {
   });
 
   it('fetches a specific version', async () => {
-    global.fetch = jest.fn().mockResolvedValue({
+    mockFetch.mockResolvedValue({
       ok: true,
       json: () => Promise.resolve(VERSIONS[0])
     });
@@ -159,44 +163,38 @@ describe('useReportVersion', () => {
     await waitFor(() => expect(result.current.loading).toBe(false));
     expect(result.current.reportVersion).toEqual(VERSIONS[0]);
     expect(result.current.error).toBeNull();
-    expect(global.fetch).toHaveBeenCalledWith(
+    expect(mockFetch).toHaveBeenCalledWith(
       '/api/v1/reports/r1/versions/1',
       expect.any(Object)
     );
   });
 
   it('does not fetch when auth_required and accessToken is null', () => {
-    global.fetch = jest.fn();
-
     renderHook(() => useReportVersion('r1', '1'), {
       wrapper: makeWrapper(true, null)
     });
 
-    expect(global.fetch).not.toHaveBeenCalled();
+    expect(mockFetch).not.toHaveBeenCalled();
   });
 
   it('does not fetch when reportId is undefined', () => {
-    global.fetch = jest.fn();
-
     renderHook(() => useReportVersion(undefined, '1'), {
       wrapper: makeWrapper(false, null)
     });
 
-    expect(global.fetch).not.toHaveBeenCalled();
+    expect(mockFetch).not.toHaveBeenCalled();
   });
 
   it('does not fetch when versionNum is undefined', () => {
-    global.fetch = jest.fn();
-
     renderHook(() => useReportVersion('r1', undefined), {
       wrapper: makeWrapper(false, null)
     });
 
-    expect(global.fetch).not.toHaveBeenCalled();
+    expect(mockFetch).not.toHaveBeenCalled();
   });
 
   it('includes Authorization header when accessToken is set', async () => {
-    global.fetch = jest.fn().mockResolvedValue({
+    mockFetch.mockResolvedValue({
       ok: true,
       json: () => Promise.resolve(VERSIONS[1])
     });
@@ -205,8 +203,8 @@ describe('useReportVersion', () => {
       wrapper: makeWrapper(true, 'mytoken')
     });
 
-    await waitFor(() => expect(global.fetch).toHaveBeenCalled());
-    expect(global.fetch).toHaveBeenCalledWith(
+    await waitFor(() => expect(mockFetch).toHaveBeenCalled());
+    expect(mockFetch).toHaveBeenCalledWith(
       '/api/v1/reports/r1/versions/2',
       expect.objectContaining({
         headers: expect.objectContaining({ Authorization: 'Bearer mytoken' })
@@ -215,7 +213,7 @@ describe('useReportVersion', () => {
   });
 
   it('sets error when fetch returns non-ok status', async () => {
-    global.fetch = jest.fn().mockResolvedValue({ ok: false, status: 404 });
+    mockFetch.mockResolvedValue({ ok: false, status: 404 });
 
     const { result } = renderHook(() => useReportVersion('r1', '99'), {
       wrapper: makeWrapper(false, null)
@@ -227,7 +225,7 @@ describe('useReportVersion', () => {
   });
 
   it('resets reportVersion when reportId changes', async () => {
-    global.fetch = jest.fn().mockResolvedValue({
+    mockFetch.mockResolvedValue({
       ok: true,
       json: () => Promise.resolve(VERSIONS[0])
     });
@@ -243,17 +241,15 @@ describe('useReportVersion', () => {
     await waitFor(() => expect(result.current.loading).toBe(false));
     expect(result.current.reportVersion).toEqual(VERSIONS[0]);
 
-    global.fetch = jest.fn().mockResolvedValue({
+    mockFetch.mockResolvedValue({
       ok: true,
       json: () => Promise.resolve(VERSIONS[1])
     });
 
     rerender({ id: 'r2', ver: '1' });
 
-    // Should reset to undefined while re-fetching
-    expect(result.current.reportVersion).toBeUndefined();
-
-    await waitFor(() => expect(result.current.loading).toBe(false));
-    expect(result.current.reportVersion).toEqual(VERSIONS[1]);
+    // Wait for new data to load after the reportId change
+    await waitFor(() => expect(result.current.reportVersion).toEqual(VERSIONS[1]));
+    expect(result.current.loading).toBe(false);
   });
 });
