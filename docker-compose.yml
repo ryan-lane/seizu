@@ -154,7 +154,7 @@ services:
       AUTHENTIK_ERROR_REPORTING__ENABLED: "false"
     volumes:
       - authentik_media:/media
-      - ./.compose/authentik/blueprints:/blueprints/custom:ro
+      - ./.config/dev/authentik/blueprints:/blueprints/custom:ro
     ports:
       - "9000:9000"
     depends_on:
@@ -189,7 +189,7 @@ services:
       AUTHENTIK_ERROR_REPORTING__ENABLED: "false"
     volumes:
       - authentik_media:/media
-      - ./.compose/authentik/blueprints:/blueprints/custom:ro
+      - ./.config/dev/authentik/blueprints:/blueprints/custom:ro
       - /var/run/docker.sock:/var/run/docker.sock
     depends_on:
       authentik-postgresql:
@@ -307,9 +307,10 @@ services:
       - "OIDC_SCOPE=openid email profile"
       # Disable the referer check so node can proxy to the backend
       - "CSRF_CHECK_REFERER=false"
-      # Disable HTTPS redirect and allow CSRF cookie over plain HTTP in development
+      # Disable HTTPS redirect and allow CSRF/session cookies over plain HTTP in development
       - "TALISMAN_FORCE_HTTPS=false"
       - "CSRF_COOKIE_SECURE=false"
+      - "SESSION_COOKIE_SECURE=false"
       - SECRET_KEY=fake
       - STATSD_EXTERNAL_PREFIX=seizu
       - STATSD_EXTERNAL_PROVIDER=newrelic

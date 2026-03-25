@@ -37,6 +37,13 @@ def login() -> None:
         seizu --credentials-file ~/seizu-creds.json login
     """
     api_url = state.api_url
+
+    try:
+        store = auth.get_store(state.credentials_file)
+    except Exception as exc:
+        _die(exc)
+        return
+
     console.print(f"Authenticating with [bold]{api_url}[/bold]")
 
     try:
@@ -45,7 +52,6 @@ def login() -> None:
         _die(exc)
         return
 
-    store = auth.get_store(state.credentials_file)
     store.save_token(api_url, token)
     console.print(
         f"\n[green]Logged in.[/green] "

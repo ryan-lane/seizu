@@ -93,7 +93,7 @@ def seed_cmd(config: str, force: bool, dry_run: bool) -> None:
     seeded_ids: Dict[str, str] = {}
 
     for report_key, report in loaded.reports.items():
-        report_config_dict = report.model_dump()
+        report_config_dict = report.model_dump(exclude_none=True)
         existing = existing_by_name.get(report.name)
 
         if existing:

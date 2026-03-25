@@ -1,6 +1,6 @@
 #!/bin/bash
 
-mkdir -p ./.compose/telegraf ./.compose/elasticmq ./.compose/neo4j ./.compose/seizu ./.compose/authentik/blueprints ./.compose/dynamodb
+mkdir -p ./.compose/telegraf ./.compose/elasticmq ./.compose/neo4j ./.compose/seizu ./.compose/dynamodb
 
 if [ ! -f ./.env ]
 then

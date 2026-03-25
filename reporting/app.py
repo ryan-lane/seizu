@@ -1,6 +1,8 @@
 from typing import Any
 from typing import Dict
+from typing import List
 from typing import Optional
+from urllib.parse import urlparse
 
 from apiflask import APIFlask
 from flask_seasurf import SeaSurf
@@ -18,13 +20,21 @@ from reporting.routes import validate
 from reporting.services import report_store
 
 
-CSP_POLICY = {
-    "default-src": ["'self'"],
-    "connect-src": ["'self'"],
-    # issues in material-ui
-    "style-src": ["'self'", "'unsafe-inline'"],
-    "script-src-elem": ["'self'"],
-}
+def _build_csp_policy() -> Dict[str, List[str]]:
+    connect_src = ["'self'"]
+    # Allow the browser to reach the OIDC provider (discovery doc, token endpoint, etc.)
+    if settings.OIDC_AUTHORITY:
+        parsed = urlparse(settings.OIDC_AUTHORITY)
+        oidc_origin = f"{parsed.scheme}://{parsed.netloc}"  # noqa: E231
+        if oidc_origin not in connect_src:
+            connect_src.append(oidc_origin)
+    return {
+        "default-src": ["'self'"],
+        "connect-src": connect_src,
+        # issues in material-ui
+        "style-src": ["'self'", "'unsafe-inline'"],
+        "script-src-elem": ["'self'"],
+    }
 
 
 def create_app(override_settings: Optional[Dict] = None) -> APIFlask:
@@ -53,10 +63,11 @@ def create_app(override_settings: Optional[Dict] = None) -> APIFlask:
     csp.init_app(
         app,
         force_https=settings.TALISMAN_FORCE_HTTPS,
-        content_security_policy=CSP_POLICY,
+        content_security_policy=_build_csp_policy(),
         # Add a nonce to inline scripts in the react app. When we can remove unsafe-inline from style-src,
         # we should inject the nonce here.
         content_security_policy_nonce_in=["script-src"],
+        session_cookie_secure=settings.SESSION_COOKIE_SECURE,
     )
 
     csrf = SeaSurf(app)

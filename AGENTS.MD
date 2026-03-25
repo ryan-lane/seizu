@@ -400,9 +400,11 @@ The backend uses `PyJWKClient` (PyJWT) to validate JWTs against any standard OID
 | `JWT_AUDIENCE` | `JWT_AUDIENCE` | `""` | Audience to validate; must match the OIDC client ID (e.g. `seizu`) when using Authentik, because Authentik always sets `aud` in the access token |
 | `DEVELOPMENT_ONLY_REQUIRE_AUTH` | `DEVELOPMENT_ONLY_REQUIRE_AUTH` | `true` | Set `false` in dev to bypass auth |
 | `TALISMAN_FORCE_HTTPS` | `TALISMAN_FORCE_HTTPS` | `true` | Set `false` when not serving HTTPS (dev or behind SSL-terminating LB) |
+| `SESSION_COOKIE_SECURE` | `SESSION_COOKIE_SECURE` | `true` | Set `false` in dev (plain HTTP); must match `TALISMAN_FORCE_HTTPS` — if the session cookie is `Secure` but requests are made over HTTP, the CLI's `requests.Session` won't send it back and CSRF validation will fail with 403 |
+| `CSRF_COOKIE_SECURE` | `CSRF_COOKIE_SECURE` | `true` | Set `false` in dev (plain HTTP) |
 | `OIDC_AUTHORITY` | `OIDC_AUTHORITY` | `""` | OIDC provider base URL; served to the frontend via `/api/v1/config` |
 | `OIDC_CLIENT_ID` | `OIDC_CLIENT_ID` | `""` | OIDC client ID; served to the frontend via `/api/v1/config` |
-| `OIDC_REDIRECT_URI` | `OIDC_REDIRECT_URI` | `""` | OIDC callback URL (browser-reachable); served to the frontend via `/api/v1/config` |
+| `OIDC_REDIRECT_URI` | `OIDC_REDIRECT_URI` | `""` | Served via `/api/v1/config` but **not used by the frontend** — `userManager.ts` always derives `redirect_uri` from `window.location.origin` so the callback returns to the same origin that initiated the flow |
 | `OIDC_SCOPE` | `OIDC_SCOPE` | `"openid email"` | OIDC scope; served to the frontend via `/api/v1/config` |
 
 The frontend performs an OIDC PKCE flow when the backend returns `auth_required: true` and an `oidc` config object from `GET /api/v1/config`. The `UserManager` is created dynamically in `App.tsx` from the fetched config and shared via `AuthConfigContext` — there are no build-time `REACT_APP_OIDC_*` env vars. Auth state lives in `src/auth.context.ts`; the `UserManager` factory is in `src/userManager.ts`.
@@ -442,7 +444,7 @@ Visit `http://localhost:3000`. You will be redirected to Authentik at `http://lo
 - The user visits the verification URL in a browser (pre-filled with the code) and logs in
 - The CLI polls `POST http://localhost:9000/application/o/seizu/token/` until the user approves
 - The access token is stored in the OS-native keyring (or in a JSON file when `--credentials-file` is used) and auto-loaded on subsequent commands
-- The Authentik blueprint enables this via `device_code_flow: !Find [slug, default-provider-device-code]`
+- The Authentik blueprint enables this by setting `flow_device_code` on the **Brand** (not the OAuth2Provider) to `default-provider-authorization-implicit-consent`; Authentik's `DeviceEntryView` returns 404 if the brand has no device code flow configured
 
 **Reverting to no-auth dev mode:**
 ```bash
@@ -454,7 +456,7 @@ make down && make up
 
 **Authentik admin UI:** `http://localhost:9000` — log in as `akadmin` / `devpassword` to inspect the OIDC provider, application, and users.
 
-The OIDC redirect URIs registered in the blueprint are `http://localhost:3000/auth/callback` (dev server) and `http://localhost:8080/auth/callback` (backend direct). If you change ports, update `.config/dev/authentik/blueprints/seizu.yaml` and the `REACT_APP_OIDC_REDIRECT_URI` env var in `docker-compose.yml`.
+The OIDC redirect URIs registered in the blueprint are `http://localhost:3000/auth/callback` (dev server) and `http://localhost:8080/auth/callback` (backend direct). If you change ports, update `.config/dev/authentik/blueprints/seizu.yaml`. The frontend always uses `window.location.origin + '/auth/callback'` as `redirect_uri`, so no env var change is needed — just register the new URI in the blueprint.
 
 Default dev credentials:
 - Admin UI (`http://localhost:9000`): `akadmin` / `devpassword`

@@ -116,25 +116,25 @@ down:
 
 .PHONY: auth_enable
 auth_enable:
-	@sed -i '' 's/DEVELOPMENT_ONLY_REQUIRE_AUTH=false/DEVELOPMENT_ONLY_REQUIRE_AUTH=true/' .env
+	@perl -pi -e 's/DEVELOPMENT_ONLY_REQUIRE_AUTH=false/DEVELOPMENT_ONLY_REQUIRE_AUTH=true/' .env
 	@echo "Auth enabled in .env. Run 'make down && make up' to apply."
 
 .PHONY: auth_disable
 auth_disable:
-	@sed -i '' 's/DEVELOPMENT_ONLY_REQUIRE_AUTH=true/DEVELOPMENT_ONLY_REQUIRE_AUTH=false/' .env
+	@perl -pi -e 's/DEVELOPMENT_ONLY_REQUIRE_AUTH=true/DEVELOPMENT_ONLY_REQUIRE_AUTH=false/' .env
 	@echo "Auth disabled in .env. Run 'make down && make up' to apply."
 
 .PHONY: sqlmodel_enable
 sqlmodel_enable:
 	@grep -q 'REPORT_STORE_BACKEND=' .env 2>/dev/null \
-		&& sed -i '' 's/REPORT_STORE_BACKEND=.*/REPORT_STORE_BACKEND=sqlmodel/' .env \
+		&& perl -pi -e 's/REPORT_STORE_BACKEND=.*/REPORT_STORE_BACKEND=sqlmodel/' .env \
 		|| echo 'REPORT_STORE_BACKEND=sqlmodel' >> .env
 	@echo "SQLModel backend enabled in .env. Run 'make down && make up' to apply."
 
 .PHONY: sqlmodel_disable
 sqlmodel_disable:
 	@grep -q 'REPORT_STORE_BACKEND=' .env 2>/dev/null \
-		&& sed -i '' 's/REPORT_STORE_BACKEND=.*/REPORT_STORE_BACKEND=dynamodb/' .env \
+		&& perl -pi -e 's/REPORT_STORE_BACKEND=.*/REPORT_STORE_BACKEND=dynamodb/' .env \
 		|| echo 'REPORT_STORE_BACKEND=dynamodb' >> .env
 	@echo "DynamoDB backend restored in .env. Run 'make down && make up' to apply."
 

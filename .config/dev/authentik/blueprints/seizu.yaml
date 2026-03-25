@@ -48,13 +48,6 @@ entries:
       invalidation_flow: !Find
         - authentik_flows.flow
         - [slug, default-provider-invalidation-flow]
-      # Device Authorization Grant: the flow Authentik presents in the browser
-      # when a user visits the verification URI to authorize a CLI session.
-      # Uses Authentik's built-in device-code flow which includes the device
-      # code entry stage, authentication, and consent.
-      device_code_flow: !Find
-        - authentik_flows.flow
-        - [slug, default-provider-device-code]
       # Allow redirects to both the bun dev server and the Flask backend
       redirect_uris:
         - url: http://localhost:3000/auth/callback
@@ -94,10 +87,18 @@ entries:
   - model: authentik_brands.brand
     state: present
     identifiers:
-      domain: localhost
+      domain: "localhost:9000"
     attrs:
-      domain: localhost
+      domain: "localhost:9000"
       branding_title: Seizu
+      # Required for the Device Authorization Grant: Authentik checks
+      # brand.flow_device_code before processing /device?code=... requests.
+      # The implicit-consent flow is used as the entry flow; when the code
+      # is pre-filled in the URL, Authentik skips this flow and routes
+      # directly through the provider's authorization_flow.
+      flow_device_code: !Find
+        - authentik_flows.flow
+        - [slug, default-provider-authorization-implicit-consent]
       branding_custom_css: |
         /* ── Seizu theme for Authentik ───────────────────────────────────────
            Matches the Material-UI palette used by the Seizu React frontend.

@@ -31,5 +31,8 @@ export default defineConfig({
       '/api': 'http://seizu:8080',
       '/healthcheck': 'http://seizu:8080',
     },
+    watch: {
+      ignored: ['**/.mypy_cache/**', '**/coverage/**'],
+    },
   },
 });
