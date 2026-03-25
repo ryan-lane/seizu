@@ -75,12 +75,18 @@ seizu validates JWTs using `PyJWKClient` against any standard OIDC JWKS endpoint
 * ``JWT_ISSUER``: optional issuer to validate in the JWT; default: ``""`` (skips issuer validation)
 * ``JWT_AUDIENCE``: optional audience to validate; must match the OIDC client ID when using providers (like Authentik) that always set ``aud``; default: ``""``
 * ``ALLOWED_JWT_ALGORITHMS``: comma-separated list of allowed JWT signing algorithms; default: ``RS256,ES256,ES512``
-* ``OIDC_AUTHORITY``: OIDC provider base URL; passed to the frontend via ``GET /api/v1/config``; default: ``""``
+* ``OIDC_AUTHORITY``: OIDC provider base URL; passed to the frontend via ``GET /api/v1/config`` and also added to the ``connect-src`` Content-Security-Policy directive so the browser can reach the discovery document and token endpoint; default: ``""``
 * ``OIDC_CLIENT_ID``: OIDC client ID; passed to the frontend; default: ``""``
-* ``OIDC_REDIRECT_URI``: OIDC callback URL (browser-reachable); passed to the frontend; default: ``""``
+* ``OIDC_REDIRECT_URI``: OIDC callback URL; passed to the frontend via ``GET /api/v1/config`` but **not used by the frontend** — the browser derives the redirect URI from ``window.location.origin`` so the PKCE callback always returns to the same origin that initiated the flow; default: ``""``
 * ``OIDC_SCOPE``: OIDC scope; default: ``openid email``
 * ``DEVELOPMENT_ONLY_REQUIRE_AUTH``: whether or not to require authentication. This option should only be changed in development; default: ``True``
 * ``DEVELOPMENT_ONLY_AUTH_USER_EMAIL``: the email address of the fake user when authentication is disabled. This option should only be changed in development; default: ``testuser``
+
+#### Security / cookie settings
+
+* ``TALISMAN_FORCE_HTTPS``: redirect HTTP requests to HTTPS and enable HSTS. Set to ``False`` when running behind an SSL-terminating load balancer or in local development; default: ``True``
+* ``SESSION_COOKIE_SECURE``: mark the Flask session cookie as ``Secure`` (HTTPS-only). Must be ``False`` when serving over plain HTTP (e.g. local development or behind an SSL-terminating proxy); default: ``True``
+* ``CSRF_COOKIE_SECURE``: mark the CSRF cookie as ``Secure`` (HTTPS-only). Should match ``SESSION_COOKIE_SECURE``; default: ``True``
 
 ### Scheduled queries
 

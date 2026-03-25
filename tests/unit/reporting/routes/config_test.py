@@ -1,3 +1,4 @@
+from reporting.app import _build_csp_policy
 from reporting.app import create_app
 
 
@@ -72,3 +73,40 @@ def test_config_oidc_null_when_authority_not_configured(mocker):
     app = create_app({"PREFERRED_URL_SCHEME": "https", "SECRET_KEY": "fake"})
     ret = app.test_client().get("/api/v1/config", follow_redirects=False)
     assert ret.json["oidc"] is None
+
+
+# ---------------------------------------------------------------------------
+# _build_csp_policy
+# ---------------------------------------------------------------------------
+
+
+def test_csp_policy_no_oidc_authority(mocker):
+    mocker.patch("reporting.settings.OIDC_AUTHORITY", "")
+    policy = _build_csp_policy()
+    assert policy["connect-src"] == ["'self'"]
+
+
+def test_csp_policy_with_oidc_authority(mocker):
+    mocker.patch(
+        "reporting.settings.OIDC_AUTHORITY",
+        "https://idp.example.com/application/o/seizu",
+    )
+    policy = _build_csp_policy()
+    assert "'self'" in policy["connect-src"]
+    assert "https://idp.example.com" in policy["connect-src"]
+
+
+def test_csp_policy_oidc_origin_not_duplicated(mocker):
+    """self and oidc origin must each appear exactly once."""
+    mocker.patch("reporting.settings.OIDC_AUTHORITY", "https://idp.example.com/o/app")
+    policy = _build_csp_policy()
+    assert policy["connect-src"].count("'self'") == 1
+    assert policy["connect-src"].count("https://idp.example.com") == 1
+
+
+def test_csp_policy_self_not_added_as_oidc_origin(mocker):
+    """If OIDC_AUTHORITY is on the same origin, connect-src stays as just 'self'."""
+    mocker.patch("reporting.settings.OIDC_AUTHORITY", "'self'/o/app")
+    policy = _build_csp_policy()
+    # Parsed origin of "'self'/o/app" is "'self'" which matches the existing entry
+    assert policy["connect-src"].count("'self'") == 1
