@@ -92,16 +92,14 @@ def test_csp_policy_with_oidc_authority(mocker):
         "https://idp.example.com/application/o/seizu",
     )
     policy = _build_csp_policy()
-    assert "'self'" in policy["connect-src"]
-    assert "https://idp.example.com" in policy["connect-src"]
+    assert policy["connect-src"] == ["'self'", "https://idp.example.com"]
 
 
 def test_csp_policy_oidc_origin_not_duplicated(mocker):
     """self and oidc origin must each appear exactly once."""
     mocker.patch("reporting.settings.OIDC_AUTHORITY", "https://idp.example.com/o/app")
     policy = _build_csp_policy()
-    assert policy["connect-src"].count("'self'") == 1
-    assert policy["connect-src"].count("https://idp.example.com") == 1
+    assert policy["connect-src"] == ["'self'", "https://idp.example.com"]
 
 
 def test_csp_policy_self_not_added_as_oidc_origin(mocker):
