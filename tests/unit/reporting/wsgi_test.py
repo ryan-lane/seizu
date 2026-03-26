@@ -1,5 +1,5 @@
-from reporting.wsgi import app
+from reporting.asgi import application
 
 
 def test_app_created():
-    assert app
+    assert application

@@ -1,99 +1,208 @@
+import http.cookies
+import os
+from contextlib import asynccontextmanager
 from typing import Any
-from typing import Dict
-from typing import List
-from typing import Optional
+from typing import AsyncIterator
 from urllib.parse import urlparse
 
-from apiflask import APIFlask
-from flask_seasurf import SeaSurf
-from flask_talisman import Talisman
+import secure
+from fastapi import FastAPI
+from fastapi import HTTPException
+from fastapi import Request
+from fastapi.responses import FileResponse
+from fastapi.responses import HTMLResponse
+from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
+from itsdangerous import BadSignature
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.responses import Response
+from starlette_csrf import CSRFMiddleware
 
 from reporting import settings
-from reporting.routes import config
-from reporting.routes import me
-from reporting.routes import query
-from reporting.routes import reports
-from reporting.routes import scheduled_queries
-from reporting.routes import static
-from reporting.routes import users
-from reporting.routes import validate
+from reporting.routes import config as config_routes
+from reporting.routes import me as me_routes
+from reporting.routes import query as query_routes
+from reporting.routes import reports as reports_routes
+from reporting.routes import scheduled_queries as sq_routes
+from reporting.routes import static as static_routes
+from reporting.routes import users as users_routes
+from reporting.routes import validate as validate_routes
 from reporting.services import report_store
 
 
-def _build_csp_policy() -> Dict[str, List[str]]:
+def _build_csp_policy() -> str:
     connect_src = ["'self'"]
-    # Allow the browser to reach the OIDC provider (discovery doc, token endpoint, etc.)
     if settings.OIDC_AUTHORITY:
         parsed = urlparse(settings.OIDC_AUTHORITY)
         oidc_origin = f"{parsed.scheme}://{parsed.netloc}"  # noqa: E231
         if oidc_origin not in connect_src:
             connect_src.append(oidc_origin)
-    return {
-        "default-src": ["'self'"],
-        "connect-src": connect_src,
+    directives = [
+        "default-src 'self'",
+        f"connect-src {' '.join(connect_src)}",
         # issues in material-ui
-        "style-src": ["'self'", "'unsafe-inline'"],
-        "script-src-elem": ["'self'"],
-    }
+        "style-src 'self' 'unsafe-inline'",
+        "script-src-elem 'self'",
+    ]
+    return "; ".join(directives)
 
 
-def create_app(override_settings: Optional[Dict] = None) -> APIFlask:
-    app = APIFlask(
-        __name__,
-        title="Seizu",
-        version="1.0.0",
-        spec_path="/api/openapi.json",
-        docs_path="/api/docs",
-        template_folder=settings.STATIC_FOLDER,
-        static_folder=f"{settings.STATIC_FOLDER}/static",
-    )
-    app.config["VALIDATION_ERROR_STATUS_CODE"] = 400
-    app.config.from_object(settings)
-    if override_settings:
-        app.config.update(override_settings)
+class _CSRFMiddleware(CSRFMiddleware):
+    """CSRFMiddleware that returns JSON errors and self-heals stale cookies.
 
-    @app.error_processor
-    def error_processor(error: Any) -> Any:  # noqa: F811
-        body: Dict[str, Any] = {"error": error.message}
-        if error.detail:
-            body["details"] = error.detail
-        return body, error.status_code, error.headers
+    starlette-csrf's default error response is plain text, which breaks JSON
+    clients.  Additionally, if the browser holds a stale cookie from a prior
+    implementation (e.g. Flask-SeaSurf), the signature check fails with
+    BadSignature.  This subclass detects that case and expires the stale
+    cookie so the next safe-method response will issue a fresh valid token.
+    """
 
-    csp = Talisman()
-    csp.init_app(
-        app,
-        force_https=settings.TALISMAN_FORCE_HTTPS,
-        content_security_policy=_build_csp_policy(),
-        # Add a nonce to inline scripts in the react app. When we can remove unsafe-inline from style-src,
-        # we should inject the nonce here.
-        content_security_policy_nonce_in=["script-src"],
-        session_cookie_secure=settings.SESSION_COOKIE_SECURE,
-    )
+    def _get_error_response(self, request: Request) -> Response:
+        headers: dict = {}
+        csrf_cookie = request.cookies.get(self.cookie_name)
+        if csrf_cookie is not None:
+            # If the cookie exists but can't be deserialized it is stale/from a
+            # different implementation.  Clear it so the next GET sets a fresh one.
+            try:
+                self.serializer.loads(csrf_cookie)
+            except BadSignature:
+                morsel: http.cookies.SimpleCookie = http.cookies.SimpleCookie()
+                morsel[self.cookie_name] = ""
+                morsel[self.cookie_name]["max-age"] = 0
+                morsel[self.cookie_name]["path"] = self.cookie_path
+                headers["set-cookie"] = morsel.output(header="").strip()
+        return JSONResponse(
+            {"error": "CSRF validation failed"},
+            status_code=403,
+            headers=headers,
+        )
 
-    csrf = SeaSurf(app)
 
-    app.register_blueprint(config.blueprint)
-    app.register_blueprint(me.blueprint)
-    app.register_blueprint(query.blueprint)
-    app.register_blueprint(reports.blueprint)
-    app.register_blueprint(scheduled_queries.blueprint)
-    app.register_blueprint(users.blueprint)
-    app.register_blueprint(validate.blueprint)
-    app.register_blueprint(static.blueprint)
+class _SecurityHeadersMiddleware(BaseHTTPMiddleware):
+    """Apply security headers to every response."""
 
+    def __init__(self, app: Any, secure_headers: secure.Secure) -> None:
+        super().__init__(app)
+        self._secure_headers = secure_headers
+
+    async def dispatch(self, request: Request, call_next: Any) -> Response:
+        response = await call_next(request)
+        self._secure_headers.set_headers(response)
+        return response
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     should_init = settings.DYNAMODB_CREATE_TABLE or (
         settings.REPORT_STORE_BACKEND == "sqlmodel"
     )
     if should_init:
-        with app.app_context():
-            report_store.initialize()
+        await report_store.initialize()
+    yield
 
-    # No CSRF cookie on healthcheck
-    csrf.exempt_urls("/healthcheck")
 
-    # Disable STS on healthcheck
-    with app.app_context():
-        healthcheck = app.view_functions["static_files.healthcheck"]
-        setattr(healthcheck, "talisman_view_options", {"force_https": False})
+def create_app() -> FastAPI:
+    app = FastAPI(
+        title="Seizu",
+        version="1.0.0",
+        openapi_url="/api/openapi.json",
+        docs_url="/api/docs",
+        redoc_url=None,
+        lifespan=lifespan,
+    )
+
+    # Security headers middleware
+    hsts = None
+    if settings.TALISMAN_FORCE_HTTPS:
+        hsts = secure.StrictTransportSecurity().max_age(31536000).include_subdomains()
+    csp_policy = _build_csp_policy()
+    secure_headers = secure.Secure(
+        server=secure.Server().set(""),
+        hsts=hsts,
+        csp=secure.ContentSecurityPolicy().set(csp_policy),
+    )
+    app.add_middleware(_SecurityHeadersMiddleware, secure_headers=secure_headers)
+
+    # CSRF middleware — skip on healthcheck and config (GET, no state-change risk)
+    if not settings.CSRF_DISABLE:
+        app.add_middleware(
+            _CSRFMiddleware,
+            secret=settings.SECRET_KEY or "",
+            cookie_name=settings.CSRF_COOKIE_NAME,
+            header_name=settings.CSRF_HEADER_NAME,
+            cookie_secure=settings.CSRF_COOKIE_SECURE,
+            cookie_httponly=settings.CSRF_COOKIE_HTTPONLY,
+            cookie_samesite=settings.CSRF_COOKIE_SAMESITE,
+            cookie_domain=settings.CSRF_COOKIE_DOMAIN,
+            cookie_path=settings.CSRF_COOKIE_PATH,
+        )
+
+    @app.exception_handler(HTTPException)
+    async def http_exception_handler(
+        request: Request, exc: HTTPException
+    ) -> JSONResponse:
+        return JSONResponse(
+            status_code=exc.status_code,
+            content={
+                "error": str(exc.detail) if exc.detail else str(exc.status_code),
+            },
+        )
+
+    # API routers
+    for router_module in [
+        config_routes,
+        me_routes,
+        query_routes,
+        reports_routes,
+        sq_routes,
+        users_routes,
+        validate_routes,
+        static_routes,
+    ]:
+        app.include_router(router_module.router)
+
+    # Static files from the React build
+    static_folder = settings.STATIC_FOLDER
+    static_dir = os.path.join(static_folder, "static")
+    if os.path.isdir(static_dir):
+        app.mount("/static", StaticFiles(directory=static_dir), name="static")
+
+    # Root-level static files (manifest.json, favicon, etc.) and SPA catch-all
+    _register_static_routes(app, static_folder)
 
     return app
+
+
+_ROOT_STATIC_FILES = {
+    "manifest.json",
+    "asset-manifest.json",
+    "favicon.png",
+    "favicon.svg",
+}
+
+
+def _register_static_routes(app: FastAPI, static_folder: str) -> None:
+    @app.get("/{full_path:path}", include_in_schema=False)
+    async def spa_fallback(full_path: str) -> Response:
+        # Strip leading slashes from path
+        path = full_path.lstrip("/")
+
+        # Serve known root-level static files directly
+        if path in _ROOT_STATIC_FILES:
+            file_path = os.path.join(static_folder, path)
+            if os.path.isfile(file_path):
+                return FileResponse(file_path)
+
+        # Fall back to serving index.html for all other paths (SPA)
+        index_path = os.path.join(static_folder, "index.html")
+        if os.path.isfile(index_path):
+            with open(index_path, "r", encoding="utf-8") as f:
+                content = f.read()
+            return HTMLResponse(
+                content=content,
+                headers={
+                    "Cache-Control": "no-cache, no-store, must-revalidate",
+                },
+            )
+        # If no index.html exists (dev mode without a frontend build), return 404
+        return JSONResponse(content={"error": "Not found"}, status_code=404)

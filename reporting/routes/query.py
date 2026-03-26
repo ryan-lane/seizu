@@ -2,22 +2,22 @@ import logging
 from typing import Any
 
 import neo4j.exceptions
-from apiflask import APIBlueprint
-from flask import jsonify
-from flask import make_response
+from fastapi import APIRouter
+from fastapi import Depends
+from fastapi.responses import JSONResponse
 from neo4j.graph import Node
 from neo4j.graph import Path
 from neo4j.graph import Relationship
 
-from reporting import authnz  # noqa: F401
-from reporting.authnz import bearer_auth
+from reporting.authnz import CurrentUser
+from reporting.authnz import get_current_user
 from reporting.schema.query import QueryRequest
 from reporting.schema.query import QueryResponse
 from reporting.services import reporting_neo4j
 from reporting.services.query_validator import validate_query
 
 logger = logging.getLogger(__name__)
-blueprint = APIBlueprint("query", __name__)
+router = APIRouter()
 
 
 def _serialize_neo4j_value(value: Any) -> Any:
@@ -52,28 +52,25 @@ def _serialize_neo4j_value(value: Any) -> Any:
         return str(value)
 
 
-@blueprint.post("/api/v1/query")
-@blueprint.auth_required(bearer_auth)
-@blueprint.input(QueryRequest, arg_name="body")
-@blueprint.output(QueryResponse)
-def query(body: QueryRequest) -> Any:
+@router.post("/api/v1/query", response_model=QueryResponse)
+async def query(
+    body: QueryRequest,
+    current: CurrentUser = Depends(get_current_user),
+) -> Any:
     """Execute a validated read-only Cypher query."""
-    validation = validate_query(body.query, params=body.params)
+    validation = await validate_query(body.query, params=body.params)
 
     if validation.has_errors:
-        # Return Cypher validation errors in the original envelope so the
-        # frontend can display them inline.  Returning a Response object
-        # bypasses APIFlask's @output serialisation wrapper.
-        return make_response(
-            jsonify(
-                errors=[str(err) for err in validation.errors],
-                warnings=[str(w) for w in validation.warnings],
-            ),
-            400,
+        return JSONResponse(
+            content={
+                "errors": [str(err) for err in validation.errors],
+                "warnings": [str(w) for w in validation.warnings],
+            },
+            status_code=400,
         )
 
     try:
-        results = reporting_neo4j.run_query(body.query, parameters=body.params)
+        results = await reporting_neo4j.run_query(body.query, parameters=body.params)
         serialized = [
             {key: _serialize_neo4j_value(value) for key, value in record.items()}
             for record in results
@@ -85,9 +82,17 @@ def query(body: QueryRequest) -> Any:
         }
     except neo4j.exceptions.Neo4jError as e:
         logger.exception("Query execution failed")
-        return make_response(
-            jsonify(error="Query execution failed", code=e.code, details=e.message), 500
+        return JSONResponse(
+            content={
+                "error": "Query execution failed",
+                "code": e.code,
+                "details": e.message,
+            },
+            status_code=500,
         )
     except Exception:
         logger.exception("Query execution failed")
-        return make_response(jsonify(error="Query execution failed"), 500)
+        return JSONResponse(
+            content={"error": "Query execution failed"},
+            status_code=500,
+        )

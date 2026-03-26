@@ -1,12 +1,9 @@
+import asyncio
 import logging
 import signal
-import time
 from typing import Any
 from typing import Dict
 from typing import List
-
-from flask import Flask
-from flask.cli import AppGroup
 
 from reporting import scheduled_query_modules
 from reporting import settings
@@ -24,26 +21,13 @@ from reporting.services.reporting_neo4j import run_query_with_retry
 
 logger = logging.getLogger(__name__)
 
-STATE = {
-    "shutdown": False,
-}
-
-app = Flask(__name__)
-user_cli = AppGroup("worker")
-app.cli.add_command(user_cli)
-
-
-def _is_shutdown() -> bool:
-    global STATE
-    return STATE["shutdown"]
+_shutdown_event: asyncio.Event = asyncio.Event()
 
 
 def _bootstrap() -> None:
-    global STATE
-
-    def finalizer(signal, frame):  # type: ignore
+    def finalizer(sig: int, frame: Any) -> None:
         logger.info("SIGTERM caught, shutting down")
-        STATE["shutdown"] = True
+        _shutdown_event.set()
 
     signal.signal(signal.SIGTERM, finalizer)
 
@@ -61,7 +45,7 @@ def _item_to_scheduled_query(item: ScheduledQueryItem) -> ScheduledQuery:
     )
 
 
-def schedule_query(
+async def schedule_query(
     scheduled_query_id: str,
     scheduled_query: ScheduledQuery,
 ) -> None:
@@ -71,18 +55,18 @@ def schedule_query(
         )
         return
     logger.debug("Checking query", extra={"scheduled_query_id": scheduled_query_id})
-    if lock_scheduled_query(scheduled_query_id, scheduled_query):
+    if await lock_scheduled_query(scheduled_query_id, scheduled_query):
         logger.debug(
             "Got lock for query", extra={"scheduled_query_id": scheduled_query_id}
         )
         try:
             query_str = scheduled_query.cypher
             params = {d.name: d.value for d in scheduled_query.params}
-            results = run_query_with_retry(query_str, params)
+            results = await run_query_with_retry(query_str, params)
             for action in scheduled_query.actions:
-                _handle_results(scheduled_query_id, action, results)
+                await _handle_results(scheduled_query_id, action, results)
             try:
-                reset_scheduled_query_fail_count(scheduled_query_id)
+                await reset_scheduled_query_fail_count(scheduled_query_id)
             except Exception:
                 logger.exception(
                     "Failed to reset query count",
@@ -94,7 +78,7 @@ def schedule_query(
                 extra={"scheduled_query_id": scheduled_query_id},
             )
             try:
-                incr_scheduled_query_fail_count(scheduled_query_id)
+                await incr_scheduled_query_fail_count(scheduled_query_id)
             except Exception:
                 logger.exception(
                     "Failed to reset query count",
@@ -102,8 +86,10 @@ def schedule_query(
                 )
 
 
-def _handle_results(
-    scheduled_query_id: str, action: ScheduledQueryAction, results: List[Dict[str, Any]]
+async def _handle_results(
+    scheduled_query_id: str,
+    action: ScheduledQueryAction,
+    results: List[Dict[str, Any]],
 ) -> None:
     action_type = action.action_type
     if not action_type:
@@ -118,7 +104,7 @@ def _handle_results(
     if action_type not in scheduled_query_modules.get_module_names():
         logger.error(
             "Skipping results for scheduled query that is using an action that is not"
-            " configued in SCHEDULED_QUERY_MODULES",
+            " configured in SCHEDULED_QUERY_MODULES",
             extra={
                 "scheduled_query_id": scheduled_query_id,
                 "action": action_type,
@@ -126,28 +112,31 @@ def _handle_results(
         )
         return
     module = scheduled_query_modules.get_module(action_type)
-    module.handle_results(scheduled_query_id, action, results)
+    await asyncio.to_thread(module.handle_results, scheduled_query_id, action, results)
 
 
-def _schedule_queries() -> None:
+async def _schedule_queries() -> None:
     _bootstrap()
     should_init = settings.DYNAMODB_CREATE_TABLE or (
         settings.REPORT_STORE_BACKEND == "sqlmodel"
     )
     if should_init:
-        report_store.initialize()
-    scheduled_query_modules.load_modules()
-    while not _is_shutdown():
+        await report_store.initialize()
+    await scheduled_query_modules.load_modules()
+    while not _shutdown_event.is_set():
         logger.debug("Checking queries to schedule...")
-        sq_items = report_store.list_scheduled_queries()
+        sq_items = await report_store.list_scheduled_queries()
         for item in sq_items:
             sq = _item_to_scheduled_query(item)
-            schedule_query(item.scheduled_query_id, sq)
-        if not _is_shutdown():
-            time.sleep(settings.SCHEDULED_QUERY_FREQUENCY)
+            await schedule_query(item.scheduled_query_id, sq)
+        if not _shutdown_event.is_set():
+            await asyncio.sleep(settings.SCHEDULED_QUERY_FREQUENCY)
 
 
-@user_cli.command("schedule-queries")
-def schedule_queries() -> None:
+def main() -> None:
     if settings.ENABLE_SCHEDULED_QUERIES:
-        _schedule_queries()
+        asyncio.run(_schedule_queries())
+
+
+if __name__ == "__main__":
+    main()

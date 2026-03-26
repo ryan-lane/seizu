@@ -8,15 +8,15 @@ from typing import Optional
 
 from snowflake import SnowflakeGenerator
 from sqlalchemy import Column
-from sqlalchemy import Engine
 from sqlalchemy import JSON
 from sqlalchemy import UniqueConstraint
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy.ext.asyncio import AsyncEngine
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.ext.asyncio import create_async_engine
 from sqlmodel import col
-from sqlmodel import create_engine
 from sqlmodel import Field
 from sqlmodel import select
-from sqlmodel import Session
 from sqlmodel import SQLModel
 
 from reporting import settings
@@ -31,7 +31,7 @@ from reporting.services.report_store.base import ReportStore
 
 logger = logging.getLogger(__name__)
 
-_engine = None
+_engine: Optional[AsyncEngine] = None
 _snowflake_gen: Optional[SnowflakeGenerator] = None
 
 
@@ -157,14 +157,17 @@ def generate_report_id() -> str:
     return str(next(_get_snowflake_gen()))
 
 
-def _get_engine() -> Engine:
+def _get_engine() -> AsyncEngine:
     global _engine
     if _engine is None:
         url = settings.SQL_DATABASE_URL
-        connect_args = {}
-        if url.startswith("sqlite"):
-            connect_args["check_same_thread"] = False
-        _engine = create_engine(url, connect_args=connect_args)
+        # Replace sync postgresql:// with async postgresql+asyncpg://
+        if url.startswith("postgresql://"):
+            url = url.replace("postgresql://", "postgresql+asyncpg://", 1)
+        elif url.startswith("sqlite:"):
+            # sqlite+aiosqlite for async sqlite (not commonly used in prod)
+            url = url.replace("sqlite:", "sqlite+aiosqlite:", 1)
+        _engine = create_async_engine(url)
     return _engine
 
 
@@ -176,26 +179,22 @@ def _get_engine() -> Engine:
 class SQLModelReportStore(ReportStore):
     """ReportStore implementation backed by any SQLAlchemy-compatible database.
 
-    Configured via the ``SQL_DATABASE_URL`` setting.  Any URL supported by
-    SQLAlchemy works (PostgreSQL, SQLite, MySQL, etc.).
+    Configured via the ``SQL_DATABASE_URL`` setting.
     """
 
-    def initialize(self) -> None:
+    async def initialize(self) -> None:
         """Create all tables if they do not already exist."""
         try:
-            SQLModel.metadata.create_all(_get_engine())
+            async with _get_engine().begin() as conn:
+                await conn.run_sync(SQLModel.metadata.create_all)
             logger.info("SQL report store tables initialised")
         except IntegrityError:
-            # Race condition: multiple gunicorn workers call initialize()
-            # simultaneously. PostgreSQL's CREATE TABLE IF NOT EXISTS is not
-            # atomic under concurrent load; the second worker hits a unique
-            # violation on pg_type. The tables were created by the first
-            # worker, so this is safe to ignore.
             logger.info("SQL report store tables already exist")
 
-    def list_reports(self) -> List[ReportListItem]:
-        with Session(_get_engine()) as session:
-            rows = session.exec(select(ReportRecord)).all()
+    async def list_reports(self) -> List[ReportListItem]:
+        async with AsyncSession(_get_engine()) as session:
+            result = await session.execute(select(ReportRecord))
+            rows = result.scalars().all()
             return [
                 ReportListItem(
                     report_id=r.report_id,
@@ -207,9 +206,9 @@ class SQLModelReportStore(ReportStore):
                 for r in rows
             ]
 
-    def get_report_latest(self, report_id: str) -> Optional[ReportVersion]:
-        with Session(_get_engine()) as session:
-            report = session.get(ReportRecord, report_id)
+    async def get_report_latest(self, report_id: str) -> Optional[ReportVersion]:
+        async with AsyncSession(_get_engine()) as session:
+            report = await session.get(ReportRecord, report_id)
             if not report:
                 return None
             stmt = (
@@ -218,7 +217,8 @@ class SQLModelReportStore(ReportStore):
                 .order_by(col(ReportVersionRecord.version).desc())
                 .limit(1)
             )
-            row = session.exec(stmt).first()
+            result = await session.execute(stmt)
+            row = result.scalars().first()
             if not row:
                 return None
             return ReportVersion(
@@ -231,11 +231,11 @@ class SQLModelReportStore(ReportStore):
                 comment=row.comment,
             )
 
-    def get_report_version(
+    async def get_report_version(
         self, report_id: str, version: int
     ) -> Optional[ReportVersion]:
-        with Session(_get_engine()) as session:
-            report = session.get(ReportRecord, report_id)
+        async with AsyncSession(_get_engine()) as session:
+            report = await session.get(ReportRecord, report_id)
             if not report:
                 return None
             stmt = (
@@ -243,7 +243,8 @@ class SQLModelReportStore(ReportStore):
                 .where(ReportVersionRecord.report_id == report_id)
                 .where(ReportVersionRecord.version == version)
             )
-            row = session.exec(stmt).first()
+            result = await session.execute(stmt)
+            row = result.scalars().first()
             if not row:
                 return None
             return ReportVersion(
@@ -256,9 +257,9 @@ class SQLModelReportStore(ReportStore):
                 comment=row.comment,
             )
 
-    def list_report_versions(self, report_id: str) -> List[ReportVersion]:
-        with Session(_get_engine()) as session:
-            report = session.get(ReportRecord, report_id)
+    async def list_report_versions(self, report_id: str) -> List[ReportVersion]:
+        async with AsyncSession(_get_engine()) as session:
+            report = await session.get(ReportRecord, report_id)
             if not report:
                 return []
             stmt = (
@@ -266,7 +267,8 @@ class SQLModelReportStore(ReportStore):
                 .where(ReportVersionRecord.report_id == report_id)
                 .order_by(col(ReportVersionRecord.version).desc())
             )
-            rows = session.exec(stmt).all()
+            result = await session.execute(stmt)
+            rows = result.scalars().all()
             return [
                 ReportVersion(
                     report_id=r.report_id,
@@ -280,7 +282,7 @@ class SQLModelReportStore(ReportStore):
                 for r in rows
             ]
 
-    def create_report(
+    async def create_report(
         self,
         name: str,
         created_by: str,
@@ -289,7 +291,7 @@ class SQLModelReportStore(ReportStore):
         report_id = generate_report_id()
         now = datetime.now(tz=timezone.utc).isoformat()
 
-        with Session(_get_engine()) as session:
+        async with AsyncSession(_get_engine()) as session:
             session.add(
                 ReportRecord(
                     report_id=report_id,
@@ -299,7 +301,7 @@ class SQLModelReportStore(ReportStore):
                     updated_at=now,
                 )
             )
-            session.commit()
+            await session.commit()
 
         return ReportListItem(
             report_id=report_id,
@@ -309,15 +311,15 @@ class SQLModelReportStore(ReportStore):
             updated_at=now,
         )
 
-    def save_report_version(
+    async def save_report_version(
         self,
         report_id: str,
         config: Dict[str, Any],
         created_by: str,
         comment: Optional[str] = None,
     ) -> Optional[ReportVersion]:
-        with Session(_get_engine()) as session:
-            report = session.get(ReportRecord, report_id)
+        async with AsyncSession(_get_engine()) as session:
+            report = await session.get(ReportRecord, report_id)
             if not report:
                 return None
 
@@ -343,8 +345,9 @@ class SQLModelReportStore(ReportStore):
             old_stats_stmt = select(PanelStatRecord).where(
                 PanelStatRecord.report_id == report_id
             )
-            for old_stat in session.exec(old_stats_stmt).all():
-                session.delete(old_stat)
+            old_stats_result = await session.execute(old_stats_stmt)
+            for old_stat in old_stats_result.scalars().all():
+                await session.delete(old_stat)
             for stat in extract_panel_stats(report_id, config):
                 session.add(
                     PanelStatRecord(
@@ -358,7 +361,7 @@ class SQLModelReportStore(ReportStore):
                     )
                 )
 
-            session.commit()
+            await session.commit()
 
         return ReportVersion(
             report_id=report_id,
@@ -370,53 +373,49 @@ class SQLModelReportStore(ReportStore):
             comment=comment,
         )
 
-    def delete_report(self, report_id: str) -> bool:
-        """Delete a report and all its versions.
-
-        Returns False if the report does not exist.
-        """
-        with Session(_get_engine()) as session:
-            report = session.get(ReportRecord, report_id)
+    async def delete_report(self, report_id: str) -> bool:
+        """Delete a report and all its versions."""
+        async with AsyncSession(_get_engine()) as session:
+            report = await session.get(ReportRecord, report_id)
             if not report:
                 return False
 
-            # Clear the dashboard pointer if it references this report
-            pointer = session.get(DashboardPointerRecord, 1)
+            pointer = await session.get(DashboardPointerRecord, 1)
             if pointer and pointer.report_id == report_id:
-                session.delete(pointer)
+                await session.delete(pointer)
 
-            # Delete all versions for this report
             stmt = select(ReportVersionRecord).where(
                 ReportVersionRecord.report_id == report_id
             )
-            for version_record in session.exec(stmt).all():
-                session.delete(version_record)
+            result = await session.execute(stmt)
+            for version_record in result.scalars().all():
+                await session.delete(version_record)
 
-            # Delete all panel stats for this report
             stats_stmt = select(PanelStatRecord).where(
                 PanelStatRecord.report_id == report_id
             )
-            for stat_record in session.exec(stats_stmt).all():
-                session.delete(stat_record)
+            stats_result = await session.execute(stats_stmt)
+            for stat_record in stats_result.scalars().all():
+                await session.delete(stat_record)
 
-            session.delete(report)
-            session.commit()
+            await session.delete(report)
+            await session.commit()
         return True
 
-    def get_dashboard_report_id(self) -> Optional[str]:
-        with Session(_get_engine()) as session:
-            row = session.get(DashboardPointerRecord, 1)
+    async def get_dashboard_report_id(self) -> Optional[str]:
+        async with AsyncSession(_get_engine()) as session:
+            row = await session.get(DashboardPointerRecord, 1)
             if not row:
                 return None
             return row.report_id
 
-    def set_dashboard_report(self, report_id: str) -> bool:
-        with Session(_get_engine()) as session:
-            exists = session.get(ReportRecord, report_id)
+    async def set_dashboard_report(self, report_id: str) -> bool:
+        async with AsyncSession(_get_engine()) as session:
+            exists = await session.get(ReportRecord, report_id)
             if not exists:
                 return False
             now = datetime.now(tz=timezone.utc).isoformat()
-            existing = session.get(DashboardPointerRecord, 1)
+            existing = await session.get(DashboardPointerRecord, 1)
             if existing:
                 existing.report_id = report_id
                 existing.updated_at = now
@@ -425,19 +424,20 @@ class SQLModelReportStore(ReportStore):
                 session.add(
                     DashboardPointerRecord(id=1, report_id=report_id, updated_at=now)
                 )
-            session.commit()
+            await session.commit()
         return True
 
-    def get_dashboard_report(self) -> Optional[ReportVersion]:
-        report_id = self.get_dashboard_report_id()
+    async def get_dashboard_report(self) -> Optional[ReportVersion]:
+        report_id = await self.get_dashboard_report_id()
         if not report_id:
             return None
-        return self.get_report_latest(report_id)
+        return await self.get_report_latest(report_id)
 
-    def list_panel_stats(self) -> List[PanelStat]:
+    async def list_panel_stats(self) -> List[PanelStat]:
         """Return all PanelStat records across all reports."""
-        with Session(_get_engine()) as session:
-            rows = session.exec(select(PanelStatRecord)).all()
+        async with AsyncSession(_get_engine()) as session:
+            result = await session.execute(select(PanelStatRecord))
+            rows = result.scalars().all()
             return [
                 PanelStat(
                     report_id=r.report_id,
@@ -451,9 +451,10 @@ class SQLModelReportStore(ReportStore):
                 for r in rows
             ]
 
-    def list_scheduled_queries(self) -> List[ScheduledQueryItem]:
-        with Session(_get_engine()) as session:
-            rows = session.exec(select(ScheduledQueryRecord)).all()
+    async def list_scheduled_queries(self) -> List[ScheduledQueryItem]:
+        async with AsyncSession(_get_engine()) as session:
+            result = await session.execute(select(ScheduledQueryRecord))
+            rows = result.scalars().all()
             return [
                 ScheduledQueryItem(
                     scheduled_query_id=r.scheduled_query_id,
@@ -473,9 +474,9 @@ class SQLModelReportStore(ReportStore):
                 for r in rows
             ]
 
-    def get_scheduled_query(self, sq_id: str) -> Optional[ScheduledQueryItem]:
-        with Session(_get_engine()) as session:
-            record = session.get(ScheduledQueryRecord, sq_id)
+    async def get_scheduled_query(self, sq_id: str) -> Optional[ScheduledQueryItem]:
+        async with AsyncSession(_get_engine()) as session:
+            record = await session.get(ScheduledQueryRecord, sq_id)
             if not record:
                 return None
             return ScheduledQueryItem(
@@ -494,7 +495,7 @@ class SQLModelReportStore(ReportStore):
                 updated_by=record.updated_by,
             )
 
-    def create_scheduled_query(
+    async def create_scheduled_query(
         self,
         name: str,
         cypher: str,
@@ -508,7 +509,7 @@ class SQLModelReportStore(ReportStore):
         sq_id = generate_report_id()
         now = datetime.now(tz=timezone.utc).isoformat()
         version = 1
-        with Session(_get_engine()) as session:
+        async with AsyncSession(_get_engine()) as session:
             record = ScheduledQueryRecord(
                 scheduled_query_id=sq_id,
                 name=name,
@@ -540,7 +541,7 @@ class SQLModelReportStore(ReportStore):
                     comment=None,
                 )
             )
-            session.commit()
+            await session.commit()
         return ScheduledQueryItem(
             scheduled_query_id=sq_id,
             name=name,
@@ -557,7 +558,7 @@ class SQLModelReportStore(ReportStore):
             updated_by=created_by,
         )
 
-    def update_scheduled_query(
+    async def update_scheduled_query(
         self,
         sq_id: str,
         name: str,
@@ -571,8 +572,8 @@ class SQLModelReportStore(ReportStore):
         comment: Optional[str] = None,
     ) -> Optional[ScheduledQueryItem]:
         now = datetime.now(tz=timezone.utc).isoformat()
-        with Session(_get_engine()) as session:
-            record = session.get(ScheduledQueryRecord, sq_id)
+        async with AsyncSession(_get_engine()) as session:
+            record = await session.get(ScheduledQueryRecord, sq_id)
             if not record:
                 return None
             original_created_at = record.created_at
@@ -604,7 +605,7 @@ class SQLModelReportStore(ReportStore):
                     comment=comment,
                 )
             )
-            session.commit()
+            await session.commit()
         return ScheduledQueryItem(
             scheduled_query_id=sq_id,
             name=name,
@@ -621,9 +622,11 @@ class SQLModelReportStore(ReportStore):
             updated_by=updated_by,
         )
 
-    def list_scheduled_query_versions(self, sq_id: str) -> List[ScheduledQueryVersion]:
-        with Session(_get_engine()) as session:
-            sq = session.get(ScheduledQueryRecord, sq_id)
+    async def list_scheduled_query_versions(
+        self, sq_id: str
+    ) -> List[ScheduledQueryVersion]:
+        async with AsyncSession(_get_engine()) as session:
+            sq = await session.get(ScheduledQueryRecord, sq_id)
             if not sq:
                 return []
             stmt = (
@@ -631,7 +634,8 @@ class SQLModelReportStore(ReportStore):
                 .where(ScheduledQueryVersionRecord.scheduled_query_id == sq_id)
                 .order_by(col(ScheduledQueryVersionRecord.version).desc())
             )
-            rows = session.exec(stmt).all()
+            result = await session.execute(stmt)
+            rows = result.scalars().all()
             return [
                 ScheduledQueryVersion(
                     scheduled_query_id=r.scheduled_query_id,
@@ -650,11 +654,11 @@ class SQLModelReportStore(ReportStore):
                 for r in rows
             ]
 
-    def get_scheduled_query_version(
+    async def get_scheduled_query_version(
         self, sq_id: str, version: int
     ) -> Optional[ScheduledQueryVersion]:
-        with Session(_get_engine()) as session:
-            sq = session.get(ScheduledQueryRecord, sq_id)
+        async with AsyncSession(_get_engine()) as session:
+            sq = await session.get(ScheduledQueryRecord, sq_id)
             if not sq:
                 return None
             stmt = (
@@ -662,7 +666,8 @@ class SQLModelReportStore(ReportStore):
                 .where(ScheduledQueryVersionRecord.scheduled_query_id == sq_id)
                 .where(ScheduledQueryVersionRecord.version == version)
             )
-            row = session.exec(stmt).first()
+            result = await session.execute(stmt)
+            row = result.scalars().first()
             if not row:
                 return None
             return ScheduledQueryVersion(
@@ -680,22 +685,22 @@ class SQLModelReportStore(ReportStore):
                 comment=row.comment,
             )
 
-    def delete_scheduled_query(self, sq_id: str) -> bool:
-        with Session(_get_engine()) as session:
-            record = session.get(ScheduledQueryRecord, sq_id)
+    async def delete_scheduled_query(self, sq_id: str) -> bool:
+        async with AsyncSession(_get_engine()) as session:
+            record = await session.get(ScheduledQueryRecord, sq_id)
             if not record:
                 return False
-            # Delete all version records first
             stmt = select(ScheduledQueryVersionRecord).where(
                 ScheduledQueryVersionRecord.scheduled_query_id == sq_id
             )
-            for ver in session.exec(stmt).all():
-                session.delete(ver)
-            session.delete(record)
-            session.commit()
+            result = await session.execute(stmt)
+            for ver in result.scalars().all():
+                await session.delete(ver)
+            await session.delete(record)
+            await session.commit()
         return True
 
-    def get_or_create_user(
+    async def get_or_create_user(
         self,
         sub: str,
         iss: str,
@@ -703,13 +708,14 @@ class SQLModelReportStore(ReportStore):
         display_name: Optional[str] = None,
     ) -> User:
         now = datetime.now(tz=timezone.utc).isoformat()
-        with Session(_get_engine()) as session:
+        async with AsyncSession(_get_engine()) as session:
             stmt = (
                 select(UserRecord)
                 .where(UserRecord.iss == iss)
                 .where(UserRecord.sub == sub)
             )
-            record = session.exec(stmt).first()
+            result = await session.execute(stmt)
+            record = result.scalars().first()
             if not record:
                 user_id = generate_report_id()
                 record = UserRecord(
@@ -723,8 +729,8 @@ class SQLModelReportStore(ReportStore):
                     archived_at=None,
                 )
                 session.add(record)
-                session.commit()
-                session.refresh(record)
+                await session.commit()
+                await session.refresh(record)
         return User(
             user_id=record.user_id,
             sub=record.sub,
@@ -736,15 +742,15 @@ class SQLModelReportStore(ReportStore):
             archived_at=record.archived_at,
         )
 
-    def update_user_profile(
+    async def update_user_profile(
         self,
         user_id: str,
         email: str,
         display_name: Optional[str] = None,
         token_iat: Optional[datetime] = None,
     ) -> User:
-        with Session(_get_engine()) as session:
-            record = session.get(UserRecord, user_id)
+        async with AsyncSession(_get_engine()) as session:
+            record = await session.get(UserRecord, user_id)
             if not record:
                 raise ValueError(f"User {user_id!r} not found")
             changed = False
@@ -761,8 +767,8 @@ class SQLModelReportStore(ReportStore):
                     changed = True
             if changed:
                 session.add(record)
-                session.commit()
-                session.refresh(record)
+                await session.commit()
+                await session.refresh(record)
         return User(
             user_id=record.user_id,
             sub=record.sub,
@@ -774,9 +780,9 @@ class SQLModelReportStore(ReportStore):
             archived_at=record.archived_at,
         )
 
-    def get_user(self, user_id: str) -> Optional[User]:
-        with Session(_get_engine()) as session:
-            record = session.get(UserRecord, user_id)
+    async def get_user(self, user_id: str) -> Optional[User]:
+        async with AsyncSession(_get_engine()) as session:
+            record = await session.get(UserRecord, user_id)
             if not record:
                 return None
             return User(
@@ -790,13 +796,13 @@ class SQLModelReportStore(ReportStore):
                 archived_at=record.archived_at,
             )
 
-    def archive_user(self, user_id: str) -> bool:
+    async def archive_user(self, user_id: str) -> bool:
         now = datetime.now(tz=timezone.utc).isoformat()
-        with Session(_get_engine()) as session:
-            record = session.get(UserRecord, user_id)
+        async with AsyncSession(_get_engine()) as session:
+            record = await session.get(UserRecord, user_id)
             if not record:
                 return False
             record.archived_at = now
             session.add(record)
-            session.commit()
+            await session.commit()
         return True

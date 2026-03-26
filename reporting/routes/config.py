@@ -1,17 +1,14 @@
-from apiflask import APIBlueprint
-from flask import jsonify
-from flask import Response
+from fastapi import APIRouter
 
 from reporting import scheduled_query_modules
 from reporting import settings
 from reporting.schema import reporting_config
 
-blueprint = APIBlueprint("config", __name__)
+router = APIRouter()
 
 
-@blueprint.get("/api/v1/config")
-@blueprint.doc(hide=True)
-def get_config() -> Response:
+@router.get("/api/v1/config", include_in_schema=False)
+async def get_config() -> dict:
     """Get frontend configuration."""
     schema = reporting_config.output_json_schema()
     oidc_config = None
@@ -26,18 +23,15 @@ def get_config() -> Response:
         name: [f.model_dump() for f in fields]
         for name, fields in scheduled_query_modules.get_action_schemas().items()
     }
-    resp = jsonify(
-        {
-            "auth_required": settings.DEVELOPMENT_ONLY_REQUIRE_AUTH,
-            "oidc": oidc_config,
-            "stats": {
-                "external_provider": settings.STATSD_EXTERNAL_PROVIDER,
-                "external_prefix": settings.STATSD_EXTERNAL_PREFIX,
-            },
-            "scheduled_query_action_types": scheduled_query_modules.get_configured_action_names(),
-            "scheduled_query_action_schemas": action_schemas,
-            "config": {},
-            "schema": schema,
+    return {
+        "auth_required": settings.DEVELOPMENT_ONLY_REQUIRE_AUTH,
+        "oidc": oidc_config,
+        "stats": {
+            "external_provider": settings.STATSD_EXTERNAL_PROVIDER,
+            "external_prefix": settings.STATSD_EXTERNAL_PREFIX,
         },
-    )
-    return resp
+        "scheduled_query_action_types": scheduled_query_modules.get_configured_action_names(),
+        "scheduled_query_action_schemas": action_schemas,
+        "config": {},
+        "schema": schema,
+    }

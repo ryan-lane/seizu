@@ -48,7 +48,7 @@ def action_config_schema() -> List[ActionConfigFieldDef]:
     ]
 
 
-def setup() -> None:
+async def setup() -> None:
     return
 
 

@@ -1,16 +1,14 @@
-from apiflask import APIBlueprint
-from flask import g
+from fastapi import APIRouter
+from fastapi import Depends
 
-from reporting import authnz  # noqa: F401
-from reporting.authnz import bearer_auth
+from reporting.authnz import CurrentUser
+from reporting.authnz import sync_user_profile
 from reporting.schema.report_config import User
 
-blueprint = APIBlueprint("me", __name__)
+router = APIRouter()
 
 
-@blueprint.get("/api/v1/me")
-@blueprint.auth_required(bearer_auth)
-@blueprint.output(User)
-def get_current_user() -> User:
+@router.get("/api/v1/me", response_model=User)
+async def get_me(current: CurrentUser = Depends(sync_user_profile)) -> User:
     """Return the current authenticated user's profile."""
-    return authnz.sync_user_profile(g.current_user)
+    return current.user

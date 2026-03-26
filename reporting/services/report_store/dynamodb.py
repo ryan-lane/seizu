@@ -1,3 +1,4 @@
+import asyncio
 import logging
 from datetime import datetime
 from datetime import timezone
@@ -7,7 +8,7 @@ from typing import Dict
 from typing import List
 from typing import Optional
 
-from boto3.dynamodb.conditions import Key
+import boto3
 from snowflake import SnowflakeGenerator
 
 from reporting import settings
@@ -17,7 +18,6 @@ from reporting.schema.report_config import ReportVersion
 from reporting.schema.report_config import ScheduledQueryItem
 from reporting.schema.report_config import ScheduledQueryVersion
 from reporting.schema.report_config import User
-from reporting.services import get_boto_resource
 from reporting.services.report_store.base import extract_panel_stats
 from reporting.services.report_store.base import ReportStore
 
@@ -57,16 +57,6 @@ def _get_snowflake_gen() -> SnowflakeGenerator:
     if _snowflake_gen is None:
         _snowflake_gen = SnowflakeGenerator(settings.SNOWFLAKE_MACHINE_ID)
     return _snowflake_gen
-
-
-def _get_table() -> Any:
-    endpoint_url = settings.DYNAMODB_ENDPOINT_URL or None
-    resource = get_boto_resource(
-        "dynamodb",
-        region=settings.DYNAMODB_REGION,
-        endpoint_url=endpoint_url,
-    )
-    return resource.Table(settings.DYNAMODB_TABLE_NAME)
 
 
 def _floats_to_decimal(value: Any) -> Any:
@@ -178,15 +168,18 @@ def _strip_none(value: Any) -> Any:
     return value
 
 
-def _transact_put(table: Any, *items: Dict[str, Any]) -> None:
-    """Write one or more items atomically via TransactWriteItems.
+def _get_table_sync() -> Any:
+    """Return a sync boto3 DynamoDB Table object."""
+    dynamodb = boto3.resource(
+        "dynamodb",
+        region_name=settings.DYNAMODB_REGION,
+        endpoint_url=settings.DYNAMODB_ENDPOINT_URL or None,
+    )
+    return dynamodb.Table(settings.DYNAMODB_TABLE_NAME)
 
-    table.meta.client applies its own type serialization (Python → AttributeValue
-    wire format), so items must be passed as plain Python dicts — not pre-serialized
-    with TypeSerializer.  We only need to strip None values first, because
-    boto3/botocore would convert them to {"NULL": True} which DynamoDB Local
-    rejects inside TransactWriteItems.
-    """
+
+def _transact_put_sync(table: Any, *items: Dict[str, Any]) -> None:
+    """Write one or more items atomically via TransactWriteItems."""
     table.meta.client.transact_write_items(
         TransactItems=[
             {
@@ -200,6 +193,41 @@ def _transact_put(table: Any, *items: Dict[str, Any]) -> None:
     )
 
 
+def _update_user_profile_internal(
+    table: Any,
+    user_id: str,
+    email: str,
+    display_name: Optional[str],
+    token_iat: Optional[datetime],
+) -> User:
+    """Apply an email/display_name update and conditionally advance last_login."""
+    update_exp = "SET email = :e"
+    exp_values: Dict = {":e": email}
+    if display_name is not None:
+        update_exp += ", display_name = :d"
+        exp_values[":d"] = display_name
+    if token_iat is not None:
+        iat_str = token_iat.isoformat()
+        try:
+            resp = table.update_item(
+                Key={"PK": _user_pk(user_id), "SK": _SK_METADATA},
+                UpdateExpression=update_exp + ", last_login = :t",
+                ConditionExpression="last_login < :t",
+                ExpressionAttributeValues={**exp_values, ":t": iat_str},
+                ReturnValues="ALL_NEW",
+            )
+            return _user_from_item(resp["Attributes"])
+        except table.meta.client.exceptions.ConditionalCheckFailedException:
+            pass  # Token not newer — update email only
+    resp = table.update_item(
+        Key={"PK": _user_pk(user_id), "SK": _SK_METADATA},
+        UpdateExpression=update_exp,
+        ExpressionAttributeValues=exp_values,
+        ReturnValues="ALL_NEW",
+    )
+    return _user_from_item(resp["Attributes"])
+
+
 # ---------------------------------------------------------------------------
 # DynamoDB backend implementation
 # ---------------------------------------------------------------------------
@@ -208,90 +236,110 @@ def _transact_put(table: Any, *items: Dict[str, Any]) -> None:
 class DynamoDBReportStore(ReportStore):
     """ReportStore implementation backed by Amazon DynamoDB."""
 
-    def initialize(self) -> None:
+    async def initialize(self) -> None:
         """Create the DynamoDB table if it does not already exist.
 
         Intended for development / local DynamoDB setups; enabled via
         DYNAMODB_CREATE_TABLE=true.
         """
-        endpoint_url = settings.DYNAMODB_ENDPOINT_URL or None
-        resource = get_boto_resource(
-            "dynamodb",
-            region=settings.DYNAMODB_REGION,
-            endpoint_url=endpoint_url,
-        )
-        existing_names = [t.name for t in resource.tables.all()]
-        if settings.DYNAMODB_TABLE_NAME in existing_names:
-            return
-        try:
-            resource.create_table(
-                TableName=settings.DYNAMODB_TABLE_NAME,
-                KeySchema=[
-                    {"AttributeName": "PK", "KeyType": "HASH"},
-                    {"AttributeName": "SK", "KeyType": "RANGE"},
-                ],
-                AttributeDefinitions=[
-                    {"AttributeName": "PK", "AttributeType": "S"},
-                    {"AttributeName": "SK", "AttributeType": "S"},
-                ],
-                BillingMode="PAY_PER_REQUEST",
-            )
-            logger.info(
-                "Created DynamoDB table", extra={"table": settings.DYNAMODB_TABLE_NAME}
-            )
-        except resource.meta.client.exceptions.ResourceInUseException:
-            logger.info(
-                "DynamoDB table already exists (created by another worker)",
-                extra={"table": settings.DYNAMODB_TABLE_NAME},
-            )
 
-    def list_reports(self) -> List[ReportListItem]:
+        def _op() -> None:
+            dynamodb = boto3.resource(
+                "dynamodb",
+                region_name=settings.DYNAMODB_REGION,
+                endpoint_url=settings.DYNAMODB_ENDPOINT_URL or None,
+            )
+            existing_names = [t.name for t in dynamodb.tables.all()]
+            if settings.DYNAMODB_TABLE_NAME in existing_names:
+                return
+            try:
+                dynamodb.create_table(
+                    TableName=settings.DYNAMODB_TABLE_NAME,
+                    KeySchema=[
+                        {"AttributeName": "PK", "KeyType": "HASH"},
+                        {"AttributeName": "SK", "KeyType": "RANGE"},
+                    ],
+                    AttributeDefinitions=[
+                        {"AttributeName": "PK", "AttributeType": "S"},
+                        {"AttributeName": "SK", "AttributeType": "S"},
+                    ],
+                    BillingMode="PAY_PER_REQUEST",
+                )
+                logger.info(
+                    "Created DynamoDB table",
+                    extra={"table": settings.DYNAMODB_TABLE_NAME},
+                )
+            except dynamodb.meta.client.exceptions.ResourceInUseException:
+                logger.info(
+                    "DynamoDB table already exists (created by another worker)",
+                    extra={"table": settings.DYNAMODB_TABLE_NAME},
+                )
+
+        await asyncio.to_thread(_op)
+
+    async def list_reports(self) -> List[ReportListItem]:
         """Return lightweight metadata for all reports."""
-        table = _get_table()
-        resp = table.query(
-            KeyConditionExpression=Key("PK").eq(_PK_REPORT_LIST),
-        )
-        return [ReportListItem(**item) for item in resp.get("Items", [])]
 
-    def get_report_latest(self, report_id: str) -> Optional[ReportVersion]:
+        def _op() -> List[ReportListItem]:
+            table = _get_table_sync()
+            resp = table.query(
+                KeyConditionExpression="PK = :pk",
+                ExpressionAttributeValues={":pk": _PK_REPORT_LIST},
+            )
+            return [ReportListItem(**item) for item in resp.get("Items", [])]
+
+        return await asyncio.to_thread(_op)
+
+    async def get_report_latest(self, report_id: str) -> Optional[ReportVersion]:
         """Return the latest version of a report config, or None if not found."""
-        table = _get_table()
-        resp = table.get_item(
-            Key={"PK": _report_pk(report_id), "SK": _SK_LATEST},
-        )
-        item = resp.get("Item")
-        if not item:
-            return None
-        return ReportVersion(**item)
 
-    def get_report_version(
+        def _op() -> Optional[ReportVersion]:
+            table = _get_table_sync()
+            resp = table.get_item(
+                Key={"PK": _report_pk(report_id), "SK": _SK_LATEST},
+            )
+            item = resp.get("Item")
+            if not item:
+                return None
+            return ReportVersion(**item)
+
+        return await asyncio.to_thread(_op)
+
+    async def get_report_version(
         self, report_id: str, version: int
     ) -> Optional[ReportVersion]:
         """Return a specific version of a report config, or None if not found."""
-        table = _get_table()
-        resp = table.get_item(
-            Key={"PK": _report_pk(report_id), "SK": _version_sk(version)},
-        )
-        item = resp.get("Item")
-        if not item:
-            return None
-        return ReportVersion(**item)
 
-    def list_report_versions(self, report_id: str) -> List[ReportVersion]:
-        """Return all stored versions for a report, newest first.
+        def _op() -> Optional[ReportVersion]:
+            table = _get_table_sync()
+            resp = table.get_item(
+                Key={"PK": _report_pk(report_id), "SK": _version_sk(version)},
+            )
+            item = resp.get("Item")
+            if not item:
+                return None
+            return ReportVersion(**item)
 
-        The #LATEST pointer is excluded because its SK starts with '#', not
-        'VERSION#', so it is never returned by the begins_with filter.
-        """
-        table = _get_table()
-        resp = table.query(
-            KeyConditionExpression=Key("PK").eq(_report_pk(report_id))
-            & Key("SK").begins_with(_SK_VERSION_PREFIX),
-            ScanIndexForward=False,
-        )
-        return [ReportVersion(**item) for item in resp.get("Items", [])]
+        return await asyncio.to_thread(_op)
 
-    def create_report(
+    async def list_report_versions(self, report_id: str) -> List[ReportVersion]:
+        """Return all stored versions for a report, newest first."""
+
+        def _op() -> List[ReportVersion]:
+            table = _get_table_sync()
+            resp = table.query(
+                KeyConditionExpression="PK = :pk AND begins_with(SK, :prefix)",
+                ExpressionAttributeValues={
+                    ":pk": _report_pk(report_id),
+                    ":prefix": _SK_VERSION_PREFIX,
+                },
+                ScanIndexForward=False,
+            )
+            return [ReportVersion(**item) for item in resp.get("Items", [])]
+
+        return await asyncio.to_thread(_op)
+
+    async def create_report(
         self,
         name: str,
         created_by: str,
@@ -319,8 +367,11 @@ class DynamoDBReportStore(ReportStore):
             "updated_at": now,
         }
 
-        table = _get_table()
-        _transact_put(table, metadata_item, list_item)
+        def _op() -> None:
+            table = _get_table_sync()
+            _transact_put_sync(table, metadata_item, list_item)
+
+        await asyncio.to_thread(_op)
         return ReportListItem(
             report_id=report_id,
             name=name,
@@ -329,194 +380,217 @@ class DynamoDBReportStore(ReportStore):
             updated_at=now,
         )
 
-    def save_report_version(
+    async def save_report_version(
         self,
         report_id: str,
         config: Dict[str, Any],
         created_by: str,
         comment: Optional[str] = None,
     ) -> Optional[ReportVersion]:
-        """Append a new version to an existing report and return it.
+        """Append a new version to an existing report and return it."""
 
-        Returns None if the report does not exist.
-        """
-        table = _get_table()
-        resp = table.get_item(Key={"PK": _report_pk(report_id), "SK": _SK_METADATA})
-        meta = resp.get("Item")
-        if not meta:
-            return None
+        def _op() -> Optional[ReportVersion]:
+            table = _get_table_sync()
+            resp = table.get_item(Key={"PK": _report_pk(report_id), "SK": _SK_METADATA})
+            meta = resp.get("Item")
+            if not meta:
+                return None
 
-        version = int(meta["current_version"]) + 1
-        name = meta["name"]
-        now = datetime.now(tz=timezone.utc).isoformat()
+            version = int(meta["current_version"]) + 1
+            name = meta["name"]
+            now = datetime.now(tz=timezone.utc).isoformat()
 
-        version_item = {
-            "PK": _report_pk(report_id),
-            "SK": _version_sk(version),
-            "report_id": report_id,
-            "name": name,
-            "version": version,
-            "config": _floats_to_decimal(config),
-            "created_at": now,
-            "created_by": created_by,
-            "comment": comment,
-        }
-        latest_item = {**version_item, "SK": _SK_LATEST}
-        metadata_item = {
-            "PK": _report_pk(report_id),
-            "SK": _SK_METADATA,
-            "report_id": report_id,
-            "name": name,
-            "current_version": version,
-            "created_at": meta["created_at"],
-            "updated_at": now,
-        }
-        list_item = {
-            "PK": _PK_REPORT_LIST,
-            "SK": f"REPORT#{report_id}",
-            "report_id": report_id,
-            "name": name,
-            "current_version": version,
-            "created_at": meta["created_at"],
-            "updated_at": now,
-        }
-
-        stats = extract_panel_stats(report_id, config)
-        stats_item = {
-            "PK": _PK_PANEL_STATS,
-            "SK": f"REPORT#{report_id}",
-            "report_id": report_id,
-            "stats": [
-                {
-                    "metric": s.metric,
-                    "panel_type": s.panel_type,
-                    "cypher": s.cypher,
-                    "static_params": _floats_to_decimal(s.static_params),
-                    "input_param_name": s.input_param_name,
-                    "input_cypher": s.input_cypher,
-                }
-                for s in stats
-            ],
-        }
-        _transact_put(
-            table, version_item, latest_item, metadata_item, list_item, stats_item
-        )
-        return ReportVersion(**version_item)
-
-    def delete_report(self, report_id: str) -> bool:
-        """Delete a report and all its versions.
-
-        Scans all items under the report PK and batch-deletes them, then
-        removes the list entry and clears the dashboard pointer if needed.
-        Returns False if the report does not exist.
-        """
-        table = _get_table()
-        # Check existence via metadata item
-        resp = table.get_item(Key={"PK": _report_pk(report_id), "SK": _SK_METADATA})
-        if not resp.get("Item"):
-            return False
-
-        # Collect all items under this report PK (metadata, latest, all versions)
-        items_resp = table.query(
-            KeyConditionExpression=Key("PK").eq(_report_pk(report_id)),
-            ProjectionExpression="PK, SK",
-        )
-        keys_to_delete = [
-            {"PK": item["PK"], "SK": item["SK"]} for item in items_resp.get("Items", [])
-        ]
-        # Also delete the list-index entry and the panel stats record
-        keys_to_delete.append({"PK": _PK_REPORT_LIST, "SK": f"REPORT#{report_id}"})
-        keys_to_delete.append({"PK": _PK_PANEL_STATS, "SK": f"REPORT#{report_id}"})
-
-        # Clear dashboard pointer if it points to this report
-        dashboard_resp = table.get_item(
-            Key={"PK": _PK_DASHBOARD, "SK": _SK_DASHBOARD_POINTER}
-        )
-        dashboard_item = dashboard_resp.get("Item")
-        if dashboard_item and dashboard_item.get("report_id") == report_id:
-            keys_to_delete.append({"PK": _PK_DASHBOARD, "SK": _SK_DASHBOARD_POINTER})
-
-        # Batch delete in chunks of 25 (DynamoDB TransactWriteItems limit)
-        with table.batch_writer() as batch:
-            for key in keys_to_delete:
-                batch.delete_item(Key=key)
-
-        return True
-
-    def get_dashboard_report_id(self) -> Optional[str]:
-        """Return the report_id of the current dashboard report, or None if not set."""
-        table = _get_table()
-        resp = table.get_item(Key={"PK": _PK_DASHBOARD, "SK": _SK_DASHBOARD_POINTER})
-        item = resp.get("Item")
-        if not item:
-            return None
-        return item.get("report_id")
-
-    def set_dashboard_report(self, report_id: str) -> bool:
-        """Point the dashboard pointer at the given report.
-
-        Returns False if the report does not exist.
-        """
-        table = _get_table()
-        resp = table.get_item(Key={"PK": _report_pk(report_id), "SK": _SK_METADATA})
-        if not resp.get("Item"):
-            return False
-        table.put_item(
-            Item={
-                "PK": _PK_DASHBOARD,
-                "SK": _SK_DASHBOARD_POINTER,
+            version_item = {
+                "PK": _report_pk(report_id),
+                "SK": _version_sk(version),
                 "report_id": report_id,
-                "updated_at": datetime.now(tz=timezone.utc).isoformat(),
+                "name": name,
+                "version": version,
+                "config": _floats_to_decimal(config),
+                "created_at": now,
+                "created_by": created_by,
+                "comment": comment,
             }
-        )
-        return True
+            latest_item = {**version_item, "SK": _SK_LATEST}
+            metadata_item = {
+                "PK": _report_pk(report_id),
+                "SK": _SK_METADATA,
+                "report_id": report_id,
+                "name": name,
+                "current_version": version,
+                "created_at": meta["created_at"],
+                "updated_at": now,
+            }
+            list_item = {
+                "PK": _PK_REPORT_LIST,
+                "SK": f"REPORT#{report_id}",
+                "report_id": report_id,
+                "name": name,
+                "current_version": version,
+                "created_at": meta["created_at"],
+                "updated_at": now,
+            }
 
-    def get_dashboard_report(self) -> Optional[ReportVersion]:
+            stats = extract_panel_stats(report_id, config)
+            stats_item = {
+                "PK": _PK_PANEL_STATS,
+                "SK": f"REPORT#{report_id}",
+                "report_id": report_id,
+                "stats": [
+                    {
+                        "metric": s.metric,
+                        "panel_type": s.panel_type,
+                        "cypher": s.cypher,
+                        "static_params": _floats_to_decimal(s.static_params),
+                        "input_param_name": s.input_param_name,
+                        "input_cypher": s.input_cypher,
+                    }
+                    for s in stats
+                ],
+            }
+            _transact_put_sync(
+                table,
+                version_item,
+                latest_item,
+                metadata_item,
+                list_item,
+                stats_item,
+            )
+            return ReportVersion(**version_item)
+
+        return await asyncio.to_thread(_op)
+
+    async def delete_report(self, report_id: str) -> bool:
+        """Delete a report and all its versions."""
+
+        def _op() -> bool:
+            table = _get_table_sync()
+            resp = table.get_item(Key={"PK": _report_pk(report_id), "SK": _SK_METADATA})
+            if not resp.get("Item"):
+                return False
+
+            items_resp = table.query(
+                KeyConditionExpression="PK = :pk",
+                ExpressionAttributeValues={":pk": _report_pk(report_id)},
+                ProjectionExpression="PK, SK",
+            )
+            keys_to_delete = [
+                {"PK": item["PK"], "SK": item["SK"]}
+                for item in items_resp.get("Items", [])
+            ]
+            keys_to_delete.append({"PK": _PK_REPORT_LIST, "SK": f"REPORT#{report_id}"})
+            keys_to_delete.append({"PK": _PK_PANEL_STATS, "SK": f"REPORT#{report_id}"})
+
+            dashboard_resp = table.get_item(
+                Key={"PK": _PK_DASHBOARD, "SK": _SK_DASHBOARD_POINTER}
+            )
+            dashboard_item = dashboard_resp.get("Item")
+            if dashboard_item and dashboard_item.get("report_id") == report_id:
+                keys_to_delete.append(
+                    {"PK": _PK_DASHBOARD, "SK": _SK_DASHBOARD_POINTER}
+                )
+
+            with table.batch_writer() as batch:
+                for key in keys_to_delete:
+                    batch.delete_item(Key=key)
+
+            return True
+
+        return await asyncio.to_thread(_op)
+
+    async def get_dashboard_report_id(self) -> Optional[str]:
+        """Return the report_id of the current dashboard report, or None if not set."""
+
+        def _op() -> Optional[str]:
+            table = _get_table_sync()
+            resp = table.get_item(
+                Key={"PK": _PK_DASHBOARD, "SK": _SK_DASHBOARD_POINTER}
+            )
+            item = resp.get("Item")
+            if not item:
+                return None
+            return item.get("report_id")
+
+        return await asyncio.to_thread(_op)
+
+    async def set_dashboard_report(self, report_id: str) -> bool:
+        """Point the dashboard pointer at the given report."""
+
+        def _op() -> bool:
+            table = _get_table_sync()
+            resp = table.get_item(Key={"PK": _report_pk(report_id), "SK": _SK_METADATA})
+            if not resp.get("Item"):
+                return False
+            table.put_item(
+                Item={
+                    "PK": _PK_DASHBOARD,
+                    "SK": _SK_DASHBOARD_POINTER,
+                    "report_id": report_id,
+                    "updated_at": datetime.now(tz=timezone.utc).isoformat(),
+                }
+            )
+            return True
+
+        return await asyncio.to_thread(_op)
+
+    async def get_dashboard_report(self) -> Optional[ReportVersion]:
         """Return the latest version of the dashboard report, or None if not set."""
-        report_id = self.get_dashboard_report_id()
+        report_id = await self.get_dashboard_report_id()
         if not report_id:
             return None
-        return self.get_report_latest(report_id)
+        return await self.get_report_latest(report_id)
 
-    def list_panel_stats(self) -> List[PanelStat]:
+    async def list_panel_stats(self) -> List[PanelStat]:
         """Return all PanelStat records across all reports."""
-        table = _get_table()
-        resp = table.query(
-            KeyConditionExpression=Key("PK").eq(_PK_PANEL_STATS),
-        )
-        result = []
-        for item in resp.get("Items", []):
-            report_id = item["report_id"]
-            for stat_data in item.get("stats", []):
-                result.append(
-                    PanelStat(
-                        report_id=report_id,
-                        metric=stat_data["metric"],
-                        panel_type=stat_data["panel_type"],
-                        cypher=stat_data["cypher"],
-                        static_params=stat_data.get("static_params", {}),
-                        input_param_name=stat_data.get("input_param_name"),
-                        input_cypher=stat_data.get("input_cypher"),
+
+        def _op() -> List[PanelStat]:
+            table = _get_table_sync()
+            resp = table.query(
+                KeyConditionExpression="PK = :pk",
+                ExpressionAttributeValues={":pk": _PK_PANEL_STATS},
+            )
+            result = []
+            for item in resp.get("Items", []):
+                report_id = item["report_id"]
+                for stat_data in item.get("stats", []):
+                    result.append(
+                        PanelStat(
+                            report_id=report_id,
+                            metric=stat_data["metric"],
+                            panel_type=stat_data["panel_type"],
+                            cypher=stat_data["cypher"],
+                            static_params=stat_data.get("static_params", {}),
+                            input_param_name=stat_data.get("input_param_name"),
+                            input_cypher=stat_data.get("input_cypher"),
+                        )
                     )
-                )
-        return result
+            return result
 
-    def list_scheduled_queries(self) -> List[ScheduledQueryItem]:
-        table = _get_table()
-        resp = table.query(
-            KeyConditionExpression=Key("PK").eq(_PK_SCHEDULED_QUERY_LIST),
-        )
-        return [_sq_from_item(item) for item in resp.get("Items", [])]
+        return await asyncio.to_thread(_op)
 
-    def get_scheduled_query(self, sq_id: str) -> Optional[ScheduledQueryItem]:
-        table = _get_table()
-        resp = table.get_item(Key={"PK": _sq_pk(sq_id), "SK": _SK_METADATA})
-        item = resp.get("Item")
-        if not item:
-            return None
-        return _sq_from_item(item)
+    async def list_scheduled_queries(self) -> List[ScheduledQueryItem]:
+        def _op() -> List[ScheduledQueryItem]:
+            table = _get_table_sync()
+            resp = table.query(
+                KeyConditionExpression="PK = :pk",
+                ExpressionAttributeValues={":pk": _PK_SCHEDULED_QUERY_LIST},
+            )
+            return [_sq_from_item(item) for item in resp.get("Items", [])]
 
-    def create_scheduled_query(
+        return await asyncio.to_thread(_op)
+
+    async def get_scheduled_query(self, sq_id: str) -> Optional[ScheduledQueryItem]:
+        def _op() -> Optional[ScheduledQueryItem]:
+            table = _get_table_sync()
+            resp = table.get_item(Key={"PK": _sq_pk(sq_id), "SK": _SK_METADATA})
+            item = resp.get("Item")
+            if not item:
+                return None
+            return _sq_from_item(item)
+
+        return await asyncio.to_thread(_op)
+
+    async def create_scheduled_query(
         self,
         name: str,
         cypher: str,
@@ -548,7 +622,11 @@ class DynamoDBReportStore(ReportStore):
             }
         )
         metadata_item = {"PK": _sq_pk(sq_id), "SK": _SK_METADATA, **base}
-        list_item = {"PK": _PK_SCHEDULED_QUERY_LIST, "SK": _sq_pk(sq_id), **base}
+        list_item = {
+            "PK": _PK_SCHEDULED_QUERY_LIST,
+            "SK": _sq_pk(sq_id),
+            **base,
+        }
         version_item = _strip_none(
             {
                 "PK": _sq_pk(sq_id),
@@ -567,11 +645,15 @@ class DynamoDBReportStore(ReportStore):
                 "comment": None,
             }
         )
-        table = _get_table()
-        _transact_put(table, metadata_item, list_item, version_item)
+
+        def _op() -> None:
+            table = _get_table_sync()
+            _transact_put_sync(table, metadata_item, list_item, version_item)
+
+        await asyncio.to_thread(_op)
         return _sq_from_item(base)
 
-    def update_scheduled_query(
+    async def update_scheduled_query(
         self,
         sq_id: str,
         name: str,
@@ -584,208 +666,193 @@ class DynamoDBReportStore(ReportStore):
         updated_by: str,
         comment: Optional[str] = None,
     ) -> Optional[ScheduledQueryItem]:
-        table = _get_table()
-        resp = table.get_item(Key={"PK": _sq_pk(sq_id), "SK": _SK_METADATA})
-        if not resp.get("Item"):
-            return None
-        existing = resp["Item"]
-        current_version = int(existing.get("current_version", 0))
-        version = current_version + 1
-        now = datetime.now(tz=timezone.utc).isoformat()
-        base = _strip_none(
-            {
-                "scheduled_query_id": sq_id,
-                "name": name,
-                "cypher": cypher,
-                "params": _floats_to_decimal(params),
-                "frequency": frequency,
-                "watch_scans": _floats_to_decimal(watch_scans),
-                "enabled": enabled,
-                "actions": _floats_to_decimal(actions),
-                "current_version": version,
-                "created_at": existing["created_at"],
-                "updated_at": now,
-                "created_by": existing["created_by"],
-                "updated_by": updated_by,
+        def _op() -> Optional[ScheduledQueryItem]:
+            table = _get_table_sync()
+            resp = table.get_item(Key={"PK": _sq_pk(sq_id), "SK": _SK_METADATA})
+            if not resp.get("Item"):
+                return None
+            existing = resp["Item"]
+            current_version = int(existing.get("current_version", 0))
+            version = current_version + 1
+            now = datetime.now(tz=timezone.utc).isoformat()
+            base = _strip_none(
+                {
+                    "scheduled_query_id": sq_id,
+                    "name": name,
+                    "cypher": cypher,
+                    "params": _floats_to_decimal(params),
+                    "frequency": frequency,
+                    "watch_scans": _floats_to_decimal(watch_scans),
+                    "enabled": enabled,
+                    "actions": _floats_to_decimal(actions),
+                    "current_version": version,
+                    "created_at": existing["created_at"],
+                    "updated_at": now,
+                    "created_by": existing["created_by"],
+                    "updated_by": updated_by,
+                }
+            )
+            metadata_item = {"PK": _sq_pk(sq_id), "SK": _SK_METADATA, **base}
+            list_item = {
+                "PK": _PK_SCHEDULED_QUERY_LIST,
+                "SK": _sq_pk(sq_id),
+                **base,
             }
-        )
-        metadata_item = {"PK": _sq_pk(sq_id), "SK": _SK_METADATA, **base}
-        list_item = {"PK": _PK_SCHEDULED_QUERY_LIST, "SK": _sq_pk(sq_id), **base}
-        version_item = _strip_none(
-            {
-                "PK": _sq_pk(sq_id),
-                "SK": _sq_version_sk(version),
-                "scheduled_query_id": sq_id,
-                "name": name,
-                "version": version,
-                "cypher": cypher,
-                "params": _floats_to_decimal(params),
-                "frequency": frequency,
-                "watch_scans": _floats_to_decimal(watch_scans),
-                "enabled": enabled,
-                "actions": _floats_to_decimal(actions),
-                "created_at": now,
-                "created_by": updated_by,
-                "comment": comment,
-            }
-        )
-        _transact_put(table, metadata_item, list_item, version_item)
-        return _sq_from_item(base)
+            version_item = _strip_none(
+                {
+                    "PK": _sq_pk(sq_id),
+                    "SK": _sq_version_sk(version),
+                    "scheduled_query_id": sq_id,
+                    "name": name,
+                    "version": version,
+                    "cypher": cypher,
+                    "params": _floats_to_decimal(params),
+                    "frequency": frequency,
+                    "watch_scans": _floats_to_decimal(watch_scans),
+                    "enabled": enabled,
+                    "actions": _floats_to_decimal(actions),
+                    "created_at": now,
+                    "created_by": updated_by,
+                    "comment": comment,
+                }
+            )
+            _transact_put_sync(table, metadata_item, list_item, version_item)
+            return _sq_from_item(base)
 
-    def list_scheduled_query_versions(self, sq_id: str) -> List[ScheduledQueryVersion]:
-        table = _get_table()
-        resp = table.query(
-            KeyConditionExpression=Key("PK").eq(_sq_pk(sq_id))
-            & Key("SK").begins_with(_SK_VERSION_PREFIX),
-            ScanIndexForward=False,
-        )
-        return [_sq_version_from_item(item) for item in resp.get("Items", [])]
+        return await asyncio.to_thread(_op)
 
-    def get_scheduled_query_version(
+    async def list_scheduled_query_versions(
+        self, sq_id: str
+    ) -> List[ScheduledQueryVersion]:
+        def _op() -> List[ScheduledQueryVersion]:
+            table = _get_table_sync()
+            resp = table.query(
+                KeyConditionExpression="PK = :pk AND begins_with(SK, :prefix)",
+                ExpressionAttributeValues={
+                    ":pk": _sq_pk(sq_id),
+                    ":prefix": _SK_VERSION_PREFIX,
+                },
+                ScanIndexForward=False,
+            )
+            return [_sq_version_from_item(item) for item in resp.get("Items", [])]
+
+        return await asyncio.to_thread(_op)
+
+    async def get_scheduled_query_version(
         self, sq_id: str, version: int
     ) -> Optional[ScheduledQueryVersion]:
-        table = _get_table()
-        resp = table.get_item(Key={"PK": _sq_pk(sq_id), "SK": _sq_version_sk(version)})
-        item = resp.get("Item")
-        if not item:
-            return None
-        return _sq_version_from_item(item)
+        def _op() -> Optional[ScheduledQueryVersion]:
+            table = _get_table_sync()
+            resp = table.get_item(
+                Key={"PK": _sq_pk(sq_id), "SK": _sq_version_sk(version)}
+            )
+            item = resp.get("Item")
+            if not item:
+                return None
+            return _sq_version_from_item(item)
 
-    def delete_scheduled_query(self, sq_id: str) -> bool:
-        table = _get_table()
-        resp = table.get_item(Key={"PK": _sq_pk(sq_id), "SK": _SK_METADATA})
-        if not resp.get("Item"):
-            return False
-        # Collect all items under this SQ PK (metadata + all versions)
-        items_resp = table.query(
-            KeyConditionExpression=Key("PK").eq(_sq_pk(sq_id)),
-            ProjectionExpression="PK, SK",
-        )
-        keys_to_delete = [
-            {"PK": item["PK"], "SK": item["SK"]} for item in items_resp.get("Items", [])
-        ]
-        keys_to_delete.append({"PK": _PK_SCHEDULED_QUERY_LIST, "SK": _sq_pk(sq_id)})
-        with table.batch_writer() as batch:
-            for key in keys_to_delete:
-                batch.delete_item(Key=key)
-        return True
+        return await asyncio.to_thread(_op)
 
-    def _update_user_profile(
-        self,
-        table: Any,
-        user_id: str,
-        email: str,
-        display_name: Optional[str],
-        token_iat: Optional[datetime],
-    ) -> User:
-        """Apply an email/display_name update and conditionally advance last_login."""
-        update_exp = "SET email = :e"
-        exp_values: Dict = {":e": email}
-        if display_name is not None:
-            update_exp += ", display_name = :d"
-            exp_values[":d"] = display_name
-        if token_iat is not None:
-            iat_str = token_iat.isoformat()
-            try:
-                resp = table.update_item(
-                    Key={"PK": _user_pk(user_id), "SK": _SK_METADATA},
-                    UpdateExpression=update_exp + ", last_login = :t",
-                    ConditionExpression="last_login < :t",
-                    ExpressionAttributeValues={**exp_values, ":t": iat_str},
-                    ReturnValues="ALL_NEW",
-                )
-                return _user_from_item(resp["Attributes"])
-            except table.meta.client.exceptions.ConditionalCheckFailedException:
-                pass  # Token not newer — update email only
-        resp = table.update_item(
-            Key={"PK": _user_pk(user_id), "SK": _SK_METADATA},
-            UpdateExpression=update_exp,
-            ExpressionAttributeValues=exp_values,
-            ReturnValues="ALL_NEW",
-        )
-        return _user_from_item(resp["Attributes"])
+    async def delete_scheduled_query(self, sq_id: str) -> bool:
+        def _op() -> bool:
+            table = _get_table_sync()
+            resp = table.get_item(Key={"PK": _sq_pk(sq_id), "SK": _SK_METADATA})
+            if not resp.get("Item"):
+                return False
+            items_resp = table.query(
+                KeyConditionExpression="PK = :pk",
+                ExpressionAttributeValues={":pk": _sq_pk(sq_id)},
+                ProjectionExpression="PK, SK",
+            )
+            keys_to_delete = [
+                {"PK": item["PK"], "SK": item["SK"]}
+                for item in items_resp.get("Items", [])
+            ]
+            keys_to_delete.append({"PK": _PK_SCHEDULED_QUERY_LIST, "SK": _sq_pk(sq_id)})
+            with table.batch_writer() as batch:
+                for key in keys_to_delete:
+                    batch.delete_item(Key=key)
+            return True
 
-    def get_or_create_user(
+        return await asyncio.to_thread(_op)
+
+    async def get_or_create_user(
         self,
         sub: str,
         iss: str,
         email: str,
         display_name: Optional[str] = None,
     ) -> User:
-        """Get an existing user by (iss, sub), or create one on first login.
+        """Get an existing user by (iss, sub), or create one on first login."""
 
-        Existing users are returned as-is; no fields are updated.
-        Uses a conditional put on the lookup item to handle concurrent
-        first-login requests for the same user without creating duplicates.
-        """
-        table = _get_table()
-        now = datetime.now(tz=timezone.utc).isoformat()
-        lookup_sk = _user_lookup_sk(iss, sub)
+        def _op() -> User:
+            table = _get_table_sync()
+            now = datetime.now(tz=timezone.utc).isoformat()
+            lookup_sk = _user_lookup_sk(iss, sub)
 
-        # Fast path: existing user — return without updating
-        lookup_resp = table.get_item(
-            Key={"PK": _PK_USER_LOOKUP, "SK": lookup_sk},
-        )
-        lookup_item = lookup_resp.get("Item")
-
-        if lookup_item:
-            user_id = lookup_item["user_id"]
-            profile_resp = table.get_item(
-                Key={"PK": _user_pk(user_id), "SK": _SK_METADATA},
-            )
-            return _user_from_item(profile_resp["Item"])
-
-        # New user — use a conditional put so concurrent first-logins are safe
-        user_id = generate_report_id()
-        profile_item = _strip_none(
-            {
-                "PK": _user_pk(user_id),
-                "SK": _SK_METADATA,
-                "user_id": user_id,
-                "sub": sub,
-                "iss": iss,
-                "email": email,
-                "display_name": display_name,
-                "created_at": now,
-                "last_login": now,
-                "archived_at": None,
-            }
-        )
-        new_lookup_item = {
-            "PK": _PK_USER_LOOKUP,
-            "SK": lookup_sk,
-            "user_id": user_id,
-        }
-
-        try:
-            table.put_item(
-                Item=new_lookup_item,
-                ConditionExpression="attribute_not_exists(PK)",
-            )
-            table.put_item(Item=profile_item)
-        except table.meta.client.exceptions.ConditionalCheckFailedException:
-            # Another worker created this user concurrently; read and return it
-            lookup_resp2 = table.get_item(
+            lookup_resp = table.get_item(
                 Key={"PK": _PK_USER_LOOKUP, "SK": lookup_sk},
             )
-            user_id = lookup_resp2["Item"]["user_id"]
-            profile_resp = table.get_item(
-                Key={"PK": _user_pk(user_id), "SK": _SK_METADATA},
+            lookup_item = lookup_resp.get("Item")
+
+            if lookup_item:
+                user_id = lookup_item["user_id"]
+                profile_resp = table.get_item(
+                    Key={"PK": _user_pk(user_id), "SK": _SK_METADATA},
+                )
+                return _user_from_item(profile_resp["Item"])
+
+            user_id = generate_report_id()
+            profile_item = _strip_none(
+                {
+                    "PK": _user_pk(user_id),
+                    "SK": _SK_METADATA,
+                    "user_id": user_id,
+                    "sub": sub,
+                    "iss": iss,
+                    "email": email,
+                    "display_name": display_name,
+                    "created_at": now,
+                    "last_login": now,
+                    "archived_at": None,
+                }
             )
-            return _user_from_item(profile_resp["Item"])
+            new_lookup_item = {
+                "PK": _PK_USER_LOOKUP,
+                "SK": lookup_sk,
+                "user_id": user_id,
+            }
 
-        return User(
-            user_id=user_id,
-            sub=sub,
-            iss=iss,
-            email=email,
-            display_name=display_name,
-            created_at=now,
-            last_login=now,
-            archived_at=None,
-        )
+            try:
+                table.put_item(
+                    Item=new_lookup_item,
+                    ConditionExpression="attribute_not_exists(PK)",
+                )
+                table.put_item(Item=profile_item)
+            except table.meta.client.exceptions.ConditionalCheckFailedException:
+                lookup_resp2 = table.get_item(
+                    Key={"PK": _PK_USER_LOOKUP, "SK": lookup_sk},
+                )
+                user_id = lookup_resp2["Item"]["user_id"]
+                profile_resp = table.get_item(
+                    Key={"PK": _user_pk(user_id), "SK": _SK_METADATA},
+                )
+                return _user_from_item(profile_resp["Item"])
 
-    def update_user_profile(
+            return User(
+                user_id=user_id,
+                sub=sub,
+                iss=iss,
+                email=email,
+                display_name=display_name,
+                created_at=now,
+                last_login=now,
+                archived_at=None,
+            )
+
+        return await asyncio.to_thread(_op)
+
+    async def update_user_profile(
         self,
         user_id: str,
         email: str,
@@ -793,56 +860,65 @@ class DynamoDBReportStore(ReportStore):
         token_iat: Optional[datetime] = None,
     ) -> User:
         """Sync mutable profile fields, writing only what has changed."""
-        table = _get_table()
-        profile_resp = table.get_item(
-            Key={"PK": _user_pk(user_id), "SK": _SK_METADATA},
-        )
-        item = profile_resp.get("Item")
-        if not item:
-            raise ValueError(f"User {user_id!r} not found")
-        stored_user = _user_from_item(item)
 
-        email_changed = stored_user.email != email
-        name_changed = (
-            display_name is not None and stored_user.display_name != display_name
-        )
-        iat_newer = token_iat is not None and token_iat > datetime.fromisoformat(
-            stored_user.last_login
-        )
+        def _op() -> User:
+            table = _get_table_sync()
+            profile_resp = table.get_item(
+                Key={"PK": _user_pk(user_id), "SK": _SK_METADATA},
+            )
+            item = profile_resp.get("Item")
+            if not item:
+                raise ValueError(f"User {user_id!r} not found")
+            stored_user = _user_from_item(item)
 
-        if not (email_changed or name_changed or iat_newer):
-            return stored_user
+            email_changed = stored_user.email != email
+            name_changed = (
+                display_name is not None and stored_user.display_name != display_name
+            )
+            iat_newer = token_iat is not None and token_iat > datetime.fromisoformat(
+                stored_user.last_login
+            )
 
-        return self._update_user_profile(
-            table,
-            user_id,
-            email,
-            display_name if name_changed else None,
-            token_iat if iat_newer else None,
-        )
+            if not (email_changed or name_changed or iat_newer):
+                return stored_user
 
-    def get_user(self, user_id: str) -> Optional[User]:
+            return _update_user_profile_internal(
+                table,
+                user_id,
+                email,
+                display_name if name_changed else None,
+                token_iat if iat_newer else None,
+            )
+
+        return await asyncio.to_thread(_op)
+
+    async def get_user(self, user_id: str) -> Optional[User]:
         """Return a user by their internal user_id, or None if not found."""
-        table = _get_table()
-        resp = table.get_item(Key={"PK": _user_pk(user_id), "SK": _SK_METADATA})
-        item = resp.get("Item")
-        if not item:
-            return None
-        return _user_from_item(item)
 
-    def archive_user(self, user_id: str) -> bool:
-        """Soft-delete a user by setting archived_at.
+        def _op() -> Optional[User]:
+            table = _get_table_sync()
+            resp = table.get_item(Key={"PK": _user_pk(user_id), "SK": _SK_METADATA})
+            item = resp.get("Item")
+            if not item:
+                return None
+            return _user_from_item(item)
 
-        Returns False if the user does not exist.
-        """
-        table = _get_table()
-        resp = table.get_item(Key={"PK": _user_pk(user_id), "SK": _SK_METADATA})
-        if not resp.get("Item"):
-            return False
-        now = datetime.now(tz=timezone.utc).isoformat()
-        table.update_item(
-            Key={"PK": _user_pk(user_id), "SK": _SK_METADATA},
-            UpdateExpression="SET archived_at = :t",
-            ExpressionAttributeValues={":t": now},
-        )
-        return True
+        return await asyncio.to_thread(_op)
+
+    async def archive_user(self, user_id: str) -> bool:
+        """Soft-delete a user by setting archived_at."""
+
+        def _op() -> bool:
+            table = _get_table_sync()
+            resp = table.get_item(Key={"PK": _user_pk(user_id), "SK": _SK_METADATA})
+            if not resp.get("Item"):
+                return False
+            now = datetime.now(tz=timezone.utc).isoformat()
+            table.update_item(
+                Key={"PK": _user_pk(user_id), "SK": _SK_METADATA},
+                UpdateExpression="SET archived_at = :t",
+                ExpressionAttributeValues={":t": now},
+            )
+            return True
+
+        return await asyncio.to_thread(_op)

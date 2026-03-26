@@ -45,7 +45,7 @@ class ModuleInterface:
         return ""
 
     @staticmethod
-    def setup() -> None:
+    async def setup() -> None:
         """
         Called when the scheduled queries worker is started. This function
         can be used for any setup that your module may need to do, like creating
@@ -74,7 +74,7 @@ class ModuleInterface:
         return
 
 
-def load_modules() -> None:
+async def load_modules() -> None:
     global _MODULES
 
     for module_name in settings.SCHEDULED_QUERY_MODULES:
@@ -84,7 +84,7 @@ def load_modules() -> None:
         module: ModuleInterface = cast(
             ModuleInterface, __import__(module_name, fromlist=["_fake"])
         )
-        module.setup()
+        await module.setup()
         _MODULES[module.action_name()] = module
 
 
