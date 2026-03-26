@@ -117,13 +117,17 @@ def test_csp_policy_with_oidc_authority(mocker):
         "https://idp.example.com/application/o/seizu",
     )
     policy = _build_csp_policy()
-    assert "https://idp.example.com" in policy
+    assert "connect-src 'self' https://idp.example.com" in policy
+    assert "frame-src https://idp.example.com" in policy
 
 
 def test_csp_policy_oidc_origin_not_duplicated(mocker):
-    """self and oidc origin must each appear exactly once."""
+    """oidc origin appears exactly once in connect-src and once in frame-src."""
     from reporting.app import _build_csp_policy
 
     mocker.patch("reporting.settings.OIDC_AUTHORITY", "https://idp.example.com/o/app")
     policy = _build_csp_policy()
-    assert policy.count("https://idp.example.com") == 1
+    assert "connect-src 'self' https://idp.example.com" in policy
+    assert "frame-src https://idp.example.com" in policy
+    # Appears once per directive (connect-src + frame-src), not duplicated within either.
+    assert policy.count("https://idp.example.com") == 2

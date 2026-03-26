@@ -44,6 +44,10 @@ def _build_csp_policy() -> str:
         "style-src 'self' 'unsafe-inline'",
         "script-src-elem 'self'",
     ]
+    if settings.OIDC_AUTHORITY:
+        parsed = urlparse(settings.OIDC_AUTHORITY)
+        oidc_origin = f"{parsed.scheme}://{parsed.netloc}"  # noqa: E231
+        directives.append(f"frame-src {oidc_origin}")
     return "; ".join(directives)
 
 
@@ -189,7 +193,9 @@ def _register_static_routes(app: FastAPI, static_folder: str) -> None:
 
         # Serve known root-level static files directly
         if path in _ROOT_STATIC_FILES:
-            file_path = os.path.join(static_folder, path)
+            # Use basename to prevent path traversal even though path is already
+            # validated against the fixed set of known filenames.
+            file_path = os.path.join(static_folder, os.path.basename(path))
             if os.path.isfile(file_path):
                 return FileResponse(file_path)
 
