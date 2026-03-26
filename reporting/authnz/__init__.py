@@ -106,7 +106,14 @@ async def get_current_user(
         )
 
     token = credentials.credentials
-    payload = await _get_jwt_payload(token)
+    try:
+        payload = await _get_jwt_payload(token)
+    except jwt.PyJWTError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=str(exc),
+            headers={"WWW-Authenticate": "Bearer"},
+        ) from exc
 
     raw_iat = payload.get("iat")
     token_iat = (
