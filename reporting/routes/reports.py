@@ -10,6 +10,7 @@ from reporting.authnz import get_current_user
 from reporting.schema.report_config import CreateReportRequest
 from reporting.schema.report_config import CreateVersionRequest
 from reporting.schema.report_config import ReportIdResponse
+from reporting.schema.report_config import ReportListItem
 from reporting.schema.report_config import ReportListResponse
 from reporting.schema.report_config import ReportVersion
 from reporting.schema.report_config import ReportVersionListResponse
@@ -104,7 +105,7 @@ async def delete_report(
     return ReportIdResponse(report_id=report_id)
 
 
-@router.post("/api/v1/reports", response_model=ReportVersion, status_code=201)
+@router.post("/api/v1/reports", response_model=ReportListItem, status_code=201)
 async def create_report(
     body: CreateReportRequest,
     current: CurrentUser = Depends(get_current_user),

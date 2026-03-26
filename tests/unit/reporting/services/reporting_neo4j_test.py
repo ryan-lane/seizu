@@ -30,13 +30,11 @@ async def test_run_query(mocker):
     mock_record = MagicMock()
     driver_mock = MagicMock()
 
-    # Build an async context manager for session
+    async def _records():
+        yield mock_record
+
     session_mock = AsyncMock()
-    session_mock.run = AsyncMock(return_value=AsyncMock())
-    # Make the session an async iterable that yields one record
-    session_mock.run.return_value.__aiter__ = MagicMock(
-        return_value=iter([mock_record])
-    )
+    session_mock.run = AsyncMock(return_value=_records())
     driver_mock.session.return_value.__aenter__ = AsyncMock(return_value=session_mock)
     driver_mock.session.return_value.__aexit__ = AsyncMock(return_value=False)
 
@@ -73,9 +71,11 @@ async def test_run_query_with_raise(mocker):
 async def test_run_tx(mocker):
     mock_record = MagicMock()
     tx_mock = AsyncMock()
-    run_result = AsyncMock()
-    run_result.__aiter__ = MagicMock(return_value=iter([mock_record]))
-    tx_mock.run = AsyncMock(return_value=run_result)
+
+    async def _records():
+        yield mock_record
+
+    tx_mock.run = AsyncMock(return_value=_records())
     result = await reporting_neo4j.run_tx(tx_mock, "MATCH (n) RETURN n")
     assert result == [mock_record]
 

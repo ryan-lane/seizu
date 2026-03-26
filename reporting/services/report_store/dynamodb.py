@@ -168,14 +168,18 @@ def _strip_none(value: Any) -> Any:
     return value
 
 
-def _get_table_sync() -> Any:
-    """Return a sync boto3 DynamoDB Table object."""
-    dynamodb = boto3.resource(
+def get_boto_resource() -> Any:
+    """Return a sync boto3 DynamoDB service resource."""
+    return boto3.resource(
         "dynamodb",
         region_name=settings.DYNAMODB_REGION,
         endpoint_url=settings.DYNAMODB_ENDPOINT_URL or None,
     )
-    return dynamodb.Table(settings.DYNAMODB_TABLE_NAME)
+
+
+def _get_table() -> Any:
+    """Return a sync boto3 DynamoDB Table object."""
+    return get_boto_resource().Table(settings.DYNAMODB_TABLE_NAME)
 
 
 def _transact_put_sync(table: Any, *items: Dict[str, Any]) -> None:
@@ -244,11 +248,7 @@ class DynamoDBReportStore(ReportStore):
         """
 
         def _op() -> None:
-            dynamodb = boto3.resource(
-                "dynamodb",
-                region_name=settings.DYNAMODB_REGION,
-                endpoint_url=settings.DYNAMODB_ENDPOINT_URL or None,
-            )
+            dynamodb = get_boto_resource()
             existing_names = [t.name for t in dynamodb.tables.all()]
             if settings.DYNAMODB_TABLE_NAME in existing_names:
                 return
@@ -281,7 +281,7 @@ class DynamoDBReportStore(ReportStore):
         """Return lightweight metadata for all reports."""
 
         def _op() -> List[ReportListItem]:
-            table = _get_table_sync()
+            table = _get_table()
             resp = table.query(
                 KeyConditionExpression="PK = :pk",
                 ExpressionAttributeValues={":pk": _PK_REPORT_LIST},
@@ -294,7 +294,7 @@ class DynamoDBReportStore(ReportStore):
         """Return the latest version of a report config, or None if not found."""
 
         def _op() -> Optional[ReportVersion]:
-            table = _get_table_sync()
+            table = _get_table()
             resp = table.get_item(
                 Key={"PK": _report_pk(report_id), "SK": _SK_LATEST},
             )
@@ -311,7 +311,7 @@ class DynamoDBReportStore(ReportStore):
         """Return a specific version of a report config, or None if not found."""
 
         def _op() -> Optional[ReportVersion]:
-            table = _get_table_sync()
+            table = _get_table()
             resp = table.get_item(
                 Key={"PK": _report_pk(report_id), "SK": _version_sk(version)},
             )
@@ -326,7 +326,7 @@ class DynamoDBReportStore(ReportStore):
         """Return all stored versions for a report, newest first."""
 
         def _op() -> List[ReportVersion]:
-            table = _get_table_sync()
+            table = _get_table()
             resp = table.query(
                 KeyConditionExpression="PK = :pk AND begins_with(SK, :prefix)",
                 ExpressionAttributeValues={
@@ -368,7 +368,7 @@ class DynamoDBReportStore(ReportStore):
         }
 
         def _op() -> None:
-            table = _get_table_sync()
+            table = _get_table()
             _transact_put_sync(table, metadata_item, list_item)
 
         await asyncio.to_thread(_op)
@@ -390,7 +390,7 @@ class DynamoDBReportStore(ReportStore):
         """Append a new version to an existing report and return it."""
 
         def _op() -> Optional[ReportVersion]:
-            table = _get_table_sync()
+            table = _get_table()
             resp = table.get_item(Key={"PK": _report_pk(report_id), "SK": _SK_METADATA})
             meta = resp.get("Item")
             if not meta:
@@ -464,7 +464,7 @@ class DynamoDBReportStore(ReportStore):
         """Delete a report and all its versions."""
 
         def _op() -> bool:
-            table = _get_table_sync()
+            table = _get_table()
             resp = table.get_item(Key={"PK": _report_pk(report_id), "SK": _SK_METADATA})
             if not resp.get("Item"):
                 return False
@@ -502,7 +502,7 @@ class DynamoDBReportStore(ReportStore):
         """Return the report_id of the current dashboard report, or None if not set."""
 
         def _op() -> Optional[str]:
-            table = _get_table_sync()
+            table = _get_table()
             resp = table.get_item(
                 Key={"PK": _PK_DASHBOARD, "SK": _SK_DASHBOARD_POINTER}
             )
@@ -517,7 +517,7 @@ class DynamoDBReportStore(ReportStore):
         """Point the dashboard pointer at the given report."""
 
         def _op() -> bool:
-            table = _get_table_sync()
+            table = _get_table()
             resp = table.get_item(Key={"PK": _report_pk(report_id), "SK": _SK_METADATA})
             if not resp.get("Item"):
                 return False
@@ -544,7 +544,7 @@ class DynamoDBReportStore(ReportStore):
         """Return all PanelStat records across all reports."""
 
         def _op() -> List[PanelStat]:
-            table = _get_table_sync()
+            table = _get_table()
             resp = table.query(
                 KeyConditionExpression="PK = :pk",
                 ExpressionAttributeValues={":pk": _PK_PANEL_STATS},
@@ -570,7 +570,7 @@ class DynamoDBReportStore(ReportStore):
 
     async def list_scheduled_queries(self) -> List[ScheduledQueryItem]:
         def _op() -> List[ScheduledQueryItem]:
-            table = _get_table_sync()
+            table = _get_table()
             resp = table.query(
                 KeyConditionExpression="PK = :pk",
                 ExpressionAttributeValues={":pk": _PK_SCHEDULED_QUERY_LIST},
@@ -581,7 +581,7 @@ class DynamoDBReportStore(ReportStore):
 
     async def get_scheduled_query(self, sq_id: str) -> Optional[ScheduledQueryItem]:
         def _op() -> Optional[ScheduledQueryItem]:
-            table = _get_table_sync()
+            table = _get_table()
             resp = table.get_item(Key={"PK": _sq_pk(sq_id), "SK": _SK_METADATA})
             item = resp.get("Item")
             if not item:
@@ -647,7 +647,7 @@ class DynamoDBReportStore(ReportStore):
         )
 
         def _op() -> None:
-            table = _get_table_sync()
+            table = _get_table()
             _transact_put_sync(table, metadata_item, list_item, version_item)
 
         await asyncio.to_thread(_op)
@@ -667,7 +667,7 @@ class DynamoDBReportStore(ReportStore):
         comment: Optional[str] = None,
     ) -> Optional[ScheduledQueryItem]:
         def _op() -> Optional[ScheduledQueryItem]:
-            table = _get_table_sync()
+            table = _get_table()
             resp = table.get_item(Key={"PK": _sq_pk(sq_id), "SK": _SK_METADATA})
             if not resp.get("Item"):
                 return None
@@ -725,7 +725,7 @@ class DynamoDBReportStore(ReportStore):
         self, sq_id: str
     ) -> List[ScheduledQueryVersion]:
         def _op() -> List[ScheduledQueryVersion]:
-            table = _get_table_sync()
+            table = _get_table()
             resp = table.query(
                 KeyConditionExpression="PK = :pk AND begins_with(SK, :prefix)",
                 ExpressionAttributeValues={
@@ -742,7 +742,7 @@ class DynamoDBReportStore(ReportStore):
         self, sq_id: str, version: int
     ) -> Optional[ScheduledQueryVersion]:
         def _op() -> Optional[ScheduledQueryVersion]:
-            table = _get_table_sync()
+            table = _get_table()
             resp = table.get_item(
                 Key={"PK": _sq_pk(sq_id), "SK": _sq_version_sk(version)}
             )
@@ -755,7 +755,7 @@ class DynamoDBReportStore(ReportStore):
 
     async def delete_scheduled_query(self, sq_id: str) -> bool:
         def _op() -> bool:
-            table = _get_table_sync()
+            table = _get_table()
             resp = table.get_item(Key={"PK": _sq_pk(sq_id), "SK": _SK_METADATA})
             if not resp.get("Item"):
                 return False
@@ -786,7 +786,7 @@ class DynamoDBReportStore(ReportStore):
         """Get an existing user by (iss, sub), or create one on first login."""
 
         def _op() -> User:
-            table = _get_table_sync()
+            table = _get_table()
             now = datetime.now(tz=timezone.utc).isoformat()
             lookup_sk = _user_lookup_sk(iss, sub)
 
@@ -862,7 +862,7 @@ class DynamoDBReportStore(ReportStore):
         """Sync mutable profile fields, writing only what has changed."""
 
         def _op() -> User:
-            table = _get_table_sync()
+            table = _get_table()
             profile_resp = table.get_item(
                 Key={"PK": _user_pk(user_id), "SK": _SK_METADATA},
             )
@@ -896,7 +896,7 @@ class DynamoDBReportStore(ReportStore):
         """Return a user by their internal user_id, or None if not found."""
 
         def _op() -> Optional[User]:
-            table = _get_table_sync()
+            table = _get_table()
             resp = table.get_item(Key={"PK": _user_pk(user_id), "SK": _SK_METADATA})
             item = resp.get("Item")
             if not item:
@@ -909,7 +909,7 @@ class DynamoDBReportStore(ReportStore):
         """Soft-delete a user by setting archived_at."""
 
         def _op() -> bool:
-            table = _get_table_sync()
+            table = _get_table()
             resp = table.get_item(Key={"PK": _user_pk(user_id), "SK": _SK_METADATA})
             if not resp.get("Item"):
                 return False

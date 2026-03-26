@@ -1,3 +1,5 @@
+from unittest.mock import AsyncMock
+
 from reporting.scheduled_query_modules import sqs
 from reporting.schema.report_config import ScheduledQueryItem
 from reporting.schema.reporting_config import ScheduledQueryAction
@@ -7,7 +9,7 @@ def test_action_name():
     assert sqs.action_name() == "sqs"
 
 
-def test_setup(mocker):
+async def test_setup(mocker):
     mocker.patch(
         "reporting.scheduled_query_modules.sqs._SQS_CREATE_SCHEDULED_QUERY_QUEUES", True
     )
@@ -44,9 +46,9 @@ def test_setup(mocker):
     ]
     mocker.patch(
         "reporting.scheduled_query_modules.sqs.report_store.list_scheduled_queries",
-        return_value=items,
+        new=AsyncMock(return_value=items),
     )
-    sqs.setup()
+    await sqs.setup()
     assert client_mock.create_queue.call_count == 2
 
 
