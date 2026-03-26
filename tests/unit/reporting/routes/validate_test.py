@@ -152,6 +152,7 @@ async def test_validate_no_csrf(mocker):
 async def test_validate_with_csrf(mocker, helpers):
     mocker.patch("reporting.settings.CSRF_DISABLE", False)
     mocker.patch("reporting.settings.SECRET_KEY", "fake")
+    mocker.patch("reporting.settings.CSRF_COOKIE_SECURE", False)
     _mock_validate(mocker)
     app = _make_app()
     async with AsyncClient(

@@ -248,6 +248,7 @@ async def test_query_no_csrf(mocker):
 async def test_query_with_csrf(mocker, helpers):
     mocker.patch("reporting.settings.CSRF_DISABLE", False)
     mocker.patch("reporting.settings.SECRET_KEY", "fake")
+    mocker.patch("reporting.settings.CSRF_COOKIE_SECURE", False)
     _mock_validate(mocker)
     mock_record = MagicMock()
     mock_record.items.return_value = [("n", 1)]
