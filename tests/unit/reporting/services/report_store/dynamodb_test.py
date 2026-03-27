@@ -1096,3 +1096,419 @@ async def test_delete_scheduled_query_not_found(patch_table, store):
     patch_table.get_item.return_value = {}
     result = await store.delete_scheduled_query("nonexistent")
     assert result is False
+
+
+# ---------------------------------------------------------------------------
+# Toolsets
+# ---------------------------------------------------------------------------
+
+
+def _ts_metadata_item(ts_id="ts1", current_version=1):
+    return {
+        "PK": f"TOOLSET#{ts_id}",
+        "SK": "#METADATA",
+        "toolset_id": ts_id,
+        "name": "My Toolset",
+        "description": "A toolset",
+        "enabled": True,
+        "current_version": current_version,
+        "created_at": "2024-01-01T00:00:00+00:00",
+        "updated_at": "2024-01-01T00:00:00+00:00",
+        "created_by": "user@example.com",
+        "updated_by": "user@example.com",
+    }
+
+
+def _ts_version_item(ts_id="ts1", version=1):
+    return {
+        "PK": f"TOOLSET#{ts_id}",
+        "SK": f"VERSION#{version:010d}",  # noqa: E231
+        "toolset_id": ts_id,
+        "name": "My Toolset",
+        "description": "A toolset",
+        "enabled": True,
+        "version": version,
+        "created_at": "2024-01-01T00:00:00+00:00",
+        "created_by": "user@example.com",
+        "comment": None,
+    }
+
+
+async def test_list_toolsets_empty(patch_table, store):
+    patch_table.query.return_value = {"Items": []}
+    result = await store.list_toolsets()
+    assert result == []
+
+
+async def test_list_toolsets_returns_items(patch_table, store):
+    patch_table.query.return_value = {"Items": [_ts_metadata_item()]}
+    result = await store.list_toolsets()
+    assert len(result) == 1
+    assert result[0].toolset_id == "ts1"
+    assert result[0].name == "My Toolset"
+
+
+async def test_get_toolset_success(patch_table, store):
+    patch_table.get_item.return_value = {"Item": _ts_metadata_item()}
+    result = await store.get_toolset("ts1")
+    assert result is not None
+    assert result.toolset_id == "ts1"
+
+
+async def test_get_toolset_not_found(patch_table, store):
+    patch_table.get_item.return_value = {}
+    result = await store.get_toolset("nonexistent")
+    assert result is None
+
+
+async def test_create_toolset(patch_table, store, mocker):
+    mocker.patch(
+        "reporting.services.report_store.dynamodb.generate_report_id",
+        return_value="ts1",
+    )
+    patch_table.meta.client.transact_write_items = MagicMock()
+    result = await store.create_toolset(
+        name="My Toolset",
+        description="desc",
+        enabled=True,
+        created_by="user@example.com",
+    )
+    assert result.toolset_id == "ts1"
+    assert result.current_version == 1
+    assert result.created_by == "user@example.com"
+    assert patch_table.meta.client.transact_write_items.call_count == 1
+
+
+async def test_update_toolset_success(patch_table, store):
+    patch_table.get_item.return_value = {"Item": _ts_metadata_item(current_version=1)}
+    patch_table.meta.client.transact_write_items = MagicMock()
+    result = await store.update_toolset(
+        toolset_id="ts1",
+        name="Updated",
+        description="new desc",
+        enabled=False,
+        updated_by="editor@example.com",
+        comment="v2",
+    )
+    assert result is not None
+    assert result.current_version == 2
+    assert result.updated_by == "editor@example.com"
+
+
+async def test_update_toolset_not_found(patch_table, store):
+    patch_table.get_item.return_value = {}
+    result = await store.update_toolset(
+        toolset_id="nonexistent",
+        name="X",
+        description="",
+        enabled=True,
+        updated_by="u@x.com",
+    )
+    assert result is None
+
+
+async def test_delete_toolset_success(patch_table, store):
+    def _query_side_effect(**kwargs):
+        pk = kwargs["ExpressionAttributeValues"][":pk"]
+        if pk == "TOOLSET#ts1":
+            return {
+                "Items": [
+                    {"PK": "TOOLSET#ts1", "SK": "#METADATA"},
+                    {"PK": "TOOLSET#ts1", "SK": "VERSION#0000000001"},
+                ]
+            }
+        if pk == "TOOL_LIST#ts1":
+            return {"Items": []}
+        return {"Items": []}
+
+    patch_table.get_item.return_value = {"Item": _ts_metadata_item()}
+    patch_table.query.side_effect = _query_side_effect
+    batch_mock = MagicMock()
+    patch_table.batch_writer.return_value.__enter__ = MagicMock(return_value=batch_mock)
+    patch_table.batch_writer.return_value.__exit__ = MagicMock(return_value=False)
+    result = await store.delete_toolset("ts1")
+    assert result is True
+
+
+async def test_delete_toolset_not_found(patch_table, store):
+    patch_table.get_item.return_value = {}
+    result = await store.delete_toolset("nonexistent")
+    assert result is False
+
+
+async def test_list_toolset_versions_empty(patch_table, store):
+    patch_table.query.return_value = {"Items": []}
+    result = await store.list_toolset_versions("ts1")
+    assert result == []
+
+
+async def test_list_toolset_versions_returns_items(patch_table, store):
+    patch_table.query.return_value = {
+        "Items": [_ts_version_item(version=2), _ts_version_item(version=1)]
+    }
+    result = await store.list_toolset_versions("ts1")
+    assert len(result) == 2
+    assert result[0].version == 2
+
+
+async def test_get_toolset_version_success(patch_table, store):
+    patch_table.get_item.return_value = {"Item": _ts_version_item(version=1)}
+    result = await store.get_toolset_version("ts1", 1)
+    assert result is not None
+    assert result.version == 1
+
+
+async def test_get_toolset_version_not_found(patch_table, store):
+    patch_table.get_item.return_value = {}
+    result = await store.get_toolset_version("ts1", 99)
+    assert result is None
+
+
+# ---------------------------------------------------------------------------
+# Tools
+# ---------------------------------------------------------------------------
+
+
+def _tool_metadata_item(tool_id="t1", toolset_id="ts1", current_version=1):
+    return {
+        "PK": f"TOOL#{tool_id}",
+        "SK": "#METADATA",
+        "tool_id": tool_id,
+        "toolset_id": toolset_id,
+        "name": "My Tool",
+        "description": "A tool",
+        "cypher": "MATCH (n) RETURN n LIMIT 1",
+        "parameters": [],
+        "enabled": True,
+        "current_version": current_version,
+        "created_at": "2024-01-01T00:00:00+00:00",
+        "updated_at": "2024-01-01T00:00:00+00:00",
+        "created_by": "user@example.com",
+        "updated_by": "user@example.com",
+    }
+
+
+def _tool_version_dynamo_item(tool_id="t1", toolset_id="ts1", version=1):
+    return {
+        "PK": f"TOOL#{tool_id}",
+        "SK": f"VERSION#{version:010d}",  # noqa: E231
+        "tool_id": tool_id,
+        "toolset_id": toolset_id,
+        "name": "My Tool",
+        "description": "A tool",
+        "cypher": "MATCH (n) RETURN n LIMIT 1",
+        "parameters": [],
+        "enabled": True,
+        "version": version,
+        "created_at": "2024-01-01T00:00:00+00:00",
+        "created_by": "user@example.com",
+        "comment": None,
+    }
+
+
+async def test_list_tools_empty(patch_table, store):
+    patch_table.query.return_value = {"Items": []}
+    result = await store.list_tools("ts1")
+    assert result == []
+
+
+async def test_list_tools_returns_items(patch_table, store):
+    def _query_side_effect(**kwargs):
+        pk = kwargs["ExpressionAttributeValues"][":pk"]
+        if pk == "TOOL_LIST#ts1":
+            return {"Items": [{"SK": "TOOL#t1"}]}
+        return {"Items": []}
+
+    patch_table.query.side_effect = _query_side_effect
+    patch_table.get_item.return_value = {"Item": _tool_metadata_item()}
+    result = await store.list_tools("ts1")
+    assert len(result) == 1
+    assert result[0].tool_id == "t1"
+
+
+async def test_get_tool_success(patch_table, store):
+    patch_table.get_item.return_value = {"Item": _tool_metadata_item()}
+    result = await store.get_tool("t1")
+    assert result is not None
+    assert result.tool_id == "t1"
+
+
+async def test_get_tool_not_found(patch_table, store):
+    patch_table.get_item.return_value = {}
+    result = await store.get_tool("nonexistent")
+    assert result is None
+
+
+async def test_create_tool_success(patch_table, store, mocker):
+    mocker.patch(
+        "reporting.services.report_store.dynamodb.generate_report_id",
+        return_value="t1",
+    )
+    patch_table.get_item.return_value = {"Item": _ts_metadata_item()}
+    patch_table.meta.client.transact_write_items = MagicMock()
+    result = await store.create_tool(
+        toolset_id="ts1",
+        name="My Tool",
+        description="desc",
+        cypher="MATCH (n) RETURN n",
+        parameters=[],
+        enabled=True,
+        created_by="user@example.com",
+    )
+    assert result is not None
+    assert result.tool_id == "t1"
+    assert result.current_version == 1
+    assert patch_table.meta.client.transact_write_items.call_count == 1
+
+
+async def test_create_tool_toolset_not_found(patch_table, store, mocker):
+    mocker.patch(
+        "reporting.services.report_store.dynamodb.generate_report_id",
+        return_value="t1",
+    )
+    patch_table.get_item.return_value = {}
+    result = await store.create_tool(
+        toolset_id="nonexistent",
+        name="My Tool",
+        description="",
+        cypher="MATCH (n) RETURN n",
+        parameters=[],
+        enabled=True,
+        created_by="user@example.com",
+    )
+    assert result is None
+
+
+async def test_update_tool_success(patch_table, store):
+    patch_table.get_item.return_value = {"Item": _tool_metadata_item(current_version=1)}
+    patch_table.meta.client.transact_write_items = MagicMock()
+    result = await store.update_tool(
+        tool_id="t1",
+        name="Updated",
+        description="new desc",
+        cypher="MATCH (n) RETURN n LIMIT 5",
+        parameters=[],
+        enabled=False,
+        updated_by="editor@example.com",
+        comment="v2",
+    )
+    assert result is not None
+    assert result.current_version == 2
+    assert result.updated_by == "editor@example.com"
+
+
+async def test_update_tool_not_found(patch_table, store):
+    patch_table.get_item.return_value = {}
+    result = await store.update_tool(
+        tool_id="nonexistent",
+        name="X",
+        description="",
+        cypher="MATCH (n) RETURN n",
+        parameters=[],
+        enabled=True,
+        updated_by="u@x.com",
+    )
+    assert result is None
+
+
+async def test_delete_tool_success(patch_table, store):
+    patch_table.get_item.return_value = {"Item": _tool_metadata_item()}
+    patch_table.query.return_value = {
+        "Items": [
+            {"PK": "TOOL#t1", "SK": "#METADATA"},
+            {"PK": "TOOL#t1", "SK": "VERSION#0000000001"},
+        ]
+    }
+    batch_mock = MagicMock()
+    patch_table.batch_writer.return_value.__enter__ = MagicMock(return_value=batch_mock)
+    patch_table.batch_writer.return_value.__exit__ = MagicMock(return_value=False)
+    result = await store.delete_tool("t1")
+    assert result is True
+    # 2 tool items + 1 list item
+    assert batch_mock.delete_item.call_count == 3
+
+
+async def test_delete_tool_not_found(patch_table, store):
+    patch_table.get_item.return_value = {}
+    result = await store.delete_tool("nonexistent")
+    assert result is False
+
+
+async def test_list_tool_versions_empty(patch_table, store):
+    patch_table.query.return_value = {"Items": []}
+    result = await store.list_tool_versions("t1")
+    assert result == []
+
+
+async def test_list_tool_versions_returns_items(patch_table, store):
+    patch_table.query.return_value = {
+        "Items": [
+            _tool_version_dynamo_item(version=2),
+            _tool_version_dynamo_item(version=1),
+        ]
+    }
+    result = await store.list_tool_versions("t1")
+    assert len(result) == 2
+    assert result[0].version == 2
+
+
+async def test_get_tool_version_success(patch_table, store):
+    patch_table.get_item.return_value = {"Item": _tool_version_dynamo_item(version=1)}
+    result = await store.get_tool_version("t1", 1)
+    assert result is not None
+    assert result.version == 1
+    assert result.tool_id == "t1"
+
+
+async def test_get_tool_version_not_found(patch_table, store):
+    patch_table.get_item.return_value = {}
+    result = await store.get_tool_version("t1", 99)
+    assert result is None
+
+
+async def test_list_enabled_tools_empty(patch_table, store):
+    patch_table.query.return_value = {"Items": []}
+    result = await store.list_enabled_tools()
+    assert result == []
+
+
+async def test_list_enabled_tools_skips_disabled_toolset(patch_table, store):
+    def _query_side_effect(**kwargs):
+        pk = kwargs["ExpressionAttributeValues"][":pk"]
+        if pk == "TOOLSET_LIST":
+            return {
+                "Items": [
+                    {**_ts_metadata_item(), "enabled": False},
+                ]
+            }
+        return {"Items": []}
+
+    patch_table.query.side_effect = _query_side_effect
+    result = await store.list_enabled_tools()
+    assert result == []
+
+
+async def test_list_enabled_tools_returns_enabled_tools(patch_table, store):
+    tool_list_item = {
+        **_tool_metadata_item(),
+        "PK": "TOOL_LIST#ts1",
+        "SK": "TOOL#t1",
+        "enabled": True,
+    }
+    call_count = 0
+
+    def _query_side_effect(**kwargs):
+        nonlocal call_count
+        pk = kwargs["ExpressionAttributeValues"][":pk"]
+        call_count += 1
+        if pk == "TOOLSET_LIST":
+            return {"Items": [_ts_metadata_item()]}
+        if pk == "TOOL_LIST#ts1":
+            return {"Items": [tool_list_item]}
+        return {"Items": []}
+
+    patch_table.query.side_effect = _query_side_effect
+    patch_table.get_item.return_value = {"Item": _tool_metadata_item()}
+    result = await store.list_enabled_tools()
+    assert len(result) == 1
+    assert result[0].tool_id == "t1"
