@@ -2,24 +2,20 @@ import { render, screen, fireEvent, waitFor, cleanup } from '@testing-library/re
 import { MemoryRouter, Routes, Route, useLocation } from 'react-router-dom';
 import { ThemeProvider, createTheme } from '@mui/material/styles';
 import ReportVersionView from 'src/pages/ReportVersionView';
+import * as reportsApiModule from 'src/hooks/useReportsApi';
 
 jest.mock('react-helmet', () => ({
   Helmet: ({ children }: { children: React.ReactNode }) => <>{children}</>
-}));
-
-jest.mock('src/hooks/useReportsApi', () => ({
-  useReportVersion: jest.fn(),
-  useReportVersionsList: jest.fn(),
-  useReportsMutations: jest.fn()
 }));
 
 // Prevent ReportView's panel sub-components from making real HTTP calls.
 // Do NOT mock src/components/ReportView itself — that leaks into ReportView.test.tsx
 // which tests ReportView directly (Bun shares the module registry across files).
 // The test reports use { rows: [] } so no panels (and no fetch calls) are rendered.
-
-const { useReportVersion, useReportVersionsList, useReportsMutations } =
-  require('src/hooks/useReportsApi');
+//
+// useReportsApi is mocked via jest.spyOn so the spy can be restored with
+// jest.restoreAllMocks() in afterAll, preventing the mock from leaking into
+// useReportsApi.test.tsx when test files run in an order where this file executes first.
 
 const theme = createTheme();
 
@@ -70,11 +66,22 @@ const ALL_VERSIONS = [VERSION_1, VERSION_2];
 
 describe('ReportVersionView', () => {
   const mockSaveReportVersion = jest.fn();
+  let useReportVersion: jest.Mock;
+  let useReportVersionsList: jest.Mock;
+  let useReportsMutations: jest.Mock;
+
+  // Restore spies after all tests so other test files get the real module.
+  afterAll(() => {
+    jest.restoreAllMocks();
+  });
 
   beforeEach(() => {
     jest.clearAllMocks();
+    useReportVersion = jest.spyOn(reportsApiModule, 'useReportVersion') as unknown as jest.Mock;
     useReportVersion.mockReturnValue({ reportVersion: VERSION_1, loading: false, error: null });
+    useReportVersionsList = jest.spyOn(reportsApiModule, 'useReportVersionsList') as unknown as jest.Mock;
     useReportVersionsList.mockReturnValue({ versions: ALL_VERSIONS, loading: false, error: null });
+    useReportsMutations = jest.spyOn(reportsApiModule, 'useReportsMutations') as unknown as jest.Mock;
     useReportsMutations.mockReturnValue({ saveReportVersion: mockSaveReportVersion });
   });
 

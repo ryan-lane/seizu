@@ -2,17 +2,11 @@ import { render, screen, fireEvent, waitFor, cleanup } from '@testing-library/re
 import { MemoryRouter, Routes, Route, useLocation } from 'react-router-dom';
 import { ThemeProvider, createTheme } from '@mui/material/styles';
 import ReportHistory from 'src/pages/ReportHistory';
+import * as reportsApiModule from 'src/hooks/useReportsApi';
 
 jest.mock('react-helmet', () => ({
   Helmet: ({ children }: { children: React.ReactNode }) => <>{children}</>
 }));
-
-jest.mock('src/hooks/useReportsApi', () => ({
-  useReportVersionsList: jest.fn(),
-  useReportsMutations: jest.fn()
-}));
-
-const { useReportVersionsList, useReportsMutations } = require('src/hooks/useReportsApi');
 
 const theme = createTheme();
 
@@ -57,14 +51,23 @@ const VERSION_2 = {
 
 describe('ReportHistory', () => {
   const mockSaveReportVersion = jest.fn();
+  let useReportVersionsList: jest.Mock;
+  let useReportsMutations: jest.Mock;
+
+  // Restore spies after all tests so other test files get the real module.
+  afterAll(() => {
+    jest.restoreAllMocks();
+  });
 
   beforeEach(() => {
     jest.clearAllMocks();
+    useReportVersionsList = jest.spyOn(reportsApiModule, 'useReportVersionsList') as unknown as jest.Mock;
     useReportVersionsList.mockReturnValue({
       versions: [VERSION_1, VERSION_2],
       loading: false,
       error: null
     });
+    useReportsMutations = jest.spyOn(reportsApiModule, 'useReportsMutations') as unknown as jest.Mock;
     useReportsMutations.mockReturnValue({ saveReportVersion: mockSaveReportVersion });
   });
 
