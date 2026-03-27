@@ -47,43 +47,43 @@ def get_store() -> ReportStore:
 # ---------------------------------------------------------------------------
 
 
-def initialize() -> None:
-    get_store().initialize()
+async def initialize() -> None:
+    await get_store().initialize()
 
 
-def list_reports() -> List[ReportListItem]:
-    return get_store().list_reports()
+async def list_reports() -> List[ReportListItem]:
+    return await get_store().list_reports()
 
 
-def get_report_latest(report_id: str) -> Optional[ReportVersion]:
-    return get_store().get_report_latest(report_id)
+async def get_report_latest(report_id: str) -> Optional[ReportVersion]:
+    return await get_store().get_report_latest(report_id)
 
 
-def get_report_version(report_id: str, version: int) -> Optional[ReportVersion]:
-    return get_store().get_report_version(report_id, version)
+async def get_report_version(report_id: str, version: int) -> Optional[ReportVersion]:
+    return await get_store().get_report_version(report_id, version)
 
 
-def list_report_versions(report_id: str) -> List[ReportVersion]:
-    return get_store().list_report_versions(report_id)
+async def list_report_versions(report_id: str) -> List[ReportVersion]:
+    return await get_store().list_report_versions(report_id)
 
 
-def create_report(
+async def create_report(
     name: str,
     created_by: str,
 ) -> ReportListItem:
-    return get_store().create_report(
+    return await get_store().create_report(
         name=name,
         created_by=created_by,
     )
 
 
-def save_report_version(
+async def save_report_version(
     report_id: str,
     config: Dict[str, Any],
     created_by: str,
     comment: Optional[str] = None,
 ) -> Optional[ReportVersion]:
-    return get_store().save_report_version(
+    return await get_store().save_report_version(
         report_id=report_id,
         config=config,
         created_by=created_by,
@@ -91,29 +91,29 @@ def save_report_version(
     )
 
 
-def delete_report(report_id: str) -> bool:
-    return get_store().delete_report(report_id)
+async def delete_report(report_id: str) -> bool:
+    return await get_store().delete_report(report_id)
 
 
-def get_dashboard_report_id() -> Optional[str]:
-    return get_store().get_dashboard_report_id()
+async def get_dashboard_report_id() -> Optional[str]:
+    return await get_store().get_dashboard_report_id()
 
 
-def set_dashboard_report(report_id: str) -> bool:
-    return get_store().set_dashboard_report(report_id)
+async def set_dashboard_report(report_id: str) -> bool:
+    return await get_store().set_dashboard_report(report_id)
 
 
-def get_dashboard_report() -> Optional[ReportVersion]:
-    return get_store().get_dashboard_report()
+async def get_dashboard_report() -> Optional[ReportVersion]:
+    return await get_store().get_dashboard_report()
 
 
-def get_or_create_user(
+async def get_or_create_user(
     sub: str,
     iss: str,
     email: str,
     display_name: Optional[str] = None,
 ) -> User:
-    return get_store().get_or_create_user(
+    return await get_store().get_or_create_user(
         sub=sub,
         iss=iss,
         email=email,
@@ -121,13 +121,13 @@ def get_or_create_user(
     )
 
 
-def update_user_profile(
+async def update_user_profile(
     user_id: str,
     email: str,
     display_name: Optional[str] = None,
     token_iat: Optional[datetime] = None,
 ) -> User:
-    return get_store().update_user_profile(
+    return await get_store().update_user_profile(
         user_id=user_id,
         email=email,
         display_name=display_name,
@@ -135,27 +135,27 @@ def update_user_profile(
     )
 
 
-def get_user(user_id: str) -> Optional[User]:
-    return get_store().get_user(user_id)
+async def get_user(user_id: str) -> Optional[User]:
+    return await get_store().get_user(user_id)
 
 
-def archive_user(user_id: str) -> bool:
-    return get_store().archive_user(user_id)
+async def archive_user(user_id: str) -> bool:
+    return await get_store().archive_user(user_id)
 
 
-def list_panel_stats() -> List[PanelStat]:
-    return get_store().list_panel_stats()
+async def list_panel_stats() -> List[PanelStat]:
+    return await get_store().list_panel_stats()
 
 
-def list_scheduled_queries() -> List[ScheduledQueryItem]:
-    return get_store().list_scheduled_queries()
+async def list_scheduled_queries() -> List[ScheduledQueryItem]:
+    return await get_store().list_scheduled_queries()
 
 
-def get_scheduled_query(sq_id: str) -> Optional[ScheduledQueryItem]:
-    return get_store().get_scheduled_query(sq_id)
+async def get_scheduled_query(sq_id: str) -> Optional[ScheduledQueryItem]:
+    return await get_store().get_scheduled_query(sq_id)
 
 
-def create_scheduled_query(
+async def create_scheduled_query(
     name: str,
     cypher: str,
     params: List[Dict[str, Any]],
@@ -165,7 +165,7 @@ def create_scheduled_query(
     actions: List[Dict[str, Any]],
     created_by: str,
 ) -> ScheduledQueryItem:
-    return get_store().create_scheduled_query(
+    return await get_store().create_scheduled_query(
         name=name,
         cypher=cypher,
         params=params,
@@ -177,7 +177,7 @@ def create_scheduled_query(
     )
 
 
-def update_scheduled_query(
+async def update_scheduled_query(
     sq_id: str,
     name: str,
     cypher: str,
@@ -189,7 +189,7 @@ def update_scheduled_query(
     updated_by: str,
     comment: Optional[str] = None,
 ) -> Optional[ScheduledQueryItem]:
-    return get_store().update_scheduled_query(
+    return await get_store().update_scheduled_query(
         sq_id=sq_id,
         name=name,
         cypher=cypher,
@@ -203,15 +203,15 @@ def update_scheduled_query(
     )
 
 
-def delete_scheduled_query(sq_id: str) -> bool:
-    return get_store().delete_scheduled_query(sq_id)
+async def delete_scheduled_query(sq_id: str) -> bool:
+    return await get_store().delete_scheduled_query(sq_id)
 
 
-def list_scheduled_query_versions(sq_id: str) -> List[ScheduledQueryVersion]:
-    return get_store().list_scheduled_query_versions(sq_id)
+async def list_scheduled_query_versions(sq_id: str) -> List[ScheduledQueryVersion]:
+    return await get_store().list_scheduled_query_versions(sq_id)
 
 
-def get_scheduled_query_version(
+async def get_scheduled_query_version(
     sq_id: str, version: int
 ) -> Optional[ScheduledQueryVersion]:
-    return get_store().get_scheduled_query_version(sq_id, version)
+    return await get_store().get_scheduled_query_version(sq_id, version)

@@ -34,4 +34,4 @@ FROM backend AS production
 
 COPY --chown=seizu:seizu --from=nodebuilder /home/node/seizu/build /build
 
-CMD ["gunicorn", "--config", "/home/seizu/seizu/gunicorn.conf", "reporting.wsgi:app", "--workers=2", "-k", "gevent", "--access-logfile=-", "--error-logfile=-"]
+CMD ["gunicorn", "--config", "/home/seizu/seizu/gunicorn.conf", "reporting.asgi:application", "--workers=2", "-k", "uvicorn.workers.UvicornWorker", "--access-logfile=-", "--error-logfile=-"]

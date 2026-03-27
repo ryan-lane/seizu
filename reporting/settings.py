@@ -6,9 +6,9 @@ from reporting.utils.settings import str_env
 # Whether or not reporting is run in debug mode. Never run reporting in debug
 # mode outside of development!
 DEBUG = bool_env("DEBUG", False)
-# The host the WSGI app should use.
+# The host the ASGI app should use.
 HOST = str_env("HOST", "0.0.0.0")
-# The port the WSGI app should use.
+# The port the ASGI app should use.
 PORT = int_env("PORT", 8080)
 # The location of the react app build directory
 STATIC_FOLDER = str_env("STATIC_FOLDER", "/build")
@@ -110,18 +110,14 @@ SCHEDULED_QUERY_MODULES = list_env(
 )
 # NOTE: scheduled query module settings are defined within the modules themselves
 
-# Whether to redirect HTTP requests to HTTPS (via Flask-Talisman).
-# Disable in development or when running behind an SSL-terminating load balancer.
+# Whether to enable HSTS (HTTP Strict Transport Security) headers.
+# Set to True in production to enforce HTTPS. Disable in development or when
+# running behind an SSL-terminating load balancer.
 TALISMAN_FORCE_HTTPS = bool_env("TALISMAN_FORCE_HTTPS", True)
-# Whether the Flask session cookie should require HTTPS (Secure flag).
-# Defaults to True (same as TALISMAN_FORCE_HTTPS). Set to False in development
-# when running over plain HTTP so the CLI's requests.Session can send the
-# session cookie and CSRF validation succeeds.
-SESSION_COOKIE_SECURE = bool_env("SESSION_COOKIE_SECURE", True)
 
 # CSRF settings
 
-# Flask session secret key for sessions (needed for CSRF)
+# Secret key used for CSRF token signing
 SECRET_KEY = str_env("SECRET_KEY")
 
 # Cookie name

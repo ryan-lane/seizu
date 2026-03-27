@@ -52,10 +52,10 @@ def action_config_schema() -> List[ActionConfigFieldDef]:
     ]
 
 
-def setup() -> None:
+async def setup() -> None:
     if not _SQS_CREATE_SCHEDULED_QUERY_QUEUES:
         return
-    for item in report_store.list_scheduled_queries():
+    for item in await report_store.list_scheduled_queries():
         for action in item.actions:
             if action.get("action_type") == "sqs":
                 sqs_client = _get_client()

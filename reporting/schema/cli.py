@@ -2,14 +2,13 @@ import json
 from typing import Optional
 
 import click
-from flask import Flask
-from flask.cli import AppGroup
 
 from reporting.schema import reporting_config
 
-app = Flask(__name__)
-schema_cli = AppGroup("schema")
-app.cli.add_command(schema_cli)
+
+@click.group()
+def schema_cli() -> None:
+    """Reporting schema tools."""
 
 
 @schema_cli.command("export")
@@ -27,3 +26,7 @@ def export_json_schema(output_file: Optional[str]) -> None:
             f.write(schema_as_json)
     else:
         print(schema_as_json)
+
+
+if __name__ == "__main__":
+    schema_cli()

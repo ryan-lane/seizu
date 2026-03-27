@@ -63,11 +63,10 @@ This can lead to stats with very high cardinality; see the limitation sections a
 
 ### Run the ``dashboard-stats`` worker, in a cron
 
-The worker can be run as a flask CLI command:
+The worker can be run directly:
 
 ```bash
-$> export FLASK_APP=reporting.dashboard_stats
-$> flask worker dashboard-stats
+python -m reporting.dashboard_stats
 ```
 
 The worker reads pre-computed stat descriptors directly from the configured report store (DynamoDB or SQLModel), so it needs access to the same store backend as the main seizu service.

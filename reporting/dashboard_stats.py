@@ -1,9 +1,8 @@
+import asyncio
 import logging
 
 import neo4j.exceptions
 from datadog.dogstatsd import statsd
-from flask import Flask
-from flask.cli import AppGroup
 
 from reporting import settings
 from reporting import setup_logging  # noqa:F401
@@ -14,25 +13,15 @@ from reporting.services.reporting_neo4j import run_query_with_retry
 
 logger = logging.getLogger(__name__)
 
-app = Flask(__name__)
-user_cli = AppGroup("worker")
-app.cli.add_command(user_cli)
 
-
-def send_stats_for_panel_stat(stat: PanelStat) -> None:
-    """Emit statsd metrics for a pre-computed PanelStat record.
-
-    This is the hot path used by the ``dashboard-stats`` worker.  The stat
-    descriptor has already had its Cypher resolved and its params split into
-    static values vs. the optional single input, so no config loading is
-    needed here.
-    """
+async def send_stats_for_panel_stat(stat: PanelStat) -> None:
+    """Emit statsd metrics for a pre-computed PanelStat record."""
     metric = stat.metric
     tags = [f"{k}:{v}" for k, v in stat.static_params.items()]  # noqa: E231
 
     if stat.input_param_name is not None and stat.input_cypher is not None:
         try:
-            input_results = run_query_with_retry(stat.input_cypher, {})
+            input_results = await run_query_with_retry(stat.input_cypher, {})
         except neo4j.exceptions.ServiceUnavailable:
             logger.exception(
                 "Failed to record metric",
@@ -51,7 +40,9 @@ def send_stats_for_panel_stat(stat: PanelStat) -> None:
             _tags = [f"{stat.input_param_name}:{value}"]  # noqa: E231
             _tags.extend(tags)
             try:
-                metric_results = run_query_with_retry(stat.cypher, parameters=_params)
+                metric_results = await run_query_with_retry(
+                    stat.cypher, parameters=_params
+                )
             except neo4j.exceptions.ServiceUnavailable:
                 logger.exception(
                     "Failed to record metric",
@@ -72,7 +63,7 @@ def send_stats_for_panel_stat(stat: PanelStat) -> None:
                     statsd.gauge(f"{metric}.total", metric_result["total"], tags=_tags)
     else:
         try:
-            metric_results = run_query_with_retry(
+            metric_results = await run_query_with_retry(
                 stat.cypher, parameters=stat.static_params
             )
         except neo4j.exceptions.ServiceUnavailable:
@@ -97,9 +88,16 @@ def send_stats_for_panel_stat(stat: PanelStat) -> None:
                 statsd.gauge(f"{metric}.total", metric_result["total"], tags=tags)
 
 
-@user_cli.command("dashboard-stats")
-def dashboard_stats() -> None:
+async def dashboard_stats() -> None:
     logger.debug("Sending in stats...")
-    panel_stats = report_store.list_panel_stats()
+    panel_stats = await report_store.list_panel_stats()
     for stat in panel_stats:
-        send_stats_for_panel_stat(stat)
+        await send_stats_for_panel_stat(stat)
+
+
+def main() -> None:
+    asyncio.run(dashboard_stats())
+
+
+if __name__ == "__main__":
+    main()

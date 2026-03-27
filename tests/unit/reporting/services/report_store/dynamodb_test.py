@@ -94,7 +94,7 @@ def _metadata_item(report_id="123", current_version=1):
 # ---------------------------------------------------------------------------
 
 
-def test_list_reports_returns_items(patch_table, store):
+async def test_list_reports_returns_items(patch_table, store):
     patch_table.query.return_value = {
         "Items": [
             {
@@ -108,7 +108,7 @@ def test_list_reports_returns_items(patch_table, store):
             }
         ]
     }
-    result = store.list_reports()
+    result = await store.list_reports()
     assert len(result) == 1
     assert isinstance(result[0], ReportListItem)
     assert result[0].report_id == "123"
@@ -116,13 +116,13 @@ def test_list_reports_returns_items(patch_table, store):
     assert result[0].current_version == 1
 
 
-def test_list_reports_empty(patch_table, store):
+async def test_list_reports_empty(patch_table, store):
     patch_table.query.return_value = {"Items": []}
-    result = store.list_reports()
+    result = await store.list_reports()
     assert result == []
 
 
-def test_list_reports_coerces_decimal(patch_table, store):
+async def test_list_reports_coerces_decimal(patch_table, store):
     patch_table.query.return_value = {
         "Items": [
             {
@@ -136,7 +136,7 @@ def test_list_reports_coerces_decimal(patch_table, store):
             }
         ]
     }
-    result = store.list_reports()
+    result = await store.list_reports()
     assert result[0].current_version == 3
     assert isinstance(result[0].current_version, int)
 
@@ -146,22 +146,22 @@ def test_list_reports_coerces_decimal(patch_table, store):
 # ---------------------------------------------------------------------------
 
 
-def test_get_report_latest_found(patch_table, store):
+async def test_get_report_latest_found(patch_table, store):
     patch_table.get_item.return_value = {"Item": _version_item()}
-    result = store.get_report_latest("123")
+    result = await store.get_report_latest("123")
     assert isinstance(result, ReportVersion)
     assert result.version == 1
 
 
-def test_get_report_latest_not_found(patch_table, store):
+async def test_get_report_latest_not_found(patch_table, store):
     patch_table.get_item.return_value = {}
-    result = store.get_report_latest("missing")
+    result = await store.get_report_latest("missing")
     assert result is None
 
 
-def test_get_report_latest_queries_correct_sk(patch_table, store):
+async def test_get_report_latest_queries_correct_sk(patch_table, store):
     patch_table.get_item.return_value = {}
-    store.get_report_latest("abc")
+    await store.get_report_latest("abc")
     patch_table.get_item.assert_called_once_with(
         Key={"PK": "REPORT#abc", "SK": "#LATEST"}
     )
@@ -172,22 +172,22 @@ def test_get_report_latest_queries_correct_sk(patch_table, store):
 # ---------------------------------------------------------------------------
 
 
-def test_get_report_version_found(patch_table, store):
+async def test_get_report_version_found(patch_table, store):
     patch_table.get_item.return_value = {"Item": _version_item(version=2)}
-    result = store.get_report_version("123", 2)
+    result = await store.get_report_version("123", 2)
     assert isinstance(result, ReportVersion)
     assert result.version == 2
 
 
-def test_get_report_version_not_found(patch_table, store):
+async def test_get_report_version_not_found(patch_table, store):
     patch_table.get_item.return_value = {}
-    result = store.get_report_version("123", 99)
+    result = await store.get_report_version("123", 99)
     assert result is None
 
 
-def test_get_report_version_uses_zero_padded_sk(patch_table, store):
+async def test_get_report_version_uses_zero_padded_sk(patch_table, store):
     patch_table.get_item.return_value = {}
-    store.get_report_version("abc", 5)
+    await store.get_report_version("abc", 5)
     patch_table.get_item.assert_called_once_with(
         Key={"PK": "REPORT#abc", "SK": "VERSION#0000000005"}
     )
@@ -198,19 +198,19 @@ def test_get_report_version_uses_zero_padded_sk(patch_table, store):
 # ---------------------------------------------------------------------------
 
 
-def test_list_report_versions_returns_items(patch_table, store):
+async def test_list_report_versions_returns_items(patch_table, store):
     patch_table.query.return_value = {
         "Items": [_version_item(version=2), _version_item(version=1)]
     }
-    result = store.list_report_versions("123")
+    result = await store.list_report_versions("123")
     assert len(result) == 2
     assert result[0].version == 2
     assert result[1].version == 1
 
 
-def test_list_report_versions_scan_index_forward_false(patch_table, store):
+async def test_list_report_versions_scan_index_forward_false(patch_table, store):
     patch_table.query.return_value = {"Items": []}
-    store.list_report_versions("abc")
+    await store.list_report_versions("abc")
     call_kwargs = patch_table.query.call_args[1]
     assert call_kwargs.get("ScanIndexForward") is False
 
@@ -220,12 +220,12 @@ def test_list_report_versions_scan_index_forward_false(patch_table, store):
 # ---------------------------------------------------------------------------
 
 
-def test_create_report_returns_list_item(patch_table, store, mocker):
+async def test_create_report_returns_list_item(patch_table, store, mocker):
     mocker.patch(
         "reporting.services.report_store.dynamodb.generate_report_id",
         return_value="snowflake123",
     )
-    result = store.create_report(
+    result = await store.create_report(
         name="My Report",
         created_by="user@example.com",
     )
@@ -236,24 +236,26 @@ def test_create_report_returns_list_item(patch_table, store, mocker):
     assert result.current_version == 0
 
 
-def test_create_report_writes_two_items_transactionally(patch_table, store, mocker):
+async def test_create_report_writes_two_items_transactionally(
+    patch_table, store, mocker
+):
     mocker.patch(
         "reporting.services.report_store.dynamodb.generate_report_id",
         return_value="rid",
     )
-    store.create_report(name="My Report", created_by="u@x.com")
+    await store.create_report(name="My Report", created_by="u@x.com")
 
     patch_table.meta.client.transact_write_items.assert_called_once()
     items = patch_table.meta.client.transact_write_items.call_args[1]["TransactItems"]
     assert len(items) == 2
 
 
-def test_create_report_correct_sks(patch_table, store, mocker):
+async def test_create_report_correct_sks(patch_table, store, mocker):
     mocker.patch(
         "reporting.services.report_store.dynamodb.generate_report_id",
         return_value="rid",
     )
-    store.create_report(name="My Report", created_by="u@x.com")
+    await store.create_report(name="My Report", created_by="u@x.com")
 
     items = patch_table.meta.client.transact_write_items.call_args[1]["TransactItems"]
     sks = [i["Put"]["Item"]["SK"] for i in items]
@@ -268,9 +270,9 @@ def test_create_report_correct_sks(patch_table, store, mocker):
 # ---------------------------------------------------------------------------
 
 
-def test_save_report_version_returns_none_when_report_missing(patch_table, store):
+async def test_save_report_version_returns_none_when_report_missing(patch_table, store):
     patch_table.get_item.return_value = {}
-    result = store.save_report_version(
+    result = await store.save_report_version(
         report_id="missing",
         config={},
         created_by="u@x.com",
@@ -278,10 +280,10 @@ def test_save_report_version_returns_none_when_report_missing(patch_table, store
     assert result is None
 
 
-def test_save_report_version_increments_version(patch_table, store):
+async def test_save_report_version_increments_version(patch_table, store):
     patch_table.get_item.return_value = {"Item": _metadata_item(current_version=3)}
 
-    result = store.save_report_version(
+    result = await store.save_report_version(
         report_id="123",
         config={"rows": [{"name": "new"}]},
         created_by="editor@example.com",
@@ -294,10 +296,12 @@ def test_save_report_version_increments_version(patch_table, store):
     assert result.comment == "v4"
 
 
-def test_save_report_version_writes_five_items_transactionally(patch_table, store):
+async def test_save_report_version_writes_five_items_transactionally(
+    patch_table, store
+):
     patch_table.get_item.return_value = {"Item": _metadata_item(current_version=1)}
 
-    store.save_report_version(report_id="123", config={}, created_by="u@x.com")
+    await store.save_report_version(report_id="123", config={}, created_by="u@x.com")
 
     patch_table.meta.client.transact_write_items.assert_called_once()
     items = patch_table.meta.client.transact_write_items.call_args[1]["TransactItems"]
@@ -332,9 +336,9 @@ def test_floats_to_decimal_leaves_non_floats_unchanged():
     assert result == {"name": "CVEs", "version": 1, "enabled": True, "comment": None}
 
 
-def test_save_report_version_converts_floats_in_config(patch_table, store):
+async def test_save_report_version_converts_floats_in_config(patch_table, store):
     patch_table.get_item.return_value = {"Item": _metadata_item(current_version=0)}
-    store.save_report_version(
+    await store.save_report_version(
         report_id="123", config={"rows": [{"size": 2.0}]}, created_by="u@x.com"
     )
 
@@ -364,7 +368,7 @@ def test_version_sk_zero_pads():
 # ---------------------------------------------------------------------------
 
 
-def test_initialize_skips_when_table_present(store, mocker):
+async def test_initialize_skips_when_table_present(store, mocker):
     mock_resource = MagicMock()
     mock_table = MagicMock()
     mock_table.name = "seizu-reports"
@@ -375,12 +379,12 @@ def test_initialize_skips_when_table_present(store, mocker):
     )
     mocker.patch("reporting.settings.DYNAMODB_TABLE_NAME", "seizu-reports")
 
-    store.initialize()
+    await store.initialize()
 
     mock_resource.create_table.assert_not_called()
 
 
-def test_initialize_creates_when_missing(store, mocker):
+async def test_initialize_creates_when_missing(store, mocker):
     mock_resource = MagicMock()
     mock_resource.tables.all.return_value = []
     mocker.patch(
@@ -389,7 +393,7 @@ def test_initialize_creates_when_missing(store, mocker):
     )
     mocker.patch("reporting.settings.DYNAMODB_TABLE_NAME", "seizu-reports")
 
-    store.initialize()
+    await store.initialize()
 
     mock_resource.create_table.assert_called_once()
     kwargs = mock_resource.create_table.call_args[1]
@@ -397,7 +401,7 @@ def test_initialize_creates_when_missing(store, mocker):
     assert kwargs["BillingMode"] == "PAY_PER_REQUEST"
 
 
-def test_initialize_handles_race_condition(store, mocker):
+async def test_initialize_handles_race_condition(store, mocker):
     mock_resource = MagicMock()
     mock_resource.tables.all.return_value = []
     mock_resource.create_table.side_effect = (
@@ -413,7 +417,7 @@ def test_initialize_handles_race_condition(store, mocker):
     mocker.patch("reporting.settings.DYNAMODB_TABLE_NAME", "seizu-reports")
 
     # Should not raise
-    store.initialize()
+    await store.initialize()
 
 
 # ---------------------------------------------------------------------------
@@ -508,21 +512,21 @@ def test_strip_none_removes_nested_nones_from_config():
 # ---------------------------------------------------------------------------
 
 
-def test_get_dashboard_report_id_returns_none_when_not_set(patch_table, store):
+async def test_get_dashboard_report_id_returns_none_when_not_set(patch_table, store):
     patch_table.get_item.return_value = {}
-    assert store.get_dashboard_report_id() is None
+    assert await store.get_dashboard_report_id() is None
 
 
-def test_get_dashboard_report_id_returns_report_id(patch_table, store):
+async def test_get_dashboard_report_id_returns_report_id(patch_table, store):
     patch_table.get_item.return_value = {
         "Item": {"PK": "#DASHBOARD", "SK": "#POINTER", "report_id": "abc123"}
     }
-    assert store.get_dashboard_report_id() == "abc123"
+    assert await store.get_dashboard_report_id() == "abc123"
 
 
-def test_get_dashboard_report_id_queries_correct_key(patch_table, store):
+async def test_get_dashboard_report_id_queries_correct_key(patch_table, store):
     patch_table.get_item.return_value = {}
-    store.get_dashboard_report_id()
+    await store.get_dashboard_report_id()
     patch_table.get_item.assert_called_once_with(
         Key={"PK": "#DASHBOARD", "SK": "#POINTER"}
     )
@@ -533,19 +537,21 @@ def test_get_dashboard_report_id_queries_correct_key(patch_table, store):
 # ---------------------------------------------------------------------------
 
 
-def test_set_dashboard_report_returns_false_when_report_missing(patch_table, store):
+async def test_set_dashboard_report_returns_false_when_report_missing(
+    patch_table, store
+):
     patch_table.get_item.return_value = {}
-    assert store.set_dashboard_report("nonexistent") is False
+    assert await store.set_dashboard_report("nonexistent") is False
 
 
-def test_set_dashboard_report_returns_true_when_report_exists(patch_table, store):
+async def test_set_dashboard_report_returns_true_when_report_exists(patch_table, store):
     patch_table.get_item.return_value = {"Item": _metadata_item()}
-    assert store.set_dashboard_report("123") is True
+    assert await store.set_dashboard_report("123") is True
 
 
-def test_set_dashboard_report_writes_pointer_item(patch_table, store):
+async def test_set_dashboard_report_writes_pointer_item(patch_table, store):
     patch_table.get_item.return_value = {"Item": _metadata_item(report_id="rid1")}
-    store.set_dashboard_report("rid1")
+    await store.set_dashboard_report("rid1")
     patch_table.put_item.assert_called_once()
     item = patch_table.put_item.call_args[1]["Item"]
     assert item["report_id"] == "rid1"
@@ -558,17 +564,17 @@ def test_set_dashboard_report_writes_pointer_item(patch_table, store):
 # ---------------------------------------------------------------------------
 
 
-def test_get_dashboard_report_returns_none_when_not_set(patch_table, store):
+async def test_get_dashboard_report_returns_none_when_not_set(patch_table, store):
     patch_table.get_item.return_value = {}
-    assert store.get_dashboard_report() is None
+    assert await store.get_dashboard_report() is None
 
 
-def test_get_dashboard_report_returns_report_version(patch_table, store):
+async def test_get_dashboard_report_returns_report_version(patch_table, store):
     patch_table.get_item.side_effect = [
         {"Item": {"PK": "#DASHBOARD", "SK": "#POINTER", "report_id": "123"}},
         {"Item": _version_item(report_id="123")},
     ]
-    result = store.get_dashboard_report()
+    result = await store.get_dashboard_report()
     assert isinstance(result, ReportVersion)
     assert result.report_id == "123"
 
@@ -578,9 +584,9 @@ def test_get_dashboard_report_returns_report_version(patch_table, store):
 # ---------------------------------------------------------------------------
 
 
-def test_save_report_version_correct_sks(patch_table, store):
+async def test_save_report_version_correct_sks(patch_table, store):
     patch_table.get_item.return_value = {"Item": _metadata_item(current_version=2)}
-    store.save_report_version(report_id="123", config={}, created_by="u@x.com")
+    await store.save_report_version(report_id="123", config={}, created_by="u@x.com")
     items = patch_table.meta.client.transact_write_items.call_args[1]["TransactItems"]
     sks = [i["Put"]["Item"]["SK"] for i in items]
     assert "#LATEST" in sks
@@ -599,12 +605,12 @@ def test_save_report_version_correct_sks(patch_table, store):
 # ---------------------------------------------------------------------------
 
 
-def test_delete_report_returns_false_when_not_found(patch_table, store):
+async def test_delete_report_returns_false_when_not_found(patch_table, store):
     patch_table.get_item.return_value = {}
-    assert store.delete_report("missing") is False
+    assert await store.delete_report("missing") is False
 
 
-def test_delete_report_returns_true_on_success(patch_table, store):
+async def test_delete_report_returns_true_on_success(patch_table, store):
     patch_table.get_item.side_effect = [
         {"Item": _metadata_item()},  # metadata check
         {},  # dashboard pointer check — not set
@@ -616,10 +622,10 @@ def test_delete_report_returns_true_on_success(patch_table, store):
             {"PK": "REPORT#123", "SK": "VERSION#0000000001"},
         ]
     }
-    assert store.delete_report("123") is True
+    assert await store.delete_report("123") is True
 
 
-def test_delete_report_clears_dashboard_pointer(patch_table, store):
+async def test_delete_report_clears_dashboard_pointer(patch_table, store):
     patch_table.get_item.side_effect = [
         {"Item": _metadata_item()},  # metadata check
         {"Item": {"PK": "#DASHBOARD", "SK": "#POINTER", "report_id": "123"}},
@@ -627,14 +633,16 @@ def test_delete_report_clears_dashboard_pointer(patch_table, store):
     patch_table.query.return_value = {
         "Items": [{"PK": "REPORT#123", "SK": "#METADATA"}]
     }
-    store.delete_report("123")
+    await store.delete_report("123")
     # batch_writer context manager calls delete_item; verify it was called
     batch = patch_table.batch_writer.return_value.__enter__.return_value
     deleted_keys = [call[1]["Key"] for call in batch.delete_item.call_args_list]
     assert {"PK": "#DASHBOARD", "SK": "#POINTER"} in deleted_keys
 
 
-def test_save_report_version_nested_none_config_produces_no_nones(patch_table, store):
+async def test_save_report_version_nested_none_config_produces_no_nones(
+    patch_table, store
+):
     """Config from Pydantic model_dump() may contain nested None values for
     optional fields; verify _strip_none removes them before they reach DynamoDB
     (which would convert None to {"NULL": True}, rejected by DynamoDB Local)."""
@@ -669,7 +677,9 @@ def test_save_report_version_nested_none_config_produces_no_nones(patch_table, s
             }
         ],
     }
-    store.save_report_version(report_id="123", config=config, created_by="u@x.com")
+    await store.save_report_version(
+        report_id="123", config=config, created_by="u@x.com"
+    )
     items = patch_table.meta.client.transact_write_items.call_args[1]["TransactItems"]
     for item_op in items:
         assert not _contains_none(item_op["Put"]["Item"])
@@ -694,7 +704,7 @@ def _user_profile_item(user_id="uid1"):
     }
 
 
-def test_get_or_create_user_creates_new_user(patch_table, store, mocker):
+async def test_get_or_create_user_creates_new_user(patch_table, store, mocker):
     mocker.patch(
         "reporting.services.report_store.dynamodb.generate_report_id",
         return_value="uid1",
@@ -704,7 +714,7 @@ def test_get_or_create_user_creates_new_user(patch_table, store, mocker):
 
     from reporting.schema.report_config import User
 
-    user = store.get_or_create_user(
+    user = await store.get_or_create_user(
         sub="sub123",
         iss="https://idp.example.com",
         email="alice@example.com",
@@ -716,7 +726,7 @@ def test_get_or_create_user_creates_new_user(patch_table, store, mocker):
     assert user.email == "alice@example.com"
 
 
-def test_get_or_create_user_creates_lookup_and_profile_items(
+async def test_get_or_create_user_creates_lookup_and_profile_items(
     patch_table, store, mocker
 ):
     mocker.patch(
@@ -725,7 +735,7 @@ def test_get_or_create_user_creates_lookup_and_profile_items(
     )
     patch_table.get_item.return_value = {}
 
-    store.get_or_create_user(
+    await store.get_or_create_user(
         sub="sub123", iss="https://idp.example.com", email="alice@example.com"
     )
 
@@ -737,7 +747,9 @@ def test_get_or_create_user_creates_lookup_and_profile_items(
     assert "USER#uid1" in pks
 
 
-def test_get_or_create_user_returns_existing_user_on_lookup_hit(patch_table, store):
+async def test_get_or_create_user_returns_existing_user_on_lookup_hit(
+    patch_table, store
+):
     lookup_item = {
         "PK": "USER_LOOKUP",
         "SK": "https://idp.example.com#sub123",
@@ -761,7 +773,7 @@ def test_get_or_create_user_returns_existing_user_on_lookup_hit(patch_table, sto
 
     from reporting.schema.report_config import User
 
-    user = store.get_or_create_user(
+    user = await store.get_or_create_user(
         sub="sub123", iss="https://idp.example.com", email="alice@example.com"
     )
     assert isinstance(user, User)
@@ -775,16 +787,16 @@ def test_get_or_create_user_returns_existing_user_on_lookup_hit(patch_table, sto
 # ---------------------------------------------------------------------------
 
 
-def test_get_user_not_found(patch_table, store):
+async def test_get_user_not_found(patch_table, store):
     patch_table.get_item.return_value = {}
-    assert store.get_user("nonexistent") is None
+    assert await store.get_user("nonexistent") is None
 
 
-def test_get_user_returns_user(patch_table, store):
+async def test_get_user_returns_user(patch_table, store):
     patch_table.get_item.return_value = {"Item": _user_profile_item()}
     from reporting.schema.report_config import User
 
-    user = store.get_user("uid1")
+    user = await store.get_user("uid1")
     assert isinstance(user, User)
     assert user.user_id == "uid1"
     assert user.email == "alice@example.com"
@@ -795,14 +807,14 @@ def test_get_user_returns_user(patch_table, store):
 # ---------------------------------------------------------------------------
 
 
-def test_archive_user_returns_false_when_not_found(patch_table, store):
+async def test_archive_user_returns_false_when_not_found(patch_table, store):
     patch_table.get_item.return_value = {}
-    assert store.archive_user("nonexistent") is False
+    assert await store.archive_user("nonexistent") is False
 
 
-def test_archive_user_updates_archived_at(patch_table, store):
+async def test_archive_user_updates_archived_at(patch_table, store):
     patch_table.get_item.return_value = {"Item": _user_profile_item()}
-    result = store.archive_user("uid1")
+    result = await store.archive_user("uid1")
     assert result is True
     patch_table.update_item.assert_called_once()
     kwargs = patch_table.update_item.call_args[1]
@@ -815,13 +827,13 @@ def test_archive_user_updates_archived_at(patch_table, store):
 # ---------------------------------------------------------------------------
 
 
-def test_list_panel_stats_returns_empty_when_none(patch_table, store):
+async def test_list_panel_stats_returns_empty_when_none(patch_table, store):
     patch_table.query.return_value = {"Items": []}
-    result = store.list_panel_stats()
+    result = await store.list_panel_stats()
     assert result == []
 
 
-def test_list_panel_stats_returns_stat_records(patch_table, store):
+async def test_list_panel_stats_returns_stat_records(patch_table, store):
     patch_table.query.return_value = {
         "Items": [
             {
@@ -839,7 +851,7 @@ def test_list_panel_stats_returns_stat_records(patch_table, store):
             }
         ]
     }
-    result = store.list_panel_stats()
+    result = await store.list_panel_stats()
     assert len(result) == 1
     assert isinstance(result[0], PanelStat)
     assert result[0].report_id == "rid1"
@@ -849,16 +861,14 @@ def test_list_panel_stats_returns_stat_records(patch_table, store):
     assert result[0].input_param_name is None
 
 
-def test_list_panel_stats_queries_correct_pk(patch_table, store):
+async def test_list_panel_stats_queries_correct_pk(patch_table, store):
     patch_table.query.return_value = {"Items": []}
-    store.list_panel_stats()
+    await store.list_panel_stats()
     call_kwargs = patch_table.query.call_args[1]
-    from boto3.dynamodb.conditions import Key as CondKey
-
-    assert call_kwargs["KeyConditionExpression"] == CondKey("PK").eq("PANEL_STATS")
+    assert call_kwargs["ExpressionAttributeValues"][":pk"] == "PANEL_STATS"
 
 
-def test_save_report_version_writes_panel_stats(patch_table, store):
+async def test_save_report_version_writes_panel_stats(patch_table, store):
     patch_table.get_item.return_value = {"Item": _metadata_item(current_version=0)}
     config = {
         "name": "Test",
@@ -879,7 +889,9 @@ def test_save_report_version_writes_panel_stats(patch_table, store):
             }
         ],
     }
-    store.save_report_version(report_id="123", config=config, created_by="u@x.com")
+    await store.save_report_version(
+        report_id="123", config=config, created_by="u@x.com"
+    )
     # Stats are written as part of the transact_write, not via batch_writer
     patch_table.batch_writer.assert_not_called()
     transact_call = patch_table.meta.client.transact_write_items.call_args
@@ -952,42 +964,42 @@ _SQ_KWARGS = dict(
 )
 
 
-def test_list_scheduled_queries_empty(patch_table, store):
+async def test_list_scheduled_queries_empty(patch_table, store):
     patch_table.query.return_value = {"Items": []}
-    result = store.list_scheduled_queries()
+    result = await store.list_scheduled_queries()
     assert result == []
 
 
-def test_list_scheduled_queries_returns_items(patch_table, store):
+async def test_list_scheduled_queries_returns_items(patch_table, store):
     patch_table.query.return_value = {"Items": [_sq_metadata_item()]}
-    result = store.list_scheduled_queries()
+    result = await store.list_scheduled_queries()
     assert len(result) == 1
     assert result[0].scheduled_query_id == "sq1"
     assert result[0].name == "My Query"
     assert result[0].current_version == 1
 
 
-def test_get_scheduled_query_success(patch_table, store):
+async def test_get_scheduled_query_success(patch_table, store):
     patch_table.get_item.return_value = {"Item": _sq_metadata_item()}
-    result = store.get_scheduled_query("sq1")
+    result = await store.get_scheduled_query("sq1")
     assert result is not None
     assert result.scheduled_query_id == "sq1"
     assert result.name == "My Query"
 
 
-def test_get_scheduled_query_not_found(patch_table, store):
+async def test_get_scheduled_query_not_found(patch_table, store):
     patch_table.get_item.return_value = {}
-    result = store.get_scheduled_query("nonexistent")
+    result = await store.get_scheduled_query("nonexistent")
     assert result is None
 
 
-def test_create_scheduled_query(patch_table, store, mocker):
+async def test_create_scheduled_query(patch_table, store, mocker):
     mocker.patch(
         "reporting.services.report_store.dynamodb.generate_report_id",
         return_value="sq1",
     )
     patch_table.meta.client.transact_write_items = MagicMock()
-    result = store.create_scheduled_query(**_SQ_KWARGS)
+    result = await store.create_scheduled_query(**_SQ_KWARGS)
     assert result.scheduled_query_id == "sq1"
     assert result.current_version == 1
     assert result.created_by == "user@example.com"
@@ -995,10 +1007,10 @@ def test_create_scheduled_query(patch_table, store, mocker):
     assert patch_table.meta.client.transact_write_items.call_count == 1
 
 
-def test_update_scheduled_query_success(patch_table, store):
+async def test_update_scheduled_query_success(patch_table, store):
     patch_table.get_item.return_value = {"Item": _sq_metadata_item(current_version=1)}
     patch_table.meta.client.transact_write_items = MagicMock()
-    result = store.update_scheduled_query(
+    result = await store.update_scheduled_query(
         sq_id="sq1",
         name="Updated",
         cypher="MATCH (n) RETURN n LIMIT 1",
@@ -1015,9 +1027,9 @@ def test_update_scheduled_query_success(patch_table, store):
     assert result.updated_by == "editor@example.com"
 
 
-def test_update_scheduled_query_not_found(patch_table, store):
+async def test_update_scheduled_query_not_found(patch_table, store):
     patch_table.get_item.return_value = {}
-    result = store.update_scheduled_query(
+    result = await store.update_scheduled_query(
         sq_id="nonexistent",
         name="X",
         cypher="MATCH (n) RETURN n",
@@ -1031,40 +1043,40 @@ def test_update_scheduled_query_not_found(patch_table, store):
     assert result is None
 
 
-def test_list_scheduled_query_versions_empty(patch_table, store):
+async def test_list_scheduled_query_versions_empty(patch_table, store):
     patch_table.query.return_value = {"Items": []}
-    result = store.list_scheduled_query_versions("sq1")
+    result = await store.list_scheduled_query_versions("sq1")
     assert result == []
 
 
-def test_list_scheduled_query_versions_returns_items(patch_table, store):
+async def test_list_scheduled_query_versions_returns_items(patch_table, store):
     patch_table.query.return_value = {
         "Items": [
             _sq_version_dynamo_item(version=2),
             _sq_version_dynamo_item(version=1),
         ]
     }
-    result = store.list_scheduled_query_versions("sq1")
+    result = await store.list_scheduled_query_versions("sq1")
     assert len(result) == 2
     assert result[0].version == 2
     assert result[1].version == 1
 
 
-def test_get_scheduled_query_version_success(patch_table, store):
+async def test_get_scheduled_query_version_success(patch_table, store):
     patch_table.get_item.return_value = {"Item": _sq_version_dynamo_item(version=1)}
-    result = store.get_scheduled_query_version("sq1", 1)
+    result = await store.get_scheduled_query_version("sq1", 1)
     assert result is not None
     assert result.version == 1
     assert result.scheduled_query_id == "sq1"
 
 
-def test_get_scheduled_query_version_not_found(patch_table, store):
+async def test_get_scheduled_query_version_not_found(patch_table, store):
     patch_table.get_item.return_value = {}
-    result = store.get_scheduled_query_version("sq1", 99)
+    result = await store.get_scheduled_query_version("sq1", 99)
     assert result is None
 
 
-def test_delete_scheduled_query_success(patch_table, store):
+async def test_delete_scheduled_query_success(patch_table, store):
     patch_table.get_item.return_value = {"Item": _sq_metadata_item()}
     patch_table.query.return_value = {
         "Items": [
@@ -1075,12 +1087,12 @@ def test_delete_scheduled_query_success(patch_table, store):
     batch_mock = MagicMock()
     patch_table.batch_writer.return_value.__enter__ = MagicMock(return_value=batch_mock)
     patch_table.batch_writer.return_value.__exit__ = MagicMock(return_value=False)
-    result = store.delete_scheduled_query("sq1")
+    result = await store.delete_scheduled_query("sq1")
     assert result is True
     assert batch_mock.delete_item.call_count == 3  # 2 items + 1 list item
 
 
-def test_delete_scheduled_query_not_found(patch_table, store):
+async def test_delete_scheduled_query_not_found(patch_table, store):
     patch_table.get_item.return_value = {}
-    result = store.delete_scheduled_query("nonexistent")
+    result = await store.delete_scheduled_query("nonexistent")
     assert result is False

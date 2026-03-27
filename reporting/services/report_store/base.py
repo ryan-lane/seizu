@@ -87,29 +87,29 @@ class ReportStore(ABC):
     """Abstract base class for report configuration storage backends."""
 
     @abstractmethod
-    def initialize(self) -> None:
+    async def initialize(self) -> None:
         """Perform any one-time setup required by the backend (e.g. create table)."""
 
     @abstractmethod
-    def list_reports(self) -> List[ReportListItem]:
+    async def list_reports(self) -> List[ReportListItem]:
         """Return lightweight metadata for all reports."""
 
     @abstractmethod
-    def get_report_latest(self, report_id: str) -> Optional[ReportVersion]:
+    async def get_report_latest(self, report_id: str) -> Optional[ReportVersion]:
         """Return the latest version of a report config, or None if not found."""
 
     @abstractmethod
-    def get_report_version(
+    async def get_report_version(
         self, report_id: str, version: int
     ) -> Optional[ReportVersion]:
         """Return a specific version of a report config, or None if not found."""
 
     @abstractmethod
-    def list_report_versions(self, report_id: str) -> List[ReportVersion]:
+    async def list_report_versions(self, report_id: str) -> List[ReportVersion]:
         """Return all stored versions for a report, newest first."""
 
     @abstractmethod
-    def create_report(
+    async def create_report(
         self,
         name: str,
         created_by: str,
@@ -117,7 +117,7 @@ class ReportStore(ABC):
         """Create a new empty report (no initial version) and return the ReportListItem."""
 
     @abstractmethod
-    def save_report_version(
+    async def save_report_version(
         self,
         report_id: str,
         config: Dict[str, Any],
@@ -130,7 +130,7 @@ class ReportStore(ABC):
         """
 
     @abstractmethod
-    def delete_report(self, report_id: str) -> bool:
+    async def delete_report(self, report_id: str) -> bool:
         """Delete a report and all its versions.
 
         Also clears the dashboard pointer if it points to this report.
@@ -138,22 +138,22 @@ class ReportStore(ABC):
         """
 
     @abstractmethod
-    def get_dashboard_report_id(self) -> Optional[str]:
+    async def get_dashboard_report_id(self) -> Optional[str]:
         """Return the report_id of the current dashboard report, or None if not set."""
 
     @abstractmethod
-    def set_dashboard_report(self, report_id: str) -> bool:
+    async def set_dashboard_report(self, report_id: str) -> bool:
         """Point the dashboard pointer at the given report.
 
         Returns False if the report does not exist.
         """
 
     @abstractmethod
-    def get_dashboard_report(self) -> Optional[ReportVersion]:
+    async def get_dashboard_report(self) -> Optional[ReportVersion]:
         """Return the latest version of the dashboard report, or None if not set."""
 
     @abstractmethod
-    def get_or_create_user(
+    async def get_or_create_user(
         self,
         sub: str,
         iss: str,
@@ -169,7 +169,7 @@ class ReportStore(ABC):
         """
 
     @abstractmethod
-    def update_user_profile(
+    async def update_user_profile(
         self,
         user_id: str,
         email: str,
@@ -187,18 +187,18 @@ class ReportStore(ABC):
         """
 
     @abstractmethod
-    def get_user(self, user_id: str) -> Optional[User]:
+    async def get_user(self, user_id: str) -> Optional[User]:
         """Return a user by their internal user_id, or None if not found."""
 
     @abstractmethod
-    def archive_user(self, user_id: str) -> bool:
+    async def archive_user(self, user_id: str) -> bool:
         """Soft-delete a user by setting archived_at.
 
         Returns False if the user does not exist.
         """
 
     @abstractmethod
-    def list_panel_stats(self) -> List[PanelStat]:
+    async def list_panel_stats(self) -> List[PanelStat]:
         """Return all PanelStat records across all reports.
 
         These are pre-computed descriptors written atomically with each
@@ -207,15 +207,15 @@ class ReportStore(ABC):
         """
 
     @abstractmethod
-    def list_scheduled_queries(self) -> List[ScheduledQueryItem]:
+    async def list_scheduled_queries(self) -> List[ScheduledQueryItem]:
         """Return all scheduled queries."""
 
     @abstractmethod
-    def get_scheduled_query(self, sq_id: str) -> Optional[ScheduledQueryItem]:
+    async def get_scheduled_query(self, sq_id: str) -> Optional[ScheduledQueryItem]:
         """Return a scheduled query by ID, or None if not found."""
 
     @abstractmethod
-    def create_scheduled_query(
+    async def create_scheduled_query(
         self,
         name: str,
         cypher: str,
@@ -229,7 +229,7 @@ class ReportStore(ABC):
         """Create a new scheduled query (at version 1) and return it."""
 
     @abstractmethod
-    def update_scheduled_query(
+    async def update_scheduled_query(
         self,
         sq_id: str,
         name: str,
@@ -245,15 +245,17 @@ class ReportStore(ABC):
         """Save a new version of an existing scheduled query. Returns None if not found."""
 
     @abstractmethod
-    def list_scheduled_query_versions(self, sq_id: str) -> List[ScheduledQueryVersion]:
+    async def list_scheduled_query_versions(
+        self, sq_id: str
+    ) -> List[ScheduledQueryVersion]:
         """Return all stored versions for a scheduled query, newest first."""
 
     @abstractmethod
-    def get_scheduled_query_version(
+    async def get_scheduled_query_version(
         self, sq_id: str, version: int
     ) -> Optional[ScheduledQueryVersion]:
         """Return a specific version of a scheduled query, or None if not found."""
 
     @abstractmethod
-    def delete_scheduled_query(self, sq_id: str) -> bool:
+    async def delete_scheduled_query(self, sq_id: str) -> bool:
         """Delete a scheduled query and all its versions. Returns False if not found."""

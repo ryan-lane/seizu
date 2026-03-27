@@ -215,7 +215,6 @@ services:
         required: false
     environment:
       - NEO4J_URI=bolt://neo4j:7687
-      - FLASK_APP=reporting.dashboard_stats
       - STATSD_HOST=telegraf
       # Report store — must match the seizu service so stats are read from the
       # same backend that report versions are written to.
@@ -227,7 +226,7 @@ services:
       - DYNAMODB_ENDPOINT_URL=http://dynamodb:8000
       - DYNAMODB_REGION=us-east-1
       - SQL_DATABASE_URL=postgresql://seizu:seizu@postgres:5432/seizu
-    command: flask worker dashboard-stats
+    command: python -m reporting.dashboard_stats
     volumes:
       - .:/home/seizu/seizu
     networks:
@@ -252,7 +251,6 @@ services:
       - AWS_DEFAULT_REGION=us-east-1
       - "SQS_CREATE_SCHEDULED_QUERY_QUEUES=true"
       - SQS_URL=http://sqs:9324
-      - FLASK_APP=reporting.scheduled_queries
       - SCHEDULED_QUERY_MODULES=reporting.scheduled_query_modules.sqs,reporting.scheduled_query_modules.slack,reporting.scheduled_query_modules.log
       - SLACK_OAUTH_BOT_TOKEN
       - REPORT_STORE_BACKEND
@@ -261,7 +259,7 @@ services:
       - DYNAMODB_REGION=us-east-1
       - DYNAMODB_CREATE_TABLE=true
       - SQL_DATABASE_URL=postgresql://seizu:seizu@postgres:5432/seizu
-    command: flask worker schedule-queries
+    command: python -m reporting.scheduled_queries
     volumes:
       - .:/home/seizu/seizu
     networks:
@@ -284,8 +282,6 @@ services:
     environment:
       - HOST=0.0.0.0
       - PORT=8080
-      # Gevent will block on DNS unless ares is set.
-      - GEVENT_RESOLVER=ares
       - NEO4J_URI=bolt://neo4j:7687
       - NEO4J_NOTIFICATIONS_MIN_SEVERITY=OFF
       # JWT authentication is disabled for development by default.
@@ -307,10 +303,11 @@ services:
       - "OIDC_SCOPE=openid email profile"
       # Disable the referer check so node can proxy to the backend
       - "CSRF_CHECK_REFERER=false"
-      # Disable HTTPS redirect and allow CSRF/session cookies over plain HTTP in development
+      # Disable HTTPS redirect and allow CSRF cookies over plain HTTP in development
       - "TALISMAN_FORCE_HTTPS=false"
       - "CSRF_COOKIE_SECURE=false"
-      - "SESSION_COOKIE_SECURE=false"
+      # Use Lax so the CSRF cookie is included after OIDC cross-site redirects
+      - "CSRF_COOKIE_SAMESITE=lax"
       - SECRET_KEY=fake
       - STATSD_EXTERNAL_PREFIX=seizu
       - STATSD_EXTERNAL_PROVIDER=newrelic
@@ -341,7 +338,7 @@ services:
     # Start from /run/seizu so the gunicorn arbiter control socket (gunicorn.ctl)
     # is created there instead of in the bind-mounted project volume, which
     # would cause the seizu-node watchpack watcher to trip over the Unix socket.
-    command: bash -c "cd /run/seizu && exec gunicorn --config /home/seizu/seizu/gunicorn.conf reporting.wsgi:app --reload --workers=2 -k gevent --access-logfile=- --error-logfile=-"
+    command: bash -c "cd /run/seizu && exec gunicorn --config /home/seizu/seizu/gunicorn.conf reporting.asgi:application --reload --workers=2 -k uvicorn.workers.UvicornWorker --access-logfile=- --error-logfile=-"
     networks:
       proxy:
       stats:

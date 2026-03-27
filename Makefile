@@ -65,12 +65,12 @@ seed_dashboard:
 
 .PHONY: schema
 schema: generate_openapi
-	FLASK_APP=reporting.schema.cli pipenv run flask schema export > schema/reporting-schema.json
+	pipenv run python -m reporting.schema.cli export > schema/reporting-schema.json
 
-# Export the OpenAPI spec from the running APIFlask app (no backend connections required).
+# Export the OpenAPI spec from the FastAPI app (no backend connections required).
 .PHONY: generate_openapi
 generate_openapi:
-	FLASK_APP=reporting.app:create_app DYNAMODB_CREATE_TABLE=false pipenv run flask spec --output schema/openapi.json
+	DYNAMODB_CREATE_TABLE=false pipenv run python -c "from reporting.app import create_app; import json; app = create_app(); print(json.dumps(app.openapi()))" > schema/openapi.json
 
 # Generate a client library from schema/openapi.json using openapi-generator-cli.
 # Usage: make generate_client LANG=go

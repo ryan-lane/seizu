@@ -1,16 +1,17 @@
+import asyncio
 import logging
+from dataclasses import dataclass
 from datetime import datetime
 from datetime import timezone
-from functools import wraps
-from typing import Any
-from typing import Callable
 from typing import Dict
 from typing import Optional
 
 import jwt
-from apiflask import HTTPTokenAuth
-from flask import g
-from flask import request
+from fastapi import Depends
+from fastapi import HTTPException
+from fastapi import status
+from fastapi.security import HTTPAuthorizationCredentials
+from fastapi.security import HTTPBearer
 from jwt import PyJWKClient
 
 from reporting import settings
@@ -18,19 +19,15 @@ from reporting.schema.report_config import User
 
 logger = logging.getLogger(__name__)
 
-_jwks_client: PyJWKClient | None = None
+_jwks_client: Optional[PyJWKClient] = None
 
-bearer_auth = HTTPTokenAuth(scheme="Bearer")
+_bearer_scheme = HTTPBearer(auto_error=False)
 
 
-@bearer_auth.verify_token
-def _verify_bearer(token: str) -> Optional[User]:
-    try:
-        user = get_user()
-        g.current_user = user
-        return user
-    except Exception:
-        return None
+@dataclass
+class CurrentUser:
+    user: User
+    jwt_claims: Dict
 
 
 def _get_jwks_client() -> PyJWKClient:
@@ -40,29 +37,14 @@ def _get_jwks_client() -> PyJWKClient:
     return _jwks_client
 
 
-def _get_jwt_payload() -> Dict:
+async def _get_jwt_payload(token: str) -> Dict:
     """
-    Get the JWT payload from the request headers.
+    Get the JWT payload from a Bearer token string.
 
-    Reads the token from the header specified by JWT_HEADER_NAME. When the
-    header is ``Authorization``, the ``Bearer `` prefix is stripped. For any
-    other header name the raw value is used as the token (e.g. the AWS ALB
-    ``x-amzn-oidc-data`` header).
+    Makes a potentially blocking HTTP call (JWKS fetch) in a thread pool.
     """
-    header_name = settings.JWT_HEADER_NAME
-    header_value = request.headers.get(header_name)
-    if not header_value:
-        raise ValueError(f"Missing JWT header: {header_name}")
-
-    if header_name.lower() == "authorization":
-        if not header_value.startswith("Bearer "):
-            raise ValueError("Authorization header must use Bearer scheme")
-        token = header_value[7:]
-    else:
-        token = header_value
-
     client = _get_jwks_client()
-    signing_key = client.get_signing_key_from_jwt(token)
+    signing_key = await asyncio.to_thread(client.get_signing_key_from_jwt, token)
 
     decode_kwargs: Dict = {
         "algorithms": settings.ALLOWED_JWT_ALGORITHMS,
@@ -72,7 +54,7 @@ def _get_jwt_payload() -> Dict:
     if settings.JWT_AUDIENCE:
         decode_kwargs["audience"] = settings.JWT_AUDIENCE
 
-    logger.debug("Decoding JWT", extra={"header": header_name})
+    logger.debug("Decoding JWT")
     return jwt.decode(token, signing_key.key, **decode_kwargs)
 
 
@@ -84,24 +66,18 @@ def get_email() -> str:
             extra={"type": "AUDIT", "user": email},
         )
         return email
-    payload = _get_jwt_payload()
-    return payload[settings.JWT_EMAIL_CLAIM]
+    raise RuntimeError(
+        "get_email() called in auth-required mode without a request context. "
+        "Use get_current_user() instead."
+    )
 
 
-def get_user() -> User:
-    """Validate the JWT and return a persisted User, creating one on first login.
+async def get_current_user(
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(_bearer_scheme),
+) -> CurrentUser:
+    """Validate the JWT and return a CurrentUser.
 
-    Extracts ``sub``, ``iss``, ``email``, and optionally ``name`` from the JWT
-    payload, then calls the report store's ``get_or_create_user`` to provision
-    the user record on first login.  Existing users are returned as-is;
-    profile updates (email drift, last_login) are applied only when the caller
-    explicitly invokes ``sync_user_profile`` (e.g. the ``/api/v1/me`` route).
-
-    Sets ``flask.g.jwt_claims`` with the relevant JWT fields so routes can
-    pass them to ``sync_user_profile`` without re-decoding the token.
-
-    In development mode (auth disabled) a synthetic dev user is returned using
-    the configured ``DEVELOPMENT_ONLY_AUTH_USER_EMAIL``.
+    In development mode (auth disabled) a synthetic dev user is returned.
     """
     from reporting.services import report_store
 
@@ -111,63 +87,72 @@ def get_user() -> User:
             "Authentication is disabled",
             extra={"type": "AUDIT", "user": email},
         )
-        g.jwt_claims = {"email": email, "display_name": None, "token_iat": None}
-        return report_store.get_or_create_user(
+        user = await report_store.get_or_create_user(
             sub=email,
             iss="dev",
             email=email,
             display_name=None,
         )
-    payload = _get_jwt_payload()
+        return CurrentUser(
+            user=user,
+            jwt_claims={"email": email, "display_name": None, "token_iat": None},
+        )
+
+    if not credentials:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Not authenticated",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    token = credentials.credentials
+    try:
+        payload = await _get_jwt_payload(token)
+    except jwt.PyJWTError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=str(exc),
+            headers={"WWW-Authenticate": "Bearer"},
+        ) from exc
+
     raw_iat = payload.get("iat")
     token_iat = (
         datetime.fromtimestamp(raw_iat, tz=timezone.utc)
         if raw_iat is not None
         else None
     )
-    g.jwt_claims = {
+    jwt_claims = {
         "email": payload[settings.JWT_EMAIL_CLAIM],
         "display_name": payload.get("name"),
         "token_iat": token_iat,
     }
-    return report_store.get_or_create_user(
+
+    user = await report_store.get_or_create_user(
         sub=payload[settings.JWT_SUB_CLAIM],
         iss=payload[settings.JWT_ISS_CLAIM],
         email=payload[settings.JWT_EMAIL_CLAIM],
         display_name=payload.get("name"),
     )
 
+    return CurrentUser(user=user, jwt_claims=jwt_claims)
 
-def sync_user_profile(user: User) -> User:
+
+async def sync_user_profile(
+    current: CurrentUser = Depends(get_current_user),
+) -> CurrentUser:
     """Update mutable profile fields for an already-authenticated user.
 
     Should be called only from routes where a profile sync is appropriate
-    (e.g. ``GET /api/v1/me``).  Reads JWT claims from ``flask.g.jwt_claims``
-    populated by ``get_user()`` and delegates to the store, which skips the
+    (e.g. ``GET /api/v1/me``).  Delegates to the store, which skips the
     write entirely if nothing has changed.
     """
     from reporting.services import report_store
 
-    claims = g.jwt_claims
-    return report_store.update_user_profile(
-        user_id=user.user_id,
+    claims = current.jwt_claims
+    updated_user = await report_store.update_user_profile(
+        user_id=current.user.user_id,
         email=claims["email"],
         display_name=claims.get("display_name"),
         token_iat=claims.get("token_iat"),
     )
-
-
-def require_auth(f: Callable) -> Callable:
-    """Decorator that validates the JWT and populates ``flask.g.current_user``.
-
-    Apply to any route that requires authentication.  The resolved
-    :class:`~reporting.schema.report_config.User` is available inside the
-    decorated function as ``g.current_user``.
-    """
-
-    @wraps(f)
-    def decorated(*args: Any, **kwargs: Any) -> Any:
-        g.current_user = get_user()
-        return f(*args, **kwargs)
-
-    return decorated
+    return CurrentUser(user=updated_user, jwt_claims=claims)

@@ -32,7 +32,7 @@ export default defineConfig({
       '/healthcheck': 'http://seizu:8080',
     },
     watch: {
-      ignored: ['**/.mypy_cache/**', '**/coverage/**'],
+      ignored: ['**/.mypy_cache/**', '**/coverage/**', '**/__pycache__/**', '**/tests/**'],
     },
   },
 });

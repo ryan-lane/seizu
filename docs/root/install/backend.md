@@ -28,7 +28,7 @@ When using the docker image, the defaults should be sufficient for basic configu
 seizu passes configuration to the frontend via a configuration endpoint.
 Report and dashboard configurations are stored in DynamoDB; use ``seizu seed`` to populate them from a YAML file.
 
-* ``SECRET_KEY``: Flask session secret key for sessions and CSRF. Set to some long, random string; default: ``None``
+* ``SECRET_KEY``: Secret key used for CSRF token signing. Set to some long, random string; default: ``None``
 
 ### Neo4j configuration
 
@@ -85,8 +85,7 @@ seizu validates JWTs using `PyJWKClient` against any standard OIDC JWKS endpoint
 #### Security / cookie settings
 
 * ``TALISMAN_FORCE_HTTPS``: redirect HTTP requests to HTTPS and enable HSTS. Set to ``False`` when running behind an SSL-terminating load balancer or in local development; default: ``True``
-* ``SESSION_COOKIE_SECURE``: mark the Flask session cookie as ``Secure`` (HTTPS-only). Must be ``False`` when serving over plain HTTP (e.g. local development or behind an SSL-terminating proxy); default: ``True``
-* ``CSRF_COOKIE_SECURE``: mark the CSRF cookie as ``Secure`` (HTTPS-only). Should match ``SESSION_COOKIE_SECURE``; default: ``True``
+* ``CSRF_COOKIE_SECURE``: mark the CSRF cookie as ``Secure`` (HTTPS-only). Set to ``False`` when serving over plain HTTP (e.g. local development or behind an SSL-terminating proxy); default: ``True``
 
 ### Scheduled queries
 

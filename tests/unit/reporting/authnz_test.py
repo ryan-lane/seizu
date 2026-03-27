@@ -1,10 +1,13 @@
 import base64
+from unittest.mock import AsyncMock
 
 import jwt
+import pytest
 from jwt.api_jwk import PyJWK
 
-import reporting.authnz
-from reporting.app import create_app
+from reporting.authnz import _get_jwt_payload
+from reporting.authnz import CurrentUser
+from reporting.authnz import get_current_user
 
 # JWK that matches the private key
 FAKE_KEY = {
@@ -39,8 +42,8 @@ def _make_mock_client(mocker, signing_key):
     return mock_client
 
 
-def test__get_jwt_payload_bearer(mocker):
-    """JWT is read from an Authorization: Bearer header by default."""
+async def test__get_jwt_payload_valid_token(mocker):
+    """_get_jwt_payload decodes a valid JWT token."""
     mocker.patch("reporting.settings.JWT_AUDIENCE", "")
     signing_key = _make_mock_signing_key(mocker)
     mock_client = _make_mock_client(mocker, signing_key)
@@ -50,84 +53,11 @@ def test__get_jwt_payload_bearer(mocker):
         base64.b64decode(FAKE_PRIVATE_KEY),
         algorithm="ES256",
     )
-    app = create_app({"PREFERRED_URL_SCHEME": "https"})
-    with app.test_request_context(headers={"Authorization": f"Bearer {encoded}"}):
-        assert reporting.authnz._get_jwt_payload() == {"email": "test@example.com"}
+    payload = await _get_jwt_payload(encoded)
+    assert payload == {"email": "test@example.com"}
 
 
-def test__get_jwt_payload_custom_header(mocker):
-    """JWT is read from a custom header when JWT_HEADER_NAME is overridden."""
-    mocker.patch("reporting.settings.JWT_AUDIENCE", "")
-    mocker.patch("reporting.settings.JWT_HEADER_NAME", "x-amzn-oidc-data")
-    signing_key = _make_mock_signing_key(mocker)
-    mock_client = _make_mock_client(mocker, signing_key)
-    mocker.patch("reporting.authnz._get_jwks_client", return_value=mock_client)
-    encoded = jwt.encode(
-        {"email": "test@example.com"},
-        base64.b64decode(FAKE_PRIVATE_KEY),
-        algorithm="ES256",
-    )
-    app = create_app({"PREFERRED_URL_SCHEME": "https"})
-    with app.test_request_context(headers={"x-amzn-oidc-data": encoded}):
-        assert reporting.authnz._get_jwt_payload() == {"email": "test@example.com"}
-
-
-def test__get_jwt_payload_custom_email_claim(mocker):
-    """Email is read from a configurable claim."""
-    mocker.patch("reporting.settings.JWT_AUDIENCE", "")
-    mocker.patch("reporting.settings.JWT_EMAIL_CLAIM", "preferred_username")
-    signing_key = _make_mock_signing_key(mocker)
-    mock_client = _make_mock_client(mocker, signing_key)
-    mocker.patch("reporting.authnz._get_jwks_client", return_value=mock_client)
-    encoded = jwt.encode(
-        {"preferred_username": "user@example.com"},
-        base64.b64decode(FAKE_PRIVATE_KEY),
-        algorithm="ES256",
-    )
-    app = create_app({"PREFERRED_URL_SCHEME": "https"})
-    with app.test_request_context(headers={"Authorization": f"Bearer {encoded}"}):
-        reporting.authnz._get_jwt_payload()
-
-
-def test_get_email(mocker):
-    mocker.patch("reporting.settings.DEVELOPMENT_ONLY_REQUIRE_AUTH", True)
-    mocker.patch(
-        "reporting.authnz._get_jwt_payload",
-        return_value={"email": "test@example.com"},
-    )
-    assert reporting.authnz.get_email() == "test@example.com"
-
-
-def test_get_email_custom_claim(mocker):
-    mocker.patch("reporting.settings.DEVELOPMENT_ONLY_REQUIRE_AUTH", True)
-    mocker.patch("reporting.settings.JWT_EMAIL_CLAIM", "preferred_username")
-    mocker.patch(
-        "reporting.authnz._get_jwt_payload",
-        return_value={"preferred_username": "user@example.com"},
-    )
-    assert reporting.authnz.get_email() == "user@example.com"
-
-
-def test_get_email_auth_disabled(mocker):
-    mocker.patch("reporting.settings.DEVELOPMENT_ONLY_REQUIRE_AUTH", False)
-    mocker.patch(
-        "reporting.settings.DEVELOPMENT_ONLY_AUTH_USER_EMAIL",
-        "test@example.com",
-    )
-    assert reporting.authnz.get_email() == "test@example.com"
-
-
-def test__get_jwt_payload_missing_header(mocker):
-    """Missing Authorization header raises ValueError."""
-    import pytest
-
-    app = create_app({"PREFERRED_URL_SCHEME": "https"})
-    with app.test_request_context():
-        with pytest.raises(ValueError, match="Missing JWT header"):
-            reporting.authnz._get_jwt_payload()
-
-
-def test__get_jwt_payload_with_audience(mocker):
+async def test__get_jwt_payload_with_audience(mocker):
     """JWT audience claim is accepted when JWT_AUDIENCE matches."""
     mocker.patch("reporting.settings.JWT_AUDIENCE", "myapp")
     signing_key = _make_mock_signing_key(mocker)
@@ -138,16 +68,12 @@ def test__get_jwt_payload_with_audience(mocker):
         base64.b64decode(FAKE_PRIVATE_KEY),
         algorithm="ES256",
     )
-    app = create_app({"PREFERRED_URL_SCHEME": "https"})
-    with app.test_request_context(headers={"Authorization": f"Bearer {encoded}"}):
-        payload = reporting.authnz._get_jwt_payload()
-        assert payload["email"] == "test@example.com"
+    payload = await _get_jwt_payload(encoded)
+    assert payload["email"] == "test@example.com"
 
 
-def test__get_jwt_payload_audience_mismatch(mocker):
+async def test__get_jwt_payload_audience_mismatch(mocker):
     """JWT with wrong audience claim is rejected."""
-    import pytest
-
     mocker.patch("reporting.settings.JWT_AUDIENCE", "myapp")
     signing_key = _make_mock_signing_key(mocker)
     mock_client = _make_mock_client(mocker, signing_key)
@@ -157,16 +83,12 @@ def test__get_jwt_payload_audience_mismatch(mocker):
         base64.b64decode(FAKE_PRIVATE_KEY),
         algorithm="ES256",
     )
-    app = create_app({"PREFERRED_URL_SCHEME": "https"})
-    with app.test_request_context(headers={"Authorization": f"Bearer {encoded}"}):
-        with pytest.raises(jwt.exceptions.InvalidAudienceError):
-            reporting.authnz._get_jwt_payload()
+    with pytest.raises(jwt.exceptions.InvalidAudienceError):
+        await _get_jwt_payload(encoded)
 
 
-def test__get_jwt_payload_aud_in_token_but_not_configured(mocker):
+async def test__get_jwt_payload_aud_in_token_but_not_configured(mocker):
     """Token with aud claim fails when JWT_AUDIENCE is not set (PyJWT requirement)."""
-    import pytest
-
     mocker.patch("reporting.settings.JWT_AUDIENCE", "")
     signing_key = _make_mock_signing_key(mocker)
     mock_client = _make_mock_client(mocker, signing_key)
@@ -176,25 +98,62 @@ def test__get_jwt_payload_aud_in_token_but_not_configured(mocker):
         base64.b64decode(FAKE_PRIVATE_KEY),
         algorithm="ES256",
     )
-    app = create_app({"PREFERRED_URL_SCHEME": "https"})
-    with app.test_request_context(headers={"Authorization": f"Bearer {encoded}"}):
-        with pytest.raises(jwt.exceptions.InvalidAudienceError):
-            reporting.authnz._get_jwt_payload()
+    with pytest.raises(jwt.exceptions.InvalidAudienceError):
+        await _get_jwt_payload(encoded)
 
 
-def test_get_user_extracts_sub_and_iss(mocker):
-    mocker.patch("reporting.settings.DEVELOPMENT_ONLY_REQUIRE_AUTH", True)
+async def test_get_current_user_auth_disabled(mocker):
+    """In dev mode (auth disabled) a synthetic dev user is returned without a token."""
+    mocker.patch("reporting.settings.DEVELOPMENT_ONLY_REQUIRE_AUTH", False)
     mocker.patch(
-        "reporting.authnz._get_jwt_payload",
-        return_value={
-            "email": "alice@example.com",
-            "sub": "sub123",
-            "iss": "https://idp.example.com",
-            "name": "Alice",
-            "iat": 1704067200,
-        },
+        "reporting.settings.DEVELOPMENT_ONLY_AUTH_USER_EMAIL",
+        "devuser@example.com",
     )
     from reporting.schema.report_config import User
+
+    fake_user = User(
+        user_id="dev-uid",
+        sub="devuser@example.com",
+        iss="dev",
+        email="devuser@example.com",
+        created_at="2024-01-01T00:00:00+00:00",
+        last_login="2024-01-01T00:00:00+00:00",
+    )
+    mock_get_or_create = mocker.patch(
+        "reporting.services.report_store.get_or_create_user",
+        new=AsyncMock(return_value=fake_user),
+    )
+    result = await get_current_user(credentials=None)
+    assert isinstance(result, CurrentUser)
+    assert result.user.email == "devuser@example.com"
+    mock_get_or_create.assert_called_once_with(
+        sub="devuser@example.com",
+        iss="dev",
+        email="devuser@example.com",
+        display_name=None,
+    )
+
+
+async def test_get_current_user_no_credentials_raises(mocker):
+    """When auth is required but no credentials provided, 401 is raised."""
+    from fastapi import HTTPException
+
+    mocker.patch("reporting.settings.DEVELOPMENT_ONLY_REQUIRE_AUTH", True)
+    with pytest.raises(HTTPException) as exc_info:
+        await get_current_user(credentials=None)
+    assert exc_info.value.status_code == 401
+
+
+async def test_get_current_user_extracts_sub_and_iss(mocker):
+    """get_current_user extracts sub and iss from JWT and calls get_or_create_user."""
+    mocker.patch("reporting.settings.DEVELOPMENT_ONLY_REQUIRE_AUTH", True)
+    mocker.patch("reporting.settings.JWT_AUDIENCE", "")
+    signing_key = _make_mock_signing_key(mocker)
+    mock_client = _make_mock_client(mocker, signing_key)
+    mocker.patch("reporting.authnz._get_jwks_client", return_value=mock_client)
+
+    from reporting.schema.report_config import User
+    from fastapi.security import HTTPAuthorizationCredentials
 
     fake_user = User(
         user_id="uid1",
@@ -207,43 +166,26 @@ def test_get_user_extracts_sub_and_iss(mocker):
     )
     mock_get_or_create = mocker.patch(
         "reporting.services.report_store.get_or_create_user",
-        return_value=fake_user,
+        new=AsyncMock(return_value=fake_user),
     )
-    app = create_app({"SECRET_KEY": "fake", "PREFERRED_URL_SCHEME": "https"})
-    with app.test_request_context():
-        result = reporting.authnz.get_user()
+
+    encoded = jwt.encode(
+        {
+            "email": "alice@example.com",
+            "sub": "sub123",
+            "iss": "https://idp.example.com",
+            "name": "Alice",
+            "iat": 1704067200,
+        },
+        base64.b64decode(FAKE_PRIVATE_KEY),
+        algorithm="ES256",
+    )
+    credentials = HTTPAuthorizationCredentials(scheme="Bearer", credentials=encoded)
+    result = await get_current_user(credentials=credentials)
     mock_get_or_create.assert_called_once_with(
         sub="sub123",
         iss="https://idp.example.com",
         email="alice@example.com",
         display_name="Alice",
     )
-    assert result.user_id == "uid1"
-
-
-def test_get_user_auth_disabled_uses_dev_sub(mocker):
-    mocker.patch("reporting.settings.DEVELOPMENT_ONLY_REQUIRE_AUTH", False)
-    mocker.patch("reporting.settings.DEVELOPMENT_ONLY_AUTH_USER_EMAIL", "devuser")
-    from reporting.schema.report_config import User
-
-    fake_user = User(
-        user_id="dev-uid",
-        sub="devuser",
-        iss="dev",
-        email="devuser",
-        created_at="2024-01-01T00:00:00+00:00",
-        last_login="2024-01-01T00:00:00+00:00",
-    )
-    mock_get_or_create = mocker.patch(
-        "reporting.services.report_store.get_or_create_user",
-        return_value=fake_user,
-    )
-    app = create_app({"SECRET_KEY": "fake", "PREFERRED_URL_SCHEME": "https"})
-    with app.test_request_context():
-        reporting.authnz.get_user()
-    mock_get_or_create.assert_called_once_with(
-        sub="devuser",
-        iss="dev",
-        email="devuser",
-        display_name=None,
-    )
+    assert result.user.user_id == "uid1"

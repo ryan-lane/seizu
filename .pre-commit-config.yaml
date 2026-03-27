@@ -41,7 +41,6 @@ repos:
     hooks:
     -   id: mypy
         additional_dependencies:
-          - apiflask
           - pydantic
           - types-PyYAML
           - types-requests

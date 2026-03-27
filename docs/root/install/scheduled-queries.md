@@ -226,11 +226,10 @@ _SLACK_OAUTH_BOT_TOKEN = str_env("SLACK_OAUTH_BOT_TOKEN")
 
 ## Run the Scheduled Queries Worker
 
-The worker runs as a Flask CLI command:
+The worker can be run directly:
 
 ```bash
-export FLASK_APP=reporting.reporting.scheduled_queries
-flask worker schedule-queries
+python -m reporting.scheduled_queries
 ```
 
 Or via Docker Compose (the `seizu-scheduled-queries` service).

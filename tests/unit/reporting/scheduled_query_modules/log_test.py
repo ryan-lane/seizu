@@ -8,8 +8,8 @@ def test_action_name():
     assert log.action_name() == "log"
 
 
-def test_setup():
-    assert log.setup() is None
+async def test_setup():
+    assert await log.setup() is None
 
 
 def test_handle_results(caplog):
