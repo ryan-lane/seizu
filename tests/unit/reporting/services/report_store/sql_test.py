@@ -861,3 +861,437 @@ async def test_delete_scheduled_query_success(store, mocker):
 
 async def test_delete_scheduled_query_not_found(store):
     assert await store.delete_scheduled_query("nonexistent") is False
+
+
+# ===========================================================================
+# Toolsets
+# ===========================================================================
+
+_TS_KWARGS = {
+    "name": "My Toolset",
+    "description": "A test toolset",
+    "enabled": True,
+    "created_by": "user@example.com",
+}
+
+
+# ---------------------------------------------------------------------------
+# create_toolset / list_toolsets
+# ---------------------------------------------------------------------------
+
+
+async def test_create_toolset_and_list(store, mocker):
+    mocker.patch(
+        "reporting.services.report_store.sql.generate_report_id",
+        return_value="ts1",
+    )
+    ts = await store.create_toolset(**_TS_KWARGS)
+    assert ts.toolset_id == "ts1"
+    assert ts.name == "My Toolset"
+    assert ts.enabled is True
+    assert ts.current_version == 1
+    assert ts.created_by == "user@example.com"
+
+    items = await store.list_toolsets()
+    assert len(items) == 1
+    assert items[0].toolset_id == "ts1"
+
+
+async def test_list_toolsets_empty(store):
+    assert await store.list_toolsets() == []
+
+
+# ---------------------------------------------------------------------------
+# get_toolset
+# ---------------------------------------------------------------------------
+
+
+async def test_get_toolset_not_found(store):
+    assert await store.get_toolset("missing") is None
+
+
+async def test_get_toolset_found(store, mocker):
+    mocker.patch(
+        "reporting.services.report_store.sql.generate_report_id",
+        return_value="ts1",
+    )
+    await store.create_toolset(**_TS_KWARGS)
+    ts = await store.get_toolset("ts1")
+    assert ts is not None
+    assert ts.toolset_id == "ts1"
+    assert ts.name == "My Toolset"
+
+
+# ---------------------------------------------------------------------------
+# update_toolset
+# ---------------------------------------------------------------------------
+
+
+async def test_update_toolset_success(store, mocker):
+    mocker.patch(
+        "reporting.services.report_store.sql.generate_report_id",
+        return_value="ts1",
+    )
+    await store.create_toolset(**_TS_KWARGS)
+    updated = await store.update_toolset(
+        toolset_id="ts1",
+        name="Updated Toolset",
+        description="New description",
+        enabled=False,
+        updated_by="user@example.com",
+        comment="Updated",
+    )
+    assert updated is not None
+    assert updated.name == "Updated Toolset"
+    assert updated.enabled is False
+    assert updated.current_version == 2
+    assert updated.updated_by == "user@example.com"
+
+
+async def test_update_toolset_not_found(store):
+    result = await store.update_toolset(
+        toolset_id="missing",
+        name="X",
+        description="",
+        enabled=True,
+        updated_by="u",
+        comment=None,
+    )
+    assert result is None
+
+
+# ---------------------------------------------------------------------------
+# list_toolset_versions / get_toolset_version
+# ---------------------------------------------------------------------------
+
+
+async def test_list_toolset_versions(store, mocker):
+    mocker.patch(
+        "reporting.services.report_store.sql.generate_report_id",
+        return_value="ts1",
+    )
+    await store.create_toolset(**_TS_KWARGS)
+    await store.update_toolset(
+        toolset_id="ts1",
+        name="v2 Name",
+        description="",
+        enabled=True,
+        updated_by="u",
+        comment="second",
+    )
+    versions = await store.list_toolset_versions("ts1")
+    assert len(versions) == 2
+    nums = {v.version for v in versions}
+    assert nums == {1, 2}
+
+
+async def test_get_toolset_version_found(store, mocker):
+    mocker.patch(
+        "reporting.services.report_store.sql.generate_report_id",
+        return_value="ts1",
+    )
+    await store.create_toolset(**_TS_KWARGS)
+    v = await store.get_toolset_version("ts1", 1)
+    assert v is not None
+    assert v.version == 1
+    assert v.name == "My Toolset"
+
+
+async def test_get_toolset_version_not_found(store):
+    assert await store.get_toolset_version("missing", 1) is None
+
+
+# ---------------------------------------------------------------------------
+# delete_toolset
+# ---------------------------------------------------------------------------
+
+
+async def test_delete_toolset_success(store, mocker):
+    mocker.patch(
+        "reporting.services.report_store.sql.generate_report_id",
+        return_value="ts1",
+    )
+    await store.create_toolset(**_TS_KWARGS)
+    assert await store.delete_toolset("ts1") is True
+    assert await store.get_toolset("ts1") is None
+    assert await store.list_toolset_versions("ts1") == []
+
+
+async def test_delete_toolset_not_found(store):
+    assert await store.delete_toolset("nonexistent") is False
+
+
+# ===========================================================================
+# Tools
+# ===========================================================================
+
+_TOOL_KWARGS = {
+    "name": "My Tool",
+    "description": "A test tool",
+    "cypher": "MATCH (n) RETURN n",
+    "parameters": [],
+    "enabled": True,
+    "created_by": "user@example.com",
+}
+
+
+async def _make_toolset(store, mocker, ts_id: str = "ts1") -> None:
+    mocker.patch(
+        "reporting.services.report_store.sql.generate_report_id",
+        return_value=ts_id,
+    )
+    await store.create_toolset(**_TS_KWARGS)
+
+
+# ---------------------------------------------------------------------------
+# create_tool / list_tools
+# ---------------------------------------------------------------------------
+
+
+async def test_create_tool_and_list(store, mocker):
+    await _make_toolset(store, mocker, "ts1")
+    mocker.patch(
+        "reporting.services.report_store.sql.generate_report_id",
+        return_value="tool1",
+    )
+    tool = await store.create_tool(toolset_id="ts1", **_TOOL_KWARGS)
+    assert tool is not None
+    assert tool.tool_id == "tool1"
+    assert tool.toolset_id == "ts1"
+    assert tool.name == "My Tool"
+    assert tool.current_version == 1
+    assert tool.created_by == "user@example.com"
+
+    tools = await store.list_tools("ts1")
+    assert len(tools) == 1
+    assert tools[0].tool_id == "tool1"
+
+
+async def test_create_tool_toolset_not_found(store, mocker):
+    mocker.patch(
+        "reporting.services.report_store.sql.generate_report_id",
+        return_value="tool1",
+    )
+    result = await store.create_tool(toolset_id="missing", **_TOOL_KWARGS)
+    assert result is None
+
+
+async def test_list_tools_empty(store, mocker):
+    await _make_toolset(store, mocker, "ts1")
+    assert await store.list_tools("ts1") == []
+
+
+# ---------------------------------------------------------------------------
+# get_tool
+# ---------------------------------------------------------------------------
+
+
+async def test_get_tool_not_found(store):
+    assert await store.get_tool("missing") is None
+
+
+async def test_get_tool_found(store, mocker):
+    await _make_toolset(store, mocker, "ts1")
+    mocker.patch(
+        "reporting.services.report_store.sql.generate_report_id",
+        return_value="tool1",
+    )
+    await store.create_tool(toolset_id="ts1", **_TOOL_KWARGS)
+    tool = await store.get_tool("tool1")
+    assert tool is not None
+    assert tool.tool_id == "tool1"
+    assert tool.toolset_id == "ts1"
+
+
+# ---------------------------------------------------------------------------
+# update_tool
+# ---------------------------------------------------------------------------
+
+
+async def test_update_tool_success(store, mocker):
+    await _make_toolset(store, mocker, "ts1")
+    mocker.patch(
+        "reporting.services.report_store.sql.generate_report_id",
+        return_value="tool1",
+    )
+    await store.create_tool(toolset_id="ts1", **_TOOL_KWARGS)
+    updated = await store.update_tool(
+        tool_id="tool1",
+        name="Updated Tool",
+        description="New desc",
+        cypher="MATCH (n) RETURN n LIMIT 10",
+        parameters=[
+            {
+                "name": "limit",
+                "type": "integer",
+                "description": "",
+                "required": False,
+                "default": 10,
+            }
+        ],
+        enabled=False,
+        updated_by="user@example.com",
+        comment="Updated",
+    )
+    assert updated is not None
+    assert updated.name == "Updated Tool"
+    assert updated.enabled is False
+    assert updated.current_version == 2
+    assert len(updated.parameters) == 1
+    assert updated.parameters[0].name == "limit"
+
+
+async def test_update_tool_not_found(store):
+    result = await store.update_tool(
+        tool_id="missing",
+        name="X",
+        description="",
+        cypher="MATCH (n) RETURN n",
+        parameters=[],
+        enabled=True,
+        updated_by="u",
+        comment=None,
+    )
+    assert result is None
+
+
+# ---------------------------------------------------------------------------
+# list_tool_versions / get_tool_version
+# ---------------------------------------------------------------------------
+
+
+async def test_list_tool_versions(store, mocker):
+    await _make_toolset(store, mocker, "ts1")
+    mocker.patch(
+        "reporting.services.report_store.sql.generate_report_id",
+        return_value="tool1",
+    )
+    await store.create_tool(toolset_id="ts1", **_TOOL_KWARGS)
+    await store.update_tool(
+        tool_id="tool1",
+        name="v2",
+        description="",
+        cypher="MATCH (n) RETURN n",
+        parameters=[],
+        enabled=True,
+        updated_by="u",
+        comment="second",
+    )
+    versions = await store.list_tool_versions("tool1")
+    assert len(versions) == 2
+    nums = {v.version for v in versions}
+    assert nums == {1, 2}
+
+
+async def test_get_tool_version_found(store, mocker):
+    await _make_toolset(store, mocker, "ts1")
+    mocker.patch(
+        "reporting.services.report_store.sql.generate_report_id",
+        return_value="tool1",
+    )
+    await store.create_tool(toolset_id="ts1", **_TOOL_KWARGS)
+    v = await store.get_tool_version("tool1", 1)
+    assert v is not None
+    assert v.version == 1
+    assert v.name == "My Tool"
+    assert v.toolset_id == "ts1"
+
+
+async def test_get_tool_version_not_found(store):
+    assert await store.get_tool_version("missing", 1) is None
+
+
+# ---------------------------------------------------------------------------
+# delete_tool
+# ---------------------------------------------------------------------------
+
+
+async def test_delete_tool_success(store, mocker):
+    await _make_toolset(store, mocker, "ts1")
+    mocker.patch(
+        "reporting.services.report_store.sql.generate_report_id",
+        return_value="tool1",
+    )
+    await store.create_tool(toolset_id="ts1", **_TOOL_KWARGS)
+    assert await store.delete_tool("tool1") is True
+    assert await store.get_tool("tool1") is None
+    assert await store.list_tool_versions("tool1") == []
+
+
+async def test_delete_tool_not_found(store):
+    assert await store.delete_tool("nonexistent") is False
+
+
+# ---------------------------------------------------------------------------
+# delete_toolset cascades to tools
+# ---------------------------------------------------------------------------
+
+
+async def test_delete_toolset_cascades_to_tools(store, mocker):
+    await _make_toolset(store, mocker, "ts1")
+    mocker.patch(
+        "reporting.services.report_store.sql.generate_report_id",
+        return_value="tool1",
+    )
+    await store.create_tool(toolset_id="ts1", **_TOOL_KWARGS)
+    assert await store.delete_toolset("ts1") is True
+    assert await store.get_tool("tool1") is None
+    assert await store.list_tools("ts1") == []
+
+
+# ---------------------------------------------------------------------------
+# list_enabled_tools
+# ---------------------------------------------------------------------------
+
+
+async def test_list_enabled_tools_empty(store):
+    assert await store.list_enabled_tools() == []
+
+
+async def test_list_enabled_tools_returns_tools_in_enabled_toolsets(store, mocker):
+    await _make_toolset(store, mocker, "ts1")
+    mocker.patch(
+        "reporting.services.report_store.sql.generate_report_id",
+        return_value="tool1",
+    )
+    await store.create_tool(toolset_id="ts1", **_TOOL_KWARGS)
+    tools = await store.list_enabled_tools()
+    assert len(tools) == 1
+    assert tools[0].tool_id == "tool1"
+
+
+async def test_list_enabled_tools_excludes_disabled_toolset(store, mocker):
+    await _make_toolset(store, mocker, "ts1")
+    mocker.patch(
+        "reporting.services.report_store.sql.generate_report_id",
+        return_value="tool1",
+    )
+    await store.create_tool(toolset_id="ts1", **_TOOL_KWARGS)
+    # Disable the toolset
+    await store.update_toolset(
+        toolset_id="ts1",
+        name="My Toolset",
+        description="",
+        enabled=False,
+        updated_by="u",
+        comment=None,
+    )
+    assert await store.list_enabled_tools() == []
+
+
+async def test_list_enabled_tools_excludes_disabled_tool(store, mocker):
+    await _make_toolset(store, mocker, "ts1")
+    mocker.patch(
+        "reporting.services.report_store.sql.generate_report_id",
+        return_value="tool1",
+    )
+    await store.create_tool(
+        toolset_id="ts1",
+        name="Disabled Tool",
+        description="",
+        cypher="MATCH (n) RETURN n",
+        parameters=[],
+        enabled=False,
+        created_by="u",
+    )
+    assert await store.list_enabled_tools() == []

@@ -323,6 +323,12 @@ services:
       - DYNAMODB_CREATE_TABLE=true
       # SQLModel — PostgreSQL URL for the sqlmodel backend
       - SQL_DATABASE_URL=postgresql://seizu:seizu@postgres:5432/seizu
+      # MCP server — set MCP_ENABLED=false to disable the endpoint
+      - MCP_ENABLED
+      # MCP OAuth metadata — set these to enable in-client auth for Claude Desktop
+      - MCP_OAUTH_AUTHORIZATION_ENDPOINT
+      - MCP_OAUTH_TOKEN_ENDPOINT
+      - MCP_OAUTH_ISSUER
       # In dev the project is bind-mounted here; the production image copies
       # the frontend build to /build via the Dockerfile nodebuilder stage.
       - STATIC_FOLDER=/home/seizu/seizu/build

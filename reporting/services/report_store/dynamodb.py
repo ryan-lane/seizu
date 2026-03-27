@@ -12,6 +12,11 @@ import boto3
 from snowflake import SnowflakeGenerator
 
 from reporting import settings
+from reporting.schema.mcp_config import ToolItem
+from reporting.schema.mcp_config import ToolParamDef
+from reporting.schema.mcp_config import ToolsetListItem
+from reporting.schema.mcp_config import ToolsetVersion
+from reporting.schema.mcp_config import ToolVersion
 from reporting.schema.report_config import PanelStat
 from reporting.schema.report_config import ReportListItem
 from reporting.schema.report_config import ReportVersion
@@ -45,6 +50,8 @@ _PK_USER_LOOKUP = "USER_LOOKUP"
 _PK_PANEL_STATS = "PANEL_STATS"
 # Scheduled queries — list index PK for listing all scheduled queries.
 _PK_SCHEDULED_QUERY_LIST = "SCHEDULED_QUERY_LIST"
+# Toolsets — list index PK for listing all toolsets.
+_PK_TOOLSET_LIST = "TOOLSET_LIST"
 
 
 # ---------------------------------------------------------------------------
@@ -91,6 +98,92 @@ def generate_report_id() -> str:
 
 def _sq_pk(sq_id: str) -> str:
     return f"SQ#{sq_id}"
+
+
+def _toolset_pk(toolset_id: str) -> str:
+    return f"TOOLSET#{toolset_id}"
+
+
+def _toolset_list_sk(toolset_id: str) -> str:
+    return f"TOOLSET#{toolset_id}"
+
+
+def _tool_pk(tool_id: str) -> str:
+    return f"TOOL#{tool_id}"
+
+
+def _tool_list_pk(toolset_id: str) -> str:
+    return f"TOOL_LIST#{toolset_id}"
+
+
+def _tool_list_sk(tool_id: str) -> str:
+    return f"TOOL#{tool_id}"
+
+
+def _toolset_from_item(item: Dict) -> ToolsetListItem:
+    return ToolsetListItem(
+        toolset_id=item["toolset_id"],
+        name=item["name"],
+        description=item.get("description", ""),
+        enabled=item.get("enabled", True),
+        current_version=item.get("current_version", 0),
+        created_at=item["created_at"],
+        updated_at=item["updated_at"],
+        created_by=item["created_by"],
+        updated_by=item.get("updated_by"),
+    )
+
+
+def _toolset_version_from_item(item: Dict) -> ToolsetVersion:
+    return ToolsetVersion(
+        toolset_id=item["toolset_id"],
+        name=item["name"],
+        description=item.get("description", ""),
+        enabled=item.get("enabled", True),
+        version=item["version"],
+        created_at=item["created_at"],
+        created_by=item["created_by"],
+        comment=item.get("comment"),
+    )
+
+
+def _tool_from_item(item: Dict) -> ToolItem:
+    return ToolItem(
+        tool_id=item["tool_id"],
+        toolset_id=item["toolset_id"],
+        name=item["name"],
+        description=item.get("description", ""),
+        cypher=item["cypher"],
+        parameters=[
+            ToolParamDef(**p) if isinstance(p, dict) else p
+            for p in item.get("parameters", [])
+        ],
+        enabled=item.get("enabled", True),
+        current_version=item.get("current_version", 0),
+        created_at=item["created_at"],
+        updated_at=item["updated_at"],
+        created_by=item["created_by"],
+        updated_by=item.get("updated_by"),
+    )
+
+
+def _tool_version_from_item(item: Dict) -> ToolVersion:
+    return ToolVersion(
+        tool_id=item["tool_id"],
+        toolset_id=item["toolset_id"],
+        name=item["name"],
+        description=item.get("description", ""),
+        cypher=item["cypher"],
+        parameters=[
+            ToolParamDef(**p) if isinstance(p, dict) else p
+            for p in item.get("parameters", [])
+        ],
+        enabled=item.get("enabled", True),
+        version=item["version"],
+        created_at=item["created_at"],
+        created_by=item["created_by"],
+        comment=item.get("comment"),
+    )
 
 
 def _sq_version_sk(version: int) -> str:
@@ -920,5 +1013,495 @@ class DynamoDBReportStore(ReportStore):
                 ExpressionAttributeValues={":t": now},
             )
             return True
+
+        return await asyncio.to_thread(_op)
+
+    # ------------------------------------------------------------------
+    # Toolsets
+    # ------------------------------------------------------------------
+
+    async def list_toolsets(self) -> List[ToolsetListItem]:
+        def _op() -> List[ToolsetListItem]:
+            table = _get_table()
+            resp = table.query(
+                KeyConditionExpression="PK = :pk",
+                ExpressionAttributeValues={":pk": _PK_TOOLSET_LIST},
+            )
+            return [_toolset_from_item(item) for item in resp.get("Items", [])]
+
+        return await asyncio.to_thread(_op)
+
+    async def get_toolset(self, toolset_id: str) -> Optional[ToolsetListItem]:
+        def _op() -> Optional[ToolsetListItem]:
+            table = _get_table()
+            resp = table.get_item(
+                Key={"PK": _toolset_pk(toolset_id), "SK": _SK_METADATA}
+            )
+            item = resp.get("Item")
+            if not item:
+                return None
+            return _toolset_from_item(item)
+
+        return await asyncio.to_thread(_op)
+
+    async def create_toolset(
+        self,
+        name: str,
+        description: str,
+        enabled: bool,
+        created_by: str,
+    ) -> ToolsetListItem:
+        toolset_id = generate_report_id()
+        now = datetime.now(tz=timezone.utc).isoformat()
+        version = 1
+        base = _strip_none(
+            {
+                "toolset_id": toolset_id,
+                "name": name,
+                "description": description,
+                "enabled": enabled,
+                "current_version": version,
+                "created_at": now,
+                "updated_at": now,
+                "created_by": created_by,
+                "updated_by": created_by,
+            }
+        )
+        metadata_item = {"PK": _toolset_pk(toolset_id), "SK": _SK_METADATA, **base}
+        list_item = {
+            "PK": _PK_TOOLSET_LIST,
+            "SK": _toolset_list_sk(toolset_id),
+            **base,
+        }
+        version_item = _strip_none(
+            {
+                "PK": _toolset_pk(toolset_id),
+                "SK": _version_sk(version),
+                "toolset_id": toolset_id,
+                "name": name,
+                "description": description,
+                "enabled": enabled,
+                "version": version,
+                "created_at": now,
+                "created_by": created_by,
+                "comment": None,
+            }
+        )
+
+        def _op() -> None:
+            table = _get_table()
+            _transact_put_sync(table, metadata_item, list_item, version_item)
+
+        await asyncio.to_thread(_op)
+        return _toolset_from_item(base)
+
+    async def update_toolset(
+        self,
+        toolset_id: str,
+        name: str,
+        description: str,
+        enabled: bool,
+        updated_by: str,
+        comment: Optional[str] = None,
+    ) -> Optional[ToolsetListItem]:
+        def _op() -> Optional[ToolsetListItem]:
+            table = _get_table()
+            resp = table.get_item(
+                Key={"PK": _toolset_pk(toolset_id), "SK": _SK_METADATA}
+            )
+            if not resp.get("Item"):
+                return None
+            existing = resp["Item"]
+            current_version = int(existing.get("current_version", 0))
+            version = current_version + 1
+            now = datetime.now(tz=timezone.utc).isoformat()
+            base = _strip_none(
+                {
+                    "toolset_id": toolset_id,
+                    "name": name,
+                    "description": description,
+                    "enabled": enabled,
+                    "current_version": version,
+                    "created_at": existing["created_at"],
+                    "updated_at": now,
+                    "created_by": existing["created_by"],
+                    "updated_by": updated_by,
+                }
+            )
+            metadata_item = {
+                "PK": _toolset_pk(toolset_id),
+                "SK": _SK_METADATA,
+                **base,
+            }
+            list_item = {
+                "PK": _PK_TOOLSET_LIST,
+                "SK": _toolset_list_sk(toolset_id),
+                **base,
+            }
+            version_item = _strip_none(
+                {
+                    "PK": _toolset_pk(toolset_id),
+                    "SK": _version_sk(version),
+                    "toolset_id": toolset_id,
+                    "name": name,
+                    "description": description,
+                    "enabled": enabled,
+                    "version": version,
+                    "created_at": now,
+                    "created_by": updated_by,
+                    "comment": comment,
+                }
+            )
+            _transact_put_sync(table, metadata_item, list_item, version_item)
+            return _toolset_from_item(base)
+
+        return await asyncio.to_thread(_op)
+
+    async def delete_toolset(self, toolset_id: str) -> bool:
+        def _op() -> bool:
+            table = _get_table()
+            resp = table.get_item(
+                Key={"PK": _toolset_pk(toolset_id), "SK": _SK_METADATA}
+            )
+            if not resp.get("Item"):
+                return False
+
+            # Find and delete all tools in this toolset first
+            tool_list_resp = table.query(
+                KeyConditionExpression="PK = :pk",
+                ExpressionAttributeValues={":pk": _tool_list_pk(toolset_id)},
+                ProjectionExpression="SK",
+            )
+            tool_ids = [
+                item["SK"].replace("TOOL#", "")
+                for item in tool_list_resp.get("Items", [])
+            ]
+            for tool_id in tool_ids:
+                tool_items_resp = table.query(
+                    KeyConditionExpression="PK = :pk",
+                    ExpressionAttributeValues={":pk": _tool_pk(tool_id)},
+                    ProjectionExpression="PK, SK",
+                )
+                keys_to_delete = [
+                    {"PK": i["PK"], "SK": i["SK"]}
+                    for i in tool_items_resp.get("Items", [])
+                ]
+                with table.batch_writer() as batch:
+                    for key in keys_to_delete:
+                        batch.delete_item(Key=key)
+
+            # Delete the tool list partition for this toolset
+            tool_list_keys = [
+                {"PK": _tool_list_pk(toolset_id), "SK": _tool_list_sk(tool_id)}
+                for tool_id in tool_ids
+            ]
+
+            # Delete all toolset items
+            items_resp = table.query(
+                KeyConditionExpression="PK = :pk",
+                ExpressionAttributeValues={":pk": _toolset_pk(toolset_id)},
+                ProjectionExpression="PK, SK",
+            )
+            keys_to_delete = [
+                {"PK": item["PK"], "SK": item["SK"]}
+                for item in items_resp.get("Items", [])
+            ]
+            keys_to_delete.append(
+                {"PK": _PK_TOOLSET_LIST, "SK": _toolset_list_sk(toolset_id)}
+            )
+            keys_to_delete.extend(tool_list_keys)
+
+            with table.batch_writer() as batch:
+                for key in keys_to_delete:
+                    batch.delete_item(Key=key)
+
+            return True
+
+        return await asyncio.to_thread(_op)
+
+    async def list_toolset_versions(self, toolset_id: str) -> List[ToolsetVersion]:
+        def _op() -> List[ToolsetVersion]:
+            table = _get_table()
+            resp = table.query(
+                KeyConditionExpression="PK = :pk AND begins_with(SK, :prefix)",
+                ExpressionAttributeValues={
+                    ":pk": _toolset_pk(toolset_id),
+                    ":prefix": _SK_VERSION_PREFIX,
+                },
+                ScanIndexForward=False,
+            )
+            return [_toolset_version_from_item(item) for item in resp.get("Items", [])]
+
+        return await asyncio.to_thread(_op)
+
+    async def get_toolset_version(
+        self, toolset_id: str, version: int
+    ) -> Optional[ToolsetVersion]:
+        def _op() -> Optional[ToolsetVersion]:
+            table = _get_table()
+            resp = table.get_item(
+                Key={"PK": _toolset_pk(toolset_id), "SK": _version_sk(version)}
+            )
+            item = resp.get("Item")
+            if not item:
+                return None
+            return _toolset_version_from_item(item)
+
+        return await asyncio.to_thread(_op)
+
+    # ------------------------------------------------------------------
+    # Tools
+    # ------------------------------------------------------------------
+
+    async def list_tools(self, toolset_id: str) -> List[ToolItem]:
+        def _op() -> List[ToolItem]:
+            table = _get_table()
+            resp = table.query(
+                KeyConditionExpression="PK = :pk",
+                ExpressionAttributeValues={":pk": _tool_list_pk(toolset_id)},
+            )
+            tool_ids = [
+                item["SK"].replace("TOOL#", "") for item in resp.get("Items", [])
+            ]
+            tools = []
+            for tool_id in tool_ids:
+                tool_resp = table.get_item(
+                    Key={"PK": _tool_pk(tool_id), "SK": _SK_METADATA}
+                )
+                item = tool_resp.get("Item")
+                if item:
+                    tools.append(_tool_from_item(item))
+            return tools
+
+        return await asyncio.to_thread(_op)
+
+    async def get_tool(self, tool_id: str) -> Optional[ToolItem]:
+        def _op() -> Optional[ToolItem]:
+            table = _get_table()
+            resp = table.get_item(Key={"PK": _tool_pk(tool_id), "SK": _SK_METADATA})
+            item = resp.get("Item")
+            if not item:
+                return None
+            return _tool_from_item(item)
+
+        return await asyncio.to_thread(_op)
+
+    async def create_tool(
+        self,
+        toolset_id: str,
+        name: str,
+        description: str,
+        cypher: str,
+        parameters: List[Dict[str, Any]],
+        enabled: bool,
+        created_by: str,
+    ) -> Optional[ToolItem]:
+        def _op() -> Optional[ToolItem]:
+            table = _get_table()
+            # Verify toolset exists
+            ts_resp = table.get_item(
+                Key={"PK": _toolset_pk(toolset_id), "SK": _SK_METADATA}
+            )
+            if not ts_resp.get("Item"):
+                return None
+
+            tool_id = generate_report_id()
+            now = datetime.now(tz=timezone.utc).isoformat()
+            version = 1
+            base = _strip_none(
+                {
+                    "tool_id": tool_id,
+                    "toolset_id": toolset_id,
+                    "name": name,
+                    "description": description,
+                    "cypher": cypher,
+                    "parameters": _floats_to_decimal(parameters),
+                    "enabled": enabled,
+                    "current_version": version,
+                    "created_at": now,
+                    "updated_at": now,
+                    "created_by": created_by,
+                    "updated_by": created_by,
+                }
+            )
+            metadata_item = {"PK": _tool_pk(tool_id), "SK": _SK_METADATA, **base}
+            list_item = {
+                "PK": _tool_list_pk(toolset_id),
+                "SK": _tool_list_sk(tool_id),
+                **base,
+            }
+            version_item = _strip_none(
+                {
+                    "PK": _tool_pk(tool_id),
+                    "SK": _version_sk(version),
+                    "tool_id": tool_id,
+                    "toolset_id": toolset_id,
+                    "name": name,
+                    "description": description,
+                    "cypher": cypher,
+                    "parameters": _floats_to_decimal(parameters),
+                    "enabled": enabled,
+                    "version": version,
+                    "created_at": now,
+                    "created_by": created_by,
+                    "comment": None,
+                }
+            )
+            _transact_put_sync(table, metadata_item, list_item, version_item)
+            return _tool_from_item(base)
+
+        return await asyncio.to_thread(_op)
+
+    async def update_tool(
+        self,
+        tool_id: str,
+        name: str,
+        description: str,
+        cypher: str,
+        parameters: List[Dict[str, Any]],
+        enabled: bool,
+        updated_by: str,
+        comment: Optional[str] = None,
+    ) -> Optional[ToolItem]:
+        def _op() -> Optional[ToolItem]:
+            table = _get_table()
+            resp = table.get_item(Key={"PK": _tool_pk(tool_id), "SK": _SK_METADATA})
+            if not resp.get("Item"):
+                return None
+            existing = resp["Item"]
+            toolset_id = existing["toolset_id"]
+            current_version = int(existing.get("current_version", 0))
+            version = current_version + 1
+            now = datetime.now(tz=timezone.utc).isoformat()
+            base = _strip_none(
+                {
+                    "tool_id": tool_id,
+                    "toolset_id": toolset_id,
+                    "name": name,
+                    "description": description,
+                    "cypher": cypher,
+                    "parameters": _floats_to_decimal(parameters),
+                    "enabled": enabled,
+                    "current_version": version,
+                    "created_at": existing["created_at"],
+                    "updated_at": now,
+                    "created_by": existing["created_by"],
+                    "updated_by": updated_by,
+                }
+            )
+            metadata_item = {"PK": _tool_pk(tool_id), "SK": _SK_METADATA, **base}
+            list_item = {
+                "PK": _tool_list_pk(toolset_id),
+                "SK": _tool_list_sk(tool_id),
+                **base,
+            }
+            version_item = _strip_none(
+                {
+                    "PK": _tool_pk(tool_id),
+                    "SK": _version_sk(version),
+                    "tool_id": tool_id,
+                    "toolset_id": toolset_id,
+                    "name": name,
+                    "description": description,
+                    "cypher": cypher,
+                    "parameters": _floats_to_decimal(parameters),
+                    "enabled": enabled,
+                    "version": version,
+                    "created_at": now,
+                    "created_by": updated_by,
+                    "comment": comment,
+                }
+            )
+            _transact_put_sync(table, metadata_item, list_item, version_item)
+            return _tool_from_item(base)
+
+        return await asyncio.to_thread(_op)
+
+    async def delete_tool(self, tool_id: str) -> bool:
+        def _op() -> bool:
+            table = _get_table()
+            resp = table.get_item(Key={"PK": _tool_pk(tool_id), "SK": _SK_METADATA})
+            item = resp.get("Item")
+            if not item:
+                return False
+            toolset_id = item["toolset_id"]
+            items_resp = table.query(
+                KeyConditionExpression="PK = :pk",
+                ExpressionAttributeValues={":pk": _tool_pk(tool_id)},
+                ProjectionExpression="PK, SK",
+            )
+            keys_to_delete = [
+                {"PK": i["PK"], "SK": i["SK"]} for i in items_resp.get("Items", [])
+            ]
+            keys_to_delete.append(
+                {"PK": _tool_list_pk(toolset_id), "SK": _tool_list_sk(tool_id)}
+            )
+            with table.batch_writer() as batch:
+                for key in keys_to_delete:
+                    batch.delete_item(Key=key)
+            return True
+
+        return await asyncio.to_thread(_op)
+
+    async def list_tool_versions(self, tool_id: str) -> List[ToolVersion]:
+        def _op() -> List[ToolVersion]:
+            table = _get_table()
+            resp = table.query(
+                KeyConditionExpression="PK = :pk AND begins_with(SK, :prefix)",
+                ExpressionAttributeValues={
+                    ":pk": _tool_pk(tool_id),
+                    ":prefix": _SK_VERSION_PREFIX,
+                },
+                ScanIndexForward=False,
+            )
+            return [_tool_version_from_item(item) for item in resp.get("Items", [])]
+
+        return await asyncio.to_thread(_op)
+
+    async def get_tool_version(
+        self, tool_id: str, version: int
+    ) -> Optional[ToolVersion]:
+        def _op() -> Optional[ToolVersion]:
+            table = _get_table()
+            resp = table.get_item(
+                Key={"PK": _tool_pk(tool_id), "SK": _version_sk(version)}
+            )
+            item = resp.get("Item")
+            if not item:
+                return None
+            return _tool_version_from_item(item)
+
+        return await asyncio.to_thread(_op)
+
+    async def list_enabled_tools(self) -> List[ToolItem]:
+        def _op() -> List[ToolItem]:
+            table = _get_table()
+            ts_resp = table.query(
+                KeyConditionExpression="PK = :pk",
+                ExpressionAttributeValues={":pk": _PK_TOOLSET_LIST},
+            )
+            enabled_toolset_ids = [
+                item["toolset_id"]
+                for item in ts_resp.get("Items", [])
+                if item.get("enabled", True)
+            ]
+            tools = []
+            for toolset_id in enabled_toolset_ids:
+                tool_list_resp = table.query(
+                    KeyConditionExpression="PK = :pk",
+                    ExpressionAttributeValues={":pk": _tool_list_pk(toolset_id)},
+                )
+                for list_item in tool_list_resp.get("Items", []):
+                    if list_item.get("enabled", True):
+                        tool_resp = table.get_item(
+                            Key={
+                                "PK": _tool_pk(list_item["tool_id"]),
+                                "SK": _SK_METADATA,
+                            }
+                        )
+                        item = tool_resp.get("Item")
+                        if item and item.get("enabled", True):
+                            tools.append(_tool_from_item(item))
+            return tools
 
         return await asyncio.to_thread(_op)

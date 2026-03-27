@@ -1,5 +1,6 @@
 import http.cookies
 import os
+import re
 from contextlib import asynccontextmanager
 from typing import Any
 from typing import AsyncIterator
@@ -25,6 +26,7 @@ from reporting.routes import query as query_routes
 from reporting.routes import reports as reports_routes
 from reporting.routes import scheduled_queries as sq_routes
 from reporting.routes import static as static_routes
+from reporting.routes import toolsets as toolsets_routes
 from reporting.routes import users as users_routes
 from reporting.routes import validate as validate_routes
 from reporting.services import report_store
@@ -128,6 +130,7 @@ def create_app() -> FastAPI:
     app.add_middleware(_SecurityHeadersMiddleware, secure_headers=secure_headers)
 
     # CSRF middleware — skip on healthcheck and config (GET, no state-change risk)
+    # Also exempt /api/v1/mcp since MCP clients are not browsers and use Bearer auth.
     if not settings.CSRF_DISABLE:
         app.add_middleware(
             _CSRFMiddleware,
@@ -139,6 +142,7 @@ def create_app() -> FastAPI:
             cookie_samesite=settings.CSRF_COOKIE_SAMESITE,
             cookie_domain=settings.CSRF_COOKIE_DOMAIN,
             cookie_path=settings.CSRF_COOKIE_PATH,
+            exempt_urls=[re.compile(r"^/api/v1/mcp")],
         )
 
     @app.exception_handler(HTTPException)
@@ -159,11 +163,18 @@ def create_app() -> FastAPI:
         query_routes,
         reports_routes,
         sq_routes,
+        toolsets_routes,
         users_routes,
         validate_routes,
         static_routes,
     ]:
         app.include_router(router_module.router)
+
+    # MCP server — mounted before the SPA catch-all so /api/v1/mcp/* routes are handled
+    if settings.MCP_ENABLED:
+        from reporting.services.mcp_server import get_mcp_app
+
+        app.mount("/api/v1/mcp", get_mcp_app())
 
     # Static files from the React build
     static_folder = settings.STATIC_FOLDER

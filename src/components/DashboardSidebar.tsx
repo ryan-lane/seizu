@@ -6,6 +6,7 @@ import MenuBook from '@mui/icons-material/MenuBook';
 import AddCircleOutlineIcon from '@mui/icons-material/AddCircleOutline';
 import Terminal from '@mui/icons-material/Terminal';
 import Schedule from '@mui/icons-material/Schedule';
+import Extension from '@mui/icons-material/Extension';
 import NavItem from 'src/components/NavItem';
 import Hidden from 'src/components/Hidden';
 import { NavItemData } from 'src/components/NavItem';
@@ -52,6 +53,11 @@ function DashboardSidebar({ onMobileClose = () => {}, openMobile = false }: Dash
       href: '/app/scheduled-queries',
       icon: Schedule,
       title: 'Scheduled Queries'
+    },
+    {
+      href: '/app/toolsets',
+      icon: Extension,
+      title: 'MCP Toolsets'
     }
   ];
 

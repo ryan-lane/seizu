@@ -167,3 +167,17 @@ REPORT_STORE_BACKEND = str_env("REPORT_STORE_BACKEND", "dynamodb")
 # Example: postgresql://seizu:seizu@postgres:5432/seizu
 # Example: sqlite:///./seizu.db
 SQL_DATABASE_URL = str_env("SQL_DATABASE_URL", "")
+
+# Whether to enable the MCP server at /api/v1/mcp.
+MCP_ENABLED = bool_env("MCP_ENABLED", True)
+
+# OAuth 2.0 Authorization Server Metadata (RFC 8414) for MCP clients.
+# When set, Seizu exposes /.well-known/oauth-authorization-server so MCP clients
+# (e.g. Claude Desktop) can discover the OAuth flow and authenticate users
+# without requiring a pre-issued token.
+# Set these to the authorization and token endpoints of your OIDC provider.
+# Example (Authentik): https://authentik.example.com/application/o/seizu/authorize/
+# Leave empty to disable the metadata endpoint.
+MCP_OAUTH_ISSUER = str_env("MCP_OAUTH_ISSUER", "")
+MCP_OAUTH_AUTHORIZATION_ENDPOINT = str_env("MCP_OAUTH_AUTHORIZATION_ENDPOINT", "")
+MCP_OAUTH_TOKEN_ENDPOINT = str_env("MCP_OAUTH_TOKEN_ENDPOINT", "")

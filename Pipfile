@@ -30,6 +30,7 @@ secure = "*"
 python-multipart = "*"
 typer = {version = "*", extras = ["all"]}
 keyring = "*"
+mcp = "*"
 
 [dev-packages]
 pre-commit = ">=2.17.0"

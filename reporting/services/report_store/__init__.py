@@ -5,6 +5,10 @@ from typing import Dict
 from typing import List
 from typing import Optional
 
+from reporting.schema.mcp_config import ToolItem
+from reporting.schema.mcp_config import ToolsetListItem
+from reporting.schema.mcp_config import ToolsetVersion
+from reporting.schema.mcp_config import ToolVersion
 from reporting.schema.report_config import PanelStat
 from reporting.schema.report_config import ReportListItem
 from reporting.schema.report_config import ReportVersion
@@ -215,3 +219,133 @@ async def get_scheduled_query_version(
     sq_id: str, version: int
 ) -> Optional[ScheduledQueryVersion]:
     return await get_store().get_scheduled_query_version(sq_id, version)
+
+
+# ---------------------------------------------------------------------------
+# Toolset convenience functions
+# ---------------------------------------------------------------------------
+
+
+async def list_toolsets() -> List[ToolsetListItem]:
+    return await get_store().list_toolsets()
+
+
+async def get_toolset(toolset_id: str) -> Optional[ToolsetListItem]:
+    return await get_store().get_toolset(toolset_id)
+
+
+async def create_toolset(
+    name: str,
+    description: str,
+    enabled: bool,
+    created_by: str,
+) -> ToolsetListItem:
+    return await get_store().create_toolset(
+        name=name,
+        description=description,
+        enabled=enabled,
+        created_by=created_by,
+    )
+
+
+async def update_toolset(
+    toolset_id: str,
+    name: str,
+    description: str,
+    enabled: bool,
+    updated_by: str,
+    comment: Optional[str] = None,
+) -> Optional[ToolsetListItem]:
+    return await get_store().update_toolset(
+        toolset_id=toolset_id,
+        name=name,
+        description=description,
+        enabled=enabled,
+        updated_by=updated_by,
+        comment=comment,
+    )
+
+
+async def delete_toolset(toolset_id: str) -> bool:
+    return await get_store().delete_toolset(toolset_id)
+
+
+async def list_toolset_versions(toolset_id: str) -> List[ToolsetVersion]:
+    return await get_store().list_toolset_versions(toolset_id)
+
+
+async def get_toolset_version(
+    toolset_id: str, version: int
+) -> Optional[ToolsetVersion]:
+    return await get_store().get_toolset_version(toolset_id, version)
+
+
+# ---------------------------------------------------------------------------
+# Tool convenience functions
+# ---------------------------------------------------------------------------
+
+
+async def list_tools(toolset_id: str) -> List[ToolItem]:
+    return await get_store().list_tools(toolset_id)
+
+
+async def get_tool(tool_id: str) -> Optional[ToolItem]:
+    return await get_store().get_tool(tool_id)
+
+
+async def create_tool(
+    toolset_id: str,
+    name: str,
+    description: str,
+    cypher: str,
+    parameters: List[Dict[str, Any]],
+    enabled: bool,
+    created_by: str,
+) -> Optional[ToolItem]:
+    return await get_store().create_tool(
+        toolset_id=toolset_id,
+        name=name,
+        description=description,
+        cypher=cypher,
+        parameters=parameters,
+        enabled=enabled,
+        created_by=created_by,
+    )
+
+
+async def update_tool(
+    tool_id: str,
+    name: str,
+    description: str,
+    cypher: str,
+    parameters: List[Dict[str, Any]],
+    enabled: bool,
+    updated_by: str,
+    comment: Optional[str] = None,
+) -> Optional[ToolItem]:
+    return await get_store().update_tool(
+        tool_id=tool_id,
+        name=name,
+        description=description,
+        cypher=cypher,
+        parameters=parameters,
+        enabled=enabled,
+        updated_by=updated_by,
+        comment=comment,
+    )
+
+
+async def delete_tool(tool_id: str) -> bool:
+    return await get_store().delete_tool(tool_id)
+
+
+async def list_tool_versions(tool_id: str) -> List[ToolVersion]:
+    return await get_store().list_tool_versions(tool_id)
+
+
+async def get_tool_version(tool_id: str, version: int) -> Optional[ToolVersion]:
+    return await get_store().get_tool_version(tool_id, version)
+
+
+async def list_enabled_tools() -> List[ToolItem]:
+    return await get_store().list_enabled_tools()
