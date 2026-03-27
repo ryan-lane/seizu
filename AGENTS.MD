@@ -211,7 +211,7 @@ Action schemas served via `GET /api/v1/config` as `scheduled_query_action_schema
 
 | Service | Role |
 |---------|------|
-| `seizu` | APIFlask backend + static frontend |
+| `seizu` | FastAPI backend + static frontend |
 | `seizu-node` | Bun dev server |
 | `seizu-dashboard-stats` | Stats worker |
 | `seizu-scheduled-queries` | Scheduled query worker |
