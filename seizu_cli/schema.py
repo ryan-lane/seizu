@@ -21,3 +21,6 @@ from seizu_schema.reporting_config import ScheduledQuery  # noqa: F401
 from seizu_schema.reporting_config import ScheduledQueryAction  # noqa: F401
 from seizu_schema.reporting_config import ScheduledQueryParam  # noqa: F401
 from seizu_schema.reporting_config import ScheduledQueryWatchScan  # noqa: F401
+from seizu_schema.reporting_config import ToolDef  # noqa: F401
+from seizu_schema.reporting_config import ToolParamDef  # noqa: F401
+from seizu_schema.reporting_config import ToolsetDef  # noqa: F401

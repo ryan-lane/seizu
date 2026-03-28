@@ -63,6 +63,104 @@ Open the **⋮** menu on a tool row and select **Edit**. An optional **comment**
 
 Open the **⋮** menu and select **Delete**.
 
+## Managing Toolsets and Tools via the CLI
+
+The `seizu` CLI provides commands for managing toolsets and tools, including CRUD operations, version history, calling tools directly, and bulk seed/export via YAML.
+
+### Toolset commands
+
+```bash
+seizu toolsets list                              # list all toolsets
+seizu toolsets get <toolset_id>                 # show a toolset
+seizu toolsets create "My Toolset" --description "desc"
+seizu toolsets update <toolset_id> --name "New Name" --enabled
+seizu toolsets delete <toolset_id>
+seizu toolsets versions <toolset_id>            # version history
+seizu toolsets version-get <toolset_id> <n>     # specific version
+```
+
+### Tool commands
+
+```bash
+seizu toolsets tools list <toolset_id>
+seizu toolsets tools get <toolset_id> <tool_id>
+seizu toolsets tools create <toolset_id> --name "Count Nodes" \
+    --cypher "MATCH (n) RETURN count(n) AS total" \
+    --description "Returns total node count"
+seizu toolsets tools update <toolset_id> <tool_id> --name "Count Nodes" \
+    --cypher "MATCH (n) RETURN count(n) AS total" --comment "Fixed query"
+seizu toolsets tools delete <toolset_id> <tool_id>
+seizu toolsets tools versions <toolset_id> <tool_id>
+seizu toolsets tools version-get <toolset_id> <tool_id> <n>
+```
+
+### Calling a tool via the CLI
+
+Tools can be executed directly from the CLI. Arguments are passed as `KEY=JSON_VALUE` pairs (the value is JSON-parsed, so numbers and booleans work without quoting):
+
+```bash
+# No parameters
+seizu toolsets tools call <toolset_id> <tool_id>
+
+# With parameters
+seizu toolsets tools call <toolset_id> <tool_id> --arg limit=10 --arg label='"CVE"'
+
+# Pass all arguments as a JSON object
+seizu toolsets tools call <toolset_id> <tool_id> --args-json '{"limit": 10}'
+
+# JSON output
+seizu toolsets tools call <toolset_id> <tool_id> --arg limit=10 --output json
+```
+
+### Seeding toolsets from YAML
+
+Toolsets and tools can be bulk-loaded from the same YAML config file used for reports and scheduled queries:
+
+```yaml
+toolsets:
+  my-toolset:
+    name: My Toolset
+    description: A collection of graph tools
+    enabled: true
+    tools:
+      count-nodes:
+        name: Count Nodes
+        description: Returns total node count
+        cypher: "MATCH (n) RETURN count(n) AS total"
+        enabled: true
+      find-by-label:
+        name: Find By Label
+        description: Returns nodes matching a label
+        cypher: "MATCH (n) WHERE $label IN labels(n) RETURN n LIMIT $limit"
+        parameters:
+          - name: label
+            type: string
+            description: Node label to filter by
+            required: true
+          - name: limit
+            type: integer
+            description: Maximum results
+            required: false
+            default: 25
+        enabled: true
+```
+
+Seed with:
+
+```bash
+seizu seed                      # reads seed_file from ~/.config/seizu/seizu.conf
+seizu seed --config path/to/config.yaml
+seizu seed --dry-run            # preview without writing
+seizu seed --force              # update even if content is unchanged
+```
+
+Export the current state back to YAML (including toolsets):
+
+```bash
+seizu export
+seizu export --dry-run          # print YAML without overwriting the file
+```
+
 ### Calling a tool via the API
 
 Tools can be called directly via the REST API without an MCP client:

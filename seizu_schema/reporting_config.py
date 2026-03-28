@@ -562,6 +562,35 @@ class ScheduledQuery(BaseModel):
     )
 
 
+class ToolParamDef(BaseModel):
+    """Definition of a single parameter accepted by a tool."""
+
+    name: str
+    type: Literal["string", "integer", "float", "boolean"]
+    description: str = ""
+    required: bool = True
+    default: Optional[Any] = None
+
+
+class ToolDef(BaseModel):
+    """A tool definition within a toolset."""
+
+    name: str
+    description: str = ""
+    cypher: str
+    parameters: List[ToolParamDef] = Field(default_factory=list)
+    enabled: bool = True
+
+
+class ToolsetDef(BaseModel):
+    """A toolset definition for MCP tool exposure."""
+
+    name: str
+    description: str = ""
+    enabled: bool = True
+    tools: Dict[str, ToolDef] = Field(default_factory=dict)
+
+
 class ReportingConfig(BaseModel):
     queries: Dict[str, str] = Field(
         default_factory=dict,
@@ -625,6 +654,28 @@ class ReportingConfig(BaseModel):
                     - action_type: slack
                       action_config:
                         title: Recently published HIGH/CRITICAL CVEs
+            """
+        ],
+    )
+
+    toolsets: Dict[str, ToolsetDef] = Field(
+        default_factory=dict,
+        description="Toolset definitions for MCP tool exposure.",
+        examples=[
+            """
+            .. code-block:: yaml
+
+              toolsets:
+                my-toolset:
+                  name: My Toolset
+                  description: A collection of graph tools
+                  enabled: true
+                  tools:
+                    my-tool:
+                      name: My Tool
+                      description: Counts nodes
+                      cypher: MATCH (n) RETURN count(n) AS total
+                      enabled: true
             """
         ],
     )

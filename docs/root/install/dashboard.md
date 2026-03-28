@@ -12,7 +12,7 @@ Rows are rendered in the order specified, and panels within rows are also render
 ## Configuration Storage
 
 Report and dashboard configurations are stored in DynamoDB, not in the YAML configuration file.
-The YAML file contains a top-level `queries` dict (used only by `scheduled_queries` references), `scheduled_queries`, a `dashboard` pointer, and a `reports` section used to seed DynamoDB.
+The YAML file contains a top-level `queries` dict (used only by `scheduled_queries` references), `scheduled_queries`, a `dashboard` pointer, a `reports` section, and a `toolsets` section — all used to seed DynamoDB.
 Each report has its own `queries` dict for named Cypher strings used by its panels.
 
 To populate DynamoDB from the YAML file during initial setup or development:
