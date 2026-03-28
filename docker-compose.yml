@@ -324,7 +324,7 @@ services:
       # SQLModel — PostgreSQL URL for the sqlmodel backend
       - SQL_DATABASE_URL=postgresql://seizu:seizu@postgres:5432/seizu
       # MCP server — set MCP_ENABLED=false to disable the endpoint
-      - MCP_ENABLED
+      - MCP_ENABLED=true
       # MCP OAuth metadata — set these to enable in-client auth for Claude Desktop
       - MCP_OAUTH_AUTHORIZATION_ENDPOINT
       - MCP_OAUTH_TOKEN_ENDPOINT
