@@ -159,7 +159,7 @@ Typer app calling the REST API. Invoked via `python -m seizu_cli`.
 - `seizu_cli/config.py` — `SeizuConfig` + `load_config()` reading `~/.config/seizu/seizu.conf`
 - `seizu_cli/client.py` — `SeizuClient`; Bearer auth + CSRF bootstrapping (calls `GET /api/v1/config` first)
 - `seizu_cli/state.py` — module-level state; `get_client()` lazy factory
-- `seizu_cli/commands/` — `reports.py`, `scheduled_queries.py`, `seed.py`, `auth.py`
+- `seizu_cli/commands/` — `reports.py`, `scheduled_queries.py`, `toolsets.py`, `seed.py`, `auth.py`
 - `seizu_cli/auth.py` — OS-native keyring or `--credentials-file` fallback; Device Authorization Grant
 
 **Config file** (`~/.config/seizu/seizu.conf`): `api_url` and `seed_file`. Resolution: CLI flag → env var → conf file → default.
@@ -170,6 +170,9 @@ Typer app calling the REST API. Invoked via `python -m seizu_cli`.
 ```bash
 PYTHONPATH=/home/seizu/seizu pipenv run python -m seizu_cli --api-url http://seizu:8080 login
 PYTHONPATH=/home/seizu/seizu pipenv run python -m seizu_cli --api-url http://seizu:8080 reports list
+PYTHONPATH=/home/seizu/seizu pipenv run python -m seizu_cli --api-url http://seizu:8080 toolsets list
+PYTHONPATH=/home/seizu/seizu pipenv run python -m seizu_cli --api-url http://seizu:8080 toolsets tools list <toolset_id>
+PYTHONPATH=/home/seizu/seizu pipenv run python -m seizu_cli --api-url http://seizu:8080 toolsets tools call <toolset_id> <tool_id> --arg limit=10
 PYTHONPATH=/home/seizu/seizu pipenv run python -m seizu_cli --api-url http://seizu:8080 seed [--force|--dry-run]
 PYTHONPATH=/home/seizu/seizu pipenv run python -m seizu_cli --api-url http://seizu:8080 export
 ```
@@ -212,6 +215,7 @@ Reports and scheduled queries are stored in DynamoDB (default) or PostgreSQL (`s
 - `dashboard` — key pointing to the default dashboard report
 - `reports` — report definitions to seed into DynamoDB; each has its own `queries` dict
 - `scheduled_queries` — **list** of recurring query definitions (SQS, Slack, log actions)
+- `toolsets` — dict of toolset definitions (key → `ToolsetDef`); each has a `tools` dict (key → `ToolDef`) with `name`, `description`, `cypher`, `parameters`, `enabled`
 
 **Report storage** (`reporting/services/report_store/`):
 - `base.py` — `ReportStore` ABC

@@ -11,13 +11,15 @@ from seizu_cli.commands import auth as auth_commands
 from seizu_cli.commands import reports
 from seizu_cli.commands import scheduled_queries
 from seizu_cli.commands import seed
+from seizu_cli.commands import toolsets
 
 app = typer.Typer(
-    help="Seizu CLI — manage reports and scheduled queries via the Seizu API.",
+    help="Seizu CLI — manage reports, scheduled queries, and toolsets via the Seizu API.",
     no_args_is_help=True,
 )
 app.add_typer(reports.app, name="reports")
 app.add_typer(scheduled_queries.app, name="scheduled-queries")
+app.add_typer(toolsets.app, name="toolsets")
 app.add_typer(auth_commands.app, name="auth")
 
 
@@ -56,7 +58,7 @@ def main(
         ),
     ),
 ) -> None:
-    """Seizu CLI — manage reports and scheduled queries via the Seizu API.
+    """Seizu CLI — manage reports, scheduled queries, and toolsets via the Seizu API.
 
     Configuration is read from ~/.config/seizu/seizu.conf (YAML).
     CLI flags and environment variables take precedence over config-file values.
@@ -72,9 +74,12 @@ def main(
 
     \b
     Quick start:
-        seizu login                # authenticate (opens browser URL)
-        seizu reports list         # list reports
-        seizu scheduled-queries list
+        seizu login                    # authenticate (opens browser URL)
+        seizu reports list             # list reports
+        seizu scheduled-queries list   # list scheduled queries
+        seizu toolsets list            # list toolsets
+        seizu toolsets tools list <toolset_id>
+        seizu toolsets tools call <toolset_id> <tool_id> --arg limit=10
 
     \b
     To use a different deployment:
