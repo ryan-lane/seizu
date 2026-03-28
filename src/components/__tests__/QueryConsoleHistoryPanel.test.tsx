@@ -1,4 +1,4 @@
-import { render, screen, fireEvent, act } from '@testing-library/react';
+import { render, screen, fireEvent, act, cleanup } from '@testing-library/react';
 import { ThemeProvider, createTheme } from '@mui/material/styles';
 import QueryConsoleHistoryPanel from 'src/components/QueryConsoleHistoryPanel';
 import * as useQueryHistoryModule from 'src/hooks/useQueryHistory';
@@ -38,6 +38,7 @@ function mockHook(overrides: Partial<ReturnType<typeof useQueryHistoryModule.use
 
 describe('QueryConsoleHistoryPanel', () => {
   afterEach(() => {
+    cleanup();
     jest.restoreAllMocks();
   });
 
