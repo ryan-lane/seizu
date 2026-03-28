@@ -146,6 +146,142 @@ reports:
                 input_id: cve_base_severity
             size: 12
 
+toolsets:
+  cve-analysis:
+    name: CVE Analysis
+    description: Tools for investigating CVE vulnerability data in the graph database.
+    enabled: true
+    tools:
+      get-cve:
+        name: get_cve
+        description: >-
+          Return full details for a single CVE by its ID (e.g. CVE-2024-12345).
+          Returns id, base_severity, base_score, description, and published_date.
+        cypher: |-
+          MATCH (c:CVE {id: $cve_id})
+          RETURN c.id AS id,
+                 c.base_severity AS base_severity,
+                 c.base_score AS base_score,
+                 c.description_en AS description,
+                 c.published_date AS published_date
+        parameters:
+          - name: cve_id
+            type: string
+            description: The CVE identifier, e.g. CVE-2024-12345.
+            required: true
+        enabled: true
+      list-cves-by-severity:
+        name: list_cves_by_severity
+        description: >-
+          List CVEs filtered by base severity (CRITICAL, HIGH, MEDIUM, or LOW),
+          ordered by base score descending. Returns up to `limit` results.
+        cypher: |-
+          MATCH (c:CVE)
+          WHERE c.base_severity = $severity
+          RETURN c.id AS id,
+                 c.base_severity AS base_severity,
+                 c.base_score AS base_score,
+                 c.description_en AS description,
+                 c.published_date AS published_date
+          ORDER BY c.base_score DESC
+          LIMIT $limit
+        parameters:
+          - name: severity
+            type: string
+            description: "Severity level: CRITICAL, HIGH, MEDIUM, or LOW."
+            required: true
+          - name: limit
+            type: integer
+            description: Maximum number of results to return.
+            required: false
+            default: 25
+        enabled: true
+      count-cves-by-severity:
+        name: count_cves_by_severity
+        description: >-
+          Return a breakdown of CVE counts grouped by base severity.
+          Useful for a quick risk overview.
+        cypher: |-
+          MATCH (c:CVE)
+          WHERE c.base_severity IS NOT NULL
+          RETURN c.base_severity AS severity, count(c.id) AS total
+          ORDER BY total DESC
+        enabled: true
+      get-recent-cves:
+        name: get_recent_cves
+        description: >-
+          Return CVEs published within the last `hours` hours, optionally
+          filtered to a specific severity. Results are ordered by published
+          date descending.
+        cypher: |-
+          MATCH (c:CVE)
+          WHERE datetime(c.published_date) > datetime() - duration({hours: $hours})
+            AND ($severity = '' OR c.base_severity = $severity)
+          RETURN c.id AS id,
+                 c.base_severity AS base_severity,
+                 c.base_score AS base_score,
+                 c.description_en AS description,
+                 c.published_date AS published_date
+          ORDER BY c.published_date DESC
+          LIMIT $limit
+        parameters:
+          - name: hours
+            type: integer
+            description: Look-back window in hours.
+            required: false
+            default: 24
+          - name: severity
+            type: string
+            description: "Filter by severity (CRITICAL, HIGH, MEDIUM, LOW) or empty string for all."
+            required: false
+            default: ""
+          - name: limit
+            type: integer
+            description: Maximum number of results to return.
+            required: false
+            default: 50
+        enabled: true
+  graph-exploration:
+    name: Graph Exploration
+    description: >-
+      General-purpose tools for exploring the shape and contents of the Neo4j
+      graph. Useful for discovery before writing more targeted queries.
+    enabled: true
+    tools:
+      count-nodes-by-label:
+        name: count_nodes_by_label
+        description: >-
+          Return a count of nodes for each label in the graph, ordered by count
+          descending. Useful for understanding the size and composition of the
+          database.
+        cypher: |-
+          CALL db.labels() YIELD label
+          CALL apoc.cypher.run('MATCH (n:' + label + ') RETURN count(n) AS total', {})
+          YIELD value
+          RETURN label, value.total AS total
+          ORDER BY total DESC
+        enabled: true
+      get-sync-status:
+        name: get_sync_status
+        description: >-
+          Return the last sync timestamp and type for each cartography data
+          source (SyncMetadata nodes). Useful for checking data freshness.
+        cypher: |-
+          MATCH (s:SyncMetadata)
+          RETURN s.grouptype AS grouptype,
+                 s.syncedtype AS syncedtype,
+                 s.groupid AS groupid,
+                 datetime({epochSeconds: s.lastupdated}) AS last_synced
+          ORDER BY last_synced DESC
+          LIMIT $limit
+        parameters:
+          - name: limit
+            type: integer
+            description: Maximum number of sync records to return.
+            required: false
+            default: 20
+        enabled: true
+
 scheduled_queries:
   - name: Recently published HIGH/CRITICAL CVEs
     cypher: |-
