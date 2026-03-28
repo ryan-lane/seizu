@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useMemo, memo } from 'react';
 import { Helmet } from 'react-helmet';
 import {
   Box,
@@ -6,12 +6,18 @@ import {
   Divider,
   Grid,
   Paper,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
   Typography
 } from '@mui/material';
 import Error from '@mui/icons-material/Error';
-import MuiMarkdown from 'mui-markdown';
+import MuiMarkdown, { defaultOverrides } from 'mui-markdown';
 
-import { Report } from 'src/config.context';
+import { Report, Panel, ReportInput } from 'src/config.context';
 import { getQueryStringValue } from 'src/components/QueryString';
 import CypherAutocomplete from 'src/components/reports/CypherAutocomplete';
 import CypherBar from 'src/components/reports/CypherBar';
@@ -23,6 +29,223 @@ import CypherTable from 'src/components/reports/CypherTable';
 import CypherVerticalTable from 'src/components/reports/CypherVerticalTable';
 import FreeTextInput from 'src/components/reports/FreeTextInput';
 
+function MarkdownTable({ children }: { children?: React.ReactNode }) {
+  return (
+    <TableContainer component={Paper} variant="outlined" sx={{ my: 1 }}>
+      <Table size="small" sx={{ borderCollapse: 'collapse' }}>
+        {children}
+      </Table>
+    </TableContainer>
+  );
+}
+
+function MarkdownHeadCell({ children }: { children?: React.ReactNode }) {
+  return (
+    <TableCell
+      component="th"
+      scope="col"
+      sx={{ whiteSpace: 'normal', border: '1px solid', borderColor: 'divider', fontWeight: 700, bgcolor: 'action.hover' }}
+    >
+      {children}
+    </TableCell>
+  );
+}
+
+function MarkdownCell({ children }: { children?: React.ReactNode }) {
+  return (
+    <TableCell sx={{ whiteSpace: 'normal', border: '1px solid', borderColor: 'divider' }}>
+      {children}
+    </TableCell>
+  );
+}
+
+const markdownOverrides = {
+  ...defaultOverrides,
+  h1: { component: 'h2' as const },
+  h2: { component: 'h3' as const },
+  h3: { component: 'h4' as const },
+  h4: { component: 'h5' as const },
+  h5: { component: 'h6' as const },
+  ol: { props: { className: 'mui-markdown-ol' } },
+  ul: { props: { className: 'mui-markdown-ul' } },
+  table: { component: MarkdownTable },
+  thead: { component: TableHead },
+  tbody: { component: TableBody },
+  tr: { component: TableRow },
+  th: { component: MarkdownHeadCell },
+  td: { component: MarkdownCell },
+};
+
+interface PanelItemProps {
+  item: Panel;
+  index: number;
+  varData: Record<string, { label?: string; value?: string }>;
+  allInputs: ReportInput[];
+  resolveQuery: (cypher: string | undefined) => string | undefined;
+}
+
+const PanelItem = memo(function PanelItem({ item, index, varData, allInputs, resolveQuery }: PanelItemProps) {
+  const needInputs: string[] = [];
+  const params: Record<string, string | undefined> = {};
+  if (item.params !== undefined) {
+    item.params.forEach((inputData) => {
+      const paramName = inputData.name;
+      const paramValue = inputData?.value;
+      const paramInputId = inputData?.input_id;
+      if (paramValue != null) {
+        params[paramName] = paramValue;
+      } else if (paramInputId != null) {
+        params[paramName] = varData[paramInputId]?.value;
+        if (
+          params[paramName] === undefined ||
+          params[paramName] === null ||
+          params[paramName] === ''
+        ) {
+          try {
+            const input = allInputs.find((obj) => obj.input_id === paramInputId);
+            needInputs.push(input!.label);
+          } catch (err) {
+            console.log(err);
+            needInputs.push(`*(Error: undefined input: ${paramInputId})`);
+          }
+        }
+      }
+    });
+  }
+
+  const details = {
+    cypher: resolveQuery(item.cypher),
+    details_cypher: resolveQuery(item.details_cypher),
+    type: item.type,
+    metric: item.metric,
+    columns: item.columns,
+    caption: item.caption,
+    params
+  };
+
+  let itemComponent;
+  if (item.type === 'progress') {
+    itemComponent = (
+      <CypherProgress
+        cypher={resolveQuery(item.cypher)}
+        params={params}
+        caption={item.caption}
+        threshold={item.threshold}
+        details={details}
+        needInputs={needInputs}
+      />
+    );
+  } else if (item.type === 'pie') {
+    itemComponent = (
+      <CypherPie
+        cypher={resolveQuery(item.cypher)}
+        params={params}
+        caption={item.caption}
+        pieSettings={item.pie_settings}
+        details={details}
+      />
+    );
+  } else if (item.type === 'bar') {
+    itemComponent = (
+      <CypherBar
+        cypher={resolveQuery(item.cypher)}
+        params={params}
+        caption={item.caption}
+        barSettings={item.bar_settings}
+        details={details}
+      />
+    );
+  } else if (item.type === 'graph') {
+    itemComponent = (
+      <CypherGraph
+        cypher={resolveQuery(item.cypher)}
+        params={params}
+        caption={item.caption}
+        graphSettings={item.graph_settings}
+        needInputs={needInputs}
+      />
+    );
+  } else if (item.type === 'count') {
+    itemComponent = (
+      <CypherCount
+        cypher={resolveQuery(item.cypher)}
+        params={params}
+        caption={item.caption}
+        details={details}
+        needInputs={needInputs}
+      />
+    );
+  } else if (item.type === 'table') {
+    itemComponent = (
+      <CypherTable
+        cypher={resolveQuery(item.cypher)}
+        params={params}
+        columns={item.columns}
+        caption={item.caption}
+        details={details}
+        needInputs={needInputs}
+      />
+    );
+  } else if (item.type === 'vertical-table') {
+    itemComponent = (
+      <CypherVerticalTable
+        cypher={resolveQuery(item.cypher)}
+        params={params}
+        id={item.table_id}
+        details={details}
+        needInputs={needInputs}
+      />
+    );
+  } else if (item.type === 'markdown') {
+    itemComponent = (
+      <Box sx={{
+        '& p': { mb: 1 },
+        '& h2, & h3, & h4, & h5, & h6': { mb: 1 },
+        '& ul, & ol': { mb: 1 },
+      }}>
+        <MuiMarkdown options={{ overrides: markdownOverrides }}>
+          {item.markdown}
+        </MuiMarkdown>
+      </Box>
+    );
+  }
+
+  let size;
+  let xsSize;
+  if (item.size === undefined) {
+    size = 3;
+    xsSize = 6;
+  } else if (item.size < 7) {
+    size = item.size;
+    xsSize = item.size * 2;
+  } else {
+    size = item.size;
+    xsSize = item.size;
+  }
+
+  return (
+    // We allow index in keys here because the config isn't reloaded, and as such elements
+    // in the config will never change.
+    // eslint-disable-next-line react/no-array-index-key
+    <Grid key={index} size={{ lg: size, md: size, xl: size, xs: xsSize }}>
+      {itemComponent}
+    </Grid>
+  );
+}, function areEqual(prevProps, nextProps) {
+  if (prevProps.resolveQuery !== nextProps.resolveQuery) return false;
+  if (prevProps.item !== nextProps.item) return false;
+
+  // Only re-render if a varData value for an input this panel uses has changed
+  const inputIds = (nextProps.item.params ?? [])
+    .map((p) => p.input_id)
+    .filter((id): id is string => id != null);
+
+  for (const id of inputIds) {
+    if (prevProps.varData[id]?.value !== nextProps.varData[id]?.value) return false;
+  }
+  return true;
+});
+
 interface ReportViewProps {
   report: Report;
   title?: string;
@@ -30,11 +253,11 @@ interface ReportViewProps {
 }
 
 function ReportView({ report, title, boxSx = { height: '100%', py: 3 } }: ReportViewProps) {
-  const reportQueries = report.queries ?? {};
-  function resolveQuery(cypher: string | undefined): string | undefined {
+  const reportQueries = useMemo(() => report.queries ?? {}, [report]);
+  const resolveQuery = useCallback((cypher: string | undefined): string | undefined => {
     if (cypher === undefined) return undefined;
     return reportQueries[cypher] ?? cypher;
-  }
+  }, [reportQueries]);
   const [varData, setVarData] = useState({});
 
   useEffect(() => {
@@ -127,161 +350,19 @@ function ReportView({ report, title, boxSx = { height: '100%', py: 3 } }: Report
 
   const rows = [];
   report.rows.forEach((row) => {
-    const items = [];
-    row.panels.forEach((item, index) => {
-      const needInputs = [];
-      const params = {};
-      if (item.params !== undefined) {
-        item.params.forEach((inputData) => {
-          const paramName = inputData.name;
-          const paramValue = inputData?.value;
-          const paramInputId = inputData?.input_id;
-          // Use != null (loose) to treat both null and undefined as "not set".
-          // When config is stored in DynamoDB, _strip_none removes None fields,
-          // so absent keys come back as undefined rather than null.
-          if (paramValue != null) {
-            params[paramName] = paramValue;
-          } else if (paramInputId != null) {
-            params[paramName] = varData[paramInputId]?.value;
-            if (
-              params[paramName] === undefined ||
-              params[paramName] === null ||
-              params[paramName] === ''
-            ) {
-              try {
-                const input = report.inputs.find((obj) => obj.input_id === paramInputId);
-                needInputs.push(input.label);
-              } catch (err) {
-                console.log(err);
-                needInputs.push(`*(Error: undefined input: ${paramInputId})`);
-              }
-            }
-          }
-        });
-      }
-
-      const details = {
-        cypher: resolveQuery(item.cypher),
-        details_cypher: resolveQuery(item.details_cypher),
-        type: item.type,
-        metric: item.metric,
-        columns: item.columns,
-        caption: item.caption,
-        params
-      };
-
-      let itemComponent;
-      if (item.type === 'progress') {
-        itemComponent = (
-          <CypherProgress
-            cypher={resolveQuery(item.cypher)}
-            params={params}
-            caption={item.caption}
-            threshold={item.threshold}
-            details={details}
-            needInputs={needInputs}
-          />
-        );
-      } else if (item.type === 'pie') {
-        itemComponent = (
-          <CypherPie
-            cypher={resolveQuery(item.cypher)}
-            params={params}
-            caption={item.caption}
-            pieSettings={item.pie_settings}
-            details={details}
-          />
-        );
-      } else if (item.type === 'bar') {
-        itemComponent = (
-          <CypherBar
-            cypher={resolveQuery(item.cypher)}
-            params={params}
-            caption={item.caption}
-            barSettings={item.bar_settings}
-            details={details}
-          />
-        );
-      } else if (item.type === 'graph') {
-        itemComponent = (
-          <CypherGraph
-            cypher={resolveQuery(item.cypher)}
-            params={params}
-            caption={item.caption}
-            graphSettings={item.graph_settings}
-            needInputs={needInputs}
-          />
-        );
-      } else if (item.type === 'count') {
-        itemComponent = (
-          <CypherCount
-            cypher={resolveQuery(item.cypher)}
-            params={params}
-            caption={item.caption}
-            details={details}
-            needInputs={needInputs}
-          />
-        );
-      } else if (item.type === 'table') {
-        itemComponent = (
-          <CypherTable
-            cypher={resolveQuery(item.cypher)}
-            params={params}
-            columns={item.columns}
-            caption={item.caption}
-            details={details}
-            needInputs={needInputs}
-          />
-        );
-      } else if (item.type === 'vertical-table') {
-        itemComponent = (
-          <CypherVerticalTable
-            cypher={resolveQuery(item.cypher)}
-            params={params}
-            id={item.table_id}
-            details={details}
-            needInputs={needInputs}
-          />
-        );
-      } else if (item.type === 'markdown') {
-        itemComponent = (
-          <MuiMarkdown
-            overrides={{
-              h1: { component: 'h2' },
-              h2: { component: 'h3' },
-              h3: { component: 'h4' },
-              h4: { component: 'h5' },
-              h5: { component: 'h6' },
-              ol: { props: { className: 'mui-markdown-ol' } },
-              ul: { props: { className: 'mui-markdown-ul' } }
-            }}
-          >
-            {item.markdown}
-          </MuiMarkdown>
-        );
-      }
-
-      let size;
-      let xsSize;
-      if (item.size === undefined) {
-        size = 3;
-        xsSize = 6;
-      } else if (item.size < 7) {
-        size = item.size;
-        xsSize = item.size * 2;
-      } else {
-        size = item.size;
-        xsSize = item.size;
-      }
-      items.push(
-        // We allow index in keys here because the config isn't reloaded, and as such elements
-        // in the config will never change.
-        // eslint-disable-next-line react/no-array-index-key
-        <Grid key={index} size={{ lg: size, md: size, xl: size, xs: xsSize }}>
-          {itemComponent}
-        </Grid>
-      );
-    });
+    const items = row.panels.map((item, index) => (
+      // We allow index in keys here because the config isn't reloaded, and as such elements
+      // in the config will never change.
+      // eslint-disable-next-line react/no-array-index-key
+      <PanelItem
+        key={index}
+        index={index}
+        item={item}
+        varData={varData}
+        allInputs={report.inputs ?? []}
+        resolveQuery={resolveQuery}
+      />
+    ));
     rows.push(
       <Container key={row.name} maxWidth={false} sx={{ pb: 2 }}>
         <Paper elevation={1} sx={{ p: 2 }}>

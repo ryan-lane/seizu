@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import {
-  Button,
+  Box,
   Divider,
+  IconButton,
   List,
   ListItem,
   Paper,
@@ -196,25 +197,24 @@ export default function CypherVerticalTable({
     const caption = String(mungedData[id]);
     const table = makeTable(mungedData);
     tables.push(
-      <div key={i}>
+      <Box key={i} sx={{ position: 'relative', '&:hover .panel-info-btn': { opacity: 1 } }}>
+        <IconButton
+          className="panel-info-btn"
+          size="small"
+          onClick={handleClickOpen}
+          sx={{ position: 'absolute', top: 0, right: 0, opacity: 0, transition: 'opacity 0.2s' }}
+        >
+          <Info fontSize="small" />
+        </IconButton>
         <Typography gutterBottom variant="h4" component="div">
           {caption}
-          <Button
-            variant="text"
-            size="small"
-            color="inherit"
-            onClick={handleClickOpen}
-            sx={{ mt: -0.5 }}
-          >
-            <Info fontSize="small" />
-          </Button>
           <QueryValidationBadge errors={queryErrors} warnings={warnings} />
         </Typography>
         <Divider />
         <TableContainer component={Paper} sx={{ p: 2 }}>
           {table}
         </TableContainer>
-      </div>
+      </Box>
     );
   }
 

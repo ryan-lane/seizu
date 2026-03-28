@@ -1,4 +1,4 @@
-import { render, screen, fireEvent, cleanup } from '@testing-library/react';
+import { render, screen, fireEvent, cleanup, act } from '@testing-library/react';
 import FreeTextInput from '../FreeTextInput';
 
 jest.mock('src/components/QueryString', () => ({
@@ -17,31 +17,63 @@ describe('FreeTextInput', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    jest.useFakeTimers();
   });
 
-  afterEach(cleanup);
+  afterEach(() => {
+    jest.useRealTimers();
+    cleanup();
+  });
 
   it('renders a text field with the given label', () => {
     render(<FreeTextInput {...defaultProps} />);
     expect(screen.getByLabelText('Test Label')).toBeInTheDocument();
   });
 
-  it('calls setValue with updated value on change', () => {
+  it('initialises with the inputDefault value', () => {
+    render(<FreeTextInput {...defaultProps} />);
+    expect(screen.getByLabelText('Test Label')).toHaveValue('default');
+  });
+
+  it('does not call setValue immediately on change (debounced)', () => {
     render(<FreeTextInput {...defaultProps} />);
     fireEvent.change(screen.getByLabelText('Test Label'), {
       target: { value: 'new value' }
     });
+    expect(defaultProps.setValue).not.toHaveBeenCalled();
+  });
+
+  it('calls setValue with updated value after debounce delay', () => {
+    render(<FreeTextInput {...defaultProps} />);
+    fireEvent.change(screen.getByLabelText('Test Label'), {
+      target: { value: 'new value' }
+    });
+    act(() => { jest.advanceTimersByTime(300); });
     expect(defaultProps.setValue).toHaveBeenCalledWith({
       'test-input': { label: '', value: 'new value' }
     });
   });
 
-  it('calls setValue with inputDefault when value is empty', () => {
+  it('calls setValue with inputDefault when the field is cleared', () => {
     render(<FreeTextInput {...defaultProps} />);
-    // Simulate clearing the input (null/undefined scenario is handled internally)
     fireEvent.change(screen.getByLabelText('Test Label'), {
-      target: { value: 'typed' }
+      target: { value: '' }
     });
-    expect(defaultProps.setValue).toHaveBeenCalled();
+    act(() => { jest.advanceTimersByTime(300); });
+    expect(defaultProps.setValue).toHaveBeenCalledWith({
+      'test-input': { label: 'default', value: 'default' }
+    });
+  });
+
+  it('only fires setValue once for rapid keystrokes (debounce collapses them)', () => {
+    render(<FreeTextInput {...defaultProps} />);
+    fireEvent.change(screen.getByLabelText('Test Label'), { target: { value: 'a' } });
+    fireEvent.change(screen.getByLabelText('Test Label'), { target: { value: 'ab' } });
+    fireEvent.change(screen.getByLabelText('Test Label'), { target: { value: 'abc' } });
+    act(() => { jest.advanceTimersByTime(300); });
+    expect(defaultProps.setValue).toHaveBeenCalledTimes(1);
+    expect(defaultProps.setValue).toHaveBeenCalledWith({
+      'test-input': { label: '', value: 'abc' }
+    });
   });
 });

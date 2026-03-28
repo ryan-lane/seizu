@@ -86,9 +86,9 @@ export default function CypherDetails({ details, open, setOpen }: CypherDetailsP
         paramKey = (details.params![key] as unknown[]).join(', ');
       }
       return (
-        <div key={key}>
+        <span key={key} style={{ display: 'block' }}>
           {key}: {String(paramKey)}
-        </div>
+        </span>
       );
     });
   }
@@ -167,7 +167,7 @@ export default function CypherDetails({ details, open, setOpen }: CypherDetailsP
           </Typography>
         </TableCell>
         <TableCell>
-          <Typography variant="body1">{params}</Typography>
+          <Typography variant="body1" component="div">{params}</Typography>
         </TableCell>
       </TableRow>
     );

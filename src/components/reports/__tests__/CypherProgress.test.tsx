@@ -1,4 +1,4 @@
-import { render, screen, cleanup } from '@testing-library/react';
+import { render, screen, fireEvent, cleanup } from '@testing-library/react';
 import { ThemeProvider, createTheme } from '@mui/material/styles';
 import CypherProgress from '../CypherProgress';
 
@@ -8,8 +8,8 @@ jest.mock('src/hooks/useCypherQuery', () => ({
 
 jest.mock('src/components/reports/CypherDetails', () => ({
   __esModule: true,
-  default: function MockCypherDetails() {
-    return null;
+  default: function MockCypherDetails({ open }: { open: boolean }) {
+    return open ? <div data-testid="details-dialog">Details</div> : null;
   }
 }));
 
@@ -120,6 +120,40 @@ describe('CypherProgress', () => {
     );
     expect(screen.getByText('Progress Caption')).toBeInTheDocument();
     expect(screen.getByText('75%')).toBeInTheDocument();
+  });
+
+  it('renders the info button in the top-right when data is loaded', () => {
+    useLazyCypherQuery.mockReturnValue([
+      mockRunQuery,
+      { ...defaultState, records: [{ numerator: 75, denominator: 100 }], first: { numerator: 75, denominator: 100 } }
+    ]);
+    const { container } = render(
+      <Wrapper>
+        <CypherProgress
+          cypher="MATCH (n) RETURN count(n) as numerator, count(n) as denominator"
+          caption="Test Progress"
+        />
+      </Wrapper>
+    );
+    expect(container.querySelector('.panel-info-btn')).toBeInTheDocument();
+  });
+
+  it('opens the details dialog when the info button is clicked', () => {
+    useLazyCypherQuery.mockReturnValue([
+      mockRunQuery,
+      { ...defaultState, records: [{ numerator: 75, denominator: 100 }], first: { numerator: 75, denominator: 100 } }
+    ]);
+    const { container } = render(
+      <Wrapper>
+        <CypherProgress
+          cypher="MATCH (n) RETURN count(n) as numerator, count(n) as denominator"
+          caption="Test Progress"
+          details={{ type: 'progress', caption: 'Test Progress' }}
+        />
+      </Wrapper>
+    );
+    fireEvent.click(container.querySelector('.panel-info-btn')!);
+    expect(screen.getByTestId('details-dialog')).toBeInTheDocument();
   });
 
   it('shows validation error state when queryErrors are present', () => {

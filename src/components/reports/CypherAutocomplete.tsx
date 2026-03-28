@@ -55,16 +55,18 @@ export default function CypherAutocomplete({
     return val;
   });
 
-  // Add an empty option, to handle the case of an empty default.
-  if (inputDefault !== undefined) {
-    mungedRecords.push(inputDefault);
-  } else {
-    mungedRecords.push({});
+  // Add a clear/default option only if it isn't already present in the results.
+  const clearOption: AutocompleteOption = inputDefault ?? {};
+  const clearValue = clearOption.value ?? '';
+  const alreadyPresent = mungedRecords.some((r) => (r.value ?? '') === clearValue);
+  if (!alreadyPresent) {
+    mungedRecords.push(clearOption);
   }
 
   return (
     <Autocomplete
-      value={value?.[inputId || '']}
+      // Use null instead of undefined so MUI always treats this as a controlled input.
+      value={value?.[inputId || ''] ?? null}
       onChange={(event, newValue) => {
         if (newValue === null || newValue === undefined) {
           setValue?.({ ...value, [inputId || '']: inputDefault });

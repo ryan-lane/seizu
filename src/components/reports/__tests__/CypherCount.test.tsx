@@ -1,4 +1,4 @@
-import { render, screen, cleanup } from '@testing-library/react';
+import { render, screen, fireEvent, cleanup } from '@testing-library/react';
 import { ThemeProvider, createTheme } from '@mui/material/styles';
 import CypherCount from '../CypherCount';
 
@@ -8,8 +8,8 @@ jest.mock('src/hooks/useCypherQuery', () => ({
 
 jest.mock('src/components/reports/CypherDetails', () => ({
   __esModule: true,
-  default: function MockCypherDetails() {
-    return null;
+  default: function MockCypherDetails({ open }: { open: boolean }) {
+    return open ? <div data-testid="details-dialog">Details</div> : null;
   }
 }));
 
@@ -133,6 +133,37 @@ describe('CypherCount', () => {
     );
     expect(screen.getByText('Test Count')).toBeInTheDocument();
     expect(screen.getByText('42')).toBeInTheDocument();
+  });
+
+  it('renders the info button in the top-right when data is loaded', () => {
+    useLazyCypherQuery.mockReturnValue([
+      mockRunQuery,
+      { ...defaultState, records: [{ total: 5 }], first: { total: 5 } }
+    ]);
+    const { container } = render(
+      <Wrapper>
+        <CypherCount cypher="MATCH (n) RETURN count(n) as total" caption="Test Count" />
+      </Wrapper>
+    );
+    expect(container.querySelector('.panel-info-btn')).toBeInTheDocument();
+  });
+
+  it('opens the details dialog when the info button is clicked', () => {
+    useLazyCypherQuery.mockReturnValue([
+      mockRunQuery,
+      { ...defaultState, records: [{ total: 5 }], first: { total: 5 } }
+    ]);
+    const { container } = render(
+      <Wrapper>
+        <CypherCount
+          cypher="MATCH (n) RETURN count(n) as total"
+          caption="Test Count"
+          details={{ type: 'count', caption: 'Test Count' }}
+        />
+      </Wrapper>
+    );
+    fireEvent.click(container.querySelector('.panel-info-btn')!);
+    expect(screen.getByTestId('details-dialog')).toBeInTheDocument();
   });
 
   it('shows validation error state when queryErrors are present', () => {

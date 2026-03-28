@@ -1,6 +1,9 @@
+import { useState, useEffect } from 'react';
 import { TextField } from '@mui/material';
 import { InputValue } from 'src/config.context';
 import { setQueryStringValue } from 'src/components/QueryString';
+
+const DEBOUNCE_MS = 300;
 
 interface FreeTextInputProps {
   inputId?: string;
@@ -17,20 +20,32 @@ export default function FreeTextInput({
   value,
   setValue
 }: FreeTextInputProps) {
+  const [localValue, setLocalValue] = useState(
+    value?.[inputId || '']?.value ?? inputDefault?.value ?? ''
+  );
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (localValue === null || localValue === undefined || localValue === '') {
+        setValue?.({ ...value, [inputId || '']: inputDefault });
+        setQueryStringValue(inputId, inputDefault?.value);
+      } else {
+        setValue?.({
+          ...value,
+          [inputId || '']: { label: '', value: localValue }
+        });
+        setQueryStringValue(inputId, localValue);
+      }
+    }, DEBOUNCE_MS);
+
+    return () => clearTimeout(timer);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [localValue]);
+
   return (
     <TextField
-      onChange={(event) => {
-        if (event.target.value === null || event.target.value === undefined || event.target.value === '') {
-          setValue?.({ ...value, [inputId || '']: inputDefault });
-          setQueryStringValue(inputId, inputDefault?.value);
-        } else {
-          setValue?.({
-            ...value,
-            [inputId || '']: { label: '', value: event.target.value }
-          });
-          setQueryStringValue(inputId, event.target.value);
-        }
-      }}
+      onChange={(event) => setLocalValue(event.target.value)}
+      value={localValue}
       id={inputId}
       label={labelName}
       variant="outlined"
