@@ -430,7 +430,7 @@ def get_mcp_app() -> ASGIApp:
             Route(
                 "/{path:path}",
                 endpoint=asgi_app,
-                methods=["GET", "POST", "DELETE"],
+                methods=["POST"],
             ),
         ],
         lifespan=lifespan,
