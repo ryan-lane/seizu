@@ -4,7 +4,7 @@ import {
   CardContent,
   CardHeader,
   Divider,
-  Button,
+  IconButton,
   Grid,
   Typography
 } from '@mui/material';
@@ -149,14 +149,19 @@ export default function CypherPie({
 
   return (
     <>
-      <Card>
+      <Card sx={{ position: 'relative', '&:hover .panel-info-btn': { opacity: 1 } }}>
+        <IconButton
+          className="panel-info-btn"
+          size="small"
+          onClick={() => setOpen(true)}
+          sx={{ position: 'absolute', top: 8, right: 8, opacity: 0, transition: 'opacity 0.2s' }}
+        >
+          <Info fontSize="small" />
+        </IconButton>
         <Grid container direction="column" alignItems="center">
           <CardHeader title={caption} />
         </Grid>
         <Divider />
-        <Button size="small" color="inherit" onClick={() => setOpen(true)}>
-          <Info />
-        </Button>
         <QueryValidationBadge errors={queryErrors} warnings={warnings} />
 
         <PieChart

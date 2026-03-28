@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import {
   Accordion,
   AccordionDetails,
@@ -8,10 +8,19 @@ import {
   Chip,
   CircularProgress,
   Container,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
   Divider,
+  FormControl,
   Grid,
   IconButton,
+  InputLabel,
+  MenuItem,
   Paper,
+  Select,
+  Slider,
   Stack,
   TextField,
   Tooltip,
@@ -43,7 +52,7 @@ import {
 import { CSS } from '@dnd-kit/utilities';
 import { useDroppable } from '@dnd-kit/core';
 
-import { Report, Row, Panel } from 'src/config.context';
+import { Report, Row, Panel, ReportInput, InputValue } from 'src/config.context';
 import PanelEditor, { EditablePanel } from 'src/components/reports/PanelEditor';
 
 // ---------------------------------------------------------------------------
@@ -247,6 +256,209 @@ function DroppableRowArea({ rowId, children }: { rowId: string; children: React.
 }
 
 // ---------------------------------------------------------------------------
+// Inputs editor
+// ---------------------------------------------------------------------------
+
+const INPUT_TYPES = [
+  { value: 'autocomplete', label: 'Autocomplete' },
+  { value: 'text', label: 'Text' }
+];
+
+function emptyInput(): ReportInput {
+  return { input_id: '', type: 'autocomplete', label: '', size: 3 };
+}
+
+interface InputCardProps {
+  input: ReportInput;
+  onEdit: () => void;
+  onDelete: () => void;
+  onResize: (delta: number) => void;
+}
+
+function InputCard({ input, onEdit, onDelete, onResize }: InputCardProps) {
+  const capped = Math.max(1, Math.min(12, input.size ?? 3));
+  return (
+    <Paper
+      variant="outlined"
+      sx={{ p: 1.5, display: 'flex', alignItems: 'center', gap: 1 }}
+    >
+      <Box sx={{ flex: 1, minWidth: 0 }}>
+        <Stack direction="row" spacing={0.5} alignItems="center" flexWrap="wrap">
+          <Chip
+            label={input.type}
+            size="small"
+            variant="outlined"
+            color="secondary"
+            sx={{ fontSize: '0.65rem', height: 20 }}
+          />
+          <Typography variant="body2" noWrap sx={{ fontWeight: 500 }}>
+            {input.label || <em>no label</em>}
+          </Typography>
+          <Typography variant="caption" color="text.secondary" noWrap>
+            id: {input.input_id || '—'}
+          </Typography>
+        </Stack>
+      </Box>
+      <Tooltip title="Decrease width">
+        <span>
+          <IconButton size="small" disabled={capped <= 1} onClick={() => onResize(-1)}>
+            <RemoveIcon sx={{ fontSize: 14 }} />
+          </IconButton>
+        </span>
+      </Tooltip>
+      <Typography variant="caption" sx={{ minWidth: 16, textAlign: 'center' }}>
+        {capped}
+      </Typography>
+      <Tooltip title="Increase width">
+        <span>
+          <IconButton size="small" disabled={capped >= 12} onClick={() => onResize(1)}>
+            <Add sx={{ fontSize: 14 }} />
+          </IconButton>
+        </span>
+      </Tooltip>
+      <Tooltip title="Edit input">
+        <IconButton size="small" onClick={onEdit}>
+          <EditIcon sx={{ fontSize: 14 }} />
+        </IconButton>
+      </Tooltip>
+      <Tooltip title="Delete input">
+        <IconButton size="small" color="error" onClick={onDelete}>
+          <DeleteIcon sx={{ fontSize: 14 }} />
+        </IconButton>
+      </Tooltip>
+    </Paper>
+  );
+}
+
+interface InputEditorDialogProps {
+  open: boolean;
+  input: ReportInput | null;
+  onClose: () => void;
+  onSave: (input: ReportInput) => void;
+}
+
+function InputEditorDialog({ open, input, onClose, onSave }: InputEditorDialogProps) {
+  const [form, setForm] = useState<ReportInput>(emptyInput());
+
+  useEffect(() => {
+    setForm(input ? { ...input } : emptyInput());
+  }, [input, open]);
+
+  function set<K extends keyof ReportInput>(key: K, value: ReportInput[K]) {
+    setForm((prev) => ({ ...prev, [key]: value }));
+  }
+
+  function setDefault(field: keyof InputValue, value: string) {
+    setForm((prev) => ({
+      ...prev,
+      default: { label: prev.default?.label ?? '', value: prev.default?.value ?? '', [field]: value }
+    }));
+  }
+
+  const isAutocomplete = form.type === 'autocomplete';
+  const canSave = form.input_id.trim() !== '' && form.label.trim() !== '';
+
+  return (
+    <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
+      <DialogTitle>{input ? 'Edit Input' : 'Add Input'}</DialogTitle>
+      <DialogContent>
+        <Stack spacing={2} sx={{ mt: 1 }}>
+          <FormControl fullWidth size="small">
+            <InputLabel>Input type</InputLabel>
+            <Select
+              label="Input type"
+              value={form.type}
+              onChange={(e) => set('type', e.target.value)}
+            >
+              {INPUT_TYPES.map((t) => (
+                <MenuItem key={t.value} value={t.value}>{t.label}</MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+
+          <TextField
+            fullWidth size="small" label="Input ID"
+            value={form.input_id}
+            onChange={(e) => set('input_id', e.target.value)}
+            helperText="Referenced from panel params via input_id."
+          />
+
+          <TextField
+            fullWidth size="small" label="Label"
+            value={form.label}
+            onChange={(e) => set('label', e.target.value)}
+            helperText="Shown to the user above the input."
+          />
+
+          <Box>
+            <Typography gutterBottom variant="body2">
+              Size (grid columns: {form.size ?? 3})
+            </Typography>
+            <Slider
+              min={1} max={12} step={1} marks
+              value={form.size ?? 3}
+              onChange={(_, v) => set('size', v as number)}
+              valueLabelDisplay="auto"
+            />
+          </Box>
+
+          {isAutocomplete && (
+            <>
+              <Divider />
+              <TextField
+                fullWidth size="small" label="Cypher (options query)"
+                multiline minRows={3}
+                value={form.cypher ?? ''}
+                onChange={(e) => set('cypher', e.target.value || undefined)}
+                inputProps={{ style: { fontFamily: 'monospace', fontSize: '0.8rem' } }}
+                helperText="Query to populate the dropdown. Must return a 'value' column."
+              />
+            </>
+          )}
+
+          <Divider />
+          <Typography variant="body2" fontWeight="medium">Default value</Typography>
+          <Stack direction="row" spacing={1}>
+            <TextField
+              size="small" label="Default label"
+              value={form.default?.label ?? ''}
+              onChange={(e) => setDefault('label', e.target.value)}
+              sx={{ flex: 1 }}
+              helperText="Display label for the default."
+            />
+            <TextField
+              size="small" label="Default value"
+              value={form.default?.value ?? ''}
+              onChange={(e) => setDefault('value', e.target.value)}
+              sx={{ flex: 1 }}
+              helperText="The parameter value sent to queries."
+            />
+          </Stack>
+        </Stack>
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={onClose}>Cancel</Button>
+        <Button variant="contained" onClick={() => onSave(cleanInput(form))} disabled={!canSave}>
+          Save Input
+        </Button>
+      </DialogActions>
+    </Dialog>
+  );
+}
+
+function cleanInput(input: ReportInput): ReportInput {
+  const result: ReportInput = {
+    input_id: input.input_id.trim(),
+    type: input.type,
+    label: input.label.trim()
+  };
+  if (input.size != null) result.size = Math.max(1, Math.min(12, input.size));
+  if (input.cypher) result.cypher = input.cypher;
+  if (input.default?.value) result.default = { label: input.default.label, value: input.default.value };
+  return result;
+}
+
+// ---------------------------------------------------------------------------
 // Key-value editor for named queries
 // ---------------------------------------------------------------------------
 
@@ -392,6 +604,11 @@ function EditableReportView({ report, reportId: _reportId, onSave, onCancel }: E
   const [editableRows, setEditableRows] = useState<EditableRow[]>(
     toEditableRows(report.rows)
   );
+  const [editableInputs, setEditableInputs] = useState<ReportInput[]>(
+    report.inputs ?? []
+  );
+  const [inputEditorOpen, setInputEditorOpen] = useState(false);
+  const [editingInputIndex, setEditingInputIndex] = useState<number | null>(null);
   const [saveComment, setSaveComment] = useState('');
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -424,6 +641,41 @@ function EditableReportView({ report, reportId: _reportId, onSave, onCancel }: E
           details_cypher: panel.details_cypher === oldKey ? newKey : panel.details_cypher
         }))
       }))
+    );
+  }
+
+  // ---------------------------------------------------------------------------
+  // Input operations
+  // ---------------------------------------------------------------------------
+
+  function openAddInput() {
+    setEditingInputIndex(null);
+    setInputEditorOpen(true);
+  }
+
+  function openEditInput(index: number) {
+    setEditingInputIndex(index);
+    setInputEditorOpen(true);
+  }
+
+  function handleInputSave(saved: ReportInput) {
+    if (editingInputIndex === null) {
+      setEditableInputs((prev) => [...prev, saved]);
+    } else {
+      setEditableInputs((prev) => prev.map((inp, i) => (i === editingInputIndex ? saved : inp)));
+    }
+    setInputEditorOpen(false);
+  }
+
+  function deleteInput(index: number) {
+    setEditableInputs((prev) => prev.filter((_, i) => i !== index));
+  }
+
+  function resizeInput(index: number, delta: number) {
+    setEditableInputs((prev) =>
+      prev.map((inp, i) =>
+        i === index ? { ...inp, size: Math.max(1, Math.min(12, (inp.size ?? 3) + delta)) } : inp
+      )
     );
   }
 
@@ -595,6 +847,7 @@ function EditableReportView({ report, reportId: _reportId, onSave, onCancel }: E
         ...report,
         name: reportName,
         queries: namedQueries,
+        inputs: editableInputs.length ? editableInputs : undefined,
         rows: fromEditableRows(editableRows)
       };
       await onSave(updatedReport, saveComment);
@@ -694,6 +947,49 @@ function EditableReportView({ report, reportId: _reportId, onSave, onCancel }: E
         </Accordion>
       </Container>
 
+      {/* Inputs section */}
+      <Container maxWidth={false} sx={{ pt: 0, pb: 1 }}>
+        <Accordion variant="outlined" disableGutters defaultExpanded>
+          <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <Typography variant="body2" fontWeight="medium">
+                Inputs
+              </Typography>
+              <Chip
+                label={editableInputs.length}
+                size="small"
+                variant="outlined"
+                sx={{ height: 18, fontSize: '0.7rem' }}
+              />
+            </Box>
+          </AccordionSummary>
+          <AccordionDetails>
+            <Stack spacing={1}>
+              {editableInputs.length === 0 && (
+                <Typography variant="body2" color="text.secondary">
+                  No inputs yet. Add one below to let users filter panel queries.
+                </Typography>
+              )}
+              {editableInputs.map((inp, i) => (
+                // eslint-disable-next-line react/no-array-index-key
+                <InputCard
+                  key={i}
+                  input={inp}
+                  onEdit={() => openEditInput(i)}
+                  onDelete={() => deleteInput(i)}
+                  onResize={(delta) => resizeInput(i, delta)}
+                />
+              ))}
+              <Box>
+                <Button size="small" startIcon={<Add />} onClick={openAddInput}>
+                  Add input
+                </Button>
+              </Box>
+            </Stack>
+          </AccordionDetails>
+        </Accordion>
+      </Container>
+
       {/* Rows with panels */}
       <DndContext sensors={sensors} onDragStart={onDragStart} onDragEnd={onDragEnd}>
         {editableRows.map((row) => (
@@ -782,6 +1078,14 @@ function EditableReportView({ report, reportId: _reportId, onSave, onCancel }: E
         panel={editingPanelRef?.panelId ? editingPanel.current : null}
         onClose={() => setEditorOpen(false)}
         onSave={handlePanelSave}
+      />
+
+      {/* Input editor dialog */}
+      <InputEditorDialog
+        open={inputEditorOpen}
+        input={editingInputIndex !== null ? (editableInputs[editingInputIndex] ?? null) : null}
+        onClose={() => setInputEditorOpen(false)}
+        onSave={handleInputSave}
       />
     </>
   );

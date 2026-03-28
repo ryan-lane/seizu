@@ -146,6 +146,231 @@ reports:
                 input_id: cve_base_severity
             size: 12
 
+  panel-examples:
+    name: Panel Examples
+    queries:
+      cves-total: |-
+        MATCH (c:CVE)
+        RETURN count(c.id) AS total
+      cves-severity-fraction: |-
+        MATCH (c:CVE)
+        WITH COUNT(DISTINCT c.id) AS denominator
+        MATCH (c:CVE)
+        WHERE c.base_severity = $base_severity
+        RETURN count(DISTINCT c.id) AS numerator, denominator
+      cves-severity-fraction-details: |-
+        MATCH (c:CVE)
+        WHERE c.base_severity = $base_severity
+        RETURN c AS details
+      cves-severity-count: |-
+        MATCH (c:CVE)
+        WHERE c.base_severity = $base_severity
+        RETURN count(DISTINCT c.id) AS total
+      cves-by-severity: |-
+        MATCH (c:CVE)
+        WHERE c.base_severity IS NOT NULL
+        WITH c.base_severity AS severity, count(c.id) AS total
+        RETURN {id: severity, value: total} AS details
+      cves-graph: |-
+        MATCH (c:CVE)
+        WHERE c.base_severity IS NOT NULL
+        WITH c LIMIT 50
+        WITH
+          collect(distinct {id: c.base_severity, label: c.base_severity, group: 'severity'}) AS severity_nodes,
+          collect({id: c.id, label: c.id, group: c.base_severity}) AS cve_nodes,
+          collect({source: c.id, target: c.base_severity}) AS links
+        RETURN {nodes: severity_nodes + cve_nodes, links: links}
+      cves-id-search: |-
+        MATCH (c:CVE)
+        WHERE c.id CONTAINS $search
+        RETURN c.id AS id,
+               c.base_severity AS base_severity,
+               c.base_score AS base_score,
+               c.description_en AS description
+        ORDER BY datetime(c.published_date) DESC
+        LIMIT 25
+      cves-by-severity-list: |-
+        MATCH (c:CVE)
+        WHERE c.base_severity = $base_severity
+        RETURN c.id AS id,
+               c.base_severity AS base_severity,
+               c.base_score AS base_score,
+               c.description_en AS description
+        ORDER BY c.base_score DESC
+        LIMIT 25
+      cve-single: |-
+        MATCH (c:CVE)
+        WHERE c.base_severity IS NOT NULL
+        RETURN c.id AS id,
+               c.base_severity AS severity,
+               c.base_score AS score,
+               c.description_en AS description,
+               c.published_date AS published_date
+        ORDER BY c.base_score DESC
+        LIMIT 1
+    inputs:
+      - input_id: panel_examples_search
+        label: CVE ID Search
+        type: text
+        default:
+          label: CVE-2024
+          value: CVE-2024
+        size: 3
+      - input_id: panel_examples_severity
+        cypher: |-
+          MATCH (c:CVE)
+          RETURN DISTINCT c.base_severity AS value
+        label: Base Severity
+        type: autocomplete
+        size: 3
+    rows:
+      - name: About this report
+        panels:
+          - type: markdown
+            size: 12
+            markdown: |-
+              ## Panel Examples
+
+              This report demonstrates all available panel types. Each section below
+              showcases a different type using CVE data from the graph.
+
+              | Panel type | Description |
+              |---|---|
+              | **count** | Single numeric value with optional drill-down details |
+              | **progress** | Fraction displayed as a progress bar with threshold colouring |
+              | **pie** | Pie chart built from `{id, value}` rows; supports row/column legend |
+              | **bar** | Bar chart built from `{id, value}` rows; supports row/column legend |
+              | **graph** | Force-directed graph from `{nodes, links}`; Graph/Table/Raw tabs |
+              | **table** | Paginated, sortable data table; columns auto-detected from query |
+              | **vertical-table** | Key→value layout for a single entity's properties |
+              | **markdown** | Static Markdown content (this panel) |
+
+              Inputs above the rows can be **text** (free-text field) or **autocomplete**
+              (options populated from a Cypher query).
+      - name: Count panels
+        panels:
+          - cypher: cves-total
+            type: count
+            caption: Total CVEs
+            size: 3
+          - cypher: cves-severity-count
+            details_cypher: cves-severity-fraction-details
+            type: count
+            params:
+              - name: base_severity
+                value: CRITICAL
+            caption: Critical CVEs
+            size: 3
+          - cypher: cves-severity-count
+            details_cypher: cves-severity-fraction-details
+            type: count
+            params:
+              - name: base_severity
+                value: HIGH
+            caption: High CVEs
+            size: 3
+          - cypher: cves-severity-count
+            details_cypher: cves-severity-fraction-details
+            type: count
+            params:
+              - name: base_severity
+                value: MEDIUM
+            caption: Medium CVEs
+            size: 3
+      - name: Progress panels
+        panels:
+          - cypher: cves-severity-fraction
+            details_cypher: cves-severity-fraction-details
+            type: progress
+            params:
+              - name: base_severity
+                value: CRITICAL
+            caption: Critical CVEs
+            size: 3
+            threshold: 0
+          - cypher: cves-severity-fraction
+            details_cypher: cves-severity-fraction-details
+            type: progress
+            params:
+              - name: base_severity
+                value: HIGH
+            caption: High CVEs
+            size: 3
+            threshold: 0
+          - cypher: cves-severity-fraction
+            details_cypher: cves-severity-fraction-details
+            type: progress
+            params:
+              - name: base_severity
+                value: MEDIUM
+            caption: Medium CVEs
+            size: 3
+            threshold: 0
+          - cypher: cves-severity-fraction
+            details_cypher: cves-severity-fraction-details
+            type: progress
+            params:
+              - name: base_severity
+                value: LOW
+            caption: Low CVEs
+            size: 3
+            threshold: 0
+      - name: Pie and bar charts
+        panels:
+          - cypher: cves-by-severity
+            type: pie
+            caption: CVEs by severity (arc labels)
+            size: 6
+          - cypher: cves-by-severity
+            type: bar
+            caption: CVEs by severity (no legend)
+            size: 6
+          - cypher: cves-by-severity
+            type: pie
+            caption: CVEs by severity (column legend)
+            size: 6
+            pie_settings:
+              legend: column
+          - cypher: cves-by-severity
+            type: bar
+            caption: CVEs by severity (row legend)
+            size: 6
+            bar_settings:
+              legend: row
+      - name: Graph panel
+        panels:
+          - cypher: cves-graph
+            type: graph
+            caption: CVE severity graph (node_label=label, node_color_by=group)
+            size: 12
+            graph_settings:
+              node_label: label
+              node_color_by: group
+      - name: Table with text input filter
+        panels:
+          - cypher: cves-id-search
+            type: table
+            caption: CVEs matching CVE ID search
+            params:
+              - name: search
+                input_id: panel_examples_search
+            size: 12
+      - name: Table with autocomplete filter
+        panels:
+          - cypher: cves-by-severity-list
+            type: table
+            caption: CVEs by severity
+            params:
+              - name: base_severity
+                input_id: panel_examples_severity
+            size: 12
+      - name: Vertical table panel
+        panels:
+          - cypher: cve-single
+            type: vertical-table
+            table_id: id
+            size: 12
+
 toolsets:
   cve-analysis:
     name: CVE Analysis

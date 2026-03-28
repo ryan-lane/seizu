@@ -273,6 +273,30 @@ describe('ReportView param building', () => {
     expect(useLazyCypherQuery).toHaveBeenCalledWith(directCypher);
   });
 
+  it('renders markdown panel content directly without a cypher query', () => {
+    const report: Report = {
+      name: 'Test',
+      rows: [{
+        name: 'Markdown Row',
+        panels: [{
+          type: 'markdown',
+          markdown: '## Hello\n\nSome **bold** text.',
+          size: 12
+        }]
+      }]
+    };
+
+    render(
+      <Wrapper>
+        <ReportView report={report} title="Test" />
+      </Wrapper>
+    );
+
+    // useLazyCypherQuery should not be called for markdown panels
+    expect(useLazyCypherQuery).not.toHaveBeenCalled();
+    expect(screen.getByText('Markdown Row')).toBeInTheDocument();
+  });
+
   it('falls back to literal string when panel.cypher is not in report.queries', () => {
     const directCypher = 'MATCH (n) RETURN count(n) AS total';
     const report = makeReport([

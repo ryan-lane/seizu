@@ -4,7 +4,7 @@ import {
   CardContent,
   CardHeader,
   Divider,
-  Button,
+  IconButton,
   Grid,
   Typography
 } from '@mui/material';
@@ -141,14 +141,19 @@ export default function CypherCount({
 
   return (
     <>
-      <Card style={{ height: '100%' }}>
+      <Card style={{ height: '100%' }} sx={{ position: 'relative', '&:hover .panel-info-btn': { opacity: 1 } }}>
+        <IconButton
+          className="panel-info-btn"
+          size="small"
+          onClick={handleClickOpen}
+          sx={{ position: 'absolute', top: 8, right: 8, opacity: 0, transition: 'opacity 0.2s' }}
+        >
+          <Info fontSize="small" />
+        </IconButton>
         <Grid container direction="column" alignItems="center">
           <CardHeader title={caption} />
         </Grid>
         <Divider />
-        <Button size="small" color="inherit" onClick={handleClickOpen}>
-          <Info />
-        </Button>
         <QueryValidationBadge errors={queryErrors} warnings={warnings} />
         <Grid container spacing={0} direction="column" alignItems="center">
           <CardContent>

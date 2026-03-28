@@ -353,9 +353,13 @@ To render markdown, use a ``markdown`` panel.
 
 ![a markdown panel example](/images/markdown-panel.png)
 
+Standard Markdown is supported, including **bold**, *italic*, headings, ordered and unordered lists, links, code spans, fenced code blocks, and tables.
+Tables are rendered using MUI components with themed borders and a highlighted header row.
+Heading levels in the Markdown source are shifted down by one (``##`` renders as ``<h3>``, etc.) so they fit naturally within the panel hierarchy.
+
 | Field | Description |
 |-------|-------------|
-| markdown | The markdown to render. |
+| markdown | The markdown content to render. Supports headings, lists, links, code, and tables. |
 | type | The type of panel. ``markdown``, for this panel type. |
 | size | The width of this panel. |
 
@@ -442,6 +446,7 @@ End-users can select through a dropdown list of the values, or can type to searc
 ### text
 
 A ``text`` input can be used for user-defined input for panel query parameters.
+Panel re-renders are debounced: connected panels only update 300 ms after the user stops typing, rather than on every keystroke.
 
 ![an text input example](/images/text-input.png)
 
@@ -463,8 +468,10 @@ A ``text`` input can be used for user-defined input for panel query parameters.
 
 ## Example Configuration
 
-All panel types have an info button, which will show extra details about the panel, such as the query used, the parameters to the query, metrics that may be pushed with it, etc.
-Non-table panel types can also show a query related to the panel as more details, in the details view.
+All panel types with a `cypher` query have an info button that shows extra details about the panel, such as the query used, the parameters to the query, metrics that may be pushed with it, etc.
+For `count`, `progress`, `pie`, `bar`, `graph`, and `vertical-table` panels, the info button appears in the top-right corner of the panel and is only visible on hover.
+For `table` panels the info button is always visible, inline with the panel header.
+Non-table panel types that also have a `details_cypher` configured will show a data drill-down table as the first tab in the details view.
 
 ![a details view example](/images/details-view.png)
 
