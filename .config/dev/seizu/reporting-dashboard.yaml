@@ -248,18 +248,20 @@ toolsets:
       graph. Useful for discovery before writing more targeted queries.
     enabled: true
     tools:
-      count-nodes-by-label:
-        name: count_nodes_by_label
+      count-nodes-with-label:
+        name: count_nodes_with_label
         description: >-
-          Return a count of nodes for each label in the graph, ordered by count
-          descending. Useful for understanding the size and composition of the
-          database.
+          Return the total number of nodes that have a specific label.
+          Use the seizu__schema tool first to discover available labels.
         cypher: |-
-          CALL db.labels() YIELD label
-          CALL apoc.cypher.run('MATCH (n:' + label + ') RETURN count(n) AS total', {})
-          YIELD value
-          RETURN label, value.total AS total
-          ORDER BY total DESC
+          MATCH (n)
+          WHERE $label IN labels(n)
+          RETURN count(n) AS total
+        parameters:
+          - name: label
+            type: string
+            description: The node label to count, e.g. CVE.
+            required: true
         enabled: true
       get-sync-status:
         name: get_sync_status
