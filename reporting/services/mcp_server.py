@@ -427,11 +427,8 @@ def get_mcp_app() -> ASGIApp:
                 endpoint=_oauth_metadata_handler,
                 methods=["GET"],
             ),
-            Route(
-                "/{path:path}",
-                endpoint=asgi_app,
-                methods=["POST"],
-            ),
+            Route("/", endpoint=asgi_app, methods=["POST"]),
+            Route("/{path:path}", endpoint=asgi_app, methods=["POST"]),
         ],
         lifespan=lifespan,
     )
