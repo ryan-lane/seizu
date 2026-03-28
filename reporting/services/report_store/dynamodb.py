@@ -18,6 +18,7 @@ from reporting.schema.mcp_config import ToolsetListItem
 from reporting.schema.mcp_config import ToolsetVersion
 from reporting.schema.mcp_config import ToolVersion
 from reporting.schema.report_config import PanelStat
+from reporting.schema.report_config import QueryHistoryItem
 from reporting.schema.report_config import ReportListItem
 from reporting.schema.report_config import ReportVersion
 from reporting.schema.report_config import ScheduledQueryItem
@@ -52,6 +53,10 @@ _PK_PANEL_STATS = "PANEL_STATS"
 _PK_SCHEDULED_QUERY_LIST = "SCHEDULED_QUERY_LIST"
 # Toolsets — list index PK for listing all toolsets.
 _PK_TOOLSET_LIST = "TOOLSET_LIST"
+# Query history — per-user SK prefix; items sorted newest-first by snowflake ID.
+_SK_QUERY_HISTORY_PREFIX = "HISTORY#"
+# Maximum history items fetched from DynamoDB per user (caps scan size).
+_QUERY_HISTORY_MAX = 500
 
 
 # ---------------------------------------------------------------------------
@@ -94,6 +99,15 @@ def _version_sk(version: int) -> str:
 def generate_report_id() -> str:
     """Return a new unique snowflake ID string."""
     return str(next(_get_snowflake_gen()))
+
+
+def _query_history_pk(user_id: str) -> str:
+    return f"QUERY_HISTORY#{user_id}"
+
+
+def _query_history_sk(history_id: str) -> str:
+    """Pad the snowflake ID so lexicographic order matches time order."""
+    return f"{_SK_QUERY_HISTORY_PREFIX}{history_id.zfill(20)}"
 
 
 def _sq_pk(sq_id: str) -> str:
@@ -1503,5 +1517,84 @@ class DynamoDBReportStore(ReportStore):
                         if item and item.get("enabled", True):
                             tools.append(_tool_from_item(item))
             return tools
+
+        return await asyncio.to_thread(_op)
+
+    # ------------------------------------------------------------------
+    # Query history
+    # ------------------------------------------------------------------
+
+    async def save_query_history(self, user_id: str, query: str) -> QueryHistoryItem:
+        """Append a query execution to the user's history."""
+        history_id = str(next(_get_snowflake_gen()))
+        now = datetime.now(tz=timezone.utc).isoformat()
+        item = {
+            "PK": _query_history_pk(user_id),
+            "SK": _query_history_sk(history_id),
+            "history_id": history_id,
+            "user_id": user_id,
+            "query": query,
+            "executed_at": now,
+        }
+
+        def _op() -> None:
+            table = _get_table()
+            table.put_item(Item=_strip_none(item))
+
+        await asyncio.to_thread(_op)
+        return QueryHistoryItem(
+            history_id=history_id,
+            user_id=user_id,
+            query=query,
+            executed_at=now,
+        )
+
+    async def list_query_history(
+        self, user_id: str, page: int, per_page: int
+    ) -> tuple[List[QueryHistoryItem], int]:
+        """Return a paginated page of query history (newest first) and the total count."""
+
+        def _op() -> tuple[List[QueryHistoryItem], int]:
+            table = _get_table()
+            pk = _query_history_pk(user_id)
+
+            # Count (capped at _QUERY_HISTORY_MAX to bound the scan).
+            count_resp = table.query(
+                KeyConditionExpression="PK = :pk AND begins_with(SK, :prefix)",
+                ExpressionAttributeValues={
+                    ":pk": pk,
+                    ":prefix": _SK_QUERY_HISTORY_PREFIX,
+                },
+                Select="COUNT",
+                Limit=_QUERY_HISTORY_MAX,
+            )
+            total = count_resp.get("Count", 0)
+            if total == 0:
+                return [], 0
+
+            # Fetch only as many items as needed to reach the end of the requested
+            # page (DynamoDB has no OFFSET, so we scan from the start and slice).
+            fetch_limit = page * per_page
+            resp = table.query(
+                KeyConditionExpression="PK = :pk AND begins_with(SK, :prefix)",
+                ExpressionAttributeValues={
+                    ":pk": pk,
+                    ":prefix": _SK_QUERY_HISTORY_PREFIX,
+                },
+                ScanIndexForward=False,
+                Limit=fetch_limit,
+            )
+            items = resp.get("Items", [])
+            offset = (page - 1) * per_page
+            paged = items[offset : offset + per_page]  # noqa: E203
+            return [
+                QueryHistoryItem(
+                    history_id=it["history_id"],
+                    user_id=it["user_id"],
+                    query=it["query"],
+                    executed_at=it["executed_at"],
+                )
+                for it in paged
+            ], total
 
         return await asyncio.to_thread(_op)

@@ -26,6 +26,7 @@ from reporting.schema.mcp_config import ToolsetListItem
 from reporting.schema.mcp_config import ToolsetVersion
 from reporting.schema.mcp_config import ToolVersion
 from reporting.schema.report_config import PanelStat
+from reporting.schema.report_config import QueryHistoryItem
 from reporting.schema.report_config import ReportListItem
 from reporting.schema.report_config import ReportVersion
 from reporting.schema.report_config import ScheduledQueryItem
@@ -208,6 +209,15 @@ class ToolVersionRecord(SQLModel, table=True):  # type: ignore
     created_at: str
     created_by: str
     comment: Optional[str] = None
+
+
+class QueryHistoryRecord(SQLModel, table=True):  # type: ignore
+    __tablename__ = "query_history"
+    id: Optional[int] = Field(default=None, primary_key=True)
+    history_id: str = Field(unique=True)
+    user_id: str = Field(index=True)
+    query: str
+    executed_at: str
 
 
 # ---------------------------------------------------------------------------
@@ -1339,3 +1349,62 @@ class SQLModelReportStore(ReportStore):
             )
             tool_result = await session.execute(tool_stmt)
             return [self._tool_item_from_record(r) for r in tool_result.scalars().all()]
+
+    # ------------------------------------------------------------------
+    # Query history
+    # ------------------------------------------------------------------
+
+    async def save_query_history(self, user_id: str, query: str) -> QueryHistoryItem:
+        """Append a query execution to the user's history."""
+        history_id = generate_report_id()
+        now = datetime.now(tz=timezone.utc).isoformat()
+        record = QueryHistoryRecord(
+            history_id=history_id,
+            user_id=user_id,
+            query=query,
+            executed_at=now,
+        )
+        async with AsyncSession(_get_engine()) as session:
+            session.add(record)
+            await session.commit()
+        return QueryHistoryItem(
+            history_id=history_id,
+            user_id=user_id,
+            query=query,
+            executed_at=now,
+        )
+
+    async def list_query_history(
+        self, user_id: str, page: int, per_page: int
+    ) -> tuple[List[QueryHistoryItem], int]:
+        """Return a paginated page of query history (newest first) and the total count."""
+        from sqlalchemy import func
+
+        async with AsyncSession(_get_engine()) as session:
+            count_stmt = (
+                select(func.count())
+                .select_from(QueryHistoryRecord)
+                .where(col(QueryHistoryRecord.user_id) == user_id)
+            )
+            count_result = await session.execute(count_stmt)
+            total = count_result.scalar() or 0
+
+            offset = (page - 1) * per_page
+            page_stmt = (
+                select(QueryHistoryRecord)
+                .where(col(QueryHistoryRecord.user_id) == user_id)
+                .order_by(col(QueryHistoryRecord.id).desc())
+                .offset(offset)
+                .limit(per_page)
+            )
+            page_result = await session.execute(page_stmt)
+            rows = page_result.scalars().all()
+            return [
+                QueryHistoryItem(
+                    history_id=r.history_id,
+                    user_id=r.user_id,
+                    query=r.query,
+                    executed_at=r.executed_at,
+                )
+                for r in rows
+            ], total

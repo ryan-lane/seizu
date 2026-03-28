@@ -23,7 +23,8 @@ function getCsrfToken(): string {
 }
 
 export function useLazyCypherQuery(
-  cypher?: string
+  cypher?: string,
+  saveHistory: boolean = false
 ): [(params?: Record<string, unknown>) => void, QueryState] {
   const { accessToken } = useContext(AuthContext);
   const { auth_required } = useContext(AuthConfigContext);
@@ -54,7 +55,7 @@ export function useLazyCypherQuery(
       fetch('/api/v1/query', {
         method: 'POST',
         headers,
-        body: JSON.stringify({ query: cypher, params })
+        body: JSON.stringify({ query: cypher, params, save_history: saveHistory })
       })
         .then((res) => res.json())
         .then((data: { error?: string; errors?: string[]; warnings?: string[]; results?: QueryRecord[] }) => {
@@ -97,7 +98,7 @@ export function useLazyCypherQuery(
           setState({ loading: false, error: err, records: undefined, first: undefined, warnings: [], queryErrors: [] });
         });
     },
-    [cypher, accessToken, auth_required]
+    [cypher, saveHistory, accessToken, auth_required]
   );
 
   return [run, state];

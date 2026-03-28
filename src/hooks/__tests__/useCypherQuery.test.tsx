@@ -131,4 +131,28 @@ describe('useLazyCypherQuery', () => {
     });
     expect(global.fetch).toHaveBeenCalledTimes(1);
   });
+
+  it('sends save_history: true when saveHistory=true', () => {
+    const { result } = renderHook(() => useLazyCypherQuery(CYPHER, true), {
+      wrapper: makeWrapper(false, null)
+    });
+    const [run] = result.current;
+    act(() => {
+      run();
+    });
+    const body = JSON.parse((global.fetch as jest.Mock).mock.calls[0][1].body);
+    expect(body.save_history).toBe(true);
+  });
+
+  it('sends save_history: false by default', () => {
+    const { result } = renderHook(() => useLazyCypherQuery(CYPHER), {
+      wrapper: makeWrapper(false, null)
+    });
+    const [run] = result.current;
+    act(() => {
+      run();
+    });
+    const body = JSON.parse((global.fetch as jest.Mock).mock.calls[0][1].body);
+    expect(body.save_history).toBe(false);
+  });
 });

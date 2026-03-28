@@ -11,6 +11,7 @@ from reporting.schema.mcp_config import ToolsetListItem
 from reporting.schema.mcp_config import ToolsetVersion
 from reporting.schema.mcp_config import ToolVersion
 from reporting.schema.report_config import PanelStat
+from reporting.schema.report_config import QueryHistoryItem
 from reporting.schema.report_config import ReportListItem
 from reporting.schema.report_config import ReportVersion
 from reporting.schema.report_config import ScheduledQueryItem
@@ -368,3 +369,21 @@ class ReportStore(ABC):
     @abstractmethod
     async def list_enabled_tools(self) -> List[ToolItem]:
         """Return all enabled tools in all enabled toolsets."""
+
+    # ------------------------------------------------------------------
+    # Query history
+    # ------------------------------------------------------------------
+
+    @abstractmethod
+    async def save_query_history(self, user_id: str, query: str) -> QueryHistoryItem:
+        """Append a query execution to the user's history and return the new item."""
+
+    @abstractmethod
+    async def list_query_history(
+        self, user_id: str, page: int, per_page: int
+    ) -> tuple[List[QueryHistoryItem], int]:
+        """Return a paginated page of query history (newest first) and the total count.
+
+        Only items belonging to ``user_id`` are returned — callers must never
+        pass a user_id they do not own.
+        """

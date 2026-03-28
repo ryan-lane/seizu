@@ -7,15 +7,22 @@ It is designed for ad-hoc exploration of the Neo4j graph without requiring a sav
 
 The console is split into three areas:
 
-- **Database browser** (left, collapsible) — shows the available schema from Neo4j.
+- **Side panel** (left, collapsible) — shows the database schema or query history; toggle between them with the icons in the panel header.
 - **Result panel** (top right) — displays query results in Graph, Table, or Raw format.
 - **Query editor** (bottom right) — a multi-line Cypher editor with a Run button.
 
 Press **Ctrl+Enter** (or **Cmd+Enter** on macOS) to run the query without reaching for the mouse.
 
-## Database Browser
+## Side Panel
 
-The collapsible left panel queries Neo4j on load to discover the current schema:
+The collapsible left panel has two tabs, switched via icons in the panel header:
+
+- **Database schema** (tree icon) — queries Neo4j on load to discover the current schema.
+- **Query history** (clock icon) — shows your past queries from most recent to oldest.
+
+When collapsed, both icons are visible as stacked buttons. Clicking either icon opens the panel on that tab. Clicking the active icon again closes the panel.
+
+### Database Schema
 
 | Section | Source | Click action |
 |---------|--------|--------------|
@@ -25,6 +32,14 @@ The collapsible left panel queries Neo4j on load to discover the current schema:
 
 Clicking any item inserts the generated query into the editor and runs it immediately.
 Node labels are colour-coded using the same palette as the graph panel, so colours are consistent across the UI.
+
+### Query History
+
+The history tab shows the last 500 queries you have run from the Query Console (report panel queries are not recorded). Queries are shown newest first, 20 per page. Hovering over a row shows the full query in a tooltip.
+
+Clicking a history item **loads the query into the editor without running it**, so you can review or edit it before executing.
+
+History is private to your account — you cannot see queries run by other users.
 
 ## Result Tabs
 

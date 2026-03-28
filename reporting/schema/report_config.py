@@ -221,3 +221,21 @@ class ActionConfigFieldDef(BaseModel):
     description: Optional[str] = None
     default: Optional[Any] = None
     options: Optional[List[str]] = None
+
+
+class QueryHistoryItem(BaseModel):
+    """A single query console history entry for a user."""
+
+    history_id: str
+    user_id: str
+    query: str
+    executed_at: str
+
+
+class QueryHistoryListResponse(BaseModel):
+    """Paginated list of query history items."""
+
+    items: List[QueryHistoryItem]
+    total: int
+    page: int
+    per_page: int

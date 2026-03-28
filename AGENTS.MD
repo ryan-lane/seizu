@@ -75,7 +75,8 @@ React 19 + TypeScript + Bun + Material-UI + MUI X Charts + `@xyflow/react`.
 - `src/userManager.ts` — `oidc-client-ts` `UserManager` singleton; returns `null` when auth is off
 - `src/components/AuthProvider.tsx` — OIDC flow; registers events, calls `getUser()`, triggers `signinRedirect()` when unauthenticated
 - `src/components/OidcCallback.tsx` — `/auth/callback`; calls `signinRedirectCallback()` then navigates to `/`
-- `src/hooks/useCypherQuery.ts` — wraps `POST /api/v1/query`; skips if `auth_required` and no token
+- `src/hooks/useCypherQuery.ts` — wraps `POST /api/v1/query`; skips if `auth_required` and no token; `saveHistory` param forwards `save_history: true` to record in console history
+- `src/hooks/useQueryHistory.ts` — fetches `GET /api/v1/query-history` for the current user; returns `{ loading, error, data, fetchHistory }`
 - `src/hooks/useReportsApi.ts` — `useReportsList()`, `useReport(id)`, `useDashboardReport()`, `useAllReports()`, `useReportVersionsList(id)`, `useReportVersion(id, v)`; `useReportsMutations()` for create/save-version/set-dashboard/delete
 - `src/components/ReportView.tsx` — shared report renderer; resolves panel `cypher` against `report.queries`
 - `src/components/reports/` — panel components (`CypherCount`, `CypherTable`, `CypherBar`, etc.)
@@ -121,8 +122,9 @@ FastAPI, Python 3.12, Gunicorn + UvicornWorker (ASGI). All I/O is async (neo4j a
 | Method | Path | Description |
 |--------|------|-------------|
 | GET | `/api/v1/config` | OIDC config, stats config, JSON schema |
-| POST | `/api/v1/query` | Execute validated read-only Cypher; returns `{results, errors, warnings}` |
+| POST | `/api/v1/query` | Execute validated read-only Cypher; returns `{results, errors, warnings}`; pass `save_history: true` to record in console history |
 | POST | `/api/v1/validate` | Validate Cypher without executing; returns `{errors, warnings}` |
+| GET | `/api/v1/query-history` | Paginated query history for the current user; params `page`, `per_page` (1–100) |
 | GET | `/api/v1/reports` | List reports (metadata only) |
 | POST | `/api/v1/reports` | Create report; 201 |
 | GET | `/api/v1/reports/dashboard` | Latest dashboard report; 404 if none |
