@@ -180,7 +180,7 @@ Prefer `make seed_dashboard [ARGS="--force|--dry-run|export"]`.
 Seizu exposes an MCP (Model Context Protocol) server at `/api/v1/mcp` when `MCP_ENABLED=true` (default). LLM agents such as Claude can connect and call tools as a standard MCP client.
 
 **Key details:**
-- Transport: StreamableHTTP, mounted as a Starlette ASGI sub-app inside FastAPI via `app.mount()`
+- Transport: StreamableHTTP, wired into FastAPI via `_MCPMiddleware` (pure ASGI middleware in `reporting/app.py`) that intercepts `/api/v1/mcp*` before FastAPI routing; avoids a Starlette 1.0.0 issue where `Mount("/api/v1/mcp")` requires a trailing slash and the SPA catch-all returns 405
 - Auth: `_MCPAuthMiddleware` validates Bearer JWT tokens using the same `PyJWKClient` logic as the REST API; passes through unauthenticated in dev (`DEVELOPMENT_ONLY_REQUIRE_AUTH=false`)
 - CSRF: exempt — MCP clients are not browsers and do not use cookie-based auth
 - Tool names: namespaced as `{toolset_name}__{tool_name}` (double underscore)

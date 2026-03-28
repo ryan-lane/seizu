@@ -1,18 +1,19 @@
 """MCP server for Seizu — exposes toolsets and tools as MCP tools.
 
-The server is mounted as a Starlette ASGI sub-application inside the FastAPI app
-at /api/v1/mcp.  Authentication is enforced by a thin ASGI middleware that validates
-the Bearer token using the same JWT logic as the rest of the API.
+The server is wired into the FastAPI app via a pure ASGI middleware
+(_MCPMiddleware in reporting/app.py) that intercepts /api/v1/mcp* paths before
+FastAPI's router runs.  Authentication is enforced by _MCPAuthMiddleware which
+validates the Bearer token using the same JWT logic as the rest of the API.
+The session manager lifespan is managed by the FastAPI app's lifespan context.
 """
 import asyncio
 import json
 import logging
-from contextlib import asynccontextmanager
 from typing import Any
-from typing import AsyncIterator
 from typing import Dict
 from typing import List
 from typing import Optional
+from typing import Tuple
 
 import jwt
 from jwt import PyJWKClient
@@ -21,10 +22,8 @@ from mcp.server.lowlevel import Server
 from mcp.server.streamable_http_manager import StreamableHTTPSessionManager
 from mcp.types import TextContent
 from mcp.types import Tool
-from starlette.applications import Starlette
 from starlette.requests import Request
 from starlette.responses import JSONResponse as StarletteJSONResponse
-from starlette.routing import Route
 from starlette.types import ASGIApp
 from starlette.types import Receive
 from starlette.types import Scope
@@ -399,12 +398,42 @@ async def _oauth_metadata_handler(request: Request) -> StarletteJSONResponse:
 
 
 # ---------------------------------------------------------------------------
+# Inner dispatcher: routes OAuth metadata, passes everything else to MCP
+# ---------------------------------------------------------------------------
+
+
+class _MCPDispatcher:
+    """Routes OAuth metadata requests; forwards everything else to the MCP app."""
+
+    def __init__(self, mcp_asgi_app: ASGIApp) -> None:
+        self._mcp_app = mcp_asgi_app
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        path = scope.get("path", "")
+        if scope["type"] == "http" and path.endswith(_WELL_KNOWN_PATH):
+            request = Request(scope, receive)
+            response = await _oauth_metadata_handler(request)
+            await response(scope, receive, send)
+            return
+        await self._mcp_app(scope, receive, send)
+
+
+# ---------------------------------------------------------------------------
 # ASGI app factory
 # ---------------------------------------------------------------------------
 
 
-def get_mcp_app() -> ASGIApp:
-    """Return the MCP ASGI application wrapped with auth middleware."""
+def get_mcp_app() -> Tuple[StreamableHTTPSessionManager, ASGIApp]:
+    """Return (session_manager, mcp_asgi_app) for integration into the FastAPI app.
+
+    The caller must:
+    1. Store session_manager and start it with ``async with session_manager.run()``
+       during the application lifespan (e.g., FastAPI lifespan context).
+    2. Route /api/v1/mcp* requests to the returned mcp_asgi_app (e.g., via
+       _MCPMiddleware in reporting/app.py).
+
+    Auth and OAuth metadata routing are handled internally by the returned app.
+    """
     mcp_server = _build_mcp_server()
     session_manager = StreamableHTTPSessionManager(
         app=mcp_server,
@@ -412,25 +441,5 @@ def get_mcp_app() -> ASGIApp:
         json_response=True,
         stateless=True,
     )
-    asgi_app = StreamableHTTPASGIApp(session_manager)
-
-    @asynccontextmanager
-    async def lifespan(app: Starlette) -> AsyncIterator[None]:
-        async with session_manager.run():
-            yield
-
-    starlette_app = Starlette(
-        routes=[
-            # OAuth metadata must be reachable before auth — no token yet during discovery
-            Route(
-                _WELL_KNOWN_PATH,
-                endpoint=_oauth_metadata_handler,
-                methods=["GET"],
-            ),
-            Route("/", endpoint=asgi_app, methods=["POST"]),
-            Route("/{path:path}", endpoint=asgi_app, methods=["POST"]),
-        ],
-        lifespan=lifespan,
-    )
-
-    return _MCPAuthMiddleware(starlette_app)
+    mcp_asgi = StreamableHTTPASGIApp(session_manager)
+    return session_manager, _MCPAuthMiddleware(_MCPDispatcher(mcp_asgi))
