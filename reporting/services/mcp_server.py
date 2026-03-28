@@ -260,8 +260,14 @@ def _build_mcp_server() -> Server:
                     )
                 ]
 
+            # Apply parameter defaults so optional params are passed as null
+            # rather than absent — Neo4j raises ParameterMissing if a $param
+            # referenced in the query is not present at all.
+            params_with_defaults = {p.name: p.default for p in target_tool.parameters}
+            params_with_defaults.update(args)
+
             results = await reporting_neo4j.run_query(
-                target_tool.cypher, parameters=args
+                target_tool.cypher, parameters=params_with_defaults
             )
             serialized = [
                 {key: _serialize_neo4j_value(value) for key, value in record.items()}
