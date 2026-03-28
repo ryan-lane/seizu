@@ -6,6 +6,10 @@ from typing import Dict
 from typing import List
 from typing import Optional
 
+from reporting.schema.mcp_config import ToolItem
+from reporting.schema.mcp_config import ToolsetListItem
+from reporting.schema.mcp_config import ToolsetVersion
+from reporting.schema.mcp_config import ToolVersion
 from reporting.schema.report_config import PanelStat
 from reporting.schema.report_config import ReportListItem
 from reporting.schema.report_config import ReportVersion
@@ -259,3 +263,108 @@ class ReportStore(ABC):
     @abstractmethod
     async def delete_scheduled_query(self, sq_id: str) -> bool:
         """Delete a scheduled query and all its versions. Returns False if not found."""
+
+    # ------------------------------------------------------------------
+    # Toolsets
+    # ------------------------------------------------------------------
+
+    @abstractmethod
+    async def list_toolsets(self) -> List[ToolsetListItem]:
+        """Return all toolsets."""
+
+    @abstractmethod
+    async def get_toolset(self, toolset_id: str) -> Optional[ToolsetListItem]:
+        """Return a toolset by ID, or None if not found."""
+
+    @abstractmethod
+    async def create_toolset(
+        self,
+        name: str,
+        description: str,
+        enabled: bool,
+        created_by: str,
+    ) -> ToolsetListItem:
+        """Create a new toolset (at version 1) and return it."""
+
+    @abstractmethod
+    async def update_toolset(
+        self,
+        toolset_id: str,
+        name: str,
+        description: str,
+        enabled: bool,
+        updated_by: str,
+        comment: Optional[str] = None,
+    ) -> Optional[ToolsetListItem]:
+        """Save a new version of an existing toolset. Returns None if not found."""
+
+    @abstractmethod
+    async def delete_toolset(self, toolset_id: str) -> bool:
+        """Delete a toolset, all its versions, and all its tools. Returns False if not found."""
+
+    @abstractmethod
+    async def list_toolset_versions(self, toolset_id: str) -> List[ToolsetVersion]:
+        """Return all stored versions for a toolset, newest first."""
+
+    @abstractmethod
+    async def get_toolset_version(
+        self, toolset_id: str, version: int
+    ) -> Optional[ToolsetVersion]:
+        """Return a specific version of a toolset, or None if not found."""
+
+    # ------------------------------------------------------------------
+    # Tools
+    # ------------------------------------------------------------------
+
+    @abstractmethod
+    async def list_tools(self, toolset_id: str) -> List[ToolItem]:
+        """Return all tools within a toolset."""
+
+    @abstractmethod
+    async def get_tool(self, tool_id: str) -> Optional[ToolItem]:
+        """Return a tool by ID, or None if not found."""
+
+    @abstractmethod
+    async def create_tool(
+        self,
+        toolset_id: str,
+        name: str,
+        description: str,
+        cypher: str,
+        parameters: List[Dict[str, Any]],
+        enabled: bool,
+        created_by: str,
+    ) -> Optional[ToolItem]:
+        """Create a new tool (at version 1). Returns None if the toolset does not exist."""
+
+    @abstractmethod
+    async def update_tool(
+        self,
+        tool_id: str,
+        name: str,
+        description: str,
+        cypher: str,
+        parameters: List[Dict[str, Any]],
+        enabled: bool,
+        updated_by: str,
+        comment: Optional[str] = None,
+    ) -> Optional[ToolItem]:
+        """Save a new version of an existing tool. Returns None if not found."""
+
+    @abstractmethod
+    async def delete_tool(self, tool_id: str) -> bool:
+        """Delete a tool and all its versions. Returns False if not found."""
+
+    @abstractmethod
+    async def list_tool_versions(self, tool_id: str) -> List[ToolVersion]:
+        """Return all stored versions for a tool, newest first."""
+
+    @abstractmethod
+    async def get_tool_version(
+        self, tool_id: str, version: int
+    ) -> Optional[ToolVersion]:
+        """Return a specific version of a tool, or None if not found."""
+
+    @abstractmethod
+    async def list_enabled_tools(self) -> List[ToolItem]:
+        """Return all enabled tools in all enabled toolsets."""

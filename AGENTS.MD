@@ -138,6 +138,14 @@ FastAPI, Python 3.12, Gunicorn + UvicornWorker (ASGI). All I/O is async (neo4j a
 | GET/PUT/DELETE | `/api/v1/scheduled-queries/<id>` | Get / update / delete |
 | GET | `/api/v1/scheduled-queries/<id>/versions` | All versions |
 | GET | `/api/v1/scheduled-queries/<id>/versions/<n>` | Specific version |
+| GET/POST | `/api/v1/toolsets` | List / create toolsets |
+| GET/PUT/DELETE | `/api/v1/toolsets/<id>` | Get / update / delete toolset |
+| GET | `/api/v1/toolsets/<id>/versions` | All toolset versions |
+| GET | `/api/v1/toolsets/<id>/versions/<n>` | Specific toolset version |
+| GET/POST | `/api/v1/toolsets/<id>/tools` | List / create tools |
+| GET/PUT/DELETE | `/api/v1/toolsets/<id>/tools/<tool_id>` | Get / update / delete tool |
+| GET | `/api/v1/toolsets/<id>/tools/<tool_id>/versions` | All tool versions |
+| GET | `/api/v1/toolsets/<id>/tools/<tool_id>/versions/<n>` | Specific tool version |
 | GET | `/healthcheck` | Healthcheck |
 | GET | `/api/openapi.json` | OpenAPI 3.x spec |
 | GET | `/api/docs` | Swagger UI |
@@ -166,6 +174,34 @@ PYTHONPATH=/home/seizu/seizu pipenv run python -m seizu_cli --api-url http://sei
 PYTHONPATH=/home/seizu/seizu pipenv run python -m seizu_cli --api-url http://seizu:8080 export
 ```
 Prefer `make seed_dashboard [ARGS="--force|--dry-run|export"]`.
+
+### MCP Server (`reporting/services/mcp_server.py`)
+
+Seizu exposes an MCP (Model Context Protocol) server at `/api/v1/mcp` when `MCP_ENABLED=true` (default). LLM agents such as Claude can connect and call tools as a standard MCP client.
+
+**Key details:**
+- Transport: StreamableHTTP, wired into FastAPI via `_MCPMiddleware` (pure ASGI middleware in `reporting/app.py`) that intercepts `/api/v1/mcp*` before FastAPI routing; avoids a Starlette 1.0.0 issue where `Mount("/api/v1/mcp")` requires a trailing slash and the SPA catch-all returns 405
+- Auth: `_MCPAuthMiddleware` validates Bearer JWT tokens using the same `PyJWKClient` logic as the REST API; passes through unauthenticated in dev (`DEVELOPMENT_ONLY_REQUIRE_AUTH=false`)
+- CSRF: exempt — MCP clients are not browsers and do not use cookie-based auth
+- Tool names: namespaced as `{toolset_name}__{tool_name}` (double underscore)
+- Tool listing: `@server.list_tools()` queries `report_store.list_enabled_tools()` at request time (dynamic, not static)
+- Tool execution: `@server.call_tool()` runs the tool's Cypher query via `reporting_neo4j.run_query()`
+
+**Built-in tool:** `seizu__schema` — always available; runs `CALL db.labels()`, `CALL db.relationshipTypes()`, `CALL db.propertyKeys()` and returns the graph schema.
+
+**OAuth metadata endpoint:** `GET /api/v1/mcp/.well-known/oauth-authorization-server` (RFC 8414). Enabled when `MCP_OAUTH_AUTHORIZATION_ENDPOINT` and `MCP_OAUTH_TOKEN_ENDPOINT` are set. Allows MCP clients (e.g. Claude Desktop) to discover the OIDC provider and authenticate users without a pre-issued token. The auth middleware passes `.well-known` requests through unauthenticated. Settings: `MCP_OAUTH_ISSUER`, `MCP_OAUTH_AUTHORIZATION_ENDPOINT`, `MCP_OAUTH_TOKEN_ENDPOINT`.
+
+**Toolsets and Tools** are user-managed groupings of Cypher-backed tools, stored in the same report store backend (DynamoDB or SQL) with full version history. CRUD is via the REST API. Cypher is validated at create/update time — write queries are blocked.
+
+**DynamoDB key space:**
+```
+TOOLSET#{id} / #METADATA, VERSION#NNNNNNNNNN
+TOOLSET_LIST / TOOLSET#{id}
+TOOL#{id}    / #METADATA, VERSION#NNNNNNNNNN
+TOOL_LIST#{toolset_id} / TOOL#{id}
+```
+
+**SQL tables:** `toolsets`, `toolset_versions`, `tools`, `tool_versions`
 
 ### Configuration System
 

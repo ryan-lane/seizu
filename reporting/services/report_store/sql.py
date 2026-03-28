@@ -20,6 +20,11 @@ from sqlmodel import select
 from sqlmodel import SQLModel
 
 from reporting import settings
+from reporting.schema.mcp_config import ToolItem
+from reporting.schema.mcp_config import ToolParamDef
+from reporting.schema.mcp_config import ToolsetListItem
+from reporting.schema.mcp_config import ToolsetVersion
+from reporting.schema.mcp_config import ToolVersion
 from reporting.schema.report_config import PanelStat
 from reporting.schema.report_config import ReportListItem
 from reporting.schema.report_config import ReportVersion
@@ -136,6 +141,70 @@ class ScheduledQueryVersionRecord(SQLModel, table=True):  # type: ignore
     actions: List[Dict[str, Any]] = Field(
         default=[], sa_column=Column(JSON, nullable=False)
     )
+    created_at: str
+    created_by: str
+    comment: Optional[str] = None
+
+
+class ToolsetRecord(SQLModel, table=True):  # type: ignore
+    __tablename__ = "toolsets"
+    toolset_id: str = Field(primary_key=True)
+    name: str
+    description: str = ""
+    enabled: bool = True
+    current_version: int = 0
+    created_at: str
+    updated_at: str
+    created_by: str
+    updated_by: Optional[str] = None
+
+
+class ToolsetVersionRecord(SQLModel, table=True):  # type: ignore
+    __tablename__ = "toolset_versions"
+    __table_args__ = (UniqueConstraint("toolset_id", "version"),)
+    id: Optional[int] = Field(default=None, primary_key=True)
+    toolset_id: str = Field(index=True)
+    version: int
+    name: str
+    description: str = ""
+    enabled: bool = True
+    created_at: str
+    created_by: str
+    comment: Optional[str] = None
+
+
+class ToolRecord(SQLModel, table=True):  # type: ignore
+    __tablename__ = "tools"
+    tool_id: str = Field(primary_key=True)
+    toolset_id: str = Field(index=True)
+    name: str
+    description: str = ""
+    cypher: str
+    parameters: List[Dict[str, Any]] = Field(
+        default=[], sa_column=Column(JSON, nullable=False)
+    )
+    enabled: bool = True
+    current_version: int = 0
+    created_at: str
+    updated_at: str
+    created_by: str
+    updated_by: Optional[str] = None
+
+
+class ToolVersionRecord(SQLModel, table=True):  # type: ignore
+    __tablename__ = "tool_versions"
+    __table_args__ = (UniqueConstraint("tool_id", "version"),)
+    id: Optional[int] = Field(default=None, primary_key=True)
+    tool_id: str = Field(index=True)
+    toolset_id: str
+    version: int
+    name: str
+    description: str = ""
+    cypher: str
+    parameters: List[Dict[str, Any]] = Field(
+        default=[], sa_column=Column(JSON, nullable=False)
+    )
+    enabled: bool = True
     created_at: str
     created_by: str
     comment: Optional[str] = None
@@ -806,3 +875,467 @@ class SQLModelReportStore(ReportStore):
             session.add(record)
             await session.commit()
         return True
+
+    # ------------------------------------------------------------------
+    # Toolsets
+    # ------------------------------------------------------------------
+
+    def _toolset_item_from_record(self, record: ToolsetRecord) -> ToolsetListItem:
+        return ToolsetListItem(
+            toolset_id=record.toolset_id,
+            name=record.name,
+            description=record.description or "",
+            enabled=record.enabled,
+            current_version=record.current_version,
+            created_at=record.created_at,
+            updated_at=record.updated_at,
+            created_by=record.created_by,
+            updated_by=record.updated_by,
+        )
+
+    async def list_toolsets(self) -> List[ToolsetListItem]:
+        async with AsyncSession(_get_engine()) as session:
+            result = await session.execute(select(ToolsetRecord))
+            rows = result.scalars().all()
+            return [self._toolset_item_from_record(r) for r in rows]
+
+    async def get_toolset(self, toolset_id: str) -> Optional[ToolsetListItem]:
+        async with AsyncSession(_get_engine()) as session:
+            record = await session.get(ToolsetRecord, toolset_id)
+            if not record:
+                return None
+            return self._toolset_item_from_record(record)
+
+    async def create_toolset(
+        self,
+        name: str,
+        description: str,
+        enabled: bool,
+        created_by: str,
+    ) -> ToolsetListItem:
+        toolset_id = generate_report_id()
+        now = datetime.now(tz=timezone.utc).isoformat()
+        version = 1
+        async with AsyncSession(_get_engine()) as session:
+            record = ToolsetRecord(
+                toolset_id=toolset_id,
+                name=name,
+                description=description,
+                enabled=enabled,
+                current_version=version,
+                created_at=now,
+                updated_at=now,
+                created_by=created_by,
+                updated_by=created_by,
+            )
+            session.add(record)
+            session.add(
+                ToolsetVersionRecord(
+                    toolset_id=toolset_id,
+                    version=version,
+                    name=name,
+                    description=description,
+                    enabled=enabled,
+                    created_at=now,
+                    created_by=created_by,
+                    comment=None,
+                )
+            )
+            await session.commit()
+        return ToolsetListItem(
+            toolset_id=toolset_id,
+            name=name,
+            description=description,
+            enabled=enabled,
+            current_version=version,
+            created_at=now,
+            updated_at=now,
+            created_by=created_by,
+            updated_by=created_by,
+        )
+
+    async def update_toolset(
+        self,
+        toolset_id: str,
+        name: str,
+        description: str,
+        enabled: bool,
+        updated_by: str,
+        comment: Optional[str] = None,
+    ) -> Optional[ToolsetListItem]:
+        now = datetime.now(tz=timezone.utc).isoformat()
+        async with AsyncSession(_get_engine()) as session:
+            record = await session.get(ToolsetRecord, toolset_id)
+            if not record:
+                return None
+            original_created_at = record.created_at
+            original_created_by = record.created_by
+            version = record.current_version + 1
+            record.name = name
+            record.description = description
+            record.enabled = enabled
+            record.current_version = version
+            record.updated_at = now
+            record.updated_by = updated_by
+            session.add(record)
+            session.add(
+                ToolsetVersionRecord(
+                    toolset_id=toolset_id,
+                    version=version,
+                    name=name,
+                    description=description,
+                    enabled=enabled,
+                    created_at=now,
+                    created_by=updated_by,
+                    comment=comment,
+                )
+            )
+            await session.commit()
+        return ToolsetListItem(
+            toolset_id=toolset_id,
+            name=name,
+            description=description,
+            enabled=enabled,
+            current_version=version,
+            created_at=original_created_at,
+            updated_at=now,
+            created_by=original_created_by,
+            updated_by=updated_by,
+        )
+
+    async def delete_toolset(self, toolset_id: str) -> bool:
+        async with AsyncSession(_get_engine()) as session:
+            record = await session.get(ToolsetRecord, toolset_id)
+            if not record:
+                return False
+
+            # Delete all tools and their versions
+            tools_stmt = select(ToolRecord).where(ToolRecord.toolset_id == toolset_id)
+            tools_result = await session.execute(tools_stmt)
+            for tool_record in tools_result.scalars().all():
+                versions_stmt = select(ToolVersionRecord).where(
+                    ToolVersionRecord.tool_id == tool_record.tool_id
+                )
+                versions_result = await session.execute(versions_stmt)
+                for ver in versions_result.scalars().all():
+                    await session.delete(ver)
+                await session.delete(tool_record)
+
+            # Delete all toolset versions
+            ts_versions_stmt = select(ToolsetVersionRecord).where(
+                ToolsetVersionRecord.toolset_id == toolset_id
+            )
+            ts_versions_result = await session.execute(ts_versions_stmt)
+            for ver in ts_versions_result.scalars().all():
+                await session.delete(ver)
+
+            await session.delete(record)
+            await session.commit()
+        return True
+
+    async def list_toolset_versions(self, toolset_id: str) -> List[ToolsetVersion]:
+        async with AsyncSession(_get_engine()) as session:
+            ts = await session.get(ToolsetRecord, toolset_id)
+            if not ts:
+                return []
+            stmt = (
+                select(ToolsetVersionRecord)
+                .where(ToolsetVersionRecord.toolset_id == toolset_id)
+                .order_by(col(ToolsetVersionRecord.version).desc())
+            )
+            result = await session.execute(stmt)
+            rows = result.scalars().all()
+            return [
+                ToolsetVersion(
+                    toolset_id=r.toolset_id,
+                    name=r.name,
+                    description=r.description or "",
+                    enabled=r.enabled,
+                    version=r.version,
+                    created_at=r.created_at,
+                    created_by=r.created_by,
+                    comment=r.comment,
+                )
+                for r in rows
+            ]
+
+    async def get_toolset_version(
+        self, toolset_id: str, version: int
+    ) -> Optional[ToolsetVersion]:
+        async with AsyncSession(_get_engine()) as session:
+            stmt = (
+                select(ToolsetVersionRecord)
+                .where(ToolsetVersionRecord.toolset_id == toolset_id)
+                .where(ToolsetVersionRecord.version == version)
+            )
+            result = await session.execute(stmt)
+            row = result.scalars().first()
+            if not row:
+                return None
+            return ToolsetVersion(
+                toolset_id=row.toolset_id,
+                name=row.name,
+                description=row.description or "",
+                enabled=row.enabled,
+                version=row.version,
+                created_at=row.created_at,
+                created_by=row.created_by,
+                comment=row.comment,
+            )
+
+    # ------------------------------------------------------------------
+    # Tools
+    # ------------------------------------------------------------------
+
+    def _tool_item_from_record(self, record: ToolRecord) -> ToolItem:
+        return ToolItem(
+            tool_id=record.tool_id,
+            toolset_id=record.toolset_id,
+            name=record.name,
+            description=record.description or "",
+            cypher=record.cypher,
+            parameters=[
+                ToolParamDef(**p) if isinstance(p, dict) else p
+                for p in (record.parameters or [])
+            ],
+            enabled=record.enabled,
+            current_version=record.current_version,
+            created_at=record.created_at,
+            updated_at=record.updated_at,
+            created_by=record.created_by,
+            updated_by=record.updated_by,
+        )
+
+    async def list_tools(self, toolset_id: str) -> List[ToolItem]:
+        async with AsyncSession(_get_engine()) as session:
+            stmt = select(ToolRecord).where(ToolRecord.toolset_id == toolset_id)
+            result = await session.execute(stmt)
+            return [self._tool_item_from_record(r) for r in result.scalars().all()]
+
+    async def get_tool(self, tool_id: str) -> Optional[ToolItem]:
+        async with AsyncSession(_get_engine()) as session:
+            record = await session.get(ToolRecord, tool_id)
+            if not record:
+                return None
+            return self._tool_item_from_record(record)
+
+    async def create_tool(
+        self,
+        toolset_id: str,
+        name: str,
+        description: str,
+        cypher: str,
+        parameters: List[Dict[str, Any]],
+        enabled: bool,
+        created_by: str,
+    ) -> Optional[ToolItem]:
+        async with AsyncSession(_get_engine()) as session:
+            ts = await session.get(ToolsetRecord, toolset_id)
+            if not ts:
+                return None
+            tool_id = generate_report_id()
+            now = datetime.now(tz=timezone.utc).isoformat()
+            version = 1
+            record = ToolRecord(
+                tool_id=tool_id,
+                toolset_id=toolset_id,
+                name=name,
+                description=description,
+                cypher=cypher,
+                parameters=parameters,
+                enabled=enabled,
+                current_version=version,
+                created_at=now,
+                updated_at=now,
+                created_by=created_by,
+                updated_by=created_by,
+            )
+            session.add(record)
+            session.add(
+                ToolVersionRecord(
+                    tool_id=tool_id,
+                    toolset_id=toolset_id,
+                    version=version,
+                    name=name,
+                    description=description,
+                    cypher=cypher,
+                    parameters=parameters,
+                    enabled=enabled,
+                    created_at=now,
+                    created_by=created_by,
+                    comment=None,
+                )
+            )
+            await session.commit()
+        return ToolItem(
+            tool_id=tool_id,
+            toolset_id=toolset_id,
+            name=name,
+            description=description,
+            cypher=cypher,
+            parameters=[
+                ToolParamDef(**p) if isinstance(p, dict) else p for p in parameters
+            ],
+            enabled=enabled,
+            current_version=version,
+            created_at=now,
+            updated_at=now,
+            created_by=created_by,
+            updated_by=created_by,
+        )
+
+    async def update_tool(
+        self,
+        tool_id: str,
+        name: str,
+        description: str,
+        cypher: str,
+        parameters: List[Dict[str, Any]],
+        enabled: bool,
+        updated_by: str,
+        comment: Optional[str] = None,
+    ) -> Optional[ToolItem]:
+        now = datetime.now(tz=timezone.utc).isoformat()
+        async with AsyncSession(_get_engine()) as session:
+            record = await session.get(ToolRecord, tool_id)
+            if not record:
+                return None
+            toolset_id = record.toolset_id
+            original_created_at = record.created_at
+            original_created_by = record.created_by
+            version = record.current_version + 1
+            record.name = name
+            record.description = description
+            record.cypher = cypher
+            record.parameters = parameters
+            record.enabled = enabled
+            record.current_version = version
+            record.updated_at = now
+            record.updated_by = updated_by
+            session.add(record)
+            session.add(
+                ToolVersionRecord(
+                    tool_id=tool_id,
+                    toolset_id=toolset_id,
+                    version=version,
+                    name=name,
+                    description=description,
+                    cypher=cypher,
+                    parameters=parameters,
+                    enabled=enabled,
+                    created_at=now,
+                    created_by=updated_by,
+                    comment=comment,
+                )
+            )
+            await session.commit()
+        return ToolItem(
+            tool_id=tool_id,
+            toolset_id=toolset_id,
+            name=name,
+            description=description,
+            cypher=cypher,
+            parameters=[
+                ToolParamDef(**p) if isinstance(p, dict) else p for p in parameters
+            ],
+            enabled=enabled,
+            current_version=version,
+            created_at=original_created_at,
+            updated_at=now,
+            created_by=original_created_by,
+            updated_by=updated_by,
+        )
+
+    async def delete_tool(self, tool_id: str) -> bool:
+        async with AsyncSession(_get_engine()) as session:
+            record = await session.get(ToolRecord, tool_id)
+            if not record:
+                return False
+            stmt = select(ToolVersionRecord).where(ToolVersionRecord.tool_id == tool_id)
+            result = await session.execute(stmt)
+            for ver in result.scalars().all():
+                await session.delete(ver)
+            await session.delete(record)
+            await session.commit()
+        return True
+
+    async def list_tool_versions(self, tool_id: str) -> List[ToolVersion]:
+        async with AsyncSession(_get_engine()) as session:
+            tool = await session.get(ToolRecord, tool_id)
+            if not tool:
+                return []
+            stmt = (
+                select(ToolVersionRecord)
+                .where(ToolVersionRecord.tool_id == tool_id)
+                .order_by(col(ToolVersionRecord.version).desc())
+            )
+            result = await session.execute(stmt)
+            rows = result.scalars().all()
+            return [
+                ToolVersion(
+                    tool_id=r.tool_id,
+                    toolset_id=r.toolset_id,
+                    name=r.name,
+                    description=r.description or "",
+                    cypher=r.cypher,
+                    parameters=[
+                        ToolParamDef(**p) if isinstance(p, dict) else p
+                        for p in (r.parameters or [])
+                    ],
+                    enabled=r.enabled,
+                    version=r.version,
+                    created_at=r.created_at,
+                    created_by=r.created_by,
+                    comment=r.comment,
+                )
+                for r in rows
+            ]
+
+    async def get_tool_version(
+        self, tool_id: str, version: int
+    ) -> Optional[ToolVersion]:
+        async with AsyncSession(_get_engine()) as session:
+            stmt = (
+                select(ToolVersionRecord)
+                .where(ToolVersionRecord.tool_id == tool_id)
+                .where(ToolVersionRecord.version == version)
+            )
+            result = await session.execute(stmt)
+            row = result.scalars().first()
+            if not row:
+                return None
+            return ToolVersion(
+                tool_id=row.tool_id,
+                toolset_id=row.toolset_id,
+                name=row.name,
+                description=row.description or "",
+                cypher=row.cypher,
+                parameters=[
+                    ToolParamDef(**p) if isinstance(p, dict) else p
+                    for p in (row.parameters or [])
+                ],
+                enabled=row.enabled,
+                version=row.version,
+                created_at=row.created_at,
+                created_by=row.created_by,
+                comment=row.comment,
+            )
+
+    async def list_enabled_tools(self) -> List[ToolItem]:
+        from sqlmodel import col
+
+        async with AsyncSession(_get_engine()) as session:
+            ts_stmt = select(ToolsetRecord).where(
+                col(ToolsetRecord.enabled) == True  # noqa: E712
+            )
+            ts_result = await session.execute(ts_stmt)
+            enabled_toolset_ids = [r.toolset_id for r in ts_result.scalars().all()]
+            if not enabled_toolset_ids:
+                return []
+            tool_stmt = (
+                select(ToolRecord)
+                .where(col(ToolRecord.toolset_id).in_(enabled_toolset_ids))
+                .where(col(ToolRecord.enabled) == True)  # noqa: E712
+            )
+            tool_result = await session.execute(tool_stmt)
+            return [self._tool_item_from_record(r) for r in tool_result.scalars().all()]

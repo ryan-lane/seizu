@@ -1,5 +1,6 @@
 import http.cookies
 import os
+import re
 from contextlib import asynccontextmanager
 from typing import Any
 from typing import AsyncIterator
@@ -16,6 +17,10 @@ from fastapi.staticfiles import StaticFiles
 from itsdangerous import BadSignature
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import Response
+from starlette.types import ASGIApp as StarletteASGIApp
+from starlette.types import Receive
+from starlette.types import Scope
+from starlette.types import Send
 from starlette_csrf import CSRFMiddleware
 
 from reporting import settings
@@ -25,6 +30,7 @@ from reporting.routes import query as query_routes
 from reporting.routes import reports as reports_routes
 from reporting.routes import scheduled_queries as sq_routes
 from reporting.routes import static as static_routes
+from reporting.routes import toolsets as toolsets_routes
 from reporting.routes import users as users_routes
 from reporting.routes import validate as validate_routes
 from reporting.services import report_store
@@ -95,6 +101,29 @@ class _SecurityHeadersMiddleware(BaseHTTPMiddleware):
         return response
 
 
+class _MCPMiddleware:
+    """Pure ASGI middleware that intercepts /api/v1/mcp* before FastAPI routing.
+
+    In Starlette 1.0.0, Mount("/api/v1/mcp") only matches paths with a
+    trailing slash (regex ^/api/v1/mcp/.*).  The GET /{full_path:path} SPA
+    catch-all returns a PARTIAL match for POST /api/v1/mcp, which causes
+    FastAPI to return 405 before Starlette can issue its automatic redirect.
+    This middleware runs ahead of the router and bypasses that issue entirely.
+    """
+
+    def __init__(self, app: StarletteASGIApp, mcp_app: StarletteASGIApp) -> None:
+        self._app = app
+        self._mcp_app = mcp_app
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] in ("http", "websocket"):
+            path = scope.get("path", "")
+            if path == "/api/v1/mcp" or path.startswith("/api/v1/mcp/"):
+                await self._mcp_app(scope, receive, send)
+                return
+        await self._app(scope, receive, send)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     should_init = settings.DYNAMODB_CREATE_TABLE or (
@@ -102,7 +131,12 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     )
     if should_init:
         await report_store.initialize()
-    yield
+    mcp_session_manager = getattr(app.state, "mcp_session_manager", None)
+    if mcp_session_manager is not None:
+        async with mcp_session_manager.run():
+            yield
+    else:
+        yield
 
 
 def create_app() -> FastAPI:
@@ -128,6 +162,7 @@ def create_app() -> FastAPI:
     app.add_middleware(_SecurityHeadersMiddleware, secure_headers=secure_headers)
 
     # CSRF middleware — skip on healthcheck and config (GET, no state-change risk)
+    # Also exempt /api/v1/mcp since MCP clients are not browsers and use Bearer auth.
     if not settings.CSRF_DISABLE:
         app.add_middleware(
             _CSRFMiddleware,
@@ -139,6 +174,7 @@ def create_app() -> FastAPI:
             cookie_samesite=settings.CSRF_COOKIE_SAMESITE,
             cookie_domain=settings.CSRF_COOKIE_DOMAIN,
             cookie_path=settings.CSRF_COOKIE_PATH,
+            exempt_urls=[re.compile(r"^/api/v1/mcp")],
         )
 
     @app.exception_handler(HTTPException)
@@ -159,11 +195,23 @@ def create_app() -> FastAPI:
         query_routes,
         reports_routes,
         sq_routes,
+        toolsets_routes,
         users_routes,
         validate_routes,
         static_routes,
     ]:
         app.include_router(router_module.router)
+
+    # MCP server — wired in as a pure ASGI middleware so it intercepts
+    # /api/v1/mcp* before FastAPI's router.  This avoids a Starlette 1.0.0
+    # issue where Mount("/api/v1/mcp") requires a trailing slash, causing the
+    # GET /{full_path:path} SPA catch-all to return 405 for POST /api/v1/mcp.
+    if settings.MCP_ENABLED:
+        from reporting.services.mcp_server import get_mcp_app
+
+        mcp_session_manager, mcp_asgi = get_mcp_app()
+        app.state.mcp_session_manager = mcp_session_manager
+        app.add_middleware(_MCPMiddleware, mcp_app=mcp_asgi)
 
     # Static files from the React build
     static_folder = settings.STATIC_FOLDER

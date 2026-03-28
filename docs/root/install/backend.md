@@ -87,6 +87,20 @@ seizu validates JWTs using `PyJWKClient` against any standard OIDC JWKS endpoint
 * ``TALISMAN_FORCE_HTTPS``: redirect HTTP requests to HTTPS and enable HSTS. Set to ``False`` when running behind an SSL-terminating load balancer or in local development; default: ``True``
 * ``CSRF_COOKIE_SECURE``: mark the CSRF cookie as ``Secure`` (HTTPS-only). Set to ``False`` when serving over plain HTTP (e.g. local development or behind an SSL-terminating proxy); default: ``True``
 
+### MCP server
+
+Seizu exposes a [Model Context Protocol (MCP)](https://modelcontextprotocol.io/) server at ``/api/v1/mcp``, allowing LLM agents such as Claude to query the Neo4j graph database using user-defined tools.
+
+* ``MCP_ENABLED``: Enable or disable the MCP server endpoint. Set to ``False`` to turn off the endpoint entirely; default: ``True``
+
+#### MCP OAuth metadata (optional)
+
+When ``MCP_OAUTH_AUTHORIZATION_ENDPOINT`` and ``MCP_OAUTH_TOKEN_ENDPOINT`` are set, Seizu publishes an [RFC 8414](https://datatracker.ietf.org/doc/html/rfc8414) OAuth 2.0 Authorization Server Metadata document at ``/api/v1/mcp/.well-known/oauth-authorization-server``. MCP clients that support in-client authentication (e.g. Claude Desktop) can use this endpoint to discover the OIDC provider and authenticate users without a pre-issued token.
+
+* ``MCP_OAUTH_AUTHORIZATION_ENDPOINT``: OIDC authorization endpoint URL; default: ``""`` (metadata endpoint disabled)
+* ``MCP_OAUTH_TOKEN_ENDPOINT``: OIDC token endpoint URL; default: ``""`` (metadata endpoint disabled)
+* ``MCP_OAUTH_ISSUER``: Issuer value for the metadata document. Defaults to ``JWT_ISSUER`` if unset; default: ``""``
+
 ### Scheduled queries
 
 * ``ENABLE_SCHEDULED_QUERIES``: Whether or not scheduled queries should be enabled. Note that if the worker is not running, scheduled queries will not run, even if this is set to true; default: ``True``

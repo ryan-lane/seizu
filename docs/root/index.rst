@@ -16,6 +16,7 @@ Seizu includes:
 * An interactive **Query Console** for running ad-hoc Cypher queries, with graph, table, and raw result views, and a collapsible database schema browser showing available node labels, relationship types, and property keys
 * A backend worker that can run queries on a schedule, or triggered by graph events, with action plugins that can use the results; for example, sending query results to a slack channel, or an sqs queue
 * A backend worker that can push query results from panels into statsd, for historical data tracking purposes
+* An **MCP server** at ``/api/v1/mcp`` that exposes user-defined Cypher-backed tools to LLM agents such as Claude
 * A mechanism of providing SSO for Neo4j, when Seizu is placed behind an OAuth2 proxy
 
 Getting started
@@ -30,6 +31,7 @@ Documentation
 * `Dashboard configuration <https://mappedsky.github.io/seizu/install/dashboard.html>`_
 * `Query Console <https://mappedsky.github.io/seizu/install/query-console.html>`_
 * `Scheduled query documentation <https://mappedsky.github.io/seizu/install/scheduled-queries.html>`_
+* `MCP Toolsets documentation <https://mappedsky.github.io/seizu/install/mcp-toolsets.html>`_
 * `Basic development documentation <https://mappedsky.github.io/seizu/dev/docker-compose.html>`_
 
 .. toctree::
@@ -41,6 +43,7 @@ Documentation
     install/query-console
     install/schema
     install/scheduled-queries
+    install/mcp-toolsets
     install/stats
 
 .. toctree::
