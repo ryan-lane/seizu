@@ -1,11 +1,11 @@
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 import {
   Box,
   Button,
   Card,
   CardContent,
   TextField,
-  Typography,
+  Typography
 } from '@mui/material';
 import PlayArrow from '@mui/icons-material/PlayArrow';
 import CypherGraph from 'src/components/reports/CypherGraph';
@@ -13,8 +13,15 @@ import QueryConsoleSchemaPanel from 'src/components/QueryConsoleSchemaPanel';
 
 export default function QueryConsole() {
   const [queryText, setQueryText] = useState('');
-  const [submittedQuery, setSubmittedQuery] = useState<string | undefined>(undefined);
+  const [submittedQuery, setSubmittedQuery] = useState<string | undefined>(
+    undefined
+  );
   const [schemaPanelOpen, setSchemaPanelOpen] = useState(true);
+  const [historyRefreshTrigger, setHistoryRefreshTrigger] = useState(0);
+
+  const handleQueryComplete = useCallback(() => {
+    setHistoryRefreshTrigger((n) => n + 1);
+  }, []);
 
   const handleRun = () => {
     const trimmed = queryText.trim();
@@ -28,19 +35,28 @@ export default function QueryConsole() {
     }
   };
 
-  /** Insert a query into the editor and run it immediately. */
+  /** Insert a query from the schema browser and run it immediately. */
   const handleQuerySelect = (query: string) => {
     setQueryText(query);
     setSubmittedQuery(query);
   };
 
+  /** Load a query from history into the editor without running it. */
+  const handleHistorySelect = (query: string) => {
+    setQueryText(query);
+  };
+
   return (
-    <Box sx={{ display: 'flex', height: 'calc(100vh - 64px)', overflow: 'hidden' }}>
-      {/* Schema browser */}
+    <Box
+      sx={{ display: 'flex', height: 'calc(100vh - 64px)', overflow: 'hidden' }}
+    >
+      {/* Side panel (schema / history) */}
       <QueryConsoleSchemaPanel
         open={schemaPanelOpen}
-        onToggle={() => setSchemaPanelOpen(v => !v)}
+        onToggle={() => setSchemaPanelOpen((v) => !v)}
         onQuerySelect={handleQuerySelect}
+        onHistorySelect={handleHistorySelect}
+        historyRefreshTrigger={historyRefreshTrigger}
       />
 
       {/* Main content */}
@@ -53,17 +69,33 @@ export default function QueryConsole() {
           gap: 2,
           boxSizing: 'border-box',
           minWidth: 0,
-          overflow: 'hidden',
+          overflow: 'hidden'
         }}
       >
         {/* Graph panel — detail panel open by default in the console */}
         <Box sx={{ flex: 1, minHeight: 0, overflow: 'hidden' }}>
           {submittedQuery ? (
-            <CypherGraph cypher={submittedQuery} defaultDetailOpen={true} />
+            <CypherGraph
+              cypher={submittedQuery}
+              defaultDetailOpen
+              saveHistory
+              onQueryComplete={handleQueryComplete}
+            />
           ) : (
-            <Card sx={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <Card
+              sx={{
+                height: '100%',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center'
+              }}
+            >
               <CardContent>
-                <Typography variant="body2" color="text.secondary" align="center">
+                <Typography
+                  variant="body2"
+                  color="text.secondary"
+                  align="center"
+                >
                   Run a query below to visualize the graph.
                 </Typography>
               </CardContent>
@@ -84,7 +116,9 @@ export default function QueryConsole() {
                 onKeyDown={handleKeyDown}
                 placeholder="Enter a Cypher query... (Ctrl+Enter to run)"
                 variant="outlined"
-                inputProps={{ style: { fontFamily: 'monospace', fontSize: 13 } }}
+                inputProps={{
+                  style: { fontFamily: 'monospace', fontSize: 13 }
+                }}
               />
               <Box sx={{ mt: 1, display: 'flex', justifyContent: 'flex-end' }}>
                 <Button

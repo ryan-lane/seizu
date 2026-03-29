@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Box,
   Card,
@@ -156,6 +156,10 @@ interface CypherGraphProps {
   needInputs?: string[];
   /** Whether the details panel starts open. Default false (collapsed). */
   defaultDetailOpen?: boolean;
+  /** Whether to record this query in the user's console history. Default false. */
+  saveHistory?: boolean;
+  /** Called after a query completes successfully (results received). */
+  onQueryComplete?: () => void;
 }
 
 // ─── Colours ─────────────────────────────────────────────────────────────────
@@ -356,11 +360,22 @@ export default function CypherGraph({
   graphSettings,
   needInputs,
   defaultDetailOpen = false,
+  saveHistory = false,
+  onQueryComplete,
 }: CypherGraphProps) {
   const theme = useTheme();
 
   const [runQuery, { loading, error, records, warnings, queryErrors }] =
-    useLazyCypherQuery(cypher);
+    useLazyCypherQuery(cypher, saveHistory);
+
+  // Call onQueryComplete once after each successful query (loading → false with records).
+  const prevLoadingRef = useRef(false);
+  useEffect(() => {
+    if (prevLoadingRef.current && !loading && records !== undefined && onQueryComplete) {
+      onQueryComplete();
+    }
+    prevLoadingRef.current = loading;
+  }, [loading, records, onQueryComplete]);
 
   const [selectedItem, setSelectedItem] = useState<
     { type: 'node'; data: GraphNode } | { type: 'link'; data: GraphLink } | null

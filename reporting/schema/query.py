@@ -9,6 +9,7 @@ from pydantic import BaseModel
 class QueryRequest(BaseModel):
     query: str
     params: Optional[Dict[str, Any]] = None
+    save_history: bool = False
 
 
 class QueryResponse(BaseModel):

@@ -10,6 +10,7 @@ from reporting.schema.mcp_config import ToolsetListItem
 from reporting.schema.mcp_config import ToolsetVersion
 from reporting.schema.mcp_config import ToolVersion
 from reporting.schema.report_config import PanelStat
+from reporting.schema.report_config import QueryHistoryItem
 from reporting.schema.report_config import ReportListItem
 from reporting.schema.report_config import ReportVersion
 from reporting.schema.report_config import ScheduledQueryItem
@@ -349,3 +350,20 @@ async def get_tool_version(tool_id: str, version: int) -> Optional[ToolVersion]:
 
 async def list_enabled_tools() -> List[ToolItem]:
     return await get_store().list_enabled_tools()
+
+
+# ---------------------------------------------------------------------------
+# Query history convenience functions
+# ---------------------------------------------------------------------------
+
+
+async def save_query_history(user_id: str, query: str) -> QueryHistoryItem:
+    return await get_store().save_query_history(user_id=user_id, query=query)
+
+
+async def list_query_history(
+    user_id: str, page: int, per_page: int
+) -> tuple[List[QueryHistoryItem], int]:
+    return await get_store().list_query_history(
+        user_id=user_id, page=page, per_page=per_page
+    )

@@ -403,3 +403,60 @@ async def test_query_serialize_path(mocker):
     assert len(result["nodes"]) == 2
     assert len(result["relationships"]) == 1
     assert result["nodes"][0]["properties"]["name"] == "Alice"
+
+
+async def test_query_save_history_when_flag_set(mocker):
+    """History is saved only when save_history=True is included in the request."""
+    mocker.patch("reporting.settings.CSRF_DISABLE", True)
+    _mock_validate(mocker)
+    mock_record = MagicMock()
+    mock_record.items.return_value = [("n", 1)]
+    mocker.patch(
+        "reporting.routes.query.reporting_neo4j.run_query",
+        new=AsyncMock(return_value=[mock_record]),
+    )
+    mock_save = mocker.patch(
+        "reporting.routes.query.report_store.save_query_history",
+        new=AsyncMock(),
+    )
+
+    app = _make_app()
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        await client.post(
+            "/api/v1/query",
+            json={"query": "MATCH (n) RETURN n LIMIT 1", "save_history": True},
+        )
+
+    mock_save.assert_awaited_once_with(
+        user_id="test-user-id",
+        query="MATCH (n) RETURN n LIMIT 1",
+    )
+
+
+async def test_query_does_not_save_history_by_default(mocker):
+    """History is NOT saved when save_history is omitted (report panels)."""
+    mocker.patch("reporting.settings.CSRF_DISABLE", True)
+    _mock_validate(mocker)
+    mock_record = MagicMock()
+    mock_record.items.return_value = [("n", 1)]
+    mocker.patch(
+        "reporting.routes.query.reporting_neo4j.run_query",
+        new=AsyncMock(return_value=[mock_record]),
+    )
+    mock_save = mocker.patch(
+        "reporting.routes.query.report_store.save_query_history",
+        new=AsyncMock(),
+    )
+
+    app = _make_app()
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        await client.post(
+            "/api/v1/query",
+            json={"query": "MATCH (n) RETURN n LIMIT 1"},
+        )
+
+    mock_save.assert_not_called()

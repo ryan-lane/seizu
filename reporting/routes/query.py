@@ -13,6 +13,7 @@ from reporting.authnz import CurrentUser
 from reporting.authnz import get_current_user
 from reporting.schema.query import QueryRequest
 from reporting.schema.query import QueryResponse
+from reporting.services import report_store
 from reporting.services import reporting_neo4j
 from reporting.services.query_validator import validate_query
 
@@ -75,6 +76,14 @@ async def query(
             {key: _serialize_neo4j_value(value) for key, value in record.items()}
             for record in results
         ]
+        if body.save_history:
+            try:
+                await report_store.save_query_history(
+                    user_id=current.user.user_id,
+                    query=body.query,
+                )
+            except Exception:
+                logger.warning("Failed to save query history", exc_info=True)
         return {
             "results": serialized,
             "warnings": [str(w) for w in validation.warnings],

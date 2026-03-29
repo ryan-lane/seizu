@@ -27,6 +27,7 @@ from reporting import settings
 from reporting.routes import config as config_routes
 from reporting.routes import me as me_routes
 from reporting.routes import query as query_routes
+from reporting.routes import query_history as query_history_routes
 from reporting.routes import reports as reports_routes
 from reporting.routes import scheduled_queries as sq_routes
 from reporting.routes import static as static_routes
@@ -193,6 +194,7 @@ def create_app() -> FastAPI:
         config_routes,
         me_routes,
         query_routes,
+        query_history_routes,
         reports_routes,
         sq_routes,
         toolsets_routes,
