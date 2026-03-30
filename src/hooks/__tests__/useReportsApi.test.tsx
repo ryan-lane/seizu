@@ -1,4 +1,4 @@
-import { renderHook, waitFor } from '@testing-library/react';
+import { act, renderHook, waitFor } from '@testing-library/react';
 import { AuthContext } from 'src/auth.context';
 import { AuthConfigContext } from 'src/authConfig.context';
 import { useReportVersionsList, useReportVersion, useReportsList, useReportsMutations } from 'src/hooks/useReportsApi';
@@ -343,7 +343,7 @@ describe('useReportsList', () => {
     await waitFor(() => expect(result.current.loading).toBe(false));
     expect(mockFetch).toHaveBeenCalledTimes(1);
 
-    const { act } = await import('@testing-library/react');
+
     act(() => result.current.refresh());
 
     await waitFor(() => expect(mockFetch).toHaveBeenCalledTimes(2));
@@ -386,7 +386,7 @@ describe('useReportsMutations (pinReport)', () => {
       wrapper: makeWrapper(false, null)
     });
 
-    const { act } = await import('@testing-library/react');
+
     await act(async () => {
       await result.current.pinReport('r1', true);
     });
@@ -407,7 +407,7 @@ describe('useReportsMutations (pinReport)', () => {
       wrapper: makeWrapper(false, null)
     });
 
-    const { act } = await import('@testing-library/react');
+
     await act(async () => {
       await result.current.pinReport('r1', false);
     });
@@ -428,7 +428,7 @@ describe('useReportsMutations (pinReport)', () => {
       wrapper: makeWrapper(false, null)
     });
 
-    const { act } = await import('@testing-library/react');
+
     await act(async () => {
       await expect(result.current.pinReport('r1', true)).rejects.toThrow();
     });
