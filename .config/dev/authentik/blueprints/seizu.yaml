@@ -29,6 +29,86 @@ entries:
       is_active: true
       password: devpassword
 
+  # Seizu RBAC groups — one per built-in role
+  - model: authentik_core.group
+    state: present
+    identifiers:
+      name: seizu-admin
+    attrs:
+      name: seizu-admin
+
+  - model: authentik_core.group
+    state: present
+    identifiers:
+      name: seizu-editor
+    attrs:
+      name: seizu-editor
+
+  - model: authentik_core.group
+    state: present
+    identifiers:
+      name: seizu-viewer
+    attrs:
+      name: seizu-viewer
+
+  # Seizu dev users — one per built-in role; password: seizu
+  - model: authentik_core.user
+    state: present
+    identifiers:
+      username: seizu-admin
+    attrs:
+      name: Seizu Admin
+      email: seizu-admin@localhost
+      is_active: true
+      password: seizu
+      groups:
+        - !Find [authentik_core.group, [name, seizu-admin]]
+
+  - model: authentik_core.user
+    state: present
+    identifiers:
+      username: seizu-editor
+    attrs:
+      name: Seizu Editor
+      email: seizu-editor@localhost
+      is_active: true
+      password: seizu
+      groups:
+        - !Find [authentik_core.group, [name, seizu-editor]]
+
+  - model: authentik_core.user
+    state: present
+    identifiers:
+      username: seizu-viewer
+    attrs:
+      name: Seizu Viewer
+      email: seizu-viewer@localhost
+      is_active: true
+      password: seizu
+      groups:
+        - !Find [authentik_core.group, [name, seizu-viewer]]
+
+  # Custom scope mapping: embeds seizu_role claim based on group membership.
+  # Seizu reads this via RBAC_ROLE_CLAIM (default: seizu_role) to resolve permissions
+  # without any database lookups.
+  - model: authentik_providers_oauth2.scopemapping
+    state: present
+    identifiers:
+      managed: seizu.dev/providers/oauth2/scope-seizu-role
+    attrs:
+      name: Seizu Role
+      scope_name: openid
+      expression: |
+        group_role_map = {
+            "seizu-admin": "seizu-admin",
+            "seizu-editor": "seizu-editor",
+            "seizu-viewer": "seizu-viewer",
+        }
+        for group in request.user.ak_groups.all():
+            if group.name in group_role_map:
+                return {"seizu_role": group_role_map[group.name]}
+        return {"seizu_role": "seizu-viewer"}
+
   # OAuth2/OIDC provider — supports two grant types:
   #   1. Authorization Code + PKCE  (browser SPA, frontend)
   #   2. Device Authorization Grant (CLI, seizu login)
@@ -69,6 +149,9 @@ entries:
         - !Find
           - authentik_providers_oauth2.scopemapping
           - [managed, "goauthentik.io/providers/oauth2/scope-profile"]
+        - !Find
+          - authentik_providers_oauth2.scopemapping
+          - [managed, "seizu.dev/providers/oauth2/scope-seizu-role"]
 
   # Application that binds the provider to a slug
   - model: authentik_core.application

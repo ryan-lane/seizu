@@ -189,3 +189,73 @@ async def test_get_current_user_extracts_sub_and_iss(mocker):
         display_name="Alice",
     )
     assert result.user.user_id == "uid1"
+
+
+async def test_get_current_user_resolves_permissions_from_role_claim(mocker):
+    """Permissions are resolved from the RBAC_ROLE_CLAIM in the JWT payload."""
+    mocker.patch("reporting.settings.DEVELOPMENT_ONLY_REQUIRE_AUTH", True)
+    mocker.patch("reporting.settings.JWT_AUDIENCE", "")
+    mocker.patch("reporting.settings.RBAC_ROLE_CLAIM", "seizu_role")
+    mocker.patch("reporting.settings.RBAC_DEFAULT_ROLE", "seizu-viewer")
+    signing_key = _make_mock_signing_key(mocker)
+    mock_client = _make_mock_client(mocker, signing_key)
+    mocker.patch("reporting.authnz._get_jwks_client", return_value=mock_client)
+
+    from reporting.schema.report_config import User
+    from fastapi.security import HTTPAuthorizationCredentials
+
+    fake_user = User(
+        user_id="uid1",
+        sub="sub123",
+        iss="https://idp.example.com",
+        email="alice@example.com",
+        created_at="2024-01-01T00:00:00+00:00",
+        last_login="2024-01-01T00:00:00+00:00",
+    )
+    mocker.patch(
+        "reporting.services.report_store.get_or_create_user",
+        new=AsyncMock(return_value=fake_user),
+    )
+
+    encoded = jwt.encode(
+        {
+            "email": "alice@example.com",
+            "sub": "sub123",
+            "iss": "https://idp.example.com",
+            "seizu_role": "seizu-admin",
+            "iat": 1704067200,
+        },
+        base64.b64decode(FAKE_PRIVATE_KEY),
+        algorithm="ES256",
+    )
+    credentials = HTTPAuthorizationCredentials(scheme="Bearer", credentials=encoded)
+    result = await get_current_user(credentials=credentials)
+    assert "toolsets:write" in result.permissions
+    assert "reports:read" in result.permissions
+
+
+async def test_get_current_user_dev_mode_has_all_permissions(mocker):
+    """Dev mode (auth disabled) returns ALL_PERMISSIONS."""
+    from reporting.authnz.permissions import ALL_PERMISSIONS
+
+    mocker.patch("reporting.settings.DEVELOPMENT_ONLY_REQUIRE_AUTH", False)
+    mocker.patch(
+        "reporting.settings.DEVELOPMENT_ONLY_AUTH_USER_EMAIL",
+        "devuser@example.com",
+    )
+    from reporting.schema.report_config import User
+
+    fake_user = User(
+        user_id="dev-uid",
+        sub="devuser@example.com",
+        iss="dev",
+        email="devuser@example.com",
+        created_at="2024-01-01T00:00:00+00:00",
+        last_login="2024-01-01T00:00:00+00:00",
+    )
+    mocker.patch(
+        "reporting.services.report_store.get_or_create_user",
+        new=AsyncMock(return_value=fake_user),
+    )
+    result = await get_current_user(credentials=None)
+    assert result.permissions == ALL_PERMISSIONS

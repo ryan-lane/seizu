@@ -5,6 +5,7 @@ from reporting.app import create_app
 from reporting.authnz import CurrentUser
 from reporting.authnz import get_current_user
 from reporting.authnz import sync_user_profile
+from reporting.authnz.permissions import ALL_PERMISSIONS
 from reporting.schema.report_config import User
 
 _FAKE_USER = User(
@@ -17,14 +18,16 @@ _FAKE_USER = User(
     last_login="2024-01-01T00:00:00+00:00",
 )
 
-_FAKE_CURRENT_USER = CurrentUser(user=_FAKE_USER, jwt_claims={})
+_FAKE_CURRENT_USER = CurrentUser(
+    user=_FAKE_USER, jwt_claims={}, permissions=ALL_PERMISSIONS
+)
 
 
 def _make_app(synced_user: User = _FAKE_USER) -> object:
     app = create_app()
     app.dependency_overrides[get_current_user] = lambda: _FAKE_CURRENT_USER
     app.dependency_overrides[sync_user_profile] = lambda: CurrentUser(
-        user=synced_user, jwt_claims={}
+        user=synced_user, jwt_claims={}, permissions=ALL_PERMISSIONS
     )
     return app
 
@@ -37,12 +40,14 @@ async def test_get_current_user_success(mocker):
     ) as client:
         ret = await client.get("/api/v1/me")
     assert ret.status_code == 200
-    assert ret.json()["user_id"] == "uid1"
-    assert ret.json()["email"] == "alice@example.com"
-    assert ret.json()["display_name"] == "Alice Smith"
-    assert ret.json()["sub"] == "sub123"
-    assert ret.json()["iss"] == "https://idp.example.com"
-    assert ret.json()["archived_at"] is None
+    user = ret.json()["user"]
+    assert user["user_id"] == "uid1"
+    assert user["email"] == "alice@example.com"
+    assert user["display_name"] == "Alice Smith"
+    assert user["sub"] == "sub123"
+    assert user["iss"] == "https://idp.example.com"
+    assert user["archived_at"] is None
+    assert isinstance(ret.json()["permissions"], list)
 
 
 async def test_get_current_user_returns_synced_profile(mocker):
@@ -57,5 +62,5 @@ async def test_get_current_user_returns_synced_profile(mocker):
     ) as client:
         ret = await client.get("/api/v1/me")
     assert ret.status_code == 200
-    assert ret.json()["email"] == "alice-new@example.com"
-    assert ret.json()["display_name"] == "Alice Updated"
+    assert ret.json()["user"]["email"] == "alice-new@example.com"
+    assert ret.json()["user"]["display_name"] == "Alice Updated"

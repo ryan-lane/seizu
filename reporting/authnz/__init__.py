@@ -1,9 +1,12 @@
 import asyncio
 import logging
 from dataclasses import dataclass
+from dataclasses import field
 from datetime import datetime
 from datetime import timezone
+from typing import Callable
 from typing import Dict
+from typing import FrozenSet
 from typing import Optional
 
 import jwt
@@ -28,6 +31,7 @@ _bearer_scheme = HTTPBearer(auto_error=False)
 class CurrentUser:
     user: User
     jwt_claims: Dict
+    permissions: FrozenSet[str] = field(default_factory=frozenset)
 
 
 def _get_jwks_client() -> PyJWKClient:
@@ -81,6 +85,9 @@ async def get_current_user(
     """
     from reporting.services import report_store
 
+    from reporting.authnz.permissions import ALL_PERMISSIONS
+    from reporting.authnz.permissions import resolve_permissions
+
     if not settings.DEVELOPMENT_ONLY_REQUIRE_AUTH:
         email = settings.DEVELOPMENT_ONLY_AUTH_USER_EMAIL
         logger.warning(
@@ -96,6 +103,7 @@ async def get_current_user(
         return CurrentUser(
             user=user,
             jwt_claims={"email": email, "display_name": None, "token_iat": None},
+            permissions=ALL_PERMISSIONS,
         )
 
     if not credentials:
@@ -134,7 +142,35 @@ async def get_current_user(
         display_name=payload.get("name"),
     )
 
-    return CurrentUser(user=user, jwt_claims=jwt_claims)
+    permissions = await resolve_permissions(payload)
+
+    return CurrentUser(user=user, jwt_claims=jwt_claims, permissions=permissions)
+
+
+def require_permission(*perms: str) -> Callable:
+    """Return a FastAPI dependency that checks the current user has all of the
+    specified permissions.  Authentication is still enforced first.
+
+    Usage::
+
+        @router.get("/api/v1/reports")
+        async def list_reports(
+            current: CurrentUser = Depends(require_permission("reports:read")),
+        ) -> ...:
+    """
+
+    async def _check(
+        current: CurrentUser = Depends(get_current_user),
+    ) -> CurrentUser:
+        missing = set(perms) - current.permissions
+        if missing:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"Missing permissions: {', '.join(sorted(missing))}",
+            )
+        return current
+
+    return _check
 
 
 async def sync_user_profile(
@@ -155,4 +191,6 @@ async def sync_user_profile(
         display_name=claims.get("display_name"),
         token_iat=claims.get("token_iat"),
     )
-    return CurrentUser(user=updated_user, jwt_claims=claims)
+    return CurrentUser(
+        user=updated_user, jwt_claims=claims, permissions=current.permissions
+    )

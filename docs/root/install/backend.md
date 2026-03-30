@@ -87,6 +87,44 @@ seizu validates JWTs using `PyJWKClient` against any standard OIDC JWKS endpoint
 * ``TALISMAN_FORCE_HTTPS``: redirect HTTP requests to HTTPS and enable HSTS. Set to ``False`` when running behind an SSL-terminating load balancer or in local development; default: ``True``
 * ``CSRF_COOKIE_SECURE``: mark the CSRF cookie as ``Secure`` (HTTPS-only). Set to ``False`` when serving over plain HTTP (e.g. local development or behind an SSL-terminating proxy); default: ``True``
 
+### RBAC configuration
+
+Seizu uses Role-Based Access Control (RBAC) to restrict API and MCP access. Every authenticated request has a role resolved from the JWT, which maps to a set of granular permissions.
+
+#### Built-in roles
+
+| Role | Capabilities |
+|------|-------------|
+| **seizu-viewer** | Read reports and dashboard, run ad-hoc queries, view query history, call tools via API and MCP, read toolsets/scheduled queries/roles |
+| **seizu-editor** | All Viewer capabilities + create/edit/delete reports, set default dashboard |
+| **seizu-admin** | All Editor capabilities + manage toolsets, tools, scheduled queries, and user-defined roles |
+
+#### Role claim
+
+Seizu reads the user's role from a single JWT claim set by the OIDC provider. Configure your provider to embed the role name (e.g. ``"seizu-admin"``) as a claim in every issued token. Most providers support this via property mappings or claim enrichment rules on group membership.
+
+* ``RBAC_ROLE_CLAIM``: JWT claim name that holds the user's Seizu role; default: ``seizu_role``
+* ``RBAC_DEFAULT_ROLE``: Role assigned when the JWT has no ``RBAC_ROLE_CLAIM``. Set to ``""`` to deny access to users without an explicit role claim. Valid values: ``"seizu-viewer"``, ``"seizu-editor"``, ``"seizu-admin"``, or any user-defined role name; default: ``"seizu-viewer"``
+
+**Authentik example** — create a Property Mapping with expression:
+
+```python
+seizu_group_role_map = {
+    "seizu-admins": "seizu-admin",
+    "seizu-editors": "seizu-editor",
+}
+for group in request.user.ak_groups.all():
+    if group.name in seizu_group_role_map:
+        return seizu_group_role_map[group.name]
+return "seizu-viewer"
+```
+
+Bind the mapping to the Seizu OAuth2 provider as a custom token property mapping with scope ``openid``.
+
+#### User-defined roles
+
+Admins can create custom roles with arbitrary permission subsets via the API (``POST /api/v1/roles``). When a JWT contains a user-defined role name in ``RBAC_ROLE_CLAIM``, Seizu does a single database lookup to resolve its permissions. Built-in role resolution requires no database I/O.
+
 ### MCP server
 
 Seizu exposes a [Model Context Protocol (MCP)](https://modelcontextprotocol.io/) server at ``/api/v1/mcp``, allowing LLM agents such as Claude to query the Neo4j graph database using user-defined tools.

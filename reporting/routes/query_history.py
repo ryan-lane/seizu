@@ -5,7 +5,8 @@ from fastapi import Depends
 from fastapi import Query
 
 from reporting.authnz import CurrentUser
-from reporting.authnz import get_current_user
+from reporting.authnz import require_permission
+from reporting.authnz.permissions import Permission
 from reporting.schema.report_config import QueryHistoryListResponse
 from reporting.services import report_store
 
@@ -16,7 +17,7 @@ router = APIRouter()
 async def list_query_history(
     page: int = Query(default=1, ge=1),
     per_page: int = Query(default=20, ge=1, le=100),
-    current: CurrentUser = Depends(get_current_user),
+    current: CurrentUser = Depends(require_permission(Permission.QUERY_HISTORY_READ)),
 ) -> Any:
     """Return the authenticated user's query history, paginated newest-first.
 

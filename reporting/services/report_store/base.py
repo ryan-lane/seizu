@@ -10,6 +10,8 @@ from reporting.schema.mcp_config import ToolItem
 from reporting.schema.mcp_config import ToolsetListItem
 from reporting.schema.mcp_config import ToolsetVersion
 from reporting.schema.mcp_config import ToolVersion
+from reporting.schema.rbac import RoleItem
+from reporting.schema.rbac import RoleVersion
 from reporting.schema.report_config import PanelStat
 from reporting.schema.report_config import QueryHistoryItem
 from reporting.schema.report_config import ReportListItem
@@ -387,3 +389,55 @@ class ReportStore(ABC):
         Only items belonging to ``user_id`` are returned — callers must never
         pass a user_id they do not own.
         """
+
+    # ------------------------------------------------------------------
+    # Roles (user-defined, versioned)
+    # ------------------------------------------------------------------
+
+    @abstractmethod
+    async def list_roles(self) -> List[RoleItem]:
+        """Return all user-defined roles."""
+
+    @abstractmethod
+    async def get_role(self, role_id: str) -> Optional[RoleItem]:
+        """Return a user-defined role by ID, or None if not found."""
+
+    @abstractmethod
+    async def get_role_by_name(self, name: str) -> Optional[RoleItem]:
+        """Return a user-defined role by name, or None if not found."""
+
+    @abstractmethod
+    async def create_role(
+        self,
+        name: str,
+        description: str,
+        permissions: List[str],
+        created_by: str,
+    ) -> RoleItem:
+        """Create a new user-defined role (at version 1) and return it."""
+
+    @abstractmethod
+    async def update_role(
+        self,
+        role_id: str,
+        name: str,
+        description: str,
+        permissions: List[str],
+        updated_by: str,
+        comment: Optional[str] = None,
+    ) -> Optional[RoleItem]:
+        """Save a new version of an existing role. Returns None if not found."""
+
+    @abstractmethod
+    async def delete_role(self, role_id: str) -> bool:
+        """Delete a role and all its versions. Returns False if not found."""
+
+    @abstractmethod
+    async def list_role_versions(self, role_id: str) -> List[RoleVersion]:
+        """Return all stored versions for a role, newest first."""
+
+    @abstractmethod
+    async def get_role_version(
+        self, role_id: str, version: int
+    ) -> Optional[RoleVersion]:
+        """Return a specific version of a role, or None if not found."""

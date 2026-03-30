@@ -7,6 +7,7 @@ from httpx import AsyncClient
 from reporting.app import create_app
 from reporting.authnz import CurrentUser
 from reporting.authnz import get_current_user
+from reporting.authnz.permissions import ALL_PERMISSIONS
 from reporting.schema.report_config import User
 from reporting.services.query_validator import ValidationResult
 
@@ -19,7 +20,9 @@ _FAKE_USER = User(
     last_login="2024-01-01T00:00:00+00:00",
 )
 
-_FAKE_CURRENT_USER = CurrentUser(user=_FAKE_USER, jwt_claims={})
+_FAKE_CURRENT_USER = CurrentUser(
+    user=_FAKE_USER, jwt_claims={}, permissions=ALL_PERMISSIONS
+)
 
 
 def _mock_validate(mocker, errors=None, warnings=None):

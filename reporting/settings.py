@@ -168,6 +168,16 @@ REPORT_STORE_BACKEND = str_env("REPORT_STORE_BACKEND", "dynamodb")
 # Example: sqlite:///./seizu.db
 SQL_DATABASE_URL = str_env("SQL_DATABASE_URL", "")
 
+# The JWT claim that contains the user's Seizu role name.
+# Configure your OIDC provider to embed the role (e.g. "seizu-admin") directly
+# as a claim in the token. Common claim names: "seizu_role", "role".
+RBAC_ROLE_CLAIM = str_env("RBAC_ROLE_CLAIM", "seizu_role")
+
+# Default role assigned when a user's JWT has no RBAC_ROLE_CLAIM.
+# Set to "" to deny access to users without an explicit role claim.
+# Valid values: "seizu-viewer", "seizu-editor", "seizu-admin", or any user-defined role name.
+RBAC_DEFAULT_ROLE = str_env("RBAC_DEFAULT_ROLE", "seizu-viewer")
+
 # Whether to enable the MCP server at /api/v1/mcp.
 MCP_ENABLED = bool_env("MCP_ENABLED", True)
 
