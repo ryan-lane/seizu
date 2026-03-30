@@ -330,7 +330,26 @@ describe('useReportsList', () => {
     expect(mockFetch).not.toHaveBeenCalled();
   });
 
-  it('refresh broadcasts event and triggers re-fetch', async () => {
+  it('refresh dispatches the seizu:reports-updated event', async () => {
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ reports: REPORTS })
+    });
+
+    const { result } = renderHook(() => useReportsList(), {
+      wrapper: makeWrapper(false, null)
+    });
+
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    const handler = jest.fn();
+    window.addEventListener('seizu:reports-updated', handler);
+    result.current.refresh();
+    expect(handler).toHaveBeenCalledTimes(1);
+    window.removeEventListener('seizu:reports-updated', handler);
+  });
+
+  it('re-fetches when seizu:reports-updated event is dispatched externally', async () => {
     mockFetch.mockResolvedValue({
       ok: true,
       json: () => Promise.resolve({ reports: REPORTS })
@@ -343,8 +362,9 @@ describe('useReportsList', () => {
     await waitFor(() => expect(result.current.loading).toBe(false));
     expect(mockFetch).toHaveBeenCalledTimes(1);
 
-
-    await act(async () => { result.current.refresh(); });
+    await act(async () => {
+      window.dispatchEvent(new Event('seizu:reports-updated'));
+    });
 
     await waitFor(() => expect(mockFetch).toHaveBeenCalledTimes(2));
   });
