@@ -31,6 +31,7 @@ import {
   useToolsetMutations
 } from 'src/hooks/useToolsetsApi';
 import UserDisplay from 'src/components/UserDisplay';
+import { usePermissions } from 'src/hooks/usePermissions';
 
 // ---------------------------------------------------------------------------
 // Per-row overflow menu
@@ -44,7 +45,16 @@ interface RowMenuProps {
 
 function RowMenu({ isCurrent, onRestore }: RowMenuProps) {
   const [anchor, setAnchor] = useState<null | HTMLElement>(null);
+  const hasPermission = usePermissions();
   const close = () => setAnchor(null);
+
+  const canWrite = hasPermission('toolsets:write');
+  const restoreDisabled = isCurrent || !canWrite;
+  const restoreTooltip = isCurrent
+    ? 'This is already the current version'
+    : !canWrite
+      ? 'You do not have permission to restore toolset versions'
+      : '';
 
   return (
     <>
@@ -62,14 +72,11 @@ function RowMenu({ isCurrent, onRestore }: RowMenuProps) {
         transformOrigin={{ vertical: 'top', horizontal: 'right' }}
         slotProps={{ paper: { sx: { minWidth: 180 } } }}
       >
-        <Tooltip
-          title={isCurrent ? 'This is already the current version' : ''}
-          placement="left"
-        >
+        <Tooltip title={restoreTooltip} placement="left">
           <span>
-            <MenuItem onClick={() => { onRestore(); close(); }} disabled={isCurrent}>
+            <MenuItem onClick={() => { onRestore(); close(); }} disabled={restoreDisabled}>
               <ListItemIcon>
-                <RestoreIcon fontSize="small" color={isCurrent ? 'disabled' : 'inherit'} />
+                <RestoreIcon fontSize="small" color={restoreDisabled ? 'disabled' : 'inherit'} />
               </ListItemIcon>
               <ListItemText>Restore</ListItemText>
             </MenuItem>

@@ -58,6 +58,8 @@ curl -X PUT /api/v1/reports/<report_id>/dashboard
 
 Reports can be created, edited, and deleted at runtime through the Seizu UI without modifying the YAML file or restarting the service.
 
+> **Permissions:** Creating and editing reports requires the `reports:write` permission (`seizu-editor` or `seizu-admin`). Deleting reports requires `reports:delete`. Setting the default dashboard requires `reports:set_dashboard`. Restoring a historical version also requires `reports:write`. Users with only the `seizu-viewer` role can view reports and history but will not see the **New report** button, and write/delete/restore actions in the **⋮** menu and version view will be disabled.
+
 ### Reports list
 
 Navigate to **Reports** in the sidebar to view all reports. From the list you can:
@@ -82,7 +84,7 @@ The history page lists all versions newest-first, showing the version number, sa
 Click a version number to open a read-only view of that version. From the version view you can:
 
 - Use the **← v_N_** / **v_N_ →** buttons in the toolbar to step through older and newer versions without returning to the list.
-- Click **Restore this version** to save the historical config as a new latest version. The button is disabled when viewing the current version.
+- Click **Restore this version** to save the historical config as a new latest version. The button is disabled when viewing the current version, or when you do not have the `reports:write` permission.
 
 Restoring a version never deletes history — it creates a new version whose config matches the restored one.
 

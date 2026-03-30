@@ -63,9 +63,9 @@ function DashboardNavbar({
         {currentUser && (
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, ml: 1 }}>
             <Typography variant="body2" color="inherit">
-              {currentUser.display_name ?? currentUser.email}
+              {currentUser.email || currentUser.display_name || currentUser.user_id}
             </Typography>
-            <UserAvatar name={currentUser.display_name ?? currentUser.email} />
+            <UserAvatar name={currentUser.email || currentUser.display_name || currentUser.user_id} />
           </Box>
         )}
         <Hidden lgUp>

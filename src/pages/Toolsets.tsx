@@ -45,6 +45,7 @@ import {
   UpdateToolsetRequest
 } from 'src/hooks/useToolsetsApi';
 import UserDisplay from 'src/components/UserDisplay';
+import { usePermissions } from 'src/hooks/usePermissions';
 
 // ---------------------------------------------------------------------------
 // Built-in synthetic toolset
@@ -177,7 +178,16 @@ interface RowMenuProps {
 
 function RowMenu({ isBuiltin, onEdit, onTools, onHistory, onDelete }: RowMenuProps) {
   const [anchor, setAnchor] = useState<null | HTMLElement>(null);
+  const hasPermission = usePermissions();
   const close = () => setAnchor(null);
+
+  const canWrite = hasPermission('toolsets:write');
+  const canDelete = hasPermission('toolsets:delete');
+
+  const editDisabled = isBuiltin || !canWrite;
+  const deleteDisabled = isBuiltin || !canDelete;
+  const editTooltip = isBuiltin ? 'Built-in toolsets cannot be edited' : !canWrite ? 'You do not have permission to edit toolsets' : '';
+  const deleteTooltip = isBuiltin ? 'Built-in toolsets cannot be deleted' : !canDelete ? 'You do not have permission to delete toolsets' : '';
 
   return (
     <>
@@ -195,9 +205,9 @@ function RowMenu({ isBuiltin, onEdit, onTools, onHistory, onDelete }: RowMenuPro
         transformOrigin={{ vertical: 'top', horizontal: 'right' }}
         slotProps={{ paper: { sx: { minWidth: 180 } } }}
       >
-        <Tooltip title={isBuiltin ? 'Built-in toolsets cannot be edited' : ''} placement="left">
+        <Tooltip title={editTooltip} placement="left">
           <span>
-            <MenuItem onClick={() => { onEdit(); close(); }} disabled={isBuiltin}>
+            <MenuItem onClick={() => { onEdit(); close(); }} disabled={editDisabled}>
               <ListItemIcon><EditIcon fontSize="small" /></ListItemIcon>
               <ListItemText>Edit</ListItemText>
             </MenuItem>
@@ -220,10 +230,10 @@ function RowMenu({ isBuiltin, onEdit, onTools, onHistory, onDelete }: RowMenuPro
 
         <Divider />
 
-        <Tooltip title={isBuiltin ? 'Built-in toolsets cannot be deleted' : ''} placement="left">
+        <Tooltip title={deleteTooltip} placement="left">
           <span>
-            <MenuItem onClick={() => { onDelete(); close(); }} disabled={isBuiltin} sx={{ color: 'error.main' }}>
-              <ListItemIcon><DeleteIcon fontSize="small" color={isBuiltin ? 'disabled' : 'error'} /></ListItemIcon>
+            <MenuItem onClick={() => { onDelete(); close(); }} disabled={deleteDisabled} sx={{ color: deleteDisabled ? undefined : 'error.main' }}>
+              <ListItemIcon><DeleteIcon fontSize="small" color={deleteDisabled ? 'disabled' : 'error'} /></ListItemIcon>
               <ListItemText>Delete</ListItemText>
             </MenuItem>
           </span>
@@ -241,6 +251,7 @@ function Toolsets() {
   const navigate = useNavigate();
   const { toolsets, loading, error, refresh } = useToolsetsList();
   const { createToolset, updateToolset, deleteToolset } = useToolsetMutations();
+  const hasPermission = usePermissions();
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editTarget, setEditTarget] = useState<ToolsetListItem | null>(null);
@@ -287,9 +298,11 @@ function Toolsets() {
       <Box sx={{ p: 3 }}>
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
           <Typography variant="h1">MCP Toolsets</Typography>
-          <Button variant="contained" startIcon={<AddIcon />} onClick={openCreate}>
-            New toolset
-          </Button>
+          {hasPermission('toolsets:write') && (
+            <Button variant="contained" startIcon={<AddIcon />} onClick={openCreate}>
+              New toolset
+            </Button>
+          )}
         </Box>
 
         {loading && <CircularProgress />}

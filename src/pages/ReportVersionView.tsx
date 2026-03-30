@@ -20,6 +20,7 @@ import ReportView from 'src/components/ReportView';
 import UserDisplay from 'src/components/UserDisplay';
 import { useReportVersion, useReportVersionsList, useReportsMutations } from 'src/hooks/useReportsApi';
 import { Report } from 'src/config.context';
+import { usePermissions } from 'src/hooks/usePermissions';
 
 function ReportVersionView() {
   const { id, version } = useParams();
@@ -39,6 +40,9 @@ function ReportVersionView() {
   const nextVersion = currentIdx !== -1 && currentIdx < sortedVersionNums.length - 1
     ? sortedVersionNums[currentIdx + 1]
     : null;
+
+  const hasPermission = usePermissions();
+  const canWrite = hasPermission('reports:write');
 
   const [restoring, setRestoring] = useState(false);
   const [restoreError, setRestoreError] = useState<string | null>(null);
@@ -153,13 +157,19 @@ function ReportVersionView() {
           </Alert>
         )}
 
-        <Tooltip title={nextVersion === null ? 'This is already the current version' : ''}>
+        <Tooltip title={
+          nextVersion === null
+            ? 'This is already the current version'
+            : !canWrite
+              ? 'You do not have permission to restore report versions'
+              : ''
+        }>
           <span>
             <Button
               variant="contained"
               startIcon={restoring ? <CircularProgress size={16} color="inherit" /> : <RestoreIcon />}
               onClick={handleRestore}
-              disabled={restoring || nextVersion === null}
+              disabled={restoring || nextVersion === null || !canWrite}
             >
               Restore this version
             </Button>

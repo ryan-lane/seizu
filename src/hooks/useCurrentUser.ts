@@ -11,6 +11,13 @@ export interface CurrentUser {
   created_at: string;
   last_login: string;
   archived_at: string | null;
+  permissions: string[];
+}
+
+// Shape of the actual /api/v1/me JSON response.
+interface MeApiResponse {
+  user: Omit<CurrentUser, 'permissions'>;
+  permissions: string[];
 }
 
 function getApiHeaders(accessToken: string | null): Record<string, string> {
@@ -40,7 +47,7 @@ export function useCurrentUser(): CurrentUser | null {
         if (!res.ok) throw new Error(`Failed to load current user: ${res.status}`);
         return res.json();
       })
-      .then((data: CurrentUser) => setCurrentUser(data))
+      .then((data: MeApiResponse) => setCurrentUser({ ...data.user, permissions: data.permissions }))
       .catch(() => {});
   }, [accessToken, auth_required]);
 

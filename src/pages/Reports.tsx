@@ -10,11 +10,13 @@ import ReportView from 'src/components/ReportView';
 import EditableReportView from 'src/components/EditableReportView';
 import { useReport, useReportsMutations } from 'src/hooks/useReportsApi';
 import { Report } from 'src/config.context';
+import { usePermissions } from 'src/hooks/usePermissions';
 
 function Reports() {
   const { id } = useParams();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
+  const hasPermission = usePermissions();
 
   const [editMode, setEditMode] = useState(searchParams.get('edit') === 'true');
   const [displayedReport, setDisplayedReport] = useState<Report | undefined>(undefined);
@@ -92,14 +94,16 @@ function Reports() {
         >
           History
         </Button>
-        <Button
-          variant="outlined"
-          size="small"
-          startIcon={<EditIcon />}
-          onClick={handleEnterEdit}
-        >
-          Edit report
-        </Button>
+        {hasPermission('reports:write') && (
+          <Button
+            variant="outlined"
+            size="small"
+            startIcon={<EditIcon />}
+            onClick={handleEnterEdit}
+          >
+            Edit report
+          </Button>
+        )}
       </Box>
       <ReportView report={displayedReport} title={displayedName} />
     </Box>

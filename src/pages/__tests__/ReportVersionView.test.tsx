@@ -3,6 +3,13 @@ import { MemoryRouter, Routes, Route, useLocation } from 'react-router-dom';
 import { ThemeProvider, createTheme } from '@mui/material/styles';
 import ReportVersionView from 'src/pages/ReportVersionView';
 import * as reportsApiModule from 'src/hooks/useReportsApi';
+import * as usePermissionsModule from 'src/hooks/usePermissions';
+
+jest.mock('src/hooks/usePermissions', () => ({
+  usePermissions: jest.fn(),
+}));
+
+const mockUsePermissions = usePermissionsModule.usePermissions as jest.MockedFunction<typeof usePermissionsModule.usePermissions>;
 
 jest.mock('react-helmet', () => ({
   Helmet: ({ children }: { children: React.ReactNode }) => <>{children}</>
@@ -77,6 +84,8 @@ describe('ReportVersionView', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    // Default: user has reports:write permission.
+    mockUsePermissions.mockReturnValue(() => true);
     useReportVersion = jest.spyOn(reportsApiModule, 'useReportVersion') as unknown as jest.Mock;
     useReportVersion.mockReturnValue({ reportVersion: VERSION_1, loading: false, error: null });
     useReportVersionsList = jest.spyOn(reportsApiModule, 'useReportVersionsList') as unknown as jest.Mock;
@@ -160,6 +169,13 @@ describe('ReportVersionView', () => {
   it('Restore button is disabled when viewing the latest version', () => {
     useReportVersion.mockReturnValue({ reportVersion: VERSION_2, loading: false, error: null });
     render(<ReportVersionView />, { wrapper: makeWrapper('/app/reports/r1/versions/2') });
+
+    expect(screen.getByRole('button', { name: /restore this version/i })).toBeDisabled();
+  });
+
+  it('Restore button is disabled when user lacks reports:write', () => {
+    mockUsePermissions.mockReturnValue(() => false);
+    render(<ReportVersionView />, { wrapper: Wrapper });
 
     expect(screen.getByRole('button', { name: /restore this version/i })).toBeDisabled();
   });

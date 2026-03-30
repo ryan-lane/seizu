@@ -32,6 +32,7 @@ import Error from '@mui/icons-material/Error';
 import { ReportVersion, useReportVersionsList, useReportsMutations } from 'src/hooks/useReportsApi';
 import { Report } from 'src/config.context';
 import UserDisplay from 'src/components/UserDisplay';
+import { usePermissions } from 'src/hooks/usePermissions';
 
 // ---------------------------------------------------------------------------
 // Per-row overflow menu
@@ -46,7 +47,16 @@ interface RowMenuProps {
 
 function RowMenu({ version: _version, isCurrent, onView, onRestore }: RowMenuProps) {
   const [anchor, setAnchor] = useState<null | HTMLElement>(null);
+  const hasPermission = usePermissions();
   const close = () => setAnchor(null);
+
+  const canWrite = hasPermission('reports:write');
+  const restoreDisabled = isCurrent || !canWrite;
+  const restoreTooltip = isCurrent
+    ? 'This is already the current version'
+    : !canWrite
+      ? 'You do not have permission to restore report versions'
+      : '';
 
   return (
     <>
@@ -71,17 +81,14 @@ function RowMenu({ version: _version, isCurrent, onView, onRestore }: RowMenuPro
 
         <Divider />
 
-        <Tooltip
-          title={isCurrent ? 'This is already the current version' : ''}
-          placement="left"
-        >
+        <Tooltip title={restoreTooltip} placement="left">
           <span>
             <MenuItem
               onClick={() => { onRestore(); close(); }}
-              disabled={isCurrent}
+              disabled={restoreDisabled}
             >
               <ListItemIcon>
-                <RestoreIcon fontSize="small" color={isCurrent ? 'disabled' : 'inherit'} />
+                <RestoreIcon fontSize="small" color={restoreDisabled ? 'disabled' : 'inherit'} />
               </ListItemIcon>
               <ListItemText>Restore</ListItemText>
             </MenuItem>

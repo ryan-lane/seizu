@@ -53,6 +53,7 @@ import {
 } from 'src/hooks/useToolsetsApi';
 import ToolDetailDialog, { ToolViewData } from 'src/components/ToolDetailDialog';
 import UserDisplay from 'src/components/UserDisplay';
+import { usePermissions } from 'src/hooks/usePermissions';
 
 // ---------------------------------------------------------------------------
 // Built-in seizu toolset sentinel
@@ -388,7 +389,16 @@ interface RowMenuProps {
 
 function RowMenu({ isBuiltin, onEdit, onDetail, onHistory, onDelete }: RowMenuProps) {
   const [anchor, setAnchor] = useState<null | HTMLElement>(null);
+  const hasPermission = usePermissions();
   const close = () => setAnchor(null);
+
+  const canWrite = hasPermission('tools:write');
+  const canDelete = hasPermission('tools:delete');
+
+  const editDisabled = isBuiltin || !canWrite;
+  const deleteDisabled = isBuiltin || !canDelete;
+  const editTooltip = isBuiltin ? 'Built-in tools cannot be edited' : !canWrite ? 'You do not have permission to edit tools' : '';
+  const deleteTooltip = isBuiltin ? 'Built-in tools cannot be deleted' : !canDelete ? 'You do not have permission to delete tools' : '';
 
   return (
     <>
@@ -411,9 +421,9 @@ function RowMenu({ isBuiltin, onEdit, onDetail, onHistory, onDelete }: RowMenuPr
           <ListItemText>View detail</ListItemText>
         </MenuItem>
 
-        <Tooltip title={isBuiltin ? 'Built-in tools cannot be edited' : ''} placement="left">
+        <Tooltip title={editTooltip} placement="left">
           <span>
-            <MenuItem onClick={() => { onEdit(); close(); }} disabled={isBuiltin}>
+            <MenuItem onClick={() => { onEdit(); close(); }} disabled={editDisabled}>
               <ListItemIcon><EditIcon fontSize="small" /></ListItemIcon>
               <ListItemText>Edit</ListItemText>
             </MenuItem>
@@ -431,10 +441,10 @@ function RowMenu({ isBuiltin, onEdit, onDetail, onHistory, onDelete }: RowMenuPr
 
         <Divider />
 
-        <Tooltip title={isBuiltin ? 'Built-in tools cannot be deleted' : ''} placement="left">
+        <Tooltip title={deleteTooltip} placement="left">
           <span>
-            <MenuItem onClick={() => { onDelete(); close(); }} disabled={isBuiltin} sx={{ color: 'error.main' }}>
-              <ListItemIcon><DeleteIcon fontSize="small" color={isBuiltin ? 'disabled' : 'error'} /></ListItemIcon>
+            <MenuItem onClick={() => { onDelete(); close(); }} disabled={deleteDisabled} sx={{ color: deleteDisabled ? undefined : 'error.main' }}>
+              <ListItemIcon><DeleteIcon fontSize="small" color={deleteDisabled ? 'disabled' : 'error'} /></ListItemIcon>
               <ListItemText>Delete</ListItemText>
             </MenuItem>
           </span>
@@ -451,6 +461,7 @@ function RowMenu({ isBuiltin, onEdit, onDetail, onHistory, onDelete }: RowMenuPr
 function ToolsetTools() {
   const { toolsetId } = useParams();
   const navigate = useNavigate();
+  const hasPermission = usePermissions();
 
   const isBuiltin = toolsetId === BUILTIN_TOOLSET_ID;
   const { tools, loading, error, refresh } = useToolsList(isBuiltin ? null : (toolsetId ?? null));
@@ -517,7 +528,7 @@ function ToolsetTools() {
               <Chip label="Built-in" size="small" variant="outlined" color="primary" sx={{ ml: 1, verticalAlign: 'middle' }} />
             )}
           </Typography>
-          {!isBuiltin && (
+          {!isBuiltin && hasPermission('tools:write') && (
             <Button variant="contained" startIcon={<AddIcon />} onClick={openCreate}>
               New tool
             </Button>

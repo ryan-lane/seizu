@@ -32,6 +32,7 @@ import {
 } from 'src/hooks/useToolsetsApi';
 import ToolDetailDialog, { ToolViewData } from 'src/components/ToolDetailDialog';
 import UserDisplay from 'src/components/UserDisplay';
+import { usePermissions } from 'src/hooks/usePermissions';
 
 // ---------------------------------------------------------------------------
 // Per-row overflow menu
@@ -46,7 +47,16 @@ interface RowMenuProps {
 
 function RowMenu({ isCurrent, onRestore, onDetail }: RowMenuProps) {
   const [anchor, setAnchor] = useState<null | HTMLElement>(null);
+  const hasPermission = usePermissions();
   const close = () => setAnchor(null);
+
+  const canWrite = hasPermission('tools:write');
+  const restoreDisabled = isCurrent || !canWrite;
+  const restoreTooltip = isCurrent
+    ? 'This is already the current version'
+    : !canWrite
+      ? 'You do not have permission to restore tool versions'
+      : '';
 
   return (
     <>
@@ -69,14 +79,11 @@ function RowMenu({ isCurrent, onRestore, onDetail }: RowMenuProps) {
           <ListItemText>View detail</ListItemText>
         </MenuItem>
 
-        <Tooltip
-          title={isCurrent ? 'This is already the current version' : ''}
-          placement="left"
-        >
+        <Tooltip title={restoreTooltip} placement="left">
           <span>
-            <MenuItem onClick={() => { onRestore(); close(); }} disabled={isCurrent}>
+            <MenuItem onClick={() => { onRestore(); close(); }} disabled={restoreDisabled}>
               <ListItemIcon>
-                <RestoreIcon fontSize="small" color={isCurrent ? 'disabled' : 'inherit'} />
+                <RestoreIcon fontSize="small" color={restoreDisabled ? 'disabled' : 'inherit'} />
               </ListItemIcon>
               <ListItemText>Restore</ListItemText>
             </MenuItem>
