@@ -25,6 +25,8 @@ from reporting.schema.mcp_config import ToolParamDef
 from reporting.schema.mcp_config import ToolsetListItem
 from reporting.schema.mcp_config import ToolsetVersion
 from reporting.schema.mcp_config import ToolVersion
+from reporting.schema.rbac import RoleItem
+from reporting.schema.rbac import RoleVersion
 from reporting.schema.report_config import PanelStat
 from reporting.schema.report_config import QueryHistoryItem
 from reporting.schema.report_config import ReportListItem
@@ -218,6 +220,33 @@ class QueryHistoryRecord(SQLModel, table=True):  # type: ignore
     user_id: str = Field(index=True)
     query: str
     executed_at: str
+
+
+class RoleRecord(SQLModel, table=True):  # type: ignore
+    __tablename__ = "roles"
+    role_id: str = Field(primary_key=True)
+    name: str = Field(unique=True)
+    description: str = ""
+    permissions: List[str] = Field(default=[], sa_column=Column(JSON, nullable=False))
+    current_version: int = 0
+    created_at: str
+    updated_at: str
+    created_by: str
+    updated_by: Optional[str] = None
+
+
+class RoleVersionRecord(SQLModel, table=True):  # type: ignore
+    __tablename__ = "role_versions"
+    __table_args__ = (UniqueConstraint("role_id", "version"),)
+    id: Optional[int] = Field(default=None, primary_key=True)
+    role_id: str = Field(index=True)
+    version: int
+    name: str
+    description: str = ""
+    permissions: List[str] = Field(default=[], sa_column=Column(JSON, nullable=False))
+    created_at: str
+    created_by: str
+    comment: Optional[str] = None
 
 
 # ---------------------------------------------------------------------------
@@ -1408,3 +1437,221 @@ class SQLModelReportStore(ReportStore):
                 )
                 for r in rows
             ], total
+
+    # ------------------------------------------------------------------
+    # Roles (user-defined, versioned)
+    # ------------------------------------------------------------------
+
+    async def list_roles(self) -> List[RoleItem]:
+        async with AsyncSession(_get_engine()) as session:
+            result = await session.execute(select(RoleRecord))
+            rows = result.scalars().all()
+            return [
+                RoleItem(
+                    role_id=r.role_id,
+                    name=r.name,
+                    description=r.description,
+                    permissions=r.permissions,
+                    current_version=r.current_version,
+                    created_at=r.created_at,
+                    updated_at=r.updated_at,
+                    created_by=r.created_by,
+                    updated_by=r.updated_by,
+                )
+                for r in rows
+            ]
+
+    async def get_role(self, role_id: str) -> Optional[RoleItem]:
+        async with AsyncSession(_get_engine()) as session:
+            r = await session.get(RoleRecord, role_id)
+            if not r:
+                return None
+            return RoleItem(
+                role_id=r.role_id,
+                name=r.name,
+                description=r.description,
+                permissions=r.permissions,
+                current_version=r.current_version,
+                created_at=r.created_at,
+                updated_at=r.updated_at,
+                created_by=r.created_by,
+                updated_by=r.updated_by,
+            )
+
+    async def get_role_by_name(self, name: str) -> Optional[RoleItem]:
+        async with AsyncSession(_get_engine()) as session:
+            stmt = select(RoleRecord).where(col(RoleRecord.name) == name)
+            result = await session.execute(stmt)
+            r = result.scalars().first()
+            if not r:
+                return None
+            return RoleItem(
+                role_id=r.role_id,
+                name=r.name,
+                description=r.description,
+                permissions=r.permissions,
+                current_version=r.current_version,
+                created_at=r.created_at,
+                updated_at=r.updated_at,
+                created_by=r.created_by,
+                updated_by=r.updated_by,
+            )
+
+    async def create_role(
+        self,
+        name: str,
+        description: str,
+        permissions: List[str],
+        created_by: str,
+    ) -> RoleItem:
+        role_id = generate_report_id()
+        now = datetime.now(tz=timezone.utc).isoformat()
+        version = 1
+        async with AsyncSession(_get_engine()) as session:
+            session.add(
+                RoleRecord(
+                    role_id=role_id,
+                    name=name,
+                    description=description,
+                    permissions=permissions,
+                    current_version=version,
+                    created_at=now,
+                    updated_at=now,
+                    created_by=created_by,
+                    updated_by=created_by,
+                )
+            )
+            session.add(
+                RoleVersionRecord(
+                    role_id=role_id,
+                    version=version,
+                    name=name,
+                    description=description,
+                    permissions=permissions,
+                    created_at=now,
+                    created_by=created_by,
+                )
+            )
+            await session.commit()
+        return RoleItem(
+            role_id=role_id,
+            name=name,
+            description=description,
+            permissions=permissions,
+            current_version=version,
+            created_at=now,
+            updated_at=now,
+            created_by=created_by,
+            updated_by=created_by,
+        )
+
+    async def update_role(
+        self,
+        role_id: str,
+        name: str,
+        description: str,
+        permissions: List[str],
+        updated_by: str,
+        comment: Optional[str] = None,
+    ) -> Optional[RoleItem]:
+        async with AsyncSession(_get_engine()) as session:
+            r = await session.get(RoleRecord, role_id)
+            if not r:
+                return None
+            now = datetime.now(tz=timezone.utc).isoformat()
+            version = r.current_version + 1
+            r.name = name
+            r.description = description
+            r.permissions = permissions
+            r.current_version = version
+            r.updated_at = now
+            r.updated_by = updated_by
+            session.add(r)
+            session.add(
+                RoleVersionRecord(
+                    role_id=role_id,
+                    version=version,
+                    name=name,
+                    description=description,
+                    permissions=permissions,
+                    created_at=now,
+                    created_by=updated_by,
+                    comment=comment,
+                )
+            )
+            await session.commit()
+            await session.refresh(r)
+            return RoleItem(
+                role_id=r.role_id,
+                name=r.name,
+                description=r.description,
+                permissions=r.permissions,
+                current_version=r.current_version,
+                created_at=r.created_at,
+                updated_at=r.updated_at,
+                created_by=r.created_by,
+                updated_by=r.updated_by,
+            )
+
+    async def delete_role(self, role_id: str) -> bool:
+        async with AsyncSession(_get_engine()) as session:
+            r = await session.get(RoleRecord, role_id)
+            if not r:
+                return False
+            stmt = select(RoleVersionRecord).where(
+                col(RoleVersionRecord.role_id) == role_id
+            )
+            result = await session.execute(stmt)
+            for row in result.scalars().all():
+                await session.delete(row)
+            await session.delete(r)
+            await session.commit()
+            return True
+
+    async def list_role_versions(self, role_id: str) -> List[RoleVersion]:
+        async with AsyncSession(_get_engine()) as session:
+            stmt = (
+                select(RoleVersionRecord)
+                .where(col(RoleVersionRecord.role_id) == role_id)
+                .order_by(col(RoleVersionRecord.version).desc())
+            )
+            result = await session.execute(stmt)
+            return [
+                RoleVersion(
+                    role_id=r.role_id,
+                    name=r.name,
+                    description=r.description,
+                    permissions=r.permissions,
+                    version=r.version,
+                    created_at=r.created_at,
+                    created_by=r.created_by,
+                    comment=r.comment,
+                )
+                for r in result.scalars().all()
+            ]
+
+    async def get_role_version(
+        self, role_id: str, version: int
+    ) -> Optional[RoleVersion]:
+        async with AsyncSession(_get_engine()) as session:
+            stmt = (
+                select(RoleVersionRecord)
+                .where(col(RoleVersionRecord.role_id) == role_id)
+                .where(col(RoleVersionRecord.version) == version)
+            )
+            result = await session.execute(stmt)
+            r = result.scalars().first()
+            if not r:
+                return None
+            return RoleVersion(
+                role_id=r.role_id,
+                name=r.name,
+                description=r.description,
+                permissions=r.permissions,
+                version=r.version,
+                created_at=r.created_at,
+                created_by=r.created_by,
+                comment=r.comment,
+            )
+
+    # ------------------------------------------------------------------

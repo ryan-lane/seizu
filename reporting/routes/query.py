@@ -10,7 +10,8 @@ from neo4j.graph import Path
 from neo4j.graph import Relationship
 
 from reporting.authnz import CurrentUser
-from reporting.authnz import get_current_user
+from reporting.authnz import require_permission
+from reporting.authnz.permissions import Permission
 from reporting.schema.query import QueryRequest
 from reporting.schema.query import QueryResponse
 from reporting.services import report_store
@@ -56,7 +57,7 @@ def _serialize_neo4j_value(value: Any) -> Any:
 @router.post("/api/v1/query", response_model=QueryResponse)
 async def query(
     body: QueryRequest,
-    current: CurrentUser = Depends(get_current_user),
+    current: CurrentUser = Depends(require_permission(Permission.QUERY_EXECUTE)),
 ) -> Any:
     """Execute a validated read-only Cypher query."""
     validation = await validate_query(body.query, params=body.params)

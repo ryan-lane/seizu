@@ -5,12 +5,14 @@ from unittest.mock import patch
 
 from mcp import types as mcp_types
 
+from reporting.authnz.permissions import ALL_PERMISSIONS
 from reporting.schema.mcp_config import ToolItem
 from reporting.schema.mcp_config import ToolParamDef
 from reporting.schema.mcp_config import ToolsetListItem
 from reporting.services import mcp_server as mcp_module
 from reporting.services.mcp_server import _build_mcp_server
 from reporting.services.mcp_server import _build_oauth_metadata
+from reporting.services.mcp_server import _mcp_permissions
 
 
 # ---------------------------------------------------------------------------
@@ -64,14 +66,18 @@ async def _list_tools(server):
     return result.root.tools
 
 
-async def _call_tool(server, name, arguments=None):
+async def _call_tool(server, name, arguments=None, permissions=ALL_PERMISSIONS):
     """Call the registered call_tool handler and return the text content list."""
     handler = server.request_handlers[mcp_types.CallToolRequest]
     req = mcp_types.CallToolRequest(
         method="tools/call",
         params=mcp_types.CallToolRequestParams(name=name, arguments=arguments or {}),
     )
-    result = await handler(req)
+    token = _mcp_permissions.set(permissions)
+    try:
+        result = await handler(req)
+    finally:
+        _mcp_permissions.reset(token)
     return result.root.content
 
 

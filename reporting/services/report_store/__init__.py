@@ -9,6 +9,8 @@ from reporting.schema.mcp_config import ToolItem
 from reporting.schema.mcp_config import ToolsetListItem
 from reporting.schema.mcp_config import ToolsetVersion
 from reporting.schema.mcp_config import ToolVersion
+from reporting.schema.rbac import RoleItem
+from reporting.schema.rbac import RoleVersion
 from reporting.schema.report_config import PanelStat
 from reporting.schema.report_config import QueryHistoryItem
 from reporting.schema.report_config import ReportListItem
@@ -367,3 +369,64 @@ async def list_query_history(
     return await get_store().list_query_history(
         user_id=user_id, page=page, per_page=per_page
     )
+
+
+# ---------------------------------------------------------------------------
+# Role convenience functions
+# ---------------------------------------------------------------------------
+
+
+async def list_roles() -> List[RoleItem]:
+    return await get_store().list_roles()
+
+
+async def get_role(role_id: str) -> Optional[RoleItem]:
+    return await get_store().get_role(role_id)
+
+
+async def get_role_by_name(name: str) -> Optional[RoleItem]:
+    return await get_store().get_role_by_name(name)
+
+
+async def create_role(
+    name: str,
+    description: str,
+    permissions: List[str],
+    created_by: str,
+) -> RoleItem:
+    return await get_store().create_role(
+        name=name,
+        description=description,
+        permissions=permissions,
+        created_by=created_by,
+    )
+
+
+async def update_role(
+    role_id: str,
+    name: str,
+    description: str,
+    permissions: List[str],
+    updated_by: str,
+    comment: Optional[str] = None,
+) -> Optional[RoleItem]:
+    return await get_store().update_role(
+        role_id=role_id,
+        name=name,
+        description=description,
+        permissions=permissions,
+        updated_by=updated_by,
+        comment=comment,
+    )
+
+
+async def delete_role(role_id: str) -> bool:
+    return await get_store().delete_role(role_id)
+
+
+async def list_role_versions(role_id: str) -> List[RoleVersion]:
+    return await get_store().list_role_versions(role_id)
+
+
+async def get_role_version(role_id: str, version: int) -> Optional[RoleVersion]:
+    return await get_store().get_role_version(role_id, version)

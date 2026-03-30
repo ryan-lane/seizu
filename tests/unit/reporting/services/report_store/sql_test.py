@@ -1295,3 +1295,148 @@ async def test_list_enabled_tools_excludes_disabled_tool(store, mocker):
         created_by="u",
     )
     assert await store.list_enabled_tools() == []
+
+
+# ---------------------------------------------------------------------------
+# Roles
+# ---------------------------------------------------------------------------
+
+_ROLE_KWARGS = dict(
+    name="Custom Role",
+    description="A test role",
+    permissions=["reports:read", "query:execute"],
+    created_by="uid1",
+)
+
+
+async def test_create_role_and_list(store, mocker):
+    mocker.patch(
+        "reporting.services.report_store.sql.generate_report_id",
+        return_value="r1",
+    )
+    role = await store.create_role(**_ROLE_KWARGS)
+    assert role.role_id == "r1"
+    assert role.name == "Custom Role"
+    assert role.current_version == 1
+    assert role.created_by == "uid1"
+    assert "reports:read" in role.permissions
+
+    items = await store.list_roles()
+    assert len(items) == 1
+    assert items[0].role_id == "r1"
+
+
+async def test_list_roles_empty(store):
+    assert await store.list_roles() == []
+
+
+async def test_get_role_not_found(store):
+    assert await store.get_role("missing") is None
+
+
+async def test_get_role_found(store, mocker):
+    mocker.patch(
+        "reporting.services.report_store.sql.generate_report_id",
+        return_value="r1",
+    )
+    await store.create_role(**_ROLE_KWARGS)
+    role = await store.get_role("r1")
+    assert role is not None
+    assert role.role_id == "r1"
+
+
+async def test_get_role_by_name_found(store, mocker):
+    mocker.patch(
+        "reporting.services.report_store.sql.generate_report_id",
+        return_value="r1",
+    )
+    await store.create_role(**_ROLE_KWARGS)
+    role = await store.get_role_by_name("Custom Role")
+    assert role is not None
+    assert role.name == "Custom Role"
+
+
+async def test_get_role_by_name_not_found(store):
+    assert await store.get_role_by_name("nonexistent") is None
+
+
+async def test_update_role_success(store, mocker):
+    mocker.patch(
+        "reporting.services.report_store.sql.generate_report_id",
+        return_value="r1",
+    )
+    await store.create_role(**_ROLE_KWARGS)
+    updated = await store.update_role(
+        role_id="r1",
+        name="Updated Role",
+        description="new desc",
+        permissions=["reports:read", "reports:write"],
+        updated_by="uid2",
+        comment="second version",
+    )
+    assert updated is not None
+    assert updated.name == "Updated Role"
+    assert updated.current_version == 2
+    assert updated.updated_by == "uid2"
+    assert "reports:write" in updated.permissions
+
+
+async def test_update_role_not_found(store):
+    result = await store.update_role(
+        role_id="missing",
+        name="X",
+        description="",
+        permissions=[],
+        updated_by="u",
+    )
+    assert result is None
+
+
+async def test_delete_role_success(store, mocker):
+    mocker.patch(
+        "reporting.services.report_store.sql.generate_report_id",
+        return_value="r1",
+    )
+    await store.create_role(**_ROLE_KWARGS)
+    assert await store.delete_role("r1") is True
+    assert await store.get_role("r1") is None
+
+
+async def test_delete_role_not_found(store):
+    assert await store.delete_role("missing") is False
+
+
+async def test_list_role_versions(store, mocker):
+    mocker.patch(
+        "reporting.services.report_store.sql.generate_report_id",
+        return_value="r1",
+    )
+    await store.create_role(**_ROLE_KWARGS)
+    await store.update_role(
+        role_id="r1",
+        name="Updated Role",
+        description="",
+        permissions=[],
+        updated_by="uid1",
+        comment="v2",
+    )
+    versions = await store.list_role_versions("r1")
+    assert len(versions) == 2
+    assert versions[0].version == 2
+    assert versions[1].version == 1
+
+
+async def test_get_role_version_found(store, mocker):
+    mocker.patch(
+        "reporting.services.report_store.sql.generate_report_id",
+        return_value="r1",
+    )
+    await store.create_role(**_ROLE_KWARGS)
+    v = await store.get_role_version("r1", 1)
+    assert v is not None
+    assert v.version == 1
+    assert v.role_id == "r1"
+
+
+async def test_get_role_version_not_found(store):
+    assert await store.get_role_version("missing", 1) is None

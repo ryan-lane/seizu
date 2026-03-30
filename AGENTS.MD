@@ -134,8 +134,13 @@ FastAPI, Python 3.12, Gunicorn + UvicornWorker (ASGI). All I/O is async (neo4j a
 | GET | `/api/v1/reports/<id>/versions/<n>` | Specific version |
 | POST | `/api/v1/reports/<id>/versions` | Save new version; 201 |
 | DELETE | `/api/v1/reports/<id>` | Delete report + all versions |
-| GET | `/api/v1/me` | Current user profile |
+| GET | `/api/v1/me` | Current user profile + resolved permissions |
 | GET | `/api/v1/users/<user_id>` | User profile by ID; 404 if not found |
+| GET | `/api/v1/roles/builtin` | Built-in role definitions (Viewer/Editor/Admin) |
+| GET/POST | `/api/v1/roles` | List / create user-defined roles |
+| GET/PUT/DELETE | `/api/v1/roles/<id>` | Get / update / delete user-defined role |
+| GET | `/api/v1/roles/<id>/versions` | Version history for a role |
+| GET | `/api/v1/roles/<id>/versions/<n>` | Specific role version |
 | GET/POST | `/api/v1/scheduled-queries` | List / create |
 | GET/PUT/DELETE | `/api/v1/scheduled-queries/<id>` | Get / update / delete |
 | GET | `/api/v1/scheduled-queries/<id>/versions` | All versions |
@@ -293,6 +298,26 @@ Backend validates JWTs via `PyJWKClient` (PyJWT) against any OIDC JWKS endpoint.
 | `OIDC_SCOPE` | `"openid email"` | Served to frontend |
 
 Frontend PKCE flow is driven entirely by runtime config from `GET /api/v1/config` — no build-time `REACT_APP_OIDC_*` vars. `redirect_uri` is always derived from `window.location.origin`.
+
+### RBAC
+
+Every authenticated request resolves a role from the JWT, then maps it to a `frozenset[str]` of permission strings. Permissions are enforced at the route level via `require_permission(*perms)` (a FastAPI dependency factory in `reporting/authnz/__init__.py`). The MCP server enforces `tools:call` / `query:execute` via a `contextvars.ContextVar` set in `_MCPAuthMiddleware`.
+
+**Built-in roles** (hierarchical — Admin ⊇ Editor ⊇ Viewer) are defined in `reporting/authnz/permissions.py`. No store I/O needed.
+
+**User-defined roles** are stored in the report store with version history. Resolution does a single `get_role_by_name` lookup.
+
+| Env var | Default | Notes |
+|---------|---------|-------|
+| `RBAC_ROLE_CLAIM` | `seizu_role` | JWT claim the IDP embeds the role name into |
+| `RBAC_DEFAULT_ROLE` | `seizu-viewer` | Role when JWT has no `RBAC_ROLE_CLAIM`; `""` denies access |
+
+**Key files:**
+- `reporting/authnz/permissions.py` — `Permission` enum, `BUILTIN_ROLES`, `ALL_PERMISSIONS`, `resolve_permissions(jwt_claims)`
+- `reporting/authnz/__init__.py` — `CurrentUser.permissions`, `require_permission()` factory, `get_current_user()` permission resolution
+- `reporting/routes/roles.py` — CRUD for user-defined roles
+
+**Dev mode** (`DEVELOPMENT_ONLY_REQUIRE_AUTH=false`): `ALL_PERMISSIONS` is set on every request — no RBAC enforcement.
 
 **Local Authentik setup:**
 ```bash

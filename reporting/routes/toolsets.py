@@ -7,7 +7,8 @@ from fastapi import HTTPException
 from fastapi.responses import JSONResponse
 
 from reporting.authnz import CurrentUser
-from reporting.authnz import get_current_user
+from reporting.authnz import require_permission
+from reporting.authnz.permissions import Permission
 from reporting.routes.query import _serialize_neo4j_value
 from reporting.schema.mcp_config import CallToolRequest
 from reporting.schema.mcp_config import CallToolResponse
@@ -41,7 +42,7 @@ router = APIRouter()
 
 @router.get("/api/v1/toolsets", response_model=ToolsetListResponse)
 async def list_toolsets(
-    current: CurrentUser = Depends(get_current_user),
+    current: CurrentUser = Depends(require_permission(Permission.TOOLSETS_READ)),
 ) -> ToolsetListResponse:
     """List all toolsets."""
     return ToolsetListResponse(toolsets=await report_store.list_toolsets())
@@ -50,7 +51,7 @@ async def list_toolsets(
 @router.post("/api/v1/toolsets", response_model=ToolsetListItem, status_code=201)
 async def create_toolset(
     body: CreateToolsetRequest,
-    current: CurrentUser = Depends(get_current_user),
+    current: CurrentUser = Depends(require_permission(Permission.TOOLSETS_WRITE)),
 ) -> ToolsetListItem:
     """Create a new toolset."""
     return await report_store.create_toolset(
@@ -64,7 +65,7 @@ async def create_toolset(
 @router.get("/api/v1/toolsets/{toolset_id}", response_model=ToolsetListItem)
 async def get_toolset(
     toolset_id: str,
-    current: CurrentUser = Depends(get_current_user),
+    current: CurrentUser = Depends(require_permission(Permission.TOOLSETS_READ)),
 ) -> ToolsetListItem:
     """Return a toolset by ID."""
     item = await report_store.get_toolset(toolset_id)
@@ -77,7 +78,7 @@ async def get_toolset(
 async def update_toolset(
     toolset_id: str,
     body: UpdateToolsetRequest,
-    current: CurrentUser = Depends(get_current_user),
+    current: CurrentUser = Depends(require_permission(Permission.TOOLSETS_WRITE)),
 ) -> Any:
     """Update a toolset (creates a new version)."""
     item = await report_store.update_toolset(
@@ -96,7 +97,7 @@ async def update_toolset(
 @router.delete("/api/v1/toolsets/{toolset_id}", response_model=ToolsetIdResponse)
 async def delete_toolset(
     toolset_id: str,
-    current: CurrentUser = Depends(get_current_user),
+    current: CurrentUser = Depends(require_permission(Permission.TOOLSETS_DELETE)),
 ) -> ToolsetIdResponse:
     """Delete a toolset and all its tools."""
     ok = await report_store.delete_toolset(toolset_id)
@@ -111,7 +112,7 @@ async def delete_toolset(
 )
 async def list_toolset_versions(
     toolset_id: str,
-    current: CurrentUser = Depends(get_current_user),
+    current: CurrentUser = Depends(require_permission(Permission.TOOLSETS_READ)),
 ) -> ToolsetVersionListResponse:
     """List all versions of a toolset."""
     item = await report_store.get_toolset(toolset_id)
@@ -128,7 +129,7 @@ async def list_toolset_versions(
 async def get_toolset_version(
     toolset_id: str,
     version: int,
-    current: CurrentUser = Depends(get_current_user),
+    current: CurrentUser = Depends(require_permission(Permission.TOOLSETS_READ)),
 ) -> ToolsetVersion:
     """Return a specific version of a toolset."""
     v = await report_store.get_toolset_version(toolset_id, version)
@@ -148,7 +149,7 @@ async def get_toolset_version(
 )
 async def list_tools(
     toolset_id: str,
-    current: CurrentUser = Depends(get_current_user),
+    current: CurrentUser = Depends(require_permission(Permission.TOOLS_READ)),
 ) -> ToolListResponse:
     """List all tools in a toolset."""
     ts = await report_store.get_toolset(toolset_id)
@@ -165,7 +166,7 @@ async def list_tools(
 async def create_tool(
     toolset_id: str,
     body: CreateToolRequest,
-    current: CurrentUser = Depends(get_current_user),
+    current: CurrentUser = Depends(require_permission(Permission.TOOLS_WRITE)),
 ) -> Any:
     """Create a new tool within a toolset."""
     validation = await validate_query(body.cypher)
@@ -198,7 +199,7 @@ async def create_tool(
 async def get_tool(
     toolset_id: str,
     tool_id: str,
-    current: CurrentUser = Depends(get_current_user),
+    current: CurrentUser = Depends(require_permission(Permission.TOOLS_READ)),
 ) -> ToolItem:
     """Return a tool by ID."""
     tool = await report_store.get_tool(tool_id)
@@ -215,7 +216,7 @@ async def update_tool(
     toolset_id: str,
     tool_id: str,
     body: UpdateToolRequest,
-    current: CurrentUser = Depends(get_current_user),
+    current: CurrentUser = Depends(require_permission(Permission.TOOLS_WRITE)),
 ) -> Any:
     """Update a tool (creates a new version)."""
     existing = await report_store.get_tool(tool_id)
@@ -252,7 +253,7 @@ async def update_tool(
 async def delete_tool(
     toolset_id: str,
     tool_id: str,
-    current: CurrentUser = Depends(get_current_user),
+    current: CurrentUser = Depends(require_permission(Permission.TOOLS_DELETE)),
 ) -> ToolIdResponse:
     """Delete a tool."""
     existing = await report_store.get_tool(tool_id)
@@ -272,7 +273,7 @@ async def call_tool(
     toolset_id: str,
     tool_id: str,
     body: CallToolRequest,
-    current: CurrentUser = Depends(get_current_user),
+    current: CurrentUser = Depends(require_permission(Permission.TOOLS_CALL)),
 ) -> Any:
     """Execute a tool's Cypher query with the provided arguments."""
     tool = await report_store.get_tool(tool_id)
@@ -304,7 +305,7 @@ async def call_tool(
 async def list_tool_versions(
     toolset_id: str,
     tool_id: str,
-    current: CurrentUser = Depends(get_current_user),
+    current: CurrentUser = Depends(require_permission(Permission.TOOLS_READ)),
 ) -> ToolVersionListResponse:
     """List all versions of a tool."""
     tool = await report_store.get_tool(tool_id)
@@ -322,7 +323,7 @@ async def get_tool_version(
     toolset_id: str,
     tool_id: str,
     version: int,
-    current: CurrentUser = Depends(get_current_user),
+    current: CurrentUser = Depends(require_permission(Permission.TOOLS_READ)),
 ) -> ToolVersion:
     """Return a specific version of a tool."""
     v = await report_store.get_tool_version(tool_id, version)

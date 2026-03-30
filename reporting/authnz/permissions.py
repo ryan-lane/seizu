@@ -1,0 +1,129 @@
+"""RBAC permission definitions for Seizu.
+
+Defines granular permissions, built-in roles, and permission resolution logic.
+"""
+from enum import Enum
+from typing import Any
+from typing import Dict
+from typing import FrozenSet
+
+
+class Permission(str, Enum):
+    """Granular permission strings used throughout the application."""
+
+    # Reports
+    REPORTS_READ = "reports:read"
+    REPORTS_WRITE = "reports:write"
+    REPORTS_DELETE = "reports:delete"
+    REPORTS_SET_DASHBOARD = "reports:set_dashboard"
+
+    # Queries
+    QUERY_EXECUTE = "query:execute"
+    QUERY_VALIDATE = "query:validate"
+    QUERY_HISTORY_READ = "query_history:read"
+
+    # Toolsets
+    TOOLSETS_READ = "toolsets:read"
+    TOOLSETS_WRITE = "toolsets:write"
+    TOOLSETS_DELETE = "toolsets:delete"
+
+    # Tools
+    TOOLS_READ = "tools:read"
+    TOOLS_WRITE = "tools:write"
+    TOOLS_DELETE = "tools:delete"
+    TOOLS_CALL = "tools:call"
+
+    # Scheduled queries
+    SCHEDULED_QUERIES_READ = "scheduled_queries:read"
+    SCHEDULED_QUERIES_WRITE = "scheduled_queries:write"
+    SCHEDULED_QUERIES_DELETE = "scheduled_queries:delete"
+
+    # Users
+    USERS_READ = "users:read"
+
+    # Roles (user-defined)
+    ROLES_READ = "roles:read"
+    ROLES_WRITE = "roles:write"
+    ROLES_DELETE = "roles:delete"
+
+
+# ---------------------------------------------------------------------------
+# Built-in role permission sets (hierarchical: Admin ⊇ Editor ⊇ Viewer)
+# ---------------------------------------------------------------------------
+
+VIEWER_PERMISSIONS: FrozenSet[Permission] = frozenset(
+    {
+        Permission.REPORTS_READ,
+        Permission.QUERY_EXECUTE,
+        Permission.QUERY_VALIDATE,
+        Permission.QUERY_HISTORY_READ,
+        Permission.TOOLSETS_READ,
+        Permission.TOOLS_READ,
+        Permission.TOOLS_CALL,
+        Permission.SCHEDULED_QUERIES_READ,
+        Permission.USERS_READ,
+        Permission.ROLES_READ,
+    }
+)
+
+EDITOR_PERMISSIONS: FrozenSet[Permission] = frozenset(
+    VIEWER_PERMISSIONS
+    | {
+        Permission.REPORTS_WRITE,
+        Permission.REPORTS_DELETE,
+        Permission.REPORTS_SET_DASHBOARD,
+    }
+)
+
+ADMIN_PERMISSIONS: FrozenSet[Permission] = frozenset(
+    EDITOR_PERMISSIONS
+    | {
+        Permission.SCHEDULED_QUERIES_WRITE,
+        Permission.SCHEDULED_QUERIES_DELETE,
+        Permission.TOOLSETS_WRITE,
+        Permission.TOOLSETS_DELETE,
+        Permission.TOOLS_WRITE,
+        Permission.TOOLS_DELETE,
+        Permission.ROLES_WRITE,
+        Permission.ROLES_DELETE,
+    }
+)
+
+# Maps built-in role names to their permission sets.
+BUILTIN_ROLES: Dict[str, FrozenSet[Permission]] = {
+    "seizu-viewer": VIEWER_PERMISSIONS,
+    "seizu-editor": EDITOR_PERMISSIONS,
+    "seizu-admin": ADMIN_PERMISSIONS,
+}
+
+# All permissions — used in dev mode to grant full access.
+ALL_PERMISSIONS: FrozenSet[str] = frozenset(p.value for p in Permission)
+
+
+# ---------------------------------------------------------------------------
+# Permission resolution
+# ---------------------------------------------------------------------------
+
+
+async def resolve_permissions(jwt_claims: Dict[str, Any]) -> FrozenSet[str]:
+    """Resolve a JWT payload to a set of permission strings.
+
+    Reads RBAC_ROLE_CLAIM from the JWT claims. If the claim names a built-in
+    role, returns that role's permissions directly with no store I/O. If it
+    names a user-defined role, performs a single GetItem lookup by name.
+    Falls back to RBAC_DEFAULT_ROLE when the claim is absent.
+    """
+    # Deferred imports to avoid circular dependency at module load time.
+    from reporting import settings
+    from reporting.services import report_store
+
+    role_name = jwt_claims.get(settings.RBAC_ROLE_CLAIM) or settings.RBAC_DEFAULT_ROLE
+    if not role_name:
+        return frozenset()
+
+    if role_name in BUILTIN_ROLES:
+        return frozenset(p.value for p in BUILTIN_ROLES[role_name])
+
+    # User-defined role: single lookup by name.
+    role = await report_store.get_role_by_name(role_name)
+    return frozenset(role.permissions) if role else frozenset()

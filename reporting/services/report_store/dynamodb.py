@@ -17,6 +17,8 @@ from reporting.schema.mcp_config import ToolParamDef
 from reporting.schema.mcp_config import ToolsetListItem
 from reporting.schema.mcp_config import ToolsetVersion
 from reporting.schema.mcp_config import ToolVersion
+from reporting.schema.rbac import RoleItem
+from reporting.schema.rbac import RoleVersion
 from reporting.schema.report_config import PanelStat
 from reporting.schema.report_config import QueryHistoryItem
 from reporting.schema.report_config import ReportListItem
@@ -53,6 +55,9 @@ _PK_PANEL_STATS = "PANEL_STATS"
 _PK_SCHEDULED_QUERY_LIST = "SCHEDULED_QUERY_LIST"
 # Toolsets — list index PK for listing all toolsets.
 _PK_TOOLSET_LIST = "TOOLSET_LIST"
+# Roles — list index PK for listing all user-defined roles.
+_PK_ROLE_LIST = "ROLE_LIST"
+# Group mappings — list index PK for listing all group-to-role mappings.
 # Query history — per-user SK prefix; items sorted newest-first by snowflake ID.
 _SK_QUERY_HISTORY_PREFIX = "HISTORY#"
 # Maximum history items fetched from DynamoDB per user (caps scan size).
@@ -108,6 +113,41 @@ def _query_history_pk(user_id: str) -> str:
 def _query_history_sk(history_id: str) -> str:
     """Pad the snowflake ID so lexicographic order matches time order."""
     return f"{_SK_QUERY_HISTORY_PREFIX}{history_id.zfill(20)}"
+
+
+def _role_pk(role_id: str) -> str:
+    return f"ROLE#{role_id}"
+
+
+def _role_list_sk(role_id: str) -> str:
+    return f"ROLE#{role_id}"
+
+
+def _role_from_item(item: Dict) -> RoleItem:
+    return RoleItem(
+        role_id=item["role_id"],
+        name=item["name"],
+        description=item.get("description", ""),
+        permissions=item.get("permissions", []),
+        current_version=item.get("current_version", 0),
+        created_at=item["created_at"],
+        updated_at=item["updated_at"],
+        created_by=item["created_by"],
+        updated_by=item.get("updated_by"),
+    )
+
+
+def _role_version_from_item(item: Dict) -> RoleVersion:
+    return RoleVersion(
+        role_id=item["role_id"],
+        name=item["name"],
+        description=item.get("description", ""),
+        permissions=item.get("permissions", []),
+        version=item["version"],
+        created_at=item["created_at"],
+        created_by=item["created_by"],
+        comment=item.get("comment"),
+    )
 
 
 def _sq_pk(sq_id: str) -> str:
@@ -1517,6 +1557,200 @@ class DynamoDBReportStore(ReportStore):
                         if item and item.get("enabled", True):
                             tools.append(_tool_from_item(item))
             return tools
+
+        return await asyncio.to_thread(_op)
+
+    # ------------------------------------------------------------------
+    # Roles (user-defined, versioned)
+    # ------------------------------------------------------------------
+
+    async def list_roles(self) -> List[RoleItem]:
+        def _op() -> List[RoleItem]:
+            table = _get_table()
+            resp = table.query(
+                KeyConditionExpression="PK = :pk",
+                ExpressionAttributeValues={":pk": _PK_ROLE_LIST},
+            )
+            return [_role_from_item(item) for item in resp.get("Items", [])]
+
+        return await asyncio.to_thread(_op)
+
+    async def get_role(self, role_id: str) -> Optional[RoleItem]:
+        def _op() -> Optional[RoleItem]:
+            table = _get_table()
+            resp = table.get_item(Key={"PK": _role_pk(role_id), "SK": _SK_METADATA})
+            item = resp.get("Item")
+            if not item:
+                return None
+            return _role_from_item(item)
+
+        return await asyncio.to_thread(_op)
+
+    async def get_role_by_name(self, name: str) -> Optional[RoleItem]:
+        def _op() -> Optional[RoleItem]:
+            table = _get_table()
+            resp = table.query(
+                KeyConditionExpression="PK = :pk",
+                FilterExpression="#n = :name",
+                ExpressionAttributeNames={"#n": "name"},
+                ExpressionAttributeValues={":pk": _PK_ROLE_LIST, ":name": name},
+            )
+            items = resp.get("Items", [])
+            if not items:
+                return None
+            return _role_from_item(items[0])
+
+        return await asyncio.to_thread(_op)
+
+    async def create_role(
+        self,
+        name: str,
+        description: str,
+        permissions: List[str],
+        created_by: str,
+    ) -> RoleItem:
+        role_id = generate_report_id()
+        now = datetime.now(tz=timezone.utc).isoformat()
+        version = 1
+        base = _strip_none(
+            {
+                "role_id": role_id,
+                "name": name,
+                "description": description,
+                "permissions": permissions,
+                "current_version": version,
+                "created_at": now,
+                "updated_at": now,
+                "created_by": created_by,
+                "updated_by": created_by,
+            }
+        )
+        metadata_item = {"PK": _role_pk(role_id), "SK": _SK_METADATA, **base}
+        list_item = {"PK": _PK_ROLE_LIST, "SK": _role_list_sk(role_id), **base}
+        version_item = _strip_none(
+            {
+                "PK": _role_pk(role_id),
+                "SK": _version_sk(version),
+                "role_id": role_id,
+                "name": name,
+                "description": description,
+                "permissions": permissions,
+                "version": version,
+                "created_at": now,
+                "created_by": created_by,
+                "comment": None,
+            }
+        )
+
+        def _op() -> None:
+            table = _get_table()
+            _transact_put_sync(table, metadata_item, list_item, version_item)
+
+        await asyncio.to_thread(_op)
+        return _role_from_item(base)
+
+    async def update_role(
+        self,
+        role_id: str,
+        name: str,
+        description: str,
+        permissions: List[str],
+        updated_by: str,
+        comment: Optional[str] = None,
+    ) -> Optional[RoleItem]:
+        def _op() -> Optional[RoleItem]:
+            table = _get_table()
+            resp = table.get_item(Key={"PK": _role_pk(role_id), "SK": _SK_METADATA})
+            if not resp.get("Item"):
+                return None
+            existing = resp["Item"]
+            current_version = int(existing.get("current_version", 0))
+            version = current_version + 1
+            now = datetime.now(tz=timezone.utc).isoformat()
+            base = _strip_none(
+                {
+                    "role_id": role_id,
+                    "name": name,
+                    "description": description,
+                    "permissions": permissions,
+                    "current_version": version,
+                    "created_at": existing["created_at"],
+                    "updated_at": now,
+                    "created_by": existing["created_by"],
+                    "updated_by": updated_by,
+                }
+            )
+            metadata_item = {"PK": _role_pk(role_id), "SK": _SK_METADATA, **base}
+            list_item = {"PK": _PK_ROLE_LIST, "SK": _role_list_sk(role_id), **base}
+            version_item = _strip_none(
+                {
+                    "PK": _role_pk(role_id),
+                    "SK": _version_sk(version),
+                    "role_id": role_id,
+                    "name": name,
+                    "description": description,
+                    "permissions": permissions,
+                    "version": version,
+                    "created_at": now,
+                    "created_by": updated_by,
+                    "comment": comment,
+                }
+            )
+            _transact_put_sync(table, metadata_item, list_item, version_item)
+            return _role_from_item(base)
+
+        return await asyncio.to_thread(_op)
+
+    async def delete_role(self, role_id: str) -> bool:
+        def _op() -> bool:
+            table = _get_table()
+            resp = table.get_item(Key={"PK": _role_pk(role_id), "SK": _SK_METADATA})
+            if not resp.get("Item"):
+                return False
+            items_resp = table.query(
+                KeyConditionExpression="PK = :pk",
+                ExpressionAttributeValues={":pk": _role_pk(role_id)},
+                ProjectionExpression="PK, SK",
+            )
+            keys_to_delete = [
+                {"PK": item["PK"], "SK": item["SK"]}
+                for item in items_resp.get("Items", [])
+            ]
+            keys_to_delete.append({"PK": _PK_ROLE_LIST, "SK": _role_list_sk(role_id)})
+            with table.batch_writer() as batch:
+                for key in keys_to_delete:
+                    batch.delete_item(Key=key)
+            return True
+
+        return await asyncio.to_thread(_op)
+
+    async def list_role_versions(self, role_id: str) -> List[RoleVersion]:
+        def _op() -> List[RoleVersion]:
+            table = _get_table()
+            resp = table.query(
+                KeyConditionExpression="PK = :pk AND begins_with(SK, :prefix)",
+                ExpressionAttributeValues={
+                    ":pk": _role_pk(role_id),
+                    ":prefix": _SK_VERSION_PREFIX,
+                },
+                ScanIndexForward=False,
+            )
+            return [_role_version_from_item(item) for item in resp.get("Items", [])]
+
+        return await asyncio.to_thread(_op)
+
+    async def get_role_version(
+        self, role_id: str, version: int
+    ) -> Optional[RoleVersion]:
+        def _op() -> Optional[RoleVersion]:
+            table = _get_table()
+            resp = table.get_item(
+                Key={"PK": _role_pk(role_id), "SK": _version_sk(version)}
+            )
+            item = resp.get("Item")
+            if not item:
+                return None
+            return _role_version_from_item(item)
 
         return await asyncio.to_thread(_op)
 

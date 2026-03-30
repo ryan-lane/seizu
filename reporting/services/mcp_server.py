@@ -7,10 +7,12 @@ validates the Bearer token using the same JWT logic as the rest of the API.
 The session manager lifespan is managed by the FastAPI app's lifespan context.
 """
 import asyncio
+import contextvars
 import json
 import logging
 from typing import Any
 from typing import Dict
+from typing import FrozenSet
 from typing import List
 from typing import Optional
 from typing import Tuple
@@ -44,6 +46,12 @@ logger = logging.getLogger(__name__)
 
 _BUILTIN_SCHEMA_TOOL_NAME = "seizu__schema"
 _BUILTIN_QUERY_TOOL_NAME = "seizu__query"
+
+# Context variable that holds the current request's resolved permissions.
+# Set by _MCPAuthMiddleware before passing to the MCP app.
+_mcp_permissions: contextvars.ContextVar[FrozenSet[str]] = contextvars.ContextVar(
+    "_mcp_permissions", default=frozenset()
+)
 
 _LABELS_QUERY = "CALL db.labels() YIELD label RETURN label ORDER BY label"
 _RELS_QUERY = (
@@ -157,9 +165,17 @@ def _build_mcp_server() -> Server:
         name: str, arguments: Optional[Dict[str, Any]]
     ) -> List[TextContent]:
         args = arguments or {}
+        perms = _mcp_permissions.get()
 
         # Built-in ad-hoc query tool
         if name == _BUILTIN_QUERY_TOOL_NAME:
+            if "query:execute" not in perms:
+                return [
+                    TextContent(
+                        type="text",
+                        text=json.dumps({"error": "Permission denied: query:execute"}),
+                    )
+                ]
             cypher = str(args.get("query", "")).strip()
             if not cypher:
                 return [
@@ -210,6 +226,13 @@ def _build_mcp_server() -> Server:
 
         # Built-in schema tool
         if name == _BUILTIN_SCHEMA_TOOL_NAME:
+            if "query:execute" not in perms:
+                return [
+                    TextContent(
+                        type="text",
+                        text=json.dumps({"error": "Permission denied: query:execute"}),
+                    )
+                ]
             try:
                 labels_results = await reporting_neo4j.run_query(_LABELS_QUERY)
                 rels_results = await reporting_neo4j.run_query(_RELS_QUERY)
@@ -230,6 +253,13 @@ def _build_mcp_server() -> Server:
                 ]
 
         # User-defined tool — look up by namespaced name
+        if "tools:call" not in perms:
+            return [
+                TextContent(
+                    type="text",
+                    text=json.dumps({"error": "Permission denied: tools:call"}),
+                )
+            ]
         try:
             enabled_tools = await report_store.list_enabled_tools()
             toolsets = await report_store.list_toolsets()
@@ -312,8 +342,14 @@ class _MCPAuthMiddleware:
             return
 
         if not settings.DEVELOPMENT_ONLY_REQUIRE_AUTH:
-            # Auth disabled in dev — pass through
-            await self._app(scope, receive, send)
+            # Auth disabled in dev — grant all permissions and pass through
+            from reporting.authnz.permissions import ALL_PERMISSIONS
+
+            token = _mcp_permissions.set(ALL_PERMISSIONS)
+            try:
+                await self._app(scope, receive, send)
+            finally:
+                _mcp_permissions.reset(token)
             return
 
         # OAuth metadata must be reachable before auth — client has no token yet
@@ -333,11 +369,11 @@ class _MCPAuthMiddleware:
             await self._send_401(scope, receive, send)
             return
 
-        token = auth_str[7:].strip()
+        bearer_token = auth_str[7:].strip()
         try:
             client = _get_jwks_client()
             signing_key = await asyncio.to_thread(
-                client.get_signing_key_from_jwt, token
+                client.get_signing_key_from_jwt, bearer_token
             )
             decode_kwargs: Dict[str, Any] = {
                 "algorithms": settings.ALLOWED_JWT_ALGORITHMS,
@@ -346,12 +382,20 @@ class _MCPAuthMiddleware:
                 decode_kwargs["issuer"] = settings.JWT_ISSUER
             if settings.JWT_AUDIENCE:
                 decode_kwargs["audience"] = settings.JWT_AUDIENCE
-            jwt.decode(token, signing_key.key, **decode_kwargs)
+            payload = jwt.decode(bearer_token, signing_key.key, **decode_kwargs)
         except jwt.PyJWTError:
             await self._send_401(scope, receive, send)
             return
 
-        await self._app(scope, receive, send)
+        from reporting.authnz.permissions import resolve_permissions
+
+        permissions = await resolve_permissions(payload)
+
+        ctx_token = _mcp_permissions.set(permissions)
+        try:
+            await self._app(scope, receive, send)
+        finally:
+            _mcp_permissions.reset(ctx_token)
 
     @staticmethod
     async def _send_401(scope: Scope, receive: Receive, send: Send) -> None:
