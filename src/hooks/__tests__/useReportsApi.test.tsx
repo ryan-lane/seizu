@@ -344,7 +344,7 @@ describe('useReportsList', () => {
     expect(mockFetch).toHaveBeenCalledTimes(1);
 
 
-    act(() => result.current.refresh());
+    await act(async () => { result.current.refresh(); });
 
     await waitFor(() => expect(mockFetch).toHaveBeenCalledTimes(2));
   });
