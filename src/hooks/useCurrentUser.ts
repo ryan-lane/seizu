@@ -11,6 +11,7 @@ export interface CurrentUser {
   created_at: string;
   last_login: string;
   archived_at: string | null;
+  permissions: string[];
 }
 
 function getApiHeaders(accessToken: string | null): Record<string, string> {

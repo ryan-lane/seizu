@@ -14,6 +14,8 @@ Navigate to **MCP Toolsets** in the sidebar to view all toolsets.
 
 Built-in tools provided by Seizu (the `seizu` toolset) are shown with a **Built-in** badge and cannot be edited or deleted.
 
+> **Permissions:** Creating and editing toolsets and tools requires the `toolsets:write` / `tools:write` permission (`seizu-admin`). Deleting requires `toolsets:delete` / `tools:delete`. Users with `seizu-viewer` or `seizu-editor` roles can view toolsets and tools but will not see **New toolset** / **New tool** buttons, and write/delete actions in the **⋮** menu will be disabled.
+
 From the list you can:
 
 - Click a toolset name to view its tools.

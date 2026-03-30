@@ -11,6 +11,8 @@ It can take the query results and pass them into a list of configurable actions.
 
 Scheduled queries are stored in the database and managed through the Seizu UI or API. They are not read directly from the YAML configuration file at runtime.
 
+> **Permissions:** Creating and editing scheduled queries requires the `scheduled_queries:write` permission (`seizu-admin`). Deleting requires `scheduled_queries:delete`. Users with `seizu-viewer` or `seizu-editor` roles can view scheduled queries and history but will not see the **New scheduled query** button, and write/delete actions in the **⋮** menu will be disabled.
+
 ### Scheduled Queries list
 
 Navigate to **Scheduled Queries** in the sidebar to view all scheduled queries. From the list you can:

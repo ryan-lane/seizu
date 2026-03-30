@@ -59,6 +59,7 @@ import ScheduledQueryDetailDialog, {
   ScheduledQueryViewData
 } from 'src/components/ScheduledQueryDetailDialog';
 import UserDisplay from 'src/components/UserDisplay';
+import { usePermissions } from 'src/hooks/usePermissions';
 
 const EMPTY_FORM: ScheduledQueryRequest = {
   name: '',
@@ -614,7 +615,11 @@ interface RowMenuProps {
 
 function RowMenu({ item: _item, onEdit, onHistory, onDelete }: RowMenuProps) {
   const [anchor, setAnchor] = useState<null | HTMLElement>(null);
+  const hasPermission = usePermissions();
   const close = () => setAnchor(null);
+
+  const canWrite = hasPermission('scheduled_queries:write');
+  const canDelete = hasPermission('scheduled_queries:delete');
 
   return (
     <>
@@ -632,10 +637,14 @@ function RowMenu({ item: _item, onEdit, onHistory, onDelete }: RowMenuProps) {
         transformOrigin={{ vertical: 'top', horizontal: 'right' }}
         slotProps={{ paper: { sx: { minWidth: 180 } } }}
       >
-        <MenuItem onClick={() => { onEdit(); close(); }}>
-          <ListItemIcon><EditIcon fontSize="small" /></ListItemIcon>
-          <ListItemText>Edit</ListItemText>
-        </MenuItem>
+        <Tooltip title={!canWrite ? 'You do not have permission to edit scheduled queries' : ''} placement="left">
+          <span>
+            <MenuItem onClick={() => { onEdit(); close(); }} disabled={!canWrite}>
+              <ListItemIcon><EditIcon fontSize="small" /></ListItemIcon>
+              <ListItemText>Edit</ListItemText>
+            </MenuItem>
+          </span>
+        </Tooltip>
 
         <MenuItem onClick={() => { onHistory(); close(); }}>
           <ListItemIcon><HistoryIcon fontSize="small" /></ListItemIcon>
@@ -644,10 +653,14 @@ function RowMenu({ item: _item, onEdit, onHistory, onDelete }: RowMenuProps) {
 
         <Divider />
 
-        <MenuItem onClick={() => { onDelete(); close(); }} sx={{ color: 'error.main' }}>
-          <ListItemIcon><DeleteIcon fontSize="small" color="error" /></ListItemIcon>
-          <ListItemText>Delete</ListItemText>
-        </MenuItem>
+        <Tooltip title={!canDelete ? 'You do not have permission to delete scheduled queries' : ''} placement="left">
+          <span>
+            <MenuItem onClick={() => { onDelete(); close(); }} disabled={!canDelete} sx={{ color: canDelete ? 'error.main' : undefined }}>
+              <ListItemIcon><DeleteIcon fontSize="small" color={canDelete ? 'error' : 'disabled'} /></ListItemIcon>
+              <ListItemText>Delete</ListItemText>
+            </MenuItem>
+          </span>
+        </Tooltip>
       </Menu>
     </>
   );
@@ -662,6 +675,7 @@ function ScheduledQueries() {
   const { scheduledQueries, loading, error, refresh } = useScheduledQueriesList();
   const { createScheduledQuery, updateScheduledQuery, deleteScheduledQuery } =
     useScheduledQueriesMutations();
+  const hasPermission = usePermissions();
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editTarget, setEditTarget] = useState<ScheduledQueryItem | null>(null);
@@ -707,9 +721,11 @@ function ScheduledQueries() {
       <Box sx={{ p: 3 }}>
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
           <Typography variant="h1">Scheduled Queries</Typography>
-          <Button variant="contained" startIcon={<AddIcon />} onClick={openCreate}>
-            New scheduled query
-          </Button>
+          {hasPermission('scheduled_queries:write') && (
+            <Button variant="contained" startIcon={<AddIcon />} onClick={openCreate}>
+              New scheduled query
+            </Button>
+          )}
         </Box>
 
         {loading && <CircularProgress />}

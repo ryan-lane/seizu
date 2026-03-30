@@ -58,6 +58,8 @@ curl -X PUT /api/v1/reports/<report_id>/dashboard
 
 Reports can be created, edited, and deleted at runtime through the Seizu UI without modifying the YAML file or restarting the service.
 
+> **Permissions:** Creating and editing reports requires the `reports:write` permission (`seizu-editor` or `seizu-admin`). Deleting reports requires `reports:delete`. Setting the default dashboard requires `reports:set_dashboard`. Users with only the `seizu-viewer` role can view reports and history but will not see the **New report** button, and write/delete actions in the **⋮** menu will be disabled.
+
 ### Reports list
 
 Navigate to **Reports** in the sidebar to view all reports. From the list you can:

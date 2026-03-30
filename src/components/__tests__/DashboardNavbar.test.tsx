@@ -87,7 +87,7 @@ describe('DashboardNavbar', () => {
     expect(screen.queryByText(/@/)).toBeNull();
   });
 
-  it('renders display name when user is authenticated', () => {
+  it('renders email when user is authenticated', () => {
     mockUseCurrentUser.mockReturnValue({
       user_id: 'uid1',
       sub: 'sub123',
@@ -97,6 +97,27 @@ describe('DashboardNavbar', () => {
       created_at: '2024-01-01T00:00:00+00:00',
       last_login: '2024-01-01T00:00:00+00:00',
       archived_at: null,
+      permissions: [],
+    });
+    render(
+      <Wrapper contextValue={{}}>
+        <DashboardNavbar {...defaultProps} />
+      </Wrapper>
+    );
+    expect(screen.getByText('alice@example.com')).toBeInTheDocument();
+  });
+
+  it('falls back to display_name when email is empty', () => {
+    mockUseCurrentUser.mockReturnValue({
+      user_id: 'uid1',
+      sub: 'sub123',
+      iss: 'https://idp.example.com',
+      email: '',
+      display_name: 'Alice Smith',
+      created_at: '2024-01-01T00:00:00+00:00',
+      last_login: '2024-01-01T00:00:00+00:00',
+      archived_at: null,
+      permissions: [],
     });
     render(
       <Wrapper contextValue={{}}>
@@ -106,23 +127,24 @@ describe('DashboardNavbar', () => {
     expect(screen.getByText('Alice Smith')).toBeInTheDocument();
   });
 
-  it('falls back to email when display_name is null', () => {
+  it('falls back to user_id when email and display_name are empty', () => {
     mockUseCurrentUser.mockReturnValue({
       user_id: 'uid1',
       sub: 'sub123',
       iss: 'https://idp.example.com',
-      email: 'alice@example.com',
+      email: '',
       display_name: null,
       created_at: '2024-01-01T00:00:00+00:00',
       last_login: '2024-01-01T00:00:00+00:00',
       archived_at: null,
+      permissions: [],
     });
     render(
       <Wrapper contextValue={{}}>
         <DashboardNavbar {...defaultProps} />
       </Wrapper>
     );
-    expect(screen.getByText('alice@example.com')).toBeInTheDocument();
+    expect(screen.getByText('uid1')).toBeInTheDocument();
   });
 
   it('renders avatar SVG when user is authenticated', () => {
@@ -135,6 +157,7 @@ describe('DashboardNavbar', () => {
       created_at: '2024-01-01T00:00:00+00:00',
       last_login: '2024-01-01T00:00:00+00:00',
       archived_at: null,
+      permissions: [],
     });
     const { container } = render(
       <Wrapper contextValue={{}}>
@@ -154,6 +177,7 @@ describe('DashboardNavbar', () => {
       created_at: '2024-01-01T00:00:00+00:00',
       last_login: '2024-01-01T00:00:00+00:00',
       archived_at: null,
+      permissions: [],
     });
     render(
       <Wrapper contextValue={{}}>
