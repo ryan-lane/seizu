@@ -102,6 +102,10 @@ async def delete_report(report_id: str) -> bool:
     return await get_store().delete_report(report_id)
 
 
+async def pin_report(report_id: str, pinned: bool) -> bool:
+    return await get_store().pin_report(report_id, pinned)
+
+
 async def get_dashboard_report_id() -> Optional[str]:
     return await get_store().get_dashboard_report_id()
 

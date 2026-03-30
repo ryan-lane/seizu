@@ -1,7 +1,7 @@
-import { renderHook, waitFor } from '@testing-library/react';
+import { act, renderHook, waitFor } from '@testing-library/react';
 import { AuthContext } from 'src/auth.context';
 import { AuthConfigContext } from 'src/authConfig.context';
-import { useReportVersionsList, useReportVersion } from 'src/hooks/useReportsApi';
+import { useReportVersionsList, useReportVersion, useReportsList, useReportsMutations } from 'src/hooks/useReportsApi';
 
 const AUTH_CONFIG_NO_OIDC = { auth_required: false, oidc: null, userManager: null };
 
@@ -251,5 +251,187 @@ describe('useReportVersion', () => {
     // Wait for new data to load after the reportId change
     await waitFor(() => expect(result.current.reportVersion).toEqual(VERSIONS[1]));
     expect(result.current.loading).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// useReportsList
+// ---------------------------------------------------------------------------
+
+const REPORTS = [
+  {
+    report_id: 'r1',
+    name: 'Alpha',
+    description: '',
+    current_version: 2,
+    created_at: '2024-01-01T00:00:00Z',
+    updated_at: '2024-01-02T00:00:00Z',
+    pinned: false
+  },
+  {
+    report_id: 'r2',
+    name: 'Beta',
+    description: '',
+    current_version: 1,
+    created_at: '2024-01-03T00:00:00Z',
+    updated_at: '2024-01-03T00:00:00Z',
+    pinned: true
+  }
+];
+
+describe('useReportsList', () => {
+  let mockFetch: jest.Mock;
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockFetch = jest.fn();
+    global.fetch = mockFetch;
+    Object.defineProperty(document, 'cookie', {
+      writable: true,
+      value: '_csrf_token=testtoken'
+    });
+  });
+
+  it('fetches and returns reports list', async () => {
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ reports: REPORTS })
+    });
+
+    const { result } = renderHook(() => useReportsList(), {
+      wrapper: makeWrapper(false, null)
+    });
+
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.reports).toEqual(REPORTS);
+    expect(result.current.error).toBeNull();
+  });
+
+  it('includes pinned field in returned items', async () => {
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ reports: REPORTS })
+    });
+
+    const { result } = renderHook(() => useReportsList(), {
+      wrapper: makeWrapper(false, null)
+    });
+
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.reports[1].pinned).toBe(true);
+    expect(result.current.reports[0].pinned).toBe(false);
+  });
+
+  it('does not fetch when auth_required and no token', () => {
+    renderHook(() => useReportsList(), {
+      wrapper: makeWrapper(true, null)
+    });
+
+    expect(mockFetch).not.toHaveBeenCalled();
+  });
+
+  it('refresh dispatches the seizu:reports-updated event', async () => {
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ reports: REPORTS })
+    });
+
+    const { result } = renderHook(() => useReportsList(), {
+      wrapper: makeWrapper(false, null)
+    });
+
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    const handler = jest.fn();
+    window.addEventListener('seizu:reports-updated', handler);
+    result.current.refresh();
+    expect(handler).toHaveBeenCalledTimes(1);
+    window.removeEventListener('seizu:reports-updated', handler);
+  });
+
+
+  it('sets error state on non-ok response', async () => {
+    mockFetch.mockResolvedValue({ ok: false, status: 500 });
+
+    const { result } = renderHook(() => useReportsList(), {
+      wrapper: makeWrapper(false, null)
+    });
+
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.error).not.toBeNull();
+    expect(result.current.reports).toEqual([]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// useReportsMutations – pinReport
+// ---------------------------------------------------------------------------
+
+describe('useReportsMutations (pinReport)', () => {
+  let mockFetch: jest.Mock;
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockFetch = jest.fn();
+    global.fetch = mockFetch;
+    Object.defineProperty(document, 'cookie', {
+      writable: true,
+      value: '_csrf_token=testtoken'
+    });
+  });
+
+  it('pinReport calls PUT /api/v1/reports/:id/pin with pinned true', async () => {
+    mockFetch.mockResolvedValue({ ok: true });
+
+    const { result } = renderHook(() => useReportsMutations(), {
+      wrapper: makeWrapper(false, null)
+    });
+
+
+    await act(async () => {
+      await result.current.pinReport('r1', true);
+    });
+
+    expect(mockFetch).toHaveBeenCalledWith(
+      '/api/v1/reports/r1/pin',
+      expect.objectContaining({
+        method: 'PUT',
+        body: JSON.stringify({ pinned: true })
+      })
+    );
+  });
+
+  it('pinReport calls PUT /api/v1/reports/:id/pin with pinned false', async () => {
+    mockFetch.mockResolvedValue({ ok: true });
+
+    const { result } = renderHook(() => useReportsMutations(), {
+      wrapper: makeWrapper(false, null)
+    });
+
+
+    await act(async () => {
+      await result.current.pinReport('r1', false);
+    });
+
+    expect(mockFetch).toHaveBeenCalledWith(
+      '/api/v1/reports/r1/pin',
+      expect.objectContaining({
+        method: 'PUT',
+        body: JSON.stringify({ pinned: false })
+      })
+    );
+  });
+
+  it('pinReport throws on non-ok response', async () => {
+    mockFetch.mockResolvedValue({ ok: false, status: 403 });
+
+    const { result } = renderHook(() => useReportsMutations(), {
+      wrapper: makeWrapper(false, null)
+    });
+
+
+    await act(async () => {
+      await expect(result.current.pinReport('r1', true)).rejects.toThrow();
+    });
   });
 });

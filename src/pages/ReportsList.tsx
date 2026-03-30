@@ -35,6 +35,8 @@ import EditIcon from '@mui/icons-material/Edit';
 import HistoryIcon from '@mui/icons-material/History';
 import DashboardIcon from '@mui/icons-material/Dashboard';
 import DashboardOutlinedIcon from '@mui/icons-material/DashboardOutlined';
+import PushPinIcon from '@mui/icons-material/PushPin';
+import PushPinOutlinedIcon from '@mui/icons-material/PushPinOutlined';
 import MoreVertIcon from '@mui/icons-material/MoreVert';
 import Error from '@mui/icons-material/Error';
 
@@ -54,12 +56,13 @@ interface RowMenuProps {
   report: ReportListItem;
   isDashboard: boolean;
   onSetDashboard: () => void;
+  onPin: () => void;
   onEdit: () => void;
   onHistory: () => void;
   onDelete: () => void;
 }
 
-function RowMenu({ report: _report, isDashboard, onSetDashboard, onEdit, onHistory, onDelete }: RowMenuProps) {
+function RowMenu({ report, isDashboard, onSetDashboard, onPin, onEdit, onHistory, onDelete }: RowMenuProps) {
   const [anchor, setAnchor] = useState<null | HTMLElement>(null);
   const hasPermission = usePermissions();
 
@@ -118,6 +121,20 @@ function RowMenu({ report: _report, isDashboard, onSetDashboard, onEdit, onHisto
           </span>
         </Tooltip>
 
+        <Tooltip title={!canWrite ? 'You do not have permission to pin reports' : ''} placement="left">
+          <span>
+            <MenuItem
+              onClick={() => { onPin(); close(); }}
+              disabled={!canWrite}
+            >
+              <ListItemIcon>
+                {report.pinned ? <PushPinIcon fontSize="small" color="primary" /> : <PushPinOutlinedIcon fontSize="small" />}
+              </ListItemIcon>
+              <ListItemText>{report.pinned ? 'Unpin from sidebar' : 'Pin to sidebar'}</ListItemText>
+            </MenuItem>
+          </span>
+        </Tooltip>
+
         <Divider />
 
         <Tooltip title={!canDelete ? 'You do not have permission to delete reports' : ''} placement="left">
@@ -144,7 +161,7 @@ function RowMenu({ report: _report, isDashboard, onSetDashboard, onEdit, onHisto
 function ReportsList() {
   const { reports, loading, error, refresh } = useReportsList();
   const { dashboardReportId, refresh: refreshDashboard } = useDashboardReportId();
-  const { createReport, saveReportVersion, setDashboardReport, deleteReport } =
+  const { createReport, saveReportVersion, setDashboardReport, pinReport, deleteReport } =
     useReportsMutations();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -184,6 +201,15 @@ function ReportsList() {
     try {
       await setDashboardReport(reportId);
       refreshDashboard();
+    } catch {
+      // ignore – user can retry
+    }
+  };
+
+  const handlePin = async (reportId: string, pinned: boolean) => {
+    try {
+      await pinReport(reportId, pinned);
+      refresh();
     } catch {
       // ignore – user can retry
     }
@@ -265,6 +291,18 @@ function ReportsList() {
                           >
                             {report.name}
                           </Link>
+                          {report.pinned && (
+                            <Tooltip title="Pinned to sidebar">
+                              <Chip
+                                icon={<PushPinIcon sx={{ fontSize: '0.85rem !important' }} />}
+                                label="Pinned"
+                                size="small"
+                                color="primary"
+                                variant="outlined"
+                                sx={{ height: 20, fontSize: '0.7rem' }}
+                              />
+                            </Tooltip>
+                          )}
                           {isDashboard && (
                             <Tooltip title="Currently set as the dashboard">
                               <Chip
@@ -290,6 +328,7 @@ function ReportsList() {
                           report={report}
                           isDashboard={isDashboard}
                           onSetDashboard={() => handleSetDashboard(report.report_id)}
+                          onPin={() => handlePin(report.report_id, !report.pinned)}
                           onEdit={() => navigate(`/app/reports/${report.report_id}?edit=true`)}
                           onHistory={() => navigate(`/app/reports/${report.report_id}/history`)}
                           onDelete={() => setDeleteTarget(report)}

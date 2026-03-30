@@ -10,6 +10,7 @@ from reporting.authnz import require_permission
 from reporting.authnz.permissions import Permission
 from reporting.schema.report_config import CreateReportRequest
 from reporting.schema.report_config import CreateVersionRequest
+from reporting.schema.report_config import PinReportRequest
 from reporting.schema.report_config import ReportIdResponse
 from reporting.schema.report_config import ReportListItem
 from reporting.schema.report_config import ReportListResponse
@@ -38,6 +39,19 @@ async def get_dashboard_report(
     if not report:
         raise HTTPException(status_code=404, detail="No dashboard report configured")
     return report
+
+
+@router.put("/api/v1/reports/{report_id}/pin", response_model=ReportIdResponse)
+async def pin_report(
+    report_id: str,
+    body: PinReportRequest,
+    current: CurrentUser = Depends(require_permission(Permission.REPORTS_WRITE)),
+) -> ReportIdResponse:
+    """Pin or unpin a report."""
+    ok = await report_store.pin_report(report_id, body.pinned)
+    if not ok:
+        raise HTTPException(status_code=404, detail="Report not found")
+    return ReportIdResponse(report_id=report_id)
 
 
 @router.put("/api/v1/reports/{report_id}/dashboard", response_model=ReportIdResponse)

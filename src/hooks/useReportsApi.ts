@@ -10,6 +10,7 @@ export interface ReportListItem {
   current_version: number;
   created_at: string;
   updated_at: string;
+  pinned: boolean;
 }
 
 export interface ReportVersion {
@@ -36,6 +37,12 @@ function getApiHeaders(accessToken: string | null): Record<string, string> {
   return headers;
 }
 
+const REPORTS_UPDATED = 'seizu:reports-updated';
+
+function broadcastReportsUpdated() {
+  window.dispatchEvent(new Event(REPORTS_UPDATED));
+}
+
 export function useReportsList(): {
   reports: ReportListItem[];
   loading: boolean;
@@ -49,7 +56,13 @@ export function useReportsList(): {
   const [error, setError] = useState<Error | null>(null);
   const [tick, setTick] = useState(0);
 
-  const refresh = useCallback(() => setTick((t) => t + 1), []);
+  useEffect(() => {
+    const handler = () => setTick((t) => t + 1);
+    window.addEventListener(REPORTS_UPDATED, handler);
+    return () => window.removeEventListener(REPORTS_UPDATED, handler);
+  }, []);
+
+  const refresh = useCallback(() => broadcastReportsUpdated(), []);
 
   useEffect(() => {
     if (auth_required && !accessToken) return;
@@ -205,6 +218,7 @@ export function useReportsMutations(): {
     comment?: string
   ) => Promise<ReportVersion>;
   setDashboardReport: (reportId: string) => Promise<void>;
+  pinReport: (reportId: string, pinned: boolean) => Promise<void>;
   deleteReport: (reportId: string) => Promise<void>;
 } {
   const { accessToken } = useContext(AuthContext);
@@ -252,6 +266,21 @@ export function useReportsMutations(): {
     [accessToken]
   );
 
+  const pinReport = useCallback(
+    async (reportId: string, pinned: boolean): Promise<void> => {
+      const res = await fetch(`/api/v1/reports/${reportId}/pin`, {
+        method: 'PUT',
+        headers: {
+          ...getApiHeaders(accessToken),
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ pinned })
+      });
+      if (!res.ok) throw new Error(`Failed to update pin: ${res.status}`);
+    },
+    [accessToken]
+  );
+
   const deleteReport = useCallback(
     async (reportId: string): Promise<void> => {
       const res = await fetch(`/api/v1/reports/${reportId}`, {
@@ -263,7 +292,7 @@ export function useReportsMutations(): {
     [accessToken]
   );
 
-  return { createReport, saveReportVersion, setDashboardReport, deleteReport };
+  return { createReport, saveReportVersion, setDashboardReport, pinReport, deleteReport };
 }
 
 export function useReportVersionsList(reportId: string | undefined): {

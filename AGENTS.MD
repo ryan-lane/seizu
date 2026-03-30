@@ -129,6 +129,7 @@ FastAPI, Python 3.12, Gunicorn + UvicornWorker (ASGI). All I/O is async (neo4j a
 | POST | `/api/v1/reports` | Create report; 201 |
 | GET | `/api/v1/reports/dashboard` | Latest dashboard report; 404 if none |
 | PUT | `/api/v1/reports/<id>/dashboard` | Set default dashboard |
+| PUT | `/api/v1/reports/<id>/pin` | Pin or unpin report (`{"pinned": bool}`); requires `reports:write` |
 | GET | `/api/v1/reports/<id>` | Latest version of a report |
 | GET | `/api/v1/reports/<id>/versions` | All versions |
 | GET | `/api/v1/reports/<id>/versions/<n>` | Specific version |

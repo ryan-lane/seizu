@@ -58,15 +58,22 @@ curl -X PUT /api/v1/reports/<report_id>/dashboard
 
 Reports can be created, edited, and deleted at runtime through the Seizu UI without modifying the YAML file or restarting the service.
 
-> **Permissions:** Creating and editing reports requires the `reports:write` permission (`seizu-editor` or `seizu-admin`). Deleting reports requires `reports:delete`. Setting the default dashboard requires `reports:set_dashboard`. Restoring a historical version also requires `reports:write`. Users with only the `seizu-viewer` role can view reports and history but will not see the **New report** button, and write/delete/restore actions in the **⋮** menu and version view will be disabled.
+> **Permissions:** Creating and editing reports requires the `reports:write` permission (`seizu-editor` or `seizu-admin`). Deleting reports requires `reports:delete`. Setting the default dashboard requires `reports:set_dashboard`. Pinning reports requires `reports:write`. Restoring a historical version also requires `reports:write`. Users with only the `seizu-viewer` role can view reports and history but will not see the **New report** button, and write/delete/restore actions in the **⋮** menu and version view will be disabled.
 
 ### Reports list
 
 Navigate to **Reports** in the sidebar to view all reports. From the list you can:
 
 - Click a report name to view it.
-- Open the **⋮** menu on any row to **Edit**, **View history**, **Set as dashboard**, or **Delete** a report.
+- Open the **⋮** menu on any row to **Edit**, **View history**, **Set as dashboard**, **Pin to sidebar** / **Unpin from sidebar**, or **Delete** a report.
+- A **Pinned** badge is shown inline on reports that are pinned to the sidebar.
 - A **Dashboard** badge is shown inline on whichever report is currently set as the dashboard.
+
+### Pinning reports to the sidebar
+
+Pinning a report adds it as a direct link under **Reports** in the navigation sidebar, so it can be reached in one click without going through the Reports list. Only pinned reports appear in the sidebar — the full list is always accessible via the **Reports** navigation item.
+
+To pin or unpin a report, open the **⋮** menu on its row in the Reports list and choose **Pin to sidebar** or **Unpin from sidebar**. This requires the `reports:write` permission.
 
 ### Creating a report
 
