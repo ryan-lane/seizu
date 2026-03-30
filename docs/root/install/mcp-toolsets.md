@@ -14,7 +14,7 @@ Navigate to **MCP Toolsets** in the sidebar to view all toolsets.
 
 Built-in tools provided by Seizu (the `seizu` toolset) are shown with a **Built-in** badge and cannot be edited or deleted.
 
-> **Permissions:** Creating and editing toolsets and tools requires the `toolsets:write` / `tools:write` permission (`seizu-admin`). Deleting requires `toolsets:delete` / `tools:delete`. Users with `seizu-viewer` or `seizu-editor` roles can view toolsets and tools but will not see **New toolset** / **New tool** buttons, and write/delete actions in the **⋮** menu will be disabled.
+> **Permissions:** Creating and editing toolsets and tools requires the `toolsets:write` / `tools:write` permission (`seizu-admin`). Deleting requires `toolsets:delete` / `tools:delete`. Restoring a historical version also requires `toolsets:write` / `tools:write`. Users with `seizu-viewer` or `seizu-editor` roles can view toolsets and tools but will not see **New toolset** / **New tool** buttons, and write/delete/restore actions in the **⋮** menu will be disabled.
 
 From the list you can:
 
@@ -190,7 +190,7 @@ Response:
 
 ## Version History
 
-Both toolsets and tools keep a full version history. Open the **⋮** menu and select **View history** to see all past versions with their timestamps, authors, and comments. Any previous version can be restored, which creates a new version with a `Restored from version N` comment.
+Both toolsets and tools keep a full version history. Open the **⋮** menu and select **View history** to see all past versions with their timestamps, authors, and comments. Any previous version can be restored (requires `toolsets:write` / `tools:write`), which creates a new version with a `Restored from version N` comment. The Restore action is disabled in the **⋮** menu for users without the required permission.
 
 ## Built-in Tools
 

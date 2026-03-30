@@ -11,7 +11,7 @@ It can take the query results and pass them into a list of configurable actions.
 
 Scheduled queries are stored in the database and managed through the Seizu UI or API. They are not read directly from the YAML configuration file at runtime.
 
-> **Permissions:** Creating and editing scheduled queries requires the `scheduled_queries:write` permission (`seizu-admin`). Deleting requires `scheduled_queries:delete`. Users with `seizu-viewer` or `seizu-editor` roles can view scheduled queries and history but will not see the **New scheduled query** button, and write/delete actions in the **⋮** menu will be disabled.
+> **Permissions:** Creating and editing scheduled queries requires the `scheduled_queries:write` permission (`seizu-admin`). Deleting requires `scheduled_queries:delete`. Restoring a historical version also requires `scheduled_queries:write`. Users with `seizu-viewer` or `seizu-editor` roles can view scheduled queries and history but will not see the **New scheduled query** button, and write/delete/restore actions in the **⋮** menu will be disabled.
 
 ### Scheduled Queries list
 
@@ -50,7 +50,7 @@ Every save creates a new numbered version. To view the history:
 
 The history page lists all versions newest-first, showing the version number, save date, who created that version, and the save comment. The current (latest) version is labeled **current**.
 
-Click a version number to view the full configuration at that point in time. From the overflow menu on any version row you can **Restore** to save that historical configuration as a new latest version.
+Click a version number to view the full configuration at that point in time. From the overflow menu on any version row you can **Restore** to save that historical configuration as a new latest version. The Restore action is disabled if you do not have the `scheduled_queries:write` permission.
 
 Restoring a version never deletes history — it creates a new version whose config matches the restored one, with a comment of `Restored from version N`.
 
