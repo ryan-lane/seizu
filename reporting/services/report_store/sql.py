@@ -74,6 +74,7 @@ class ReportRecord(SQLModel, table=True):  # type: ignore
     current_version: int = 0
     created_at: str
     updated_at: str
+    pinned: bool = False
 
 
 class UserRecord(SQLModel, table=True):  # type: ignore
@@ -310,6 +311,7 @@ class SQLModelReportStore(ReportStore):
                     current_version=r.current_version,
                     created_at=r.created_at,
                     updated_at=r.updated_at,
+                    pinned=r.pinned,
                 )
                 for r in rows
             ]
@@ -507,6 +509,15 @@ class SQLModelReportStore(ReportStore):
                 await session.delete(stat_record)
 
             await session.delete(report)
+            await session.commit()
+        return True
+
+    async def pin_report(self, report_id: str, pinned: bool) -> bool:
+        async with AsyncSession(_get_engine()) as session:
+            report = await session.get(ReportRecord, report_id)
+            if not report:
+                return False
+            report.pinned = pinned
             await session.commit()
         return True
 

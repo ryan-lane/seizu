@@ -433,7 +433,18 @@ class DynamoDBReportStore(ReportStore):
                 KeyConditionExpression="PK = :pk",
                 ExpressionAttributeValues={":pk": _PK_REPORT_LIST},
             )
-            return [ReportListItem(**item) for item in resp.get("Items", [])]
+            items = resp.get("Items", [])
+            return [
+                ReportListItem(
+                    report_id=item["report_id"],
+                    name=item["name"],
+                    current_version=item["current_version"],
+                    created_at=item["created_at"],
+                    updated_at=item["updated_at"],
+                    pinned=bool(item.get("pinned", False)),
+                )
+                for item in items
+            ]
 
         return await asyncio.to_thread(_op)
 
@@ -503,6 +514,7 @@ class DynamoDBReportStore(ReportStore):
             "current_version": 0,
             "created_at": now,
             "updated_at": now,
+            "pinned": False,
         }
         list_item = {
             "PK": _PK_REPORT_LIST,
@@ -512,6 +524,7 @@ class DynamoDBReportStore(ReportStore):
             "current_version": 0,
             "created_at": now,
             "updated_at": now,
+            "pinned": False,
         }
 
         def _op() -> None:
@@ -525,6 +538,7 @@ class DynamoDBReportStore(ReportStore):
             current_version=0,
             created_at=now,
             updated_at=now,
+            pinned=False,
         )
 
     async def save_report_version(
@@ -545,6 +559,7 @@ class DynamoDBReportStore(ReportStore):
 
             version = int(meta["current_version"]) + 1
             name = meta["name"]
+            pinned = bool(meta.get("pinned", False))
             now = datetime.now(tz=timezone.utc).isoformat()
 
             version_item = {
@@ -567,6 +582,7 @@ class DynamoDBReportStore(ReportStore):
                 "current_version": version,
                 "created_at": meta["created_at"],
                 "updated_at": now,
+                "pinned": pinned,
             }
             list_item = {
                 "PK": _PK_REPORT_LIST,
@@ -576,6 +592,7 @@ class DynamoDBReportStore(ReportStore):
                 "current_version": version,
                 "created_at": meta["created_at"],
                 "updated_at": now,
+                "pinned": pinned,
             }
 
             stats = extract_panel_stats(report_id, config)
@@ -641,6 +658,28 @@ class DynamoDBReportStore(ReportStore):
                 for key in keys_to_delete:
                     batch.delete_item(Key=key)
 
+            return True
+
+        return await asyncio.to_thread(_op)
+
+    async def pin_report(self, report_id: str, pinned: bool) -> bool:
+        """Set or clear the pinned flag on a report."""
+
+        def _op() -> bool:
+            table = _get_table()
+            resp = table.get_item(Key={"PK": _report_pk(report_id), "SK": _SK_METADATA})
+            if not resp.get("Item"):
+                return False
+            table.update_item(
+                Key={"PK": _report_pk(report_id), "SK": _SK_METADATA},
+                UpdateExpression="SET pinned = :pinned",
+                ExpressionAttributeValues={":pinned": pinned},
+            )
+            table.update_item(
+                Key={"PK": _PK_REPORT_LIST, "SK": f"REPORT#{report_id}"},
+                UpdateExpression="SET pinned = :pinned",
+                ExpressionAttributeValues={":pinned": pinned},
+            )
             return True
 
         return await asyncio.to_thread(_op)

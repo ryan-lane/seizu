@@ -3,7 +3,6 @@ import Dashboard from '@mui/icons-material/Dashboard';
 import Insights from '@mui/icons-material/Insights';
 import Article from '@mui/icons-material/Article';
 import MenuBook from '@mui/icons-material/MenuBook';
-import AddCircleOutlineIcon from '@mui/icons-material/AddCircleOutline';
 import Terminal from '@mui/icons-material/Terminal';
 import Schedule from '@mui/icons-material/Schedule';
 import Extension from '@mui/icons-material/Extension';
@@ -19,18 +18,13 @@ interface DashboardSidebarProps {
 
 function DashboardSidebar({ onMobileClose = () => {}, openMobile = false }: DashboardSidebarProps) {
   const { reports } = useReportsList();
-  const reportSubitems: NavItemData[] = [
-    {
-      href: '/app/reports?new=1',
-      title: 'New Report',
-      icon: AddCircleOutlineIcon
-    },
-    ...reports.map((report) => ({
+  const reportSubitems: NavItemData[] = reports
+    .filter((report) => report.pinned)
+    .map((report) => ({
       href: `/app/reports/${report.report_id}`,
       title: report.name,
       icon: Article
-    }))
-  ];
+    }));
 
   const items: NavItemData[] = [
     {
@@ -42,7 +36,7 @@ function DashboardSidebar({ onMobileClose = () => {}, openMobile = false }: Dash
       href: '/app/reports',
       icon: Insights,
       title: 'Reports',
-      subItems: reportSubitems
+      subItems: reportSubitems.length > 0 ? reportSubitems : undefined
     },
     {
       href: '/app/query-console',

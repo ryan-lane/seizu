@@ -145,6 +145,13 @@ class ReportStore(ABC):
         """
 
     @abstractmethod
+    async def pin_report(self, report_id: str, pinned: bool) -> bool:
+        """Set or clear the pinned flag on a report.
+
+        Returns False if the report does not exist.
+        """
+
+    @abstractmethod
     async def get_dashboard_report_id(self) -> Optional[str]:
         """Return the report_id of the current dashboard report, or None if not set."""
 

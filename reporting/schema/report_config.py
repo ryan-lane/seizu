@@ -34,6 +34,7 @@ class ReportListItem(BaseModel):
     current_version: int
     created_at: str
     updated_at: str
+    pinned: bool = False
 
     @field_validator("current_version", mode="before")
     @classmethod
@@ -117,6 +118,12 @@ class CreateReportRequest(BaseModel):
     """Request body for POST /api/v1/reports."""
 
     name: str
+
+
+class PinReportRequest(BaseModel):
+    """Request body for PUT /api/v1/reports/<id>/pin."""
+
+    pinned: bool
 
 
 class CreateVersionRequest(BaseModel):

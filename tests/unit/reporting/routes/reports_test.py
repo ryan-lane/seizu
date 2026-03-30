@@ -461,3 +461,87 @@ async def test_delete_report_not_found(mocker):
         ret = await client.delete("/api/v1/reports/missing")
     assert ret.status_code == 404
     assert "not found" in ret.json()["error"].lower()
+
+
+# ---------------------------------------------------------------------------
+# PUT /api/v1/reports/<report_id>/pin
+# ---------------------------------------------------------------------------
+
+
+async def test_pin_report_success(mocker):
+    mocker.patch("reporting.settings.CSRF_DISABLE", True)
+    mocker.patch(
+        "reporting.routes.reports.report_store.pin_report",
+        new=AsyncMock(return_value=True),
+    )
+    app = _make_app()
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        ret = await client.put("/api/v1/reports/rid1/pin", json={"pinned": True})
+    assert ret.status_code == 200
+    assert ret.json()["report_id"] == "rid1"
+
+
+async def test_unpin_report_success(mocker):
+    mocker.patch("reporting.settings.CSRF_DISABLE", True)
+    mocker.patch(
+        "reporting.routes.reports.report_store.pin_report",
+        new=AsyncMock(return_value=True),
+    )
+    app = _make_app()
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        ret = await client.put("/api/v1/reports/rid1/pin", json={"pinned": False})
+    assert ret.status_code == 200
+    assert ret.json()["report_id"] == "rid1"
+
+
+async def test_pin_report_passes_fields_to_service(mocker):
+    mocker.patch("reporting.settings.CSRF_DISABLE", True)
+    mock_pin = mocker.patch(
+        "reporting.routes.reports.report_store.pin_report",
+        new=AsyncMock(return_value=True),
+    )
+    app = _make_app()
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        await client.put("/api/v1/reports/rid1/pin", json={"pinned": True})
+    mock_pin.assert_called_once_with("rid1", True)
+
+
+async def test_pin_report_not_found(mocker):
+    mocker.patch("reporting.settings.CSRF_DISABLE", True)
+    mocker.patch(
+        "reporting.routes.reports.report_store.pin_report",
+        new=AsyncMock(return_value=False),
+    )
+    app = _make_app()
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        ret = await client.put("/api/v1/reports/missing/pin", json={"pinned": True})
+    assert ret.status_code == 404
+    assert "not found" in ret.json()["error"].lower()
+
+
+async def test_pin_report_missing_body(mocker):
+    mocker.patch("reporting.settings.CSRF_DISABLE", True)
+    app = _make_app()
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        ret = await client.put("/api/v1/reports/rid1/pin")
+    assert ret.status_code == 422
+
+
+async def test_pin_report_wrong_type(mocker):
+    mocker.patch("reporting.settings.CSRF_DISABLE", True)
+    app = _make_app()
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        ret = await client.put("/api/v1/reports/rid1/pin", json={})
+    assert ret.status_code == 422
