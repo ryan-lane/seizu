@@ -1512,3 +1512,177 @@ async def test_list_enabled_tools_returns_enabled_tools(patch_table, store):
     result = await store.list_enabled_tools()
     assert len(result) == 1
     assert result[0].tool_id == "t1"
+
+
+# ---------------------------------------------------------------------------
+# Roles
+# ---------------------------------------------------------------------------
+
+_NOW = "2024-01-01T00:00:00+00:00"
+
+
+def _role_metadata_item(role_id="r1", current_version=1):
+    return {
+        "PK": f"ROLE#{role_id}",
+        "SK": "#METADATA",
+        "role_id": role_id,
+        "name": "Custom Role",
+        "description": "A test role",
+        "permissions": ["reports:read", "query:execute"],
+        "current_version": current_version,
+        "created_at": _NOW,
+        "updated_at": _NOW,
+        "created_by": "uid1",
+        "updated_by": "uid1",
+    }
+
+
+def _role_version_item(role_id="r1", version=1):
+    return {
+        "PK": f"ROLE#{role_id}",
+        "SK": f"VERSION#{version:010d}",  # noqa: E231
+        "role_id": role_id,
+        "name": "Custom Role",
+        "description": "A test role",
+        "permissions": ["reports:read"],
+        "version": version,
+        "created_at": _NOW,
+        "created_by": "uid1",
+    }
+
+
+async def test_list_roles_empty(patch_table, store):
+    patch_table.query.return_value = {"Items": []}
+    result = await store.list_roles()
+    assert result == []
+
+
+async def test_list_roles_returns_items(patch_table, store):
+    patch_table.query.return_value = {"Items": [_role_metadata_item()]}
+    result = await store.list_roles()
+    assert len(result) == 1
+    assert result[0].role_id == "r1"
+    assert result[0].name == "Custom Role"
+
+
+async def test_get_role_success(patch_table, store):
+    patch_table.get_item.return_value = {"Item": _role_metadata_item()}
+    result = await store.get_role("r1")
+    assert result is not None
+    assert result.role_id == "r1"
+
+
+async def test_get_role_not_found(patch_table, store):
+    patch_table.get_item.return_value = {}
+    result = await store.get_role("nonexistent")
+    assert result is None
+
+
+async def test_get_role_by_name_found(patch_table, store):
+    patch_table.query.return_value = {"Items": [_role_metadata_item()]}
+    result = await store.get_role_by_name("Custom Role")
+    assert result is not None
+    assert result.name == "Custom Role"
+
+
+async def test_get_role_by_name_not_found(patch_table, store):
+    patch_table.query.return_value = {"Items": []}
+    result = await store.get_role_by_name("nonexistent")
+    assert result is None
+
+
+async def test_create_role(patch_table, store, mocker):
+    mocker.patch(
+        "reporting.services.report_store.dynamodb.generate_report_id",
+        return_value="r1",
+    )
+    patch_table.meta.client.transact_write_items = MagicMock()
+    result = await store.create_role(
+        name="Custom Role",
+        description="A test role",
+        permissions=["reports:read"],
+        created_by="uid1",
+    )
+    assert result.role_id == "r1"
+    assert result.name == "Custom Role"
+    assert result.current_version == 1
+    assert result.created_by == "uid1"
+    assert patch_table.meta.client.transact_write_items.call_count == 1
+
+
+async def test_update_role_success(patch_table, store):
+    patch_table.get_item.return_value = {"Item": _role_metadata_item(current_version=1)}
+    patch_table.meta.client.transact_write_items = MagicMock()
+    result = await store.update_role(
+        role_id="r1",
+        name="Updated Role",
+        description="new desc",
+        permissions=["reports:read", "reports:write"],
+        updated_by="uid2",
+        comment="v2",
+    )
+    assert result is not None
+    assert result.name == "Updated Role"
+    assert result.current_version == 2
+    assert result.updated_by == "uid2"
+
+
+async def test_update_role_not_found(patch_table, store):
+    patch_table.get_item.return_value = {}
+    result = await store.update_role(
+        role_id="nonexistent",
+        name="X",
+        description="",
+        permissions=[],
+        updated_by="u",
+    )
+    assert result is None
+
+
+async def test_delete_role_success(patch_table, store):
+    patch_table.get_item.return_value = {"Item": _role_metadata_item()}
+    patch_table.query.return_value = {
+        "Items": [
+            {"PK": "ROLE#r1", "SK": "#METADATA"},
+            {"PK": "ROLE#r1", "SK": "VERSION#0000000001"},
+        ]
+    }
+    batch_mock = MagicMock()
+    patch_table.batch_writer.return_value.__enter__ = MagicMock(return_value=batch_mock)
+    patch_table.batch_writer.return_value.__exit__ = MagicMock(return_value=False)
+    result = await store.delete_role("r1")
+    assert result is True
+
+
+async def test_delete_role_not_found(patch_table, store):
+    patch_table.get_item.return_value = {}
+    result = await store.delete_role("nonexistent")
+    assert result is False
+
+
+async def test_list_role_versions_empty(patch_table, store):
+    patch_table.query.return_value = {"Items": []}
+    result = await store.list_role_versions("r1")
+    assert result == []
+
+
+async def test_list_role_versions_returns_items(patch_table, store):
+    patch_table.query.return_value = {
+        "Items": [_role_version_item(version=2), _role_version_item(version=1)]
+    }
+    result = await store.list_role_versions("r1")
+    assert len(result) == 2
+    assert result[0].version == 2
+
+
+async def test_get_role_version_success(patch_table, store):
+    patch_table.get_item.return_value = {"Item": _role_version_item(version=1)}
+    result = await store.get_role_version("r1", 1)
+    assert result is not None
+    assert result.version == 1
+
+
+async def test_get_role_version_not_found(patch_table, store):
+    patch_table.get_item.return_value = {}
+    result = await store.get_role_version("r1", 99)
+    assert result is None
