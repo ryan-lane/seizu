@@ -3,6 +3,13 @@ import { MemoryRouter, Routes, Route, useLocation } from 'react-router-dom';
 import { ThemeProvider, createTheme } from '@mui/material/styles';
 import ReportHistory from 'src/pages/ReportHistory';
 import * as reportsApiModule from 'src/hooks/useReportsApi';
+import * as usePermissionsModule from 'src/hooks/usePermissions';
+
+jest.mock('src/hooks/usePermissions', () => ({
+  usePermissions: jest.fn(),
+}));
+
+const mockUsePermissions = usePermissionsModule.usePermissions as jest.MockedFunction<typeof usePermissionsModule.usePermissions>;
 
 jest.mock('react-helmet', () => ({
   Helmet: ({ children }: { children: React.ReactNode }) => <>{children}</>
@@ -61,6 +68,8 @@ describe('ReportHistory', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    // Default: user has reports:write permission.
+    mockUsePermissions.mockReturnValue(() => true);
     useReportVersionsList = jest.spyOn(reportsApiModule, 'useReportVersionsList') as unknown as jest.Mock;
     useReportVersionsList.mockReturnValue({
       versions: [VERSION_1, VERSION_2],
@@ -194,6 +203,20 @@ describe('ReportHistory', () => {
     fireEvent.click(menuButtons[1]);
 
     expect(screen.getByRole('menuitem', { name: /restore/i })).not.toHaveAttribute(
+      'aria-disabled',
+      'true'
+    );
+  });
+
+  it('Restore menu item is disabled for a non-current version when user lacks reports:write', () => {
+    mockUsePermissions.mockReturnValue(() => false);
+    render(<ReportHistory />, { wrapper: Wrapper });
+
+    // Open menu for the second data row (v1, not current)
+    const menuButtons = screen.getAllByRole('button', { name: 'More actions' });
+    fireEvent.click(menuButtons[1]);
+
+    expect(screen.getByRole('menuitem', { name: /restore/i })).toHaveAttribute(
       'aria-disabled',
       'true'
     );

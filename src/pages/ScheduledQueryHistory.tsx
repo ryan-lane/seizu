@@ -35,6 +35,7 @@ import UserDisplay from 'src/components/UserDisplay';
 import ScheduledQueryDetailDialog, {
   ScheduledQueryViewData
 } from 'src/components/ScheduledQueryDetailDialog';
+import { usePermissions } from 'src/hooks/usePermissions';
 
 // ---------------------------------------------------------------------------
 // Per-row overflow menu
@@ -48,7 +49,16 @@ interface RowMenuProps {
 
 function RowMenu({ version: _version, isCurrent, onRestore }: RowMenuProps) {
   const [anchor, setAnchor] = useState<null | HTMLElement>(null);
+  const hasPermission = usePermissions();
   const close = () => setAnchor(null);
+
+  const canWrite = hasPermission('scheduled_queries:write');
+  const restoreDisabled = isCurrent || !canWrite;
+  const restoreTooltip = isCurrent
+    ? 'This is already the current version'
+    : !canWrite
+      ? 'You do not have permission to restore scheduled query versions'
+      : '';
 
   return (
     <>
@@ -66,17 +76,14 @@ function RowMenu({ version: _version, isCurrent, onRestore }: RowMenuProps) {
         transformOrigin={{ vertical: 'top', horizontal: 'right' }}
         slotProps={{ paper: { sx: { minWidth: 180 } } }}
       >
-        <Tooltip
-          title={isCurrent ? 'This is already the current version' : ''}
-          placement="left"
-        >
+        <Tooltip title={restoreTooltip} placement="left">
           <span>
             <MenuItem
               onClick={() => { onRestore(); close(); }}
-              disabled={isCurrent}
+              disabled={restoreDisabled}
             >
               <ListItemIcon>
-                <RestoreIcon fontSize="small" color={isCurrent ? 'disabled' : 'inherit'} />
+                <RestoreIcon fontSize="small" color={restoreDisabled ? 'disabled' : 'inherit'} />
               </ListItemIcon>
               <ListItemText>Restore</ListItemText>
             </MenuItem>
