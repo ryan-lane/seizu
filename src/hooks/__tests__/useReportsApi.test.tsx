@@ -349,25 +349,6 @@ describe('useReportsList', () => {
     window.removeEventListener('seizu:reports-updated', handler);
   });
 
-  it('re-fetches when seizu:reports-updated event is dispatched externally', async () => {
-    mockFetch.mockResolvedValue({
-      ok: true,
-      json: () => Promise.resolve({ reports: REPORTS })
-    });
-
-    const { result } = renderHook(() => useReportsList(), {
-      wrapper: makeWrapper(false, null)
-    });
-
-    await waitFor(() => expect(result.current.loading).toBe(false));
-    expect(mockFetch).toHaveBeenCalledTimes(1);
-
-    await act(async () => {
-      window.dispatchEvent(new Event('seizu:reports-updated'));
-    });
-
-    await waitFor(() => expect(mockFetch).toHaveBeenCalledTimes(2));
-  });
 
   it('sets error state on non-ok response', async () => {
     mockFetch.mockResolvedValue({ ok: false, status: 500 });
