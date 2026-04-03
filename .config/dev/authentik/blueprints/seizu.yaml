@@ -104,7 +104,7 @@ entries:
             "seizu-editor": "seizu-editor",
             "seizu-viewer": "seizu-viewer",
         }
-        for group in request.user.ak_groups.all():
+        for group in request.user.groups.all():
             if group.name in group_role_map:
                 return {"seizu_role": group_role_map[group.name]}
         return {"seizu_role": "seizu-viewer"}
