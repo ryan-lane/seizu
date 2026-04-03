@@ -122,26 +122,13 @@ services:
       retries: 5
     networks:
       auth:
-  authentik-redis:
-    image: redis:7-alpine
-    profiles:
-      - auth
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-    networks:
-      auth:
   authentik-server:
-    image: ghcr.io/goauthentik/server:2024.12.3
+    image: ghcr.io/goauthentik/server:2026.2.1
     profiles:
       - auth
     restart: unless-stopped
     command: server
     environment:
-      AUTHENTIK_REDIS__HOST: authentik-redis
       AUTHENTIK_POSTGRESQL__HOST: authentik-postgresql
       AUTHENTIK_POSTGRESQL__USER: authentik
       AUTHENTIK_POSTGRESQL__PASSWORD: authentik
@@ -153,14 +140,12 @@ services:
       AUTHENTIK_BOOTSTRAP_PASSWORD: devpassword
       AUTHENTIK_ERROR_REPORTING__ENABLED: "false"
     volumes:
-      - authentik_media:/media
+      - authentik_media:/data
       - ./.config/dev/authentik/blueprints:/blueprints/custom:ro
     ports:
       - "9000:9000"
     depends_on:
       authentik-postgresql:
-        condition: service_healthy
-      authentik-redis:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "/lifecycle/ak", "healthcheck"]
@@ -173,14 +158,13 @@ services:
       auth:
       proxy:
   authentik-worker:
-    image: ghcr.io/goauthentik/server:2024.12.3
+    image: ghcr.io/goauthentik/server:2026.2.1
     profiles:
       - auth
     restart: unless-stopped
     command: worker
     user: root
     environment:
-      AUTHENTIK_REDIS__HOST: authentik-redis
       AUTHENTIK_POSTGRESQL__HOST: authentik-postgresql
       AUTHENTIK_POSTGRESQL__USER: authentik
       AUTHENTIK_POSTGRESQL__PASSWORD: authentik
@@ -188,13 +172,11 @@ services:
       AUTHENTIK_SECRET_KEY: seizu-dev-secret-change-in-production
       AUTHENTIK_ERROR_REPORTING__ENABLED: "false"
     volumes:
-      - authentik_media:/media
+      - authentik_media:/data
       - ./.config/dev/authentik/blueprints:/blueprints/custom:ro
       - /var/run/docker.sock:/var/run/docker.sock
     depends_on:
       authentik-postgresql:
-        condition: service_healthy
-      authentik-redis:
         condition: service_healthy
     networks:
       auth:

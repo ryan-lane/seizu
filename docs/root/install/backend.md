@@ -113,7 +113,7 @@ seizu_group_role_map = {
     "seizu-admins": "seizu-admin",
     "seizu-editors": "seizu-editor",
 }
-for group in request.user.ak_groups.all():
+for group in request.user.groups.all():
     if group.name in seizu_group_role_map:
         return seizu_group_role_map[group.name]
 return "seizu-viewer"
