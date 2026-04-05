@@ -238,7 +238,6 @@ async def test__frequency_triggered_no_previous_run():
 
 async def test__frequency_triggered_not_yet_due():
     """A query scheduled very recently is not triggered."""
-    # Use a timestamp far in the future to ensure it's not due
     future = "2099-01-01T00:00:00+00:00"
     assert scheduled_queries._frequency_triggered(future, 60) is False
 
@@ -247,3 +246,107 @@ async def test__frequency_triggered_overdue():
     """A query whose window has elapsed is triggered."""
     past = "2000-01-01T00:00:00+00:00"
     assert scheduled_queries._frequency_triggered(past, 60) is True
+
+
+async def test__is_triggered_frequency(mocker):
+    """_is_triggered returns True when frequency condition fires."""
+    item = _make_sq_item("sq1", "test", last_scheduled_at=None)
+    sq = scheduled_queries._item_to_scheduled_query(item)
+    result = await scheduled_queries._is_triggered(item, sq)
+    assert result is True
+
+
+async def test__is_triggered_watch_scan_fires(mocker):
+    """_is_triggered returns True when watch scan condition fires."""
+    item = _make_sq_item("sq1", "test", frequency=0)
+    # Give it a watch_scan trigger instead
+    item.watch_scans = [{"grouptype": ".*", "syncedtype": ".*", "groupid": ".*"}]
+    item.frequency = None
+    sq = scheduled_queries._item_to_scheduled_query(item)
+    mocker.patch(
+        "reporting.scheduled_queries.check_watch_scan_triggered",
+        new=AsyncMock(return_value=True),
+    )
+    result = await scheduled_queries._is_triggered(item, sq)
+    assert result is True
+
+
+async def test__is_triggered_no_trigger(mocker):
+    """_is_triggered returns False when neither condition fires."""
+    item = _make_sq_item("sq1", "test", last_scheduled_at="2099-01-01T00:00:00+00:00")
+    sq = scheduled_queries._item_to_scheduled_query(item)
+    result = await scheduled_queries._is_triggered(item, sq)
+    assert result is False
+
+
+async def test_schedule_query_record_result_failure_on_success(mocker):
+    """If record_scheduled_query_result raises after a successful run, it is caught."""
+    item = _make_sq_item("test_query", "test name")
+    mocker.patch(
+        "reporting.scheduled_queries._is_triggered",
+        new=AsyncMock(return_value=True),
+    )
+    mocker.patch(
+        "reporting.scheduled_queries.report_store.acquire_scheduled_query_lock",
+        new=AsyncMock(return_value=True),
+    )
+    mocker.patch(
+        "reporting.scheduled_queries.run_query_with_retry",
+        new=AsyncMock(return_value=[]),
+    )
+    mocker.patch(
+        "reporting.scheduled_queries._handle_results",
+        new=AsyncMock(),
+    )
+    mocker.patch(
+        "reporting.scheduled_queries.report_store.record_scheduled_query_result",
+        new=AsyncMock(side_effect=Exception("store error")),
+    )
+    # Should not raise
+    await scheduled_queries.schedule_query(item)
+
+
+async def test_schedule_query_record_result_failure_on_failure(mocker):
+    """If record_scheduled_query_result raises after a failed run, it is caught."""
+    item = _make_sq_item("test_query", "test name")
+    mocker.patch(
+        "reporting.scheduled_queries._is_triggered",
+        new=AsyncMock(return_value=True),
+    )
+    mocker.patch(
+        "reporting.scheduled_queries.report_store.acquire_scheduled_query_lock",
+        new=AsyncMock(return_value=True),
+    )
+    mocker.patch(
+        "reporting.scheduled_queries.run_query_with_retry",
+        new=AsyncMock(side_effect=Exception("query failed")),
+    )
+    mocker.patch(
+        "reporting.scheduled_queries.report_store.record_scheduled_query_result",
+        new=AsyncMock(side_effect=Exception("store error")),
+    )
+    # Should not raise
+    await scheduled_queries.schedule_query(item)
+
+
+def test_main_disabled(mocker):
+    """main() exits immediately when ENABLE_SCHEDULED_QUERIES is False."""
+    mocker.patch("reporting.scheduled_queries.settings.ENABLE_SCHEDULED_QUERIES", False)
+    run_mock = mocker.patch("asyncio.run")
+    scheduled_queries.main()
+    assert run_mock.call_count == 0
+
+
+def test_main_enabled(mocker):
+    """main() calls asyncio.run when ENABLE_SCHEDULED_QUERIES is True."""
+    mocker.patch("reporting.scheduled_queries.settings.ENABLE_SCHEDULED_QUERIES", True)
+    run_mock = mocker.patch("asyncio.run")
+    scheduled_queries.main()
+    assert run_mock.call_count == 1
+
+
+def test__bootstrap_registers_sigterm(mocker):
+    """_bootstrap registers a SIGTERM handler."""
+    signal_mock = mocker.patch("reporting.scheduled_queries.signal.signal")
+    scheduled_queries._bootstrap()
+    assert signal_mock.call_count == 1
