@@ -214,6 +214,22 @@ async def update_scheduled_query(
     )
 
 
+async def acquire_scheduled_query_lock(
+    sq_id: str, expected_last_scheduled_at: Optional[str]
+) -> bool:
+    return await get_store().acquire_scheduled_query_lock(
+        sq_id=sq_id, expected_last_scheduled_at=expected_last_scheduled_at
+    )
+
+
+async def record_scheduled_query_result(
+    sq_id: str, status: str, error: Optional[str] = None
+) -> None:
+    await get_store().record_scheduled_query_result(
+        sq_id=sq_id, status=status, error=error
+    )
+
+
 async def delete_scheduled_query(sq_id: str) -> bool:
     return await get_store().delete_scheduled_query(sq_id)
 

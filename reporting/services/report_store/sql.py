@@ -7,9 +7,12 @@ from typing import List
 from typing import Optional
 
 from snowflake import SnowflakeGenerator
+from sqlalchemy import and_
 from sqlalchemy import Column
 from sqlalchemy import JSON
+from sqlalchemy import null
 from sqlalchemy import UniqueConstraint
+from sqlalchemy import update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncEngine
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -125,6 +128,12 @@ class ScheduledQueryRecord(SQLModel, table=True):  # type: ignore
     updated_at: str
     created_by: str
     updated_by: Optional[str] = None
+    last_run_status: Optional[str] = None
+    last_run_at: Optional[str] = None
+    last_errors: List[Dict[str, str]] = Field(
+        default=[], sa_column=Column(JSON, nullable=False)
+    )
+    last_scheduled_at: Optional[str] = None
 
 
 class ScheduledQueryVersionRecord(SQLModel, table=True):  # type: ignore
@@ -589,6 +598,10 @@ class SQLModelReportStore(ReportStore):
                     updated_at=r.updated_at,
                     created_by=r.created_by,
                     updated_by=r.updated_by,
+                    last_run_status=r.last_run_status,
+                    last_run_at=r.last_run_at,
+                    last_errors=r.last_errors or [],
+                    last_scheduled_at=r.last_scheduled_at,
                 )
                 for r in rows
             ]
@@ -612,6 +625,10 @@ class SQLModelReportStore(ReportStore):
                 updated_at=record.updated_at,
                 created_by=record.created_by,
                 updated_by=record.updated_by,
+                last_run_status=record.last_run_status,
+                last_run_at=record.last_run_at,
+                last_errors=record.last_errors or [],
+                last_scheduled_at=record.last_scheduled_at,
             )
 
     async def create_scheduled_query(
@@ -675,6 +692,10 @@ class SQLModelReportStore(ReportStore):
             updated_at=now,
             created_by=created_by,
             updated_by=created_by,
+            last_run_status=None,
+            last_run_at=None,
+            last_errors=[],
+            last_scheduled_at=None,
         )
 
     async def update_scheduled_query(
@@ -697,6 +718,10 @@ class SQLModelReportStore(ReportStore):
                 return None
             original_created_at = record.created_at
             original_created_by = record.created_by
+            orig_last_run_status = record.last_run_status
+            orig_last_run_at = record.last_run_at
+            orig_last_errors = list(record.last_errors or [])
+            orig_last_scheduled_at = record.last_scheduled_at
             version = record.current_version + 1
             record.name = name
             record.cypher = cypher
@@ -739,6 +764,10 @@ class SQLModelReportStore(ReportStore):
             updated_at=now,
             created_by=original_created_by,
             updated_by=updated_by,
+            last_run_status=orig_last_run_status,
+            last_run_at=orig_last_run_at,
+            last_errors=orig_last_errors,
+            last_scheduled_at=orig_last_scheduled_at,
         )
 
     async def list_scheduled_query_versions(
@@ -803,6 +832,50 @@ class SQLModelReportStore(ReportStore):
                 created_by=row.created_by,
                 comment=row.comment,
             )
+
+    async def acquire_scheduled_query_lock(
+        self, sq_id: str, expected_last_scheduled_at: Optional[str]
+    ) -> bool:
+        now = datetime.now(tz=timezone.utc).isoformat()
+        async with AsyncSession(_get_engine()) as session:
+            if expected_last_scheduled_at is None:
+                condition = and_(
+                    ScheduledQueryRecord.scheduled_query_id == sq_id,
+                    ScheduledQueryRecord.last_scheduled_at == null(),
+                )
+            else:
+                condition = and_(
+                    ScheduledQueryRecord.scheduled_query_id == sq_id,
+                    ScheduledQueryRecord.last_scheduled_at
+                    == expected_last_scheduled_at,
+                )
+            stmt = (
+                update(ScheduledQueryRecord)
+                .where(condition)
+                .values(last_scheduled_at=now)
+            )
+            result = await session.execute(stmt)
+            await session.commit()
+        return result.rowcount == 1
+
+    async def record_scheduled_query_result(
+        self, sq_id: str, status: str, error: Optional[str] = None
+    ) -> None:
+        now = datetime.now(tz=timezone.utc).isoformat()
+        async with AsyncSession(_get_engine()) as session:
+            record = await session.get(ScheduledQueryRecord, sq_id)
+            if not record:
+                return
+            record.last_run_status = status
+            record.last_run_at = now
+            if status == "failure" and error:
+                errors = list(record.last_errors or [])
+                errors.insert(0, {"timestamp": now, "error": error})
+                record.last_errors = errors[:5]
+            elif status == "success":
+                record.last_errors = []
+            session.add(record)
+            await session.commit()
 
     async def delete_scheduled_query(self, sq_id: str) -> bool:
         async with AsyncSession(_get_engine()) as session:

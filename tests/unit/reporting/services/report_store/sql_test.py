@@ -863,6 +863,51 @@ async def test_delete_scheduled_query_not_found(store):
     assert await store.delete_scheduled_query("nonexistent") is False
 
 
+async def test_acquire_scheduled_query_lock_no_previous(store, mocker):
+    """First-ever lock acquisition (last_scheduled_at is None) succeeds."""
+    mocker.patch(
+        "reporting.services.report_store.sql.generate_report_id",
+        return_value="sq1",
+    )
+    await store.create_scheduled_query(**_SQ_KWARGS)
+    acquired = await store.acquire_scheduled_query_lock("sq1", None)
+    assert acquired is True
+    item = await store.get_scheduled_query("sq1")
+    assert item is not None
+    assert item.last_scheduled_at is not None
+
+
+async def test_acquire_scheduled_query_lock_with_expected(store, mocker):
+    """CAS succeeds when expected value matches stored value."""
+    mocker.patch(
+        "reporting.services.report_store.sql.generate_report_id",
+        return_value="sq1",
+    )
+    await store.create_scheduled_query(**_SQ_KWARGS)
+    # Acquire once to set a known value
+    await store.acquire_scheduled_query_lock("sq1", None)
+    item = await store.get_scheduled_query("sq1")
+    assert item is not None
+    prev = item.last_scheduled_at
+    # CAS with correct expected value
+    acquired = await store.acquire_scheduled_query_lock("sq1", prev)
+    assert acquired is True
+
+
+async def test_acquire_scheduled_query_lock_race(store, mocker):
+    """CAS fails when expected value no longer matches (another worker won)."""
+    mocker.patch(
+        "reporting.services.report_store.sql.generate_report_id",
+        return_value="sq1",
+    )
+    await store.create_scheduled_query(**_SQ_KWARGS)
+    # Acquire once to set a value
+    await store.acquire_scheduled_query_lock("sq1", None)
+    # A second worker uses the old (None) expected value — should fail
+    acquired = await store.acquire_scheduled_query_lock("sq1", None)
+    assert acquired is False
+
+
 # ===========================================================================
 # Toolsets
 # ===========================================================================

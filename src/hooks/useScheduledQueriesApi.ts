@@ -18,6 +18,11 @@ export interface ScheduledQueryAction {
   action_config: Record<string, unknown>;
 }
 
+export interface ScheduledQueryRunError {
+  timestamp: string;
+  error: string;
+}
+
 export interface ScheduledQueryItem {
   scheduled_query_id: string;
   name: string;
@@ -32,6 +37,9 @@ export interface ScheduledQueryItem {
   updated_at: string;
   created_by: string;
   updated_by: string | null;
+  last_run_status: string | null;
+  last_run_at: string | null;
+  last_errors: ScheduledQueryRunError[];
 }
 
 export interface ScheduledQueryVersion {

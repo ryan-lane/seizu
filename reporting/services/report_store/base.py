@@ -271,6 +271,27 @@ class ReportStore(ABC):
         """Return a specific version of a scheduled query, or None if not found."""
 
     @abstractmethod
+    async def acquire_scheduled_query_lock(
+        self, sq_id: str, expected_last_scheduled_at: Optional[str]
+    ) -> bool:
+        """Atomically set last_scheduled_at = now if it still equals expected.
+
+        Returns True if the lock was acquired (CAS succeeded), False if another
+        worker already updated the value (CAS failed).
+        """
+
+    @abstractmethod
+    async def record_scheduled_query_result(
+        self, sq_id: str, status: str, error: Optional[str] = None
+    ) -> None:
+        """Record the result of a scheduled query execution.
+
+        Updates ``last_run_status`` and ``last_run_at`` on the item.  When
+        *status* is ``"failure"`` and *error* is provided, the error is
+        prepended to ``last_errors`` (capped at 5 entries).
+        """
+
+    @abstractmethod
     async def delete_scheduled_query(self, sq_id: str) -> bool:
         """Delete a scheduled query and all its versions. Returns False if not found."""
 
