@@ -1098,6 +1098,71 @@ async def test_delete_scheduled_query_not_found(patch_table, store):
     assert result is False
 
 
+async def test_acquire_scheduled_query_lock_no_previous(patch_table, store):
+    """Lock acquired when no previous last_scheduled_at exists."""
+    patch_table.update_item.return_value = {}
+    result = await store.acquire_scheduled_query_lock("sq1", None)
+    assert result is True
+    assert patch_table.update_item.call_count == 2
+
+
+async def test_acquire_scheduled_query_lock_with_expected(patch_table, store):
+    """Lock acquired when last_scheduled_at matches expected."""
+    patch_table.update_item.return_value = {}
+    result = await store.acquire_scheduled_query_lock(
+        "sq1", "2024-01-01T00:00:00+00:00"
+    )
+    assert result is True
+    assert patch_table.update_item.call_count == 2
+
+
+async def test_acquire_scheduled_query_lock_race(patch_table, store):
+    """Lock not acquired when condition check fails (another worker won)."""
+    import botocore.exceptions
+
+    err = botocore.exceptions.ClientError(
+        {"Error": {"Code": "ConditionalCheckFailedException", "Message": "x"}},
+        "UpdateItem",
+    )
+    patch_table.update_item.side_effect = err
+    result = await store.acquire_scheduled_query_lock("sq1", None)
+    assert result is False
+
+
+async def test_record_scheduled_query_result_success(patch_table, store):
+    """Success result clears last_errors."""
+    patch_table.get_item.return_value = {
+        "Item": {
+            **_sq_metadata_item(),
+            "last_errors": [{"timestamp": "t", "error": "e"}],
+        }
+    }
+    await store.record_scheduled_query_result("sq1", "success")
+    assert patch_table.update_item.call_count == 2
+    call_kwargs = patch_table.update_item.call_args_list[0][1]
+    assert call_kwargs["ExpressionAttributeValues"][":errors"] == []
+
+
+async def test_record_scheduled_query_result_failure(patch_table, store):
+    """Failure result prepends error to last_errors, capped at 5."""
+    existing = [{"timestamp": f"t{i}", "error": f"e{i}"} for i in range(5)]
+    patch_table.get_item.return_value = {
+        "Item": {**_sq_metadata_item(), "last_errors": existing}
+    }
+    await store.record_scheduled_query_result("sq1", "failure", error="new error")
+    call_kwargs = patch_table.update_item.call_args_list[0][1]
+    errors = call_kwargs["ExpressionAttributeValues"][":errors"]
+    assert len(errors) == 5
+    assert errors[0]["error"] == "new error"
+
+
+async def test_record_scheduled_query_result_not_found(patch_table, store):
+    """Missing item is handled gracefully without update calls."""
+    patch_table.get_item.return_value = {}
+    await store.record_scheduled_query_result("nonexistent", "success")
+    assert patch_table.update_item.call_count == 0
+
+
 # ---------------------------------------------------------------------------
 # Toolsets
 # ---------------------------------------------------------------------------

@@ -10,10 +10,12 @@ import {
   Typography
 } from '@mui/material';
 import CloseIcon from '@mui/icons-material/Close';
+import FiberManualRecordIcon from '@mui/icons-material/FiberManualRecord';
 import {
   ScheduledQueryParam,
   ScheduledQueryWatchScan,
-  ScheduledQueryAction
+  ScheduledQueryAction,
+  ScheduledQueryRunError
 } from 'src/hooks/useScheduledQueriesApi';
 
 export interface ScheduledQueryViewData {
@@ -25,6 +27,9 @@ export interface ScheduledQueryViewData {
   watch_scans: ScheduledQueryWatchScan[];
   enabled: boolean;
   actions: ScheduledQueryAction[];
+  last_run_status?: string | null;
+  last_run_at?: string | null;
+  last_errors?: ScheduledQueryRunError[];
 }
 
 interface Props {
@@ -85,6 +90,66 @@ export default function ScheduledQueryDetailDialog({ open, onClose, data }: Prop
               size="small"
             />
           </Section>
+
+          <Section title="Last Run">
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <FiberManualRecordIcon
+                sx={{
+                  fontSize: 12,
+                  color: data.last_run_status === 'success'
+                    ? 'success.main'
+                    : data.last_run_status === 'failure'
+                      ? 'error.main'
+                      : 'warning.main',
+                }}
+              />
+              <Typography variant="body2">
+                {data.last_run_status === 'success'
+                  ? 'Success'
+                  : data.last_run_status === 'failure'
+                    ? 'Failed'
+                    : 'No runs yet'}
+              </Typography>
+              {data.last_run_at && (
+                <Typography variant="body2" color="text.secondary">
+                  {new Date(data.last_run_at).toLocaleString()}
+                </Typography>
+              )}
+            </Box>
+          </Section>
+
+          {data.last_errors && data.last_errors.length > 0 && (
+            <Section title="Recent Errors">
+              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                {data.last_errors.map((err, i) => (
+                  <Box
+                    key={i}
+                    sx={{ border: '1px solid', borderColor: 'error.light', borderRadius: 1, p: 1.5 }}
+                  >
+                    <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 0.5 }}>
+                      {new Date(err.timestamp).toLocaleString()}
+                    </Typography>
+                    <Box
+                      component="pre"
+                      sx={{
+                        m: 0,
+                        p: 1,
+                        borderRadius: 1,
+                        bgcolor: 'action.hover',
+                        fontSize: 12,
+                        fontFamily: 'monospace',
+                        whiteSpace: 'pre-wrap',
+                        wordBreak: 'break-word',
+                        overflowX: 'auto',
+                      }}
+                    >
+                      {err.error}
+                    </Box>
+                  </Box>
+                ))}
+              </Box>
+            </Section>
+          )}
 
           <Section title="Trigger">
             <Typography variant="body2">{triggerLabel}</Typography>

@@ -40,6 +40,7 @@ import {
 import AddIcon from '@mui/icons-material/Add';
 import DeleteIcon from '@mui/icons-material/Delete';
 import EditIcon from '@mui/icons-material/Edit';
+import FiberManualRecordIcon from '@mui/icons-material/FiberManualRecord';
 import HistoryIcon from '@mui/icons-material/History';
 import MoreVertIcon from '@mui/icons-material/MoreVert';
 import AddCircleOutlineIcon from '@mui/icons-material/AddCircleOutline';
@@ -777,6 +778,9 @@ function ScheduledQueries() {
                           watch_scans: item.watch_scans,
                           enabled: item.enabled,
                           actions: item.actions,
+                          last_run_status: item.last_run_status,
+                          last_run_at: item.last_run_at,
+                          last_errors: item.last_errors,
                         })}
                       >
                         {item.name}
@@ -802,11 +806,31 @@ function ScheduledQueries() {
                       )}
                     </TableCell>
                     <TableCell>
-                      <Chip
-                        label={item.enabled ? 'Enabled' : 'Disabled'}
-                        color={item.enabled ? 'success' : 'default'}
-                        size="small"
-                      />
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <Chip
+                          label={item.enabled ? 'Enabled' : 'Disabled'}
+                          color={item.enabled ? 'success' : 'default'}
+                          size="small"
+                        />
+                        <Tooltip title={
+                          item.last_run_status === 'success'
+                            ? `Last run succeeded${item.last_run_at ? ` at ${new Date(item.last_run_at).toLocaleString()}` : ''}`
+                            : item.last_run_status === 'failure'
+                              ? `Last run failed${item.last_run_at ? ` at ${new Date(item.last_run_at).toLocaleString()}` : ''}`
+                              : 'No runs yet'
+                        }>
+                          <FiberManualRecordIcon
+                            sx={{
+                              fontSize: 12,
+                              color: item.last_run_status === 'success'
+                                ? 'success.main'
+                                : item.last_run_status === 'failure'
+                                  ? 'error.main'
+                                  : 'warning.main',
+                            }}
+                          />
+                        </Tooltip>
+                      </Box>
                     </TableCell>
                     <TableCell sx={{ color: 'text.secondary' }}>
                       v{item.current_version}

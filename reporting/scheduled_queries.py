@@ -1,6 +1,8 @@
 import asyncio
 import logging
 import signal
+from datetime import datetime
+from datetime import timedelta
 from typing import Any
 from typing import Dict
 from typing import List
@@ -14,9 +16,7 @@ from reporting.schema.reporting_config import ScheduledQueryAction
 from reporting.schema.reporting_config import ScheduledQueryParam
 from reporting.schema.reporting_config import ScheduledQueryWatchScan
 from reporting.services import report_store
-from reporting.services.reporting_neo4j import incr_scheduled_query_fail_count
-from reporting.services.reporting_neo4j import lock_scheduled_query
-from reporting.services.reporting_neo4j import reset_scheduled_query_fail_count
+from reporting.services.reporting_neo4j import check_watch_scan_triggered
 from reporting.services.reporting_neo4j import run_query_with_retry
 
 logger = logging.getLogger(__name__)
@@ -45,45 +45,77 @@ def _item_to_scheduled_query(item: ScheduledQueryItem) -> ScheduledQuery:
     )
 
 
-async def schedule_query(
-    scheduled_query_id: str,
-    scheduled_query: ScheduledQuery,
-) -> None:
-    if not scheduled_query.enabled:
+def _frequency_triggered(last_scheduled_at: str | None, frequency: int) -> bool:
+    if last_scheduled_at is None:
+        return True
+    last = datetime.fromisoformat(last_scheduled_at)
+    return datetime.now(tz=last.tzinfo) > last + timedelta(minutes=frequency)
+
+
+async def _is_triggered(item: ScheduledQueryItem, sq: ScheduledQuery) -> bool:
+    """Return True if any trigger condition is met for this scheduled query."""
+    if sq.frequency and _frequency_triggered(item.last_scheduled_at, sq.frequency):
         logger.debug(
-            "Skipping disabled query", extra={"scheduled_query_id": scheduled_query_id}
+            "Frequency trigger fired",
+            extra={"scheduled_query_id": item.scheduled_query_id},
+        )
+        return True
+    if sq.watch_scans and await check_watch_scan_triggered(
+        item.last_scheduled_at, sq.watch_scans
+    ):
+        logger.debug(
+            "Watch scan trigger fired",
+            extra={"scheduled_query_id": item.scheduled_query_id},
+        )
+        return True
+    return False
+
+
+async def schedule_query(item: ScheduledQueryItem) -> None:
+    sq = _item_to_scheduled_query(item)
+    sq_id = item.scheduled_query_id
+    if not sq.enabled:
+        logger.debug("Skipping disabled query", extra={"scheduled_query_id": sq_id})
+        return
+    logger.debug("Checking query", extra={"scheduled_query_id": sq_id})
+    if not await _is_triggered(item, sq):
+        logger.debug("No trigger for query", extra={"scheduled_query_id": sq_id})
+        return
+    if not await report_store.acquire_scheduled_query_lock(
+        sq_id, item.last_scheduled_at
+    ):
+        logger.debug(
+            "Could not acquire lock for query", extra={"scheduled_query_id": sq_id}
         )
         return
-    logger.debug("Checking query", extra={"scheduled_query_id": scheduled_query_id})
-    if await lock_scheduled_query(scheduled_query_id, scheduled_query):
-        logger.debug(
-            "Got lock for query", extra={"scheduled_query_id": scheduled_query_id}
-        )
+    logger.debug("Got lock for query", extra={"scheduled_query_id": sq_id})
+    try:
+        query_str = sq.cypher
+        params = {d.name: d.value for d in sq.params}
+        results = await run_query_with_retry(query_str, params)
+        for action in sq.actions:
+            await _handle_results(sq_id, action, results)
         try:
-            query_str = scheduled_query.cypher
-            params = {d.name: d.value for d in scheduled_query.params}
-            results = await run_query_with_retry(query_str, params)
-            for action in scheduled_query.actions:
-                await _handle_results(scheduled_query_id, action, results)
-            try:
-                await reset_scheduled_query_fail_count(scheduled_query_id)
-            except Exception:
-                logger.exception(
-                    "Failed to reset query count",
-                    extra={"scheduled_query_id": scheduled_query_id},
-                )
+            await report_store.record_scheduled_query_result(sq_id, "success")
         except Exception:
             logger.exception(
-                "Failed to run actions for query",
-                extra={"scheduled_query_id": scheduled_query_id},
+                "Failed to record query result",
+                extra={"scheduled_query_id": sq_id},
             )
-            try:
-                await incr_scheduled_query_fail_count(scheduled_query_id)
-            except Exception:
-                logger.exception(
-                    "Failed to reset query count",
-                    extra={"scheduled_query_id": scheduled_query_id},
-                )
+    except Exception as exc:
+        logger.exception(
+            "Failed to run actions for query",
+            extra={"scheduled_query_id": sq_id},
+        )
+        try:
+            await report_store.record_scheduled_query_result(
+                sq_id, "failure", error=str(exc)
+            )
+        except Exception:
+            logger.exception(
+                "Failed to record query result",
+                extra={"scheduled_query_id": sq_id},
+            )
 
 
 async def _handle_results(
@@ -127,8 +159,7 @@ async def _schedule_queries() -> None:
         logger.debug("Checking queries to schedule...")
         sq_items = await report_store.list_scheduled_queries()
         for item in sq_items:
-            sq = _item_to_scheduled_query(item)
-            await schedule_query(item.scheduled_query_id, sq)
+            await schedule_query(item)
         if not _shutdown_event.is_set():
             await asyncio.sleep(settings.SCHEDULED_QUERY_FREQUENCY)
 

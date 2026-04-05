@@ -162,6 +162,10 @@ class ScheduledQueryItem(BaseModel):
     updated_at: str
     created_by: str
     updated_by: Optional[str] = None
+    last_run_status: Optional[str] = None
+    last_run_at: Optional[str] = None
+    last_errors: List[Dict[str, str]] = Field(default_factory=list)
+    last_scheduled_at: Optional[str] = None
 
     @field_validator("current_version", mode="before")
     @classmethod
@@ -174,6 +178,11 @@ class ScheduledQueryItem(BaseModel):
     @classmethod
     def coerce_json_fields(cls, v: Any) -> List[Dict[str, Any]]:
         return _coerce_decimal(v) if v is not None else []
+
+    @field_validator("last_errors", mode="before")
+    @classmethod
+    def coerce_last_errors(cls, v: Any) -> List[Dict[str, str]]:
+        return v if v is not None else []
 
 
 class ScheduledQueryVersion(BaseModel):

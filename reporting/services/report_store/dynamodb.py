@@ -9,6 +9,7 @@ from typing import List
 from typing import Optional
 
 import boto3
+import botocore.exceptions
 from snowflake import SnowflakeGenerator
 
 from reporting import settings
@@ -260,6 +261,10 @@ def _sq_from_item(item: Dict) -> ScheduledQueryItem:
         updated_at=item["updated_at"],
         created_by=item["created_by"],
         updated_by=item.get("updated_by"),
+        last_run_status=item.get("last_run_status"),
+        last_run_at=item.get("last_run_at"),
+        last_errors=item.get("last_errors", []),
+        last_scheduled_at=item.get("last_scheduled_at"),
     )
 
 
@@ -961,6 +966,81 @@ class DynamoDBReportStore(ReportStore):
             return True
 
         return await asyncio.to_thread(_op)
+
+    async def acquire_scheduled_query_lock(
+        self, sq_id: str, expected_last_scheduled_at: Optional[str]
+    ) -> bool:
+        def _op() -> bool:
+            table = _get_table()
+            now = datetime.now(tz=timezone.utc).isoformat()
+            update_expr = "SET last_scheduled_at = :new_val"
+            expr_values: Dict[str, Any] = {":new_val": now}
+
+            if expected_last_scheduled_at is None:
+                condition = "attribute_not_exists(last_scheduled_at)"
+            else:
+                condition = "last_scheduled_at = :expected"
+                expr_values[":expected"] = expected_last_scheduled_at
+
+            try:
+                table.update_item(
+                    Key={"PK": _sq_pk(sq_id), "SK": _SK_METADATA},
+                    UpdateExpression=update_expr,
+                    ExpressionAttributeValues=expr_values,
+                    ConditionExpression=condition,
+                )
+            except botocore.exceptions.ClientError as exc:
+                if exc.response["Error"]["Code"] == "ConditionalCheckFailedException":
+                    return False
+                raise
+            # Update the list item (best-effort, no condition needed)
+            table.update_item(
+                Key={"PK": _PK_SCHEDULED_QUERY_LIST, "SK": _sq_pk(sq_id)},
+                UpdateExpression=update_expr,
+                ExpressionAttributeValues={":new_val": now},
+            )
+            return True
+
+        return await asyncio.to_thread(_op)
+
+    async def record_scheduled_query_result(
+        self, sq_id: str, status: str, error: Optional[str] = None
+    ) -> None:
+        def _op() -> None:
+            table = _get_table()
+            now = datetime.now(tz=timezone.utc).isoformat()
+
+            # Read current metadata to get existing last_errors
+            resp = table.get_item(Key={"PK": _sq_pk(sq_id), "SK": _SK_METADATA})
+            item = resp.get("Item")
+            if not item:
+                return
+
+            if status == "failure" and error:
+                errors = list(item.get("last_errors", []))
+                errors.insert(0, {"timestamp": now, "error": error})
+                errors = errors[:5]
+            elif status == "success":
+                errors = []
+            else:
+                errors = list(item.get("last_errors", []))
+
+            update_expr = "SET last_run_status = :status, last_run_at = :now, last_errors = :errors"
+            expr_values = {":status": status, ":now": now, ":errors": errors}
+
+            # Update both metadata and list items
+            table.update_item(
+                Key={"PK": _sq_pk(sq_id), "SK": _SK_METADATA},
+                UpdateExpression=update_expr,
+                ExpressionAttributeValues=expr_values,
+            )
+            table.update_item(
+                Key={"PK": _PK_SCHEDULED_QUERY_LIST, "SK": _sq_pk(sq_id)},
+                UpdateExpression=update_expr,
+                ExpressionAttributeValues=expr_values,
+            )
+
+        await asyncio.to_thread(_op)
 
     async def get_or_create_user(
         self,
