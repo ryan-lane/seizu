@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
-import { Box, Button, Typography } from '@mui/material';
-import { ThreeDots } from 'react-loader-spinner';
+import { Box, Button, CircularProgress, Typography } from '@mui/material';
 import Error from '@mui/icons-material/Error';
 import EditIcon from '@mui/icons-material/Edit';
 import HistoryIcon from '@mui/icons-material/History';
@@ -58,7 +57,11 @@ function Reports() {
   }
 
   if (loading && !displayedReport) {
-    return <ThreeDots color="#2BAD60" height="100" width="100" />;
+    return (
+      <Box sx={{ display: 'flex', justifyContent: 'center', p: 4 }}>
+        <CircularProgress />
+      </Box>
+    );
   }
 
   if ((error || !displayedReport) && !loading) {

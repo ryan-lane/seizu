@@ -1,9 +1,8 @@
 import { useState, useEffect, ReactElement } from 'react';
 import { Outlet } from 'react-router-dom';
-import { styled } from '@mui/material';
+import { CircularProgress, styled } from '@mui/material';
 import { trackPromise, usePromiseTracker } from 'react-promise-tracker';
 import { ConfigContext, SeizuConfig } from 'src/config.context';
-import { ThreeDots } from 'react-loader-spinner';
 import DashboardNavbar from 'src/components/DashboardNavbar';
 import DashboardSidebar from 'src/components/DashboardSidebar';
 
@@ -20,7 +19,7 @@ function LoadingIndicator(): ReactElement | false {
           alignItems: 'center'
         }}
       >
-        <ThreeDots color="#2BAD60" height="100" width="100" />
+        <CircularProgress />
       </div>
     )
   );

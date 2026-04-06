@@ -1,5 +1,4 @@
-import { Box, Typography } from '@mui/material';
-import { ThreeDots } from 'react-loader-spinner';
+import { Box, CircularProgress, Typography } from '@mui/material';
 
 import ReportView from 'src/components/ReportView';
 import { useDashboardReport } from 'src/hooks/useReportsApi';
@@ -8,7 +7,11 @@ function Dashboard() {
   const { report, loading } = useDashboardReport();
 
   if (loading) {
-    return <ThreeDots color="#2BAD60" height="100" width="100" />;
+    return (
+      <Box sx={{ display: 'flex', justifyContent: 'center', p: 4 }}>
+        <CircularProgress />
+      </Box>
+    );
   }
 
   if (!report) {

@@ -48,8 +48,7 @@ def _build_csp_policy() -> str:
     directives = [
         "default-src 'self'",
         f"connect-src {' '.join(connect_src)}",
-        # issues in material-ui
-        "style-src 'self' 'unsafe-inline'",
+        "style-src 'self'",
         "script-src-elem 'self'",
     ]
     if settings.OIDC_AUTHORITY:

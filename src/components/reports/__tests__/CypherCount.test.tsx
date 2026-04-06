@@ -80,7 +80,7 @@ describe('CypherCount', () => {
         />
       </Wrapper>
     );
-    // ThreeDots spinner is rendered
+    // CircularProgress spinner is rendered
     expect(container.firstChild).not.toBeNull();
   });
 

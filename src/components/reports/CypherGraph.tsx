@@ -4,6 +4,7 @@ import {
   Card,
   CardContent,
   CardHeader,
+  CircularProgress,
   Divider,
   Grid,
   IconButton,
@@ -17,7 +18,6 @@ import { useTheme } from '@mui/material/styles';
 import InfoOutlined from '@mui/icons-material/InfoOutlined';
 import Info from '@mui/icons-material/Info';
 import Error from '@mui/icons-material/Error';
-import { ThreeDots } from 'react-loader-spinner';
 import {
   ReactFlow,
   Background,
@@ -516,7 +516,11 @@ export default function CypherGraph({
   }
 
   if (loading || records === undefined) {
-    return <ThreeDots color="#2BAD60" height="50" width="50" />;
+    return (
+      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', p: 4 }}>
+        <CircularProgress size={40} />
+      </Box>
+    );
   }
 
   if (records.length === 0) {

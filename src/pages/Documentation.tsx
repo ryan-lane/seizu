@@ -1,6 +1,7 @@
 import { Helmet } from 'react-helmet';
 import {
   Box,
+  CircularProgress,
   Container,
   Divider,
   Grid,
@@ -15,7 +16,6 @@ import {
   TableContainer,
   TableRow
 } from '@mui/material';
-import { ThreeDots } from 'react-loader-spinner';
 
 import { useAllReports } from 'src/hooks/useReportsApi';
 
@@ -23,7 +23,11 @@ function Documentation() {
   const { reports, loading } = useAllReports();
 
   if (loading) {
-    return <ThreeDots color="#2BAD60" height="100" width="100" />;
+    return (
+      <Box sx={{ display: 'flex', justifyContent: 'center', p: 4 }}>
+        <CircularProgress />
+      </Box>
+    );
   }
 
   const metricRows = [];

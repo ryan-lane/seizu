@@ -66,7 +66,11 @@ function ReportVersionView() {
   }
 
   if (loading) {
-    return <CircularProgress sx={{ m: 3 }} />;
+    return (
+      <Box sx={{ display: 'flex', justifyContent: 'center', p: 4 }}>
+        <CircularProgress />
+      </Box>
+    );
   }
 
   if (error || !reportVersion) {

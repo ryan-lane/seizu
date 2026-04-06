@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react';
 import {
+  Box,
   Card,
   CardContent,
   CardHeader,
+  CircularProgress,
   Divider,
   IconButton,
   Grid,
@@ -11,7 +13,6 @@ import {
 import { useTheme } from '@mui/material/styles';
 import Info from '@mui/icons-material/Info';
 import Error from '@mui/icons-material/Error';
-import { ThreeDots } from 'react-loader-spinner';
 import { PieChart } from '@mui/x-charts/PieChart';
 import { blueberryTwilightPalette } from '@mui/x-charts/colorPalettes';
 import { useLazyCypherQuery, QueryRecord } from 'src/hooks/useCypherQuery';
@@ -109,7 +110,11 @@ export default function CypherPie({
   }
 
   if (loading || records === undefined) {
-    return <ThreeDots color="#2BAD60" height="50" width="50" />;
+    return (
+      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', p: 4 }}>
+        <CircularProgress size={40} />
+      </Box>
+    );
   }
 
   if (first === undefined) {

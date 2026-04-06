@@ -1,6 +1,5 @@
 import { useEffect } from 'react';
-import { Typography, TextField, Autocomplete } from '@mui/material';
-import { ThreeDots } from 'react-loader-spinner';
+import { Box, CircularProgress, Typography, TextField, Autocomplete } from '@mui/material';
 import { useLazyCypherQuery } from 'src/hooks/useCypherQuery';
 import { setQueryStringValue } from 'src/components/QueryString';
 
@@ -41,7 +40,11 @@ export default function CypherAutocomplete({
   }
 
   if (loading || records === undefined) {
-    return <ThreeDots color="#2BAD60" height="50" width="50" />;
+    return (
+      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', p: 4 }}>
+        <CircularProgress size={40} />
+      </Box>
+    );
   }
 
   const mungedRecords: AutocompleteOption[] = records.map((record) => {
