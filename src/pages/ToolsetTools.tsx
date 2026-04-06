@@ -535,7 +535,11 @@ function ToolsetTools() {
           )}
         </Box>
 
-        {!isBuiltin && loading && <CircularProgress />}
+        {!isBuiltin && loading && (
+          <Box sx={{ display: 'flex', justifyContent: 'center', p: 4 }}>
+            <CircularProgress />
+          </Box>
+        )}
 
         {!isBuiltin && error && (
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>

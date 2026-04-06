@@ -305,7 +305,11 @@ function Toolsets() {
           )}
         </Box>
 
-        {loading && <CircularProgress />}
+        {loading && (
+          <Box sx={{ display: 'flex', justifyContent: 'center', p: 4 }}>
+            <CircularProgress />
+          </Box>
+        )}
 
         {error && (
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>

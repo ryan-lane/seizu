@@ -12,7 +12,6 @@ import {
 } from '@mui/material';
 import Info from '@mui/icons-material/Info';
 import Error from '@mui/icons-material/Error';
-import { ThreeDots } from 'react-loader-spinner';
 import { useLazyCypherQuery } from 'src/hooks/useCypherQuery';
 import CypherDetails from 'src/components/reports/CypherDetails';
 import QueryValidationBadge from 'src/components/reports/QueryValidationBadge';
@@ -114,7 +113,11 @@ export default function CypherProgress({
   }
 
   if (loading || records === undefined) {
-    return <ThreeDots color="#2BAD60" height="50" width="50" />;
+    return (
+      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', p: 4 }}>
+        <CircularProgress size={40} />
+      </Box>
+    );
   }
 
   if (first === undefined) {
