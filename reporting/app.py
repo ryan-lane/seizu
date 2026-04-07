@@ -1,6 +1,8 @@
+import base64
 import http.cookies
 import os
 import re
+import secrets
 from contextlib import asynccontextmanager
 from typing import Any
 from typing import AsyncIterator
@@ -38,17 +40,27 @@ from reporting.routes import validate as validate_routes
 from reporting.services import report_store
 
 
-def _build_csp_policy() -> str:
+_CSP_NONCE_PLACEHOLDER = "{{ csp_nonce() }}"
+
+
+def _generate_csp_nonce() -> str:
+    return base64.b64encode(secrets.token_bytes(16)).decode("ascii")
+
+
+def _build_csp_policy(nonce: str | None = None) -> str:
     connect_src = ["'self'"]
     if settings.OIDC_AUTHORITY:
         parsed = urlparse(settings.OIDC_AUTHORITY)
         oidc_origin = f"{parsed.scheme}://{parsed.netloc}"  # noqa: E231
         if oidc_origin not in connect_src:
             connect_src.append(oidc_origin)
+    style_src = ["'self'"]
+    if nonce is not None:
+        style_src.append(f"'nonce-{nonce}'")
     directives = [
         "default-src 'self'",
         f"connect-src {' '.join(connect_src)}",
-        "style-src 'self'",
+        f"style-src {' '.join(style_src)}",
         "script-src-elem 'self'",
     ]
     if settings.OIDC_AUTHORITY:
@@ -56,6 +68,10 @@ def _build_csp_policy() -> str:
         oidc_origin = f"{parsed.scheme}://{parsed.netloc}"  # noqa: E231
         directives.append(f"frame-src {oidc_origin}")
     return "; ".join(directives)
+
+
+def _inject_csp_nonce(content: str, nonce: str) -> str:
+    return content.replace(_CSP_NONCE_PLACEHOLDER, nonce)
 
 
 class _CSRFMiddleware(CSRFMiddleware):
@@ -97,8 +113,12 @@ class _SecurityHeadersMiddleware(BaseHTTPMiddleware):
         self._secure_headers = secure_headers
 
     async def dispatch(self, request: Request, call_next: Any) -> Response:
+        request.state.csp_nonce = _generate_csp_nonce()
         response = await call_next(request)
         self._secure_headers.set_headers(response)
+        response.headers["Content-Security-Policy"] = _build_csp_policy(
+            request.state.csp_nonce
+        )
         return response
 
 
@@ -154,11 +174,9 @@ def create_app() -> FastAPI:
     hsts = None
     if settings.TALISMAN_FORCE_HTTPS:
         hsts = secure.StrictTransportSecurity().max_age(31536000).include_subdomains()
-    csp_policy = _build_csp_policy()
     secure_headers = secure.Secure(
         server=secure.Server().set(""),
         hsts=hsts,
-        csp=secure.ContentSecurityPolicy().set(csp_policy),
     )
     app.add_middleware(_SecurityHeadersMiddleware, secure_headers=secure_headers)
 
@@ -238,7 +256,7 @@ _ROOT_STATIC_FILES = {
 
 def _register_static_routes(app: FastAPI, static_folder: str) -> None:
     @app.get("/{full_path:path}", include_in_schema=False)
-    async def spa_fallback(full_path: str) -> Response:
+    async def spa_fallback(full_path: str, request: Request) -> Response:
         # Strip leading slashes from path
         path = full_path.lstrip("/")
 
@@ -254,7 +272,7 @@ def _register_static_routes(app: FastAPI, static_folder: str) -> None:
         index_path = os.path.join(static_folder, "index.html")
         if os.path.isfile(index_path):
             with open(index_path, "r", encoding="utf-8") as f:
-                content = f.read()
+                content = _inject_csp_nonce(f.read(), request.state.csp_nonce)
             return HTMLResponse(
                 content=content,
                 headers={

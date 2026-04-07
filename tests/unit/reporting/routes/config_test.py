@@ -131,3 +131,11 @@ def test_csp_policy_oidc_origin_not_duplicated(mocker):
     assert "frame-src https://idp.example.com" in policy
     # Appears once per directive (connect-src + frame-src), not duplicated within either.
     assert policy.count("https://idp.example.com") == 2
+
+
+def test_csp_policy_includes_nonce_in_style_src(mocker):
+    from reporting.app import _build_csp_policy
+
+    mocker.patch("reporting.settings.OIDC_AUTHORITY", "")
+    policy = _build_csp_policy("abc123")
+    assert "style-src 'self' 'nonce-abc123'" in policy
