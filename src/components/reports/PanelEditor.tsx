@@ -21,6 +21,7 @@ import {
 import Add from '@mui/icons-material/Add';
 import DeleteIcon from '@mui/icons-material/Delete';
 import { Panel, PanelParam, ColumnDef } from 'src/config.context';
+import MarkdownPanelEditor from 'src/components/reports/MarkdownPanelEditor';
 
 const PANEL_TYPES = [
   { value: 'table', label: 'Table' },
@@ -271,14 +272,9 @@ function PanelEditor({ open, panel, onClose, onSave }: PanelEditorProps) {
           {isMarkdown && (
             <>
               <Divider />
-              <TextField
-                fullWidth
-                size="small"
-                label="Markdown content"
-                multiline
-                minRows={6}
-                value={form.markdown ?? ''}
-                onChange={(e) => set('markdown', e.target.value || undefined)}
+              <MarkdownPanelEditor
+                value={form.markdown}
+                onChange={(v) => set('markdown', v)}
               />
             </>
           )}

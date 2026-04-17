@@ -35,6 +35,14 @@
     "@mui/material": "^7.3.9",
     "@mui/styles": "^6.4.8",
     "@mui/x-charts": "^8.27.5",
+    "@tiptap/extension-link": "^3.22.3",
+    "@tiptap/extension-table": "^3.22.3",
+    "@tiptap/extension-table-cell": "^3.22.3",
+    "@tiptap/extension-table-header": "^3.22.3",
+    "@tiptap/extension-table-row": "^3.22.3",
+    "@tiptap/pm": "^3.22.3",
+    "@tiptap/react": "^3.22.3",
+    "@tiptap/starter-kit": "^3.22.3",
     "@xyflow/react": "^12.0.0",
     "boring-avatars": "^2.0.4",
     "formik": "^2.4.9",
@@ -50,7 +58,8 @@
     "react-dom": "^19.2.4",
     "react-helmet": "^6.1.0",
     "react-promise-tracker": "^2.1.1",
-    "react-router-dom": "^7.13.1"
+    "react-router-dom": "^7.13.1",
+    "tiptap-markdown": "^0.9.0"
   },
   "devDependencies": {
     "@happy-dom/global-registrator": "^20.8.4",
