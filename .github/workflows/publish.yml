@@ -74,6 +74,7 @@ jobs:
         with:
           file: Dockerfile
           context: .
+          target: production
           push: true # push the image to ghcr
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}

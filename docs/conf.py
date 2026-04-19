@@ -16,8 +16,6 @@ import sys
 from datetime import datetime
 from typing import Any
 
-import sphinx_material
-
 sys.path.insert(0, os.path.abspath("../.."))
 
 
@@ -43,7 +41,6 @@ extensions = [
     "sphinx.ext.extlinks",
     "sphinx.ext.ifconfig",
     "sphinx.ext.githubpages",
-    "sphinx-jsonschema",
     "myst_parser",
 ]
 
@@ -91,7 +88,12 @@ language = "en"
 # List of patterns, relative to source directory, that match files and
 # directories to ignore when looking for source files.
 # This patterns also effect to html_static_path and html_extra_path
-exclude_patterns = ["_build", "_venv", "Thumbs.db", ".DS_Store"]
+# `info.md` is a symlink to the project's top-level README.md. It uses
+# GitHub-flavored `#gh-{light,dark}-mode-only` URL fragments on its logo
+# images, which MyST-parser mis-reads as part of the filename. Skip it —
+# it is not referenced from any toctree and its content is not served
+# by the docs site.
+exclude_patterns = ["_build", "_venv", "Thumbs.db", ".DS_Store", "info.md"]
 
 # myst-parser: suppress xref warnings for relative .html links (intentional
 # HTML output links that myst-parser cannot resolve as source cross-references)
@@ -128,30 +130,15 @@ todo_include_todos = False
 
 # The theme to use for HTML and HTML Help pages.  See the documentation for
 # a list of builtin themes.
-html_theme = "sphinx_material"
-html_theme_path = sphinx_material.html_theme_path()
-html_context = sphinx_material.get_html_context()
+html_theme = "shibuya"
 
 # Theme options are theme-specific and customize the look and feel of a theme
 # further.  For a list of options available for each theme, see the
 # documentation.
 html_theme_options = {
-    "globaltoc_depth": 2,
-    "globaltoc_collapse": True,
-    "globaltoc_includehidden": True,
-    "repo_url": "https://github.com/mappedsky/seizu",
-    "repo_name": "seizu",
-    "repo_type": "github",
-    "nav_links": [
-        {"href": "index", "internal": True, "title": "Seizu"},
-    ],
-    "heroes": {
-        "index": "A neo4j dashboard and reporting tool.",
-    },
-    "master_doc": False,
-}
-html_sidebars = {
-    "**": ["globaltoc.html", "localtoc.html", "searchbox.html"],
+    "github_url": "https://github.com/mappedsky/seizu",
+    "light_logo": "_static/logo-horizontal-with-text-black.png",
+    "dark_logo": "_static/logo-horizontal-with-text-white.png",
 }
 
 # The name for this set of Sphinx documents.
@@ -173,7 +160,10 @@ html_favicon = "images/favicon.png"
 # Add any paths that contain custom static files (such as style sheets) here,
 # relative to this directory. They are copied after the builtin static files,
 # so a file named "default.css" will overwrite the builtin "default.css".
-# html_static_path = ["_static"]
+# Contents of `images/` are exposed under `_static/` so the Shibuya theme's
+# `light_logo` / `dark_logo` options (which resolve paths via `pathto`) can
+# reference them without moving the files out of their source location.
+html_static_path = ["images"]
 
 # html_style = 'css/seizu.css'
 

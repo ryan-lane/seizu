@@ -1,6 +1,3 @@
-.. image:: images/logo-horizontal-with-text-black.png
-    :alt: seizu logo
-
 Seizu (星図)
 ============
 
@@ -41,7 +38,6 @@ Documentation
     install/backend
     install/dashboard
     install/query-console
-    install/schema
     install/scheduled-queries
     install/mcp-toolsets
     install/stats

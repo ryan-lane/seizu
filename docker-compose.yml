@@ -251,7 +251,7 @@ services:
     image: ghcr.io/mappedsky/seizu
     build:
       context: .
-      target: backend
+      target: dev
     user: seizu
     depends_on:
       neo4j:
