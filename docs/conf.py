@@ -185,8 +185,9 @@ html_static_path = ["images"]
 # html_sidebars = {}
 
 # Additional templates that should be rendered to pages, maps page names to
-# template names.
-# html_additional_pages = {}
+# template names. The splash overrides the default index.html — index.rst is
+# kept for its toctree (which still drives sidebar nav on child pages).
+html_additional_pages = {"index": "splash.html"}
 
 # If false, no module index is generated.
 # html_domain_indices = True
