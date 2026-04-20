@@ -33,7 +33,6 @@ def _make_app(synced_user: User = _FAKE_USER) -> object:
 
 
 async def test_get_current_user_success(mocker):
-    mocker.patch("reporting.settings.CSRF_DISABLE", True)
     app = _make_app()
     async with AsyncClient(
         transport=ASGITransport(app=app), base_url="http://test"
@@ -52,7 +51,6 @@ async def test_get_current_user_success(mocker):
 
 async def test_get_current_user_returns_synced_profile(mocker):
     """The route should return the result of sync_user_profile, not the raw lookup."""
-    mocker.patch("reporting.settings.CSRF_DISABLE", True)
     updated_user = _FAKE_USER.model_copy(
         update={"email": "alice-new@example.com", "display_name": "Alice Updated"}
     )

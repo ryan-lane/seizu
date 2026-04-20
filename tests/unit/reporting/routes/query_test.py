@@ -44,7 +44,6 @@ def _make_app():
 
 
 async def test_query_success(mocker):
-    mocker.patch("reporting.settings.CSRF_DISABLE", True)
     _mock_validate(mocker)
     mock_record = MagicMock()
     mock_record.items.return_value = [("name", "Alice"), ("count", 42)]
@@ -68,7 +67,6 @@ async def test_query_success(mocker):
 
 
 async def test_query_success_with_warnings(mocker):
-    mocker.patch("reporting.settings.CSRF_DISABLE", True)
     _mock_validate(mocker, warnings=["Unknown label: Foo"])
     mock_record = MagicMock()
     mock_record.items.return_value = [("name", "Alice")]
@@ -92,7 +90,6 @@ async def test_query_success_with_warnings(mocker):
 
 
 async def test_query_with_params(mocker):
-    mocker.patch("reporting.settings.CSRF_DISABLE", True)
     _mock_validate(mocker)
     mock_record = MagicMock()
     mock_record.items.return_value = [("name", "Alice")]
@@ -121,7 +118,6 @@ async def test_query_with_params(mocker):
 
 async def test_query_passes_params_to_validator(mocker):
     """validate_query must receive the request params so it can run EXPLAIN with them."""
-    mocker.patch("reporting.settings.CSRF_DISABLE", True)
     mock_validate = mocker.patch(
         "reporting.routes.query.validate_query",
         new=AsyncMock(return_value=ValidationResult()),
@@ -151,7 +147,6 @@ async def test_query_passes_params_to_validator(mocker):
 
 
 async def test_query_no_json_body(mocker):
-    mocker.patch("reporting.settings.CSRF_DISABLE", True)
 
     app = _make_app()
     async with AsyncClient(
@@ -166,7 +161,6 @@ async def test_query_no_json_body(mocker):
 
 
 async def test_query_missing_query_field(mocker):
-    mocker.patch("reporting.settings.CSRF_DISABLE", True)
 
     app = _make_app()
     async with AsyncClient(
@@ -180,7 +174,6 @@ async def test_query_missing_query_field(mocker):
 
 
 async def test_query_validation_errors_return_400_with_errors_and_warnings(mocker):
-    mocker.patch("reporting.settings.CSRF_DISABLE", True)
     _mock_validate(mocker, errors=["Write queries are not allowed"])
 
     app = _make_app()
@@ -197,7 +190,6 @@ async def test_query_validation_errors_return_400_with_errors_and_warnings(mocke
 
 
 async def test_query_validation_errors_do_not_execute_query(mocker):
-    mocker.patch("reporting.settings.CSRF_DISABLE", True)
     _mock_validate(mocker, errors=["Write queries are not allowed"])
     mock_run = mocker.patch(
         "reporting.routes.query.reporting_neo4j.run_query",
@@ -214,7 +206,6 @@ async def test_query_validation_errors_do_not_execute_query(mocker):
 
 
 async def test_query_execution_failure(mocker):
-    mocker.patch("reporting.settings.CSRF_DISABLE", True)
     _mock_validate(mocker)
     mocker.patch(
         "reporting.routes.query.reporting_neo4j.run_query",
@@ -233,53 +224,7 @@ async def test_query_execution_failure(mocker):
     assert "Query execution failed" in ret.json()["error"]
 
 
-async def test_query_no_csrf(mocker):
-    mocker.patch("reporting.settings.CSRF_DISABLE", False)
-    mocker.patch("reporting.settings.SECRET_KEY", "fake")
-
-    app = _make_app()
-    async with AsyncClient(
-        transport=ASGITransport(app=app), base_url="http://test"
-    ) as client:
-        ret = await client.post(
-            "/api/v1/query",
-            json={"query": "MATCH (n) RETURN n"},
-        )
-    assert ret.status_code == 403
-
-
-async def test_query_with_csrf(mocker, helpers):
-    mocker.patch("reporting.settings.CSRF_DISABLE", False)
-    mocker.patch("reporting.settings.SECRET_KEY", "fake")
-    mocker.patch("reporting.settings.CSRF_COOKIE_SECURE", False)
-    _mock_validate(mocker)
-    mock_record = MagicMock()
-    mock_record.items.return_value = [("n", 1)]
-    mocker.patch(
-        "reporting.routes.query.reporting_neo4j.run_query",
-        new=AsyncMock(return_value=[mock_record]),
-    )
-
-    app = _make_app()
-    async with AsyncClient(
-        transport=ASGITransport(app=app), base_url="http://test"
-    ) as client:
-        # Get the CSRF token from the config endpoint (which sets the cookie)
-        config_resp = await client.get("/api/v1/config")
-        csrf_token = helpers.get_cookie(config_resp, "_csrf_token")
-        ret = await client.post(
-            "/api/v1/query",
-            json={"query": "MATCH (n) RETURN n LIMIT 1"},
-            headers={
-                "X-CSRFToken": csrf_token or "",
-                "Referer": "http://test/",
-            },
-        )
-    assert ret.status_code == 200
-
-
 async def test_query_serialize_node(mocker):
-    mocker.patch("reporting.settings.CSRF_DISABLE", True)
     _mock_validate(mocker)
 
     from neo4j.graph import Node
@@ -313,7 +258,6 @@ async def test_query_serialize_node(mocker):
 
 
 async def test_query_serialize_relationship(mocker):
-    mocker.patch("reporting.settings.CSRF_DISABLE", True)
     _mock_validate(mocker)
 
     from neo4j.graph import Node
@@ -357,7 +301,6 @@ async def test_query_serialize_relationship(mocker):
 
 
 async def test_query_serialize_path(mocker):
-    mocker.patch("reporting.settings.CSRF_DISABLE", True)
     _mock_validate(mocker)
 
     from neo4j.graph import Node
@@ -410,7 +353,6 @@ async def test_query_serialize_path(mocker):
 
 async def test_query_save_history_when_flag_set(mocker):
     """History is saved only when save_history=True is included in the request."""
-    mocker.patch("reporting.settings.CSRF_DISABLE", True)
     _mock_validate(mocker)
     mock_record = MagicMock()
     mock_record.items.return_value = [("n", 1)]
@@ -440,7 +382,6 @@ async def test_query_save_history_when_flag_set(mocker):
 
 async def test_query_does_not_save_history_by_default(mocker):
     """History is NOT saved when save_history is omitted (report panels)."""
-    mocker.patch("reporting.settings.CSRF_DISABLE", True)
     _mock_validate(mocker)
     mock_record = MagicMock()
     mock_record.items.return_value = [("n", 1)]

@@ -43,7 +43,6 @@ def _make_app():
 
 
 async def test_validate_success(mocker):
-    mocker.patch("reporting.settings.CSRF_DISABLE", True)
     _mock_validate(mocker)
     app = _make_app()
     async with AsyncClient(
@@ -60,7 +59,6 @@ async def test_validate_success(mocker):
 
 async def test_validate_with_errors_still_returns_200(mocker):
     """Validation errors are returned in the body with 200; 400 is for bad requests."""
-    mocker.patch("reporting.settings.CSRF_DISABLE", True)
     _mock_validate(mocker, errors=["Write queries are not allowed"])
     app = _make_app()
     async with AsyncClient(
@@ -76,7 +74,6 @@ async def test_validate_with_errors_still_returns_200(mocker):
 
 
 async def test_validate_with_warnings(mocker):
-    mocker.patch("reporting.settings.CSRF_DISABLE", True)
     _mock_validate(mocker, warnings=["Unknown label: Foo", "Unknown property: bar"])
     app = _make_app()
     async with AsyncClient(
@@ -92,7 +89,6 @@ async def test_validate_with_warnings(mocker):
 
 
 async def test_validate_with_errors_and_warnings(mocker):
-    mocker.patch("reporting.settings.CSRF_DISABLE", True)
     _mock_validate(
         mocker,
         errors=["Write queries are not allowed"],
@@ -112,7 +108,6 @@ async def test_validate_with_errors_and_warnings(mocker):
 
 
 async def test_validate_no_json_body(mocker):
-    mocker.patch("reporting.settings.CSRF_DISABLE", True)
     app = _make_app()
     async with AsyncClient(
         transport=ASGITransport(app=app), base_url="http://test"
@@ -126,7 +121,6 @@ async def test_validate_no_json_body(mocker):
 
 
 async def test_validate_missing_query_field(mocker):
-    mocker.patch("reporting.settings.CSRF_DISABLE", True)
     app = _make_app()
     async with AsyncClient(
         transport=ASGITransport(app=app), base_url="http://test"
@@ -136,40 +130,3 @@ async def test_validate_missing_query_field(mocker):
             json={"params": {"name": "Alice"}},
         )
     assert ret.status_code == 422
-
-
-async def test_validate_no_csrf(mocker):
-    mocker.patch("reporting.settings.CSRF_DISABLE", False)
-    mocker.patch("reporting.settings.SECRET_KEY", "fake")
-    app = _make_app()
-    async with AsyncClient(
-        transport=ASGITransport(app=app), base_url="http://test"
-    ) as client:
-        ret = await client.post(
-            "/api/v1/validate",
-            json={"query": "MATCH (n) RETURN n"},
-        )
-    assert ret.status_code == 403
-
-
-async def test_validate_with_csrf(mocker, helpers):
-    mocker.patch("reporting.settings.CSRF_DISABLE", False)
-    mocker.patch("reporting.settings.SECRET_KEY", "fake")
-    mocker.patch("reporting.settings.CSRF_COOKIE_SECURE", False)
-    _mock_validate(mocker)
-    app = _make_app()
-    async with AsyncClient(
-        transport=ASGITransport(app=app), base_url="http://test"
-    ) as client:
-        # Get the CSRF token from the config endpoint (which sets the cookie)
-        config_resp = await client.get("/api/v1/config")
-        csrf_token = helpers.get_cookie(config_resp, "_csrf_token")
-        ret = await client.post(
-            "/api/v1/validate",
-            json={"query": "MATCH (n) RETURN n"},
-            headers={
-                "X-CSRFToken": csrf_token or "",
-                "Referer": "http://test/",
-            },
-        )
-    assert ret.status_code == 200

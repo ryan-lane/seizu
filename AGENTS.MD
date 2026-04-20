@@ -93,7 +93,6 @@ React 19 + TypeScript + Bun + Material-UI + MUI X Charts + `@xyflow/react`.
 - `src/components/reports/CypherGraph.tsx` — graph panel (`@xyflow/react`); accepts map, path, or any format; Graph/Table/Raw tabs; collapsible detail panel
 - `src/pages/QueryConsole.tsx` — ad-hoc console at `/app/query-console`; Ctrl+Enter runs query
 - `src/components/QueryConsoleSchemaPanel.tsx` — collapsible schema browser; inserts/runs discovery queries on click
-- All POST requests must include `X-CSRFToken` header
 
 **User identity:**
 - `src/hooks/useCurrentUser.ts` — `useCurrentUser()` → `GET /api/v1/me`
@@ -108,7 +107,7 @@ FastAPI, Python 3.12, Gunicorn + UvicornWorker (ASGI). All I/O is async (neo4j a
 
 **Key files:**
 - `reporting/asgi.py` — ASGI entrypoint: `application = create_app()`
-- `reporting/app.py` — `create_app()`; FastAPI with `openapi_url="/api/openapi.json"`, `docs_url="/api/docs"`; registers security headers (`secure`), CSRF (`starlette-csrf`), routers, static files, and SPA fallback via `lifespan`
+- `reporting/app.py` — `create_app()`; FastAPI with `openapi_url="/api/openapi.json"`, `docs_url="/api/docs"`; registers security headers (`secure`), routers, static files, and SPA fallback via `lifespan`
 - `reporting/settings.py` — all config via env vars (Pydantic)
 - `reporting/routes/` — `APIRouter`s: `config.py`, `me.py`, `query.py`, `reports.py`, `users.py`, `validate.py`, `scheduled_queries.py`, `static.py` (healthcheck only)
 - `reporting/authnz/__init__.py` — `HTTPBearer` + FastAPI `Depends(get_current_user)`; `CurrentUser` dataclass (`user: User`, `jwt_claims: dict`); `sync_user_profile` dependency chains on `get_current_user`; tests override via `app.dependency_overrides[get_current_user]`
@@ -175,7 +174,7 @@ Typer app calling the REST API. Invoked via `python -m seizu_cli`.
 **Key files:**
 - `seizu_cli/main.py` — entry point; global options `--api-url`, `--token`, `--credentials-file`, `--config-file`
 - `seizu_cli/config.py` — `SeizuConfig` + `load_config()` reading `~/.config/seizu/seizu.conf`
-- `seizu_cli/client.py` — `SeizuClient`; Bearer auth + CSRF bootstrapping (calls `GET /api/v1/config` first)
+- `seizu_cli/client.py` — `SeizuClient`; Bearer auth
 - `seizu_cli/state.py` — module-level state; `get_client()` lazy factory
 - `seizu_cli/commands/` — `reports.py`, `scheduled_queries.py`, `toolsets.py`, `seed.py`, `auth.py`
 - `seizu_cli/auth.py` — OS-native keyring or `--credentials-file` fallback; Device Authorization Grant
@@ -203,7 +202,6 @@ Seizu exposes an MCP (Model Context Protocol) server at `/api/v1/mcp` when `MCP_
 **Key details:**
 - Transport: StreamableHTTP, wired into FastAPI via `_MCPMiddleware` (pure ASGI middleware in `reporting/app.py`) that intercepts `/api/v1/mcp*` before FastAPI routing; avoids a Starlette 1.0.0 issue where `Mount("/api/v1/mcp")` requires a trailing slash and the SPA catch-all returns 405
 - Auth: `_MCPAuthMiddleware` validates Bearer JWT tokens using the same `PyJWKClient` logic as the REST API; passes through unauthenticated in dev (`DEVELOPMENT_ONLY_REQUIRE_AUTH=false`)
-- CSRF: exempt — MCP clients are not browsers and do not use cookie-based auth
 - Tool names: namespaced as `{toolset_name}__{tool_name}` (double underscore)
 - Tool listing: `@server.list_tools()` queries `report_store.list_enabled_tools()` at request time (dynamic, not static)
 - Tool execution: `@server.call_tool()` runs the tool's Cypher query via `reporting_neo4j.run_query()`
@@ -308,8 +306,6 @@ Backend validates JWTs via `PyJWKClient` (PyJWT) against any OIDC JWKS endpoint.
 | `JWT_AUDIENCE` | `""` | Must match OIDC client ID when using Authentik |
 | `DEVELOPMENT_ONLY_REQUIRE_AUTH` | `true` | Set `false` to bypass auth in dev |
 | `TALISMAN_FORCE_HTTPS` | `true` | Set `false` in dev/behind LB |
-| `SESSION_COOKIE_SECURE` | `true` | Must match `TALISMAN_FORCE_HTTPS`; if mismatched, CLI gets 403 on CSRF |
-| `CSRF_COOKIE_SECURE` | `true` | Set `false` in dev |
 | `OIDC_AUTHORITY` | `""` | Served to frontend via `/api/v1/config` |
 | `OIDC_CLIENT_ID` | `""` | Served to frontend |
 | `OIDC_SCOPE` | `"openid email"` | Served to frontend |

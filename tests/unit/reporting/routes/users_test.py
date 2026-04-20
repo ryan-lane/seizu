@@ -31,7 +31,6 @@ def _make_app(get_user_return=_FAKE_USER):
 
 
 async def test_get_user_success(mocker):
-    mocker.patch("reporting.settings.CSRF_DISABLE", True)
     mocker.patch(
         "reporting.routes.users.report_store.get_user",
         new=AsyncMock(return_value=_FAKE_USER),
@@ -51,7 +50,6 @@ async def test_get_user_success(mocker):
 
 
 async def test_get_user_not_found(mocker):
-    mocker.patch("reporting.settings.CSRF_DISABLE", True)
     mocker.patch(
         "reporting.routes.users.report_store.get_user",
         new=AsyncMock(return_value=None),

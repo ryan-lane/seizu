@@ -40,11 +40,6 @@ describe('useLazyCypherQuery', () => {
     global.fetch = jest.fn().mockResolvedValue({
       json: () => Promise.resolve({ results: [] })
     });
-    // CSRF cookie
-    Object.defineProperty(document, 'cookie', {
-      writable: true,
-      value: '_csrf_token=testtoken'
-    });
   });
 
   it('does not fetch when auth_required and accessToken is null', () => {

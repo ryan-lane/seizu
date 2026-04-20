@@ -25,7 +25,6 @@ sqlmodel = "*"
 fastapi = "*"
 uvicorn = "*"
 httpx = "*"
-starlette-csrf = "*"
 secure = "*"
 python-multipart = "*"
 typer = {version = "*", extras = ["all"]}

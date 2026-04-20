@@ -115,34 +115,6 @@ SCHEDULED_QUERY_MODULES = list_env(
 # running behind an SSL-terminating load balancer.
 TALISMAN_FORCE_HTTPS = bool_env("TALISMAN_FORCE_HTTPS", True)
 
-# CSRF settings
-
-# Secret key used for CSRF token signing
-SECRET_KEY = str_env("SECRET_KEY")
-
-# Cookie name
-CSRF_COOKIE_NAME = str_env("CSRF_COOKIE_NAME", "_csrf_token")
-# Header name
-CSRF_HEADER_NAME = str_env("CSRF_HEADER_NAME", "X-CSRFToken")
-# Use a secure cookie by default.
-CSRF_COOKIE_SECURE = bool_env("CSRF_COOKIE_SECURE", True)
-# Set the cookie to be usable by javascript by default, since that's our use-case.
-CSRF_COOKIE_HTTPONLY = bool_env("CSRF_COOKIE_HTTPONLY", False)
-# Set the samesite policy to strict by default, since the site is likely served on the same site.
-CSRF_COOKIE_SAMESITE = str_env("CSRF_COOKIE_SAMESITE", "Strict")
-# Cookie path
-CSRF_COOKIE_PATH = str_env("CSRF_COOKIE_PATH", "/")
-# Cookie domain
-_CSRF_COOKIE_DOMAIN = str_env("CSRF_COOKIE_DOMAIN", "")
-if _CSRF_COOKIE_DOMAIN == "":
-    CSRF_COOKIE_DOMAIN = None
-else:
-    CSRF_COOKIE_DOMAIN = _CSRF_COOKIE_DOMAIN
-# Whether or not to check the referrer
-CSRF_CHECK_REFERER = bool_env("CSRF_CHECK_REFERER", True)
-# Setting that can be used to disable CSRF protection
-CSRF_DISABLE = bool_env("CSRF_DISABLE", False)
-
 # Maximum number of stats we will generate for panels with inputs
 DASHBOARD_STATS_MAX_INPUT_RESULTS = int_env("DASHBOARD_STATS_MAX_INPUT_RESULTS", 100)
 

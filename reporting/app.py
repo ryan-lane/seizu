@@ -1,7 +1,5 @@
 import base64
-import http.cookies
 import os
-import re
 import secrets
 from contextlib import asynccontextmanager
 from typing import Any
@@ -16,14 +14,12 @@ from fastapi.responses import FileResponse
 from fastapi.responses import HTMLResponse
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
-from itsdangerous import BadSignature
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import Response
 from starlette.types import ASGIApp as StarletteASGIApp
 from starlette.types import Receive
 from starlette.types import Scope
 from starlette.types import Send
-from starlette_csrf import CSRFMiddleware
 
 from reporting import settings
 from reporting.routes import config as config_routes
@@ -72,37 +68,6 @@ def _build_csp_policy(nonce: str | None = None) -> str:
 
 def _inject_csp_nonce(content: str, nonce: str) -> str:
     return content.replace(_CSP_NONCE_PLACEHOLDER, nonce)
-
-
-class _CSRFMiddleware(CSRFMiddleware):
-    """CSRFMiddleware that returns JSON errors and self-heals stale cookies.
-
-    starlette-csrf's default error response is plain text, which breaks JSON
-    clients.  Additionally, if the browser holds a stale cookie from a prior
-    implementation (e.g. Flask-SeaSurf), the signature check fails with
-    BadSignature.  This subclass detects that case and expires the stale
-    cookie so the next safe-method response will issue a fresh valid token.
-    """
-
-    def _get_error_response(self, request: Request) -> Response:
-        headers: dict = {}
-        csrf_cookie = request.cookies.get(self.cookie_name)
-        if csrf_cookie is not None:
-            # If the cookie exists but can't be deserialized it is stale/from a
-            # different implementation.  Clear it so the next GET sets a fresh one.
-            try:
-                self.serializer.loads(csrf_cookie)
-            except BadSignature:
-                morsel: http.cookies.SimpleCookie = http.cookies.SimpleCookie()
-                morsel[self.cookie_name] = ""
-                morsel[self.cookie_name]["max-age"] = 0
-                morsel[self.cookie_name]["path"] = self.cookie_path
-                headers["set-cookie"] = morsel.output(header="").strip()
-        return JSONResponse(
-            {"error": "CSRF validation failed"},
-            status_code=403,
-            headers=headers,
-        )
 
 
 class _SecurityHeadersMiddleware(BaseHTTPMiddleware):
@@ -179,22 +144,6 @@ def create_app() -> FastAPI:
         hsts=hsts,
     )
     app.add_middleware(_SecurityHeadersMiddleware, secure_headers=secure_headers)
-
-    # CSRF middleware — skip on healthcheck and config (GET, no state-change risk)
-    # Also exempt /api/v1/mcp since MCP clients are not browsers and use Bearer auth.
-    if not settings.CSRF_DISABLE:
-        app.add_middleware(
-            _CSRFMiddleware,
-            secret=settings.SECRET_KEY or "",
-            cookie_name=settings.CSRF_COOKIE_NAME,
-            header_name=settings.CSRF_HEADER_NAME,
-            cookie_secure=settings.CSRF_COOKIE_SECURE,
-            cookie_httponly=settings.CSRF_COOKIE_HTTPONLY,
-            cookie_samesite=settings.CSRF_COOKIE_SAMESITE,
-            cookie_domain=settings.CSRF_COOKIE_DOMAIN,
-            cookie_path=settings.CSRF_COOKIE_PATH,
-            exempt_urls=[re.compile(r"^/api/v1/mcp")],
-        )
 
     @app.exception_handler(HTTPException)
     async def http_exception_handler(

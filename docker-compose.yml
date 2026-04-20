@@ -283,14 +283,8 @@ services:
       - OIDC_CLIENT_ID=seizu
       - OIDC_REDIRECT_URI=http://localhost:3000/auth/callback
       - "OIDC_SCOPE=openid email profile"
-      # Disable the referer check so node can proxy to the backend
-      - "CSRF_CHECK_REFERER=false"
-      # Disable HTTPS redirect and allow CSRF cookies over plain HTTP in development
+      # Disable HTTPS redirect in development (plain HTTP)
       - "TALISMAN_FORCE_HTTPS=false"
-      - "CSRF_COOKIE_SECURE=false"
-      # Use Lax so the CSRF cookie is included after OIDC cross-site redirects
-      - "CSRF_COOKIE_SAMESITE=lax"
-      - SECRET_KEY=fake
       - STATSD_EXTERNAL_PREFIX=seizu
       - STATSD_EXTERNAL_PROVIDER=newrelic
       # Report store backend — set REPORT_STORE_BACKEND=sqlmodel to switch

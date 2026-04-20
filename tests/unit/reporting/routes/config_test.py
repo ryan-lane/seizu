@@ -4,13 +4,12 @@ from httpx import AsyncClient
 from reporting.app import create_app
 
 
-def _make_app(mocker):
-    mocker.patch("reporting.settings.CSRF_DISABLE", True)
+def _make_app():
     return create_app()
 
 
 async def test_config(mocker):
-    app = _make_app(mocker)
+    app = _make_app()
     async with AsyncClient(
         transport=ASGITransport(app=app), base_url="http://test"
     ) as client:
@@ -26,7 +25,7 @@ async def test_config(mocker):
 
 async def test_config_auth_required_true(mocker):
     mocker.patch("reporting.settings.DEVELOPMENT_ONLY_REQUIRE_AUTH", True)
-    app = _make_app(mocker)
+    app = _make_app()
     async with AsyncClient(
         transport=ASGITransport(app=app), base_url="http://test"
     ) as client:
@@ -36,7 +35,7 @@ async def test_config_auth_required_true(mocker):
 
 async def test_config_auth_required_false(mocker):
     mocker.patch("reporting.settings.DEVELOPMENT_ONLY_REQUIRE_AUTH", False)
-    app = _make_app(mocker)
+    app = _make_app()
     async with AsyncClient(
         transport=ASGITransport(app=app), base_url="http://test"
     ) as client:
@@ -53,7 +52,7 @@ async def test_config_oidc_included_when_auth_required(mocker):
         "https://app.example.com/auth/callback",
     )
     mocker.patch("reporting.settings.OIDC_SCOPE", "openid email")
-    app = _make_app(mocker)
+    app = _make_app()
     async with AsyncClient(
         transport=ASGITransport(app=app), base_url="http://test"
     ) as client:
@@ -76,7 +75,7 @@ async def test_config_oidc_included_when_auth_not_required(mocker):
         "https://app.example.com/auth/callback",
     )
     mocker.patch("reporting.settings.OIDC_SCOPE", "openid email")
-    app = _make_app(mocker)
+    app = _make_app()
     async with AsyncClient(
         transport=ASGITransport(app=app), base_url="http://test"
     ) as client:
@@ -87,7 +86,7 @@ async def test_config_oidc_included_when_auth_not_required(mocker):
 async def test_config_oidc_null_when_authority_not_configured(mocker):
     mocker.patch("reporting.settings.DEVELOPMENT_ONLY_REQUIRE_AUTH", True)
     mocker.patch("reporting.settings.OIDC_AUTHORITY", "")
-    app = _make_app(mocker)
+    app = _make_app()
     async with AsyncClient(
         transport=ASGITransport(app=app), base_url="http://test"
     ) as client:

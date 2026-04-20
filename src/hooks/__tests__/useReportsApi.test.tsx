@@ -49,10 +49,6 @@ describe('useReportVersionsList', () => {
     jest.clearAllMocks();
     mockFetch = jest.fn();
     global.fetch = mockFetch;
-    Object.defineProperty(document, 'cookie', {
-      writable: true,
-      value: '_csrf_token=testtoken'
-    });
   });
 
   it('fetches versions for a report', async () => {
@@ -144,10 +140,6 @@ describe('useReportVersion', () => {
     jest.clearAllMocks();
     mockFetch = jest.fn();
     global.fetch = mockFetch;
-    Object.defineProperty(document, 'cookie', {
-      writable: true,
-      value: '_csrf_token=testtoken'
-    });
   });
 
   it('fetches a specific version', async () => {
@@ -286,10 +278,6 @@ describe('useReportsList', () => {
     jest.clearAllMocks();
     mockFetch = jest.fn();
     global.fetch = mockFetch;
-    Object.defineProperty(document, 'cookie', {
-      writable: true,
-      value: '_csrf_token=testtoken'
-    });
   });
 
   it('fetches and returns reports list', async () => {
@@ -374,10 +362,6 @@ describe('useReportsMutations (pinReport)', () => {
     jest.clearAllMocks();
     mockFetch = jest.fn();
     global.fetch = mockFetch;
-    Object.defineProperty(document, 'cookie', {
-      writable: true,
-      value: '_csrf_token=testtoken'
-    });
   });
 
   it('pinReport calls PUT /api/v1/reports/:id/pin with pinned true', async () => {

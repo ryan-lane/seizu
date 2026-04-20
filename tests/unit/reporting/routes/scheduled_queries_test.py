@@ -80,7 +80,6 @@ _VALID_SQ_BODY = {
 
 
 async def test_list_scheduled_queries_success(mocker):
-    mocker.patch("reporting.settings.CSRF_DISABLE", True)
     mocker.patch(
         "reporting.routes.scheduled_queries.report_store.list_scheduled_queries",
         new=AsyncMock(return_value=[_sq_item()]),
@@ -98,7 +97,6 @@ async def test_list_scheduled_queries_success(mocker):
 
 
 async def test_list_scheduled_queries_empty(mocker):
-    mocker.patch("reporting.settings.CSRF_DISABLE", True)
     mocker.patch(
         "reporting.routes.scheduled_queries.report_store.list_scheduled_queries",
         new=AsyncMock(return_value=[]),
@@ -118,7 +116,6 @@ async def test_list_scheduled_queries_empty(mocker):
 
 
 async def test_get_scheduled_query_success(mocker):
-    mocker.patch("reporting.settings.CSRF_DISABLE", True)
     mocker.patch(
         "reporting.routes.scheduled_queries.report_store.get_scheduled_query",
         new=AsyncMock(return_value=_sq_item()),
@@ -133,7 +130,6 @@ async def test_get_scheduled_query_success(mocker):
 
 
 async def test_get_scheduled_query_not_found(mocker):
-    mocker.patch("reporting.settings.CSRF_DISABLE", True)
     mocker.patch(
         "reporting.routes.scheduled_queries.report_store.get_scheduled_query",
         new=AsyncMock(return_value=None),
@@ -153,7 +149,6 @@ async def test_get_scheduled_query_not_found(mocker):
 
 
 async def test_create_scheduled_query_success(mocker):
-    mocker.patch("reporting.settings.CSRF_DISABLE", True)
     mocker.patch(
         "reporting.routes.scheduled_queries.report_store.create_scheduled_query",
         new=AsyncMock(return_value=_sq_item()),
@@ -179,7 +174,6 @@ async def test_create_scheduled_query_success(mocker):
 
 
 async def test_create_scheduled_query_cypher_validation_error(mocker):
-    mocker.patch("reporting.settings.CSRF_DISABLE", True)
     mocker.patch(
         "reporting.routes.scheduled_queries.scheduled_query_modules.get_action_schemas",
         return_value={"log": []},
@@ -204,7 +198,6 @@ async def test_create_scheduled_query_cypher_validation_error(mocker):
 
 
 async def test_create_scheduled_query_not_json(mocker):
-    mocker.patch("reporting.settings.CSRF_DISABLE", True)
     app = _make_app()
     async with AsyncClient(
         transport=ASGITransport(app=app), base_url="http://test"
@@ -218,7 +211,6 @@ async def test_create_scheduled_query_not_json(mocker):
 
 
 async def test_create_scheduled_query_invalid_body(mocker):
-    mocker.patch("reporting.settings.CSRF_DISABLE", True)
     mocker.patch(
         "reporting.routes.scheduled_queries.scheduled_query_modules.get_action_schemas",
         return_value={"log": []},
@@ -235,7 +227,6 @@ async def test_create_scheduled_query_invalid_body(mocker):
 
 
 async def test_create_scheduled_query_unknown_action_type(mocker):
-    mocker.patch("reporting.settings.CSRF_DISABLE", True)
     mocker.patch(
         "reporting.routes.scheduled_queries.scheduled_query_modules.get_action_schemas",
         return_value={"log": []},
@@ -255,7 +246,6 @@ async def test_create_scheduled_query_unknown_action_type(mocker):
 
 
 async def test_create_scheduled_query_action_config_error(mocker):
-    mocker.patch("reporting.settings.CSRF_DISABLE", True)
     from reporting.schema.report_config import ActionConfigFieldDef
 
     mocker.patch(
@@ -288,7 +278,6 @@ async def test_create_scheduled_query_action_config_error(mocker):
 
 
 async def test_update_scheduled_query_success(mocker):
-    mocker.patch("reporting.settings.CSRF_DISABLE", True)
     mocker.patch(
         "reporting.routes.scheduled_queries.report_store.update_scheduled_query",
         new=AsyncMock(return_value=_sq_item(version=2)),
@@ -314,7 +303,6 @@ async def test_update_scheduled_query_success(mocker):
 
 
 async def test_update_scheduled_query_cypher_validation_error(mocker):
-    mocker.patch("reporting.settings.CSRF_DISABLE", True)
     mocker.patch(
         "reporting.routes.scheduled_queries.scheduled_query_modules.get_action_schemas",
         return_value={"log": []},
@@ -339,7 +327,6 @@ async def test_update_scheduled_query_cypher_validation_error(mocker):
 
 
 async def test_update_scheduled_query_not_found(mocker):
-    mocker.patch("reporting.settings.CSRF_DISABLE", True)
     mocker.patch(
         "reporting.routes.scheduled_queries.report_store.update_scheduled_query",
         new=AsyncMock(return_value=None),
@@ -364,7 +351,6 @@ async def test_update_scheduled_query_not_found(mocker):
 
 
 async def test_update_scheduled_query_not_json(mocker):
-    mocker.patch("reporting.settings.CSRF_DISABLE", True)
     app = _make_app()
     async with AsyncClient(
         transport=ASGITransport(app=app), base_url="http://test"
@@ -378,7 +364,6 @@ async def test_update_scheduled_query_not_json(mocker):
 
 
 async def test_update_scheduled_query_invalid_body(mocker):
-    mocker.patch("reporting.settings.CSRF_DISABLE", True)
     mocker.patch(
         "reporting.routes.scheduled_queries.scheduled_query_modules.get_action_schemas",
         return_value={"log": []},
@@ -400,7 +385,6 @@ async def test_update_scheduled_query_invalid_body(mocker):
 
 
 async def test_list_scheduled_query_versions_success(mocker):
-    mocker.patch("reporting.settings.CSRF_DISABLE", True)
     mocker.patch(
         "reporting.routes.scheduled_queries.report_store.get_scheduled_query",
         new=AsyncMock(return_value=_sq_item()),
@@ -421,7 +405,6 @@ async def test_list_scheduled_query_versions_success(mocker):
 
 
 async def test_list_scheduled_query_versions_not_found(mocker):
-    mocker.patch("reporting.settings.CSRF_DISABLE", True)
     mocker.patch(
         "reporting.routes.scheduled_queries.report_store.get_scheduled_query",
         new=AsyncMock(return_value=None),
@@ -440,7 +423,6 @@ async def test_list_scheduled_query_versions_not_found(mocker):
 
 
 async def test_get_scheduled_query_version_success(mocker):
-    mocker.patch("reporting.settings.CSRF_DISABLE", True)
     mocker.patch(
         "reporting.routes.scheduled_queries.report_store.get_scheduled_query_version",
         new=AsyncMock(return_value=_sq_version(version=1)),
@@ -456,7 +438,6 @@ async def test_get_scheduled_query_version_success(mocker):
 
 
 async def test_get_scheduled_query_version_not_found(mocker):
-    mocker.patch("reporting.settings.CSRF_DISABLE", True)
     mocker.patch(
         "reporting.routes.scheduled_queries.report_store.get_scheduled_query_version",
         new=AsyncMock(return_value=None),
@@ -475,7 +456,6 @@ async def test_get_scheduled_query_version_not_found(mocker):
 
 
 async def test_delete_scheduled_query_success(mocker):
-    mocker.patch("reporting.settings.CSRF_DISABLE", True)
     mocker.patch(
         "reporting.routes.scheduled_queries.report_store.delete_scheduled_query",
         new=AsyncMock(return_value=True),
@@ -490,7 +470,6 @@ async def test_delete_scheduled_query_success(mocker):
 
 
 async def test_delete_scheduled_query_not_found(mocker):
-    mocker.patch("reporting.settings.CSRF_DISABLE", True)
     mocker.patch(
         "reporting.routes.scheduled_queries.report_store.delete_scheduled_query",
         new=AsyncMock(return_value=False),
