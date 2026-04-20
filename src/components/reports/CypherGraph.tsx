@@ -36,6 +36,7 @@ import '@xyflow/react/dist/style.css';
 import { useLazyCypherQuery } from 'src/hooks/useCypherQuery';
 import QueryValidationBadge from 'src/components/reports/QueryValidationBadge';
 import GraphDetailPanel, { GraphSummaryPanel } from 'src/components/reports/GraphDetailPanel';
+import { chartPalette } from 'src/theme/brand';
 
 interface GraphSettings {
   node_label?: string;
@@ -164,19 +165,21 @@ interface CypherGraphProps {
 
 // ─── Colours ─────────────────────────────────────────────────────────────────
 
-const PALETTE = [
-  '#02B2AF', '#2E96FF', '#B800D8', '#60009B',
-  '#2731C8', '#03008D', '#00B929', '#FF5733',
-  '#FFA500', '#E91E63',
-];
+// Group → stable index. Color is resolved against a palette at call time so
+// the same group keeps its slot across renders while still swapping between
+// the light/dark brand palettes when the theme mode changes.
+const GROUP_INDEX_MAP = new Map<string, number>();
 
-const GROUP_COLOR_MAP = new Map<string, string>();
-
-export function colorForGroup(group: string): string {
-  if (!GROUP_COLOR_MAP.has(group)) {
-    GROUP_COLOR_MAP.set(group, PALETTE[GROUP_COLOR_MAP.size % PALETTE.length]);
+export function colorForGroup(
+  group: string,
+  palette: readonly string[] = chartPalette.dark,
+): string {
+  let index = GROUP_INDEX_MAP.get(group);
+  if (index === undefined) {
+    index = GROUP_INDEX_MAP.size;
+    GROUP_INDEX_MAP.set(group, index);
   }
-  return GROUP_COLOR_MAP.get(group)!;
+  return palette[index % palette.length];
 }
 
 // ─── Force layout ─────────────────────────────────────────────────────────────
@@ -269,7 +272,8 @@ function computeLayout(
 
 function GraphNodeComponent({ data, selected }: NodeProps) {
   const theme = useTheme();
-  const color = colorForGroup(String(data['group'] ?? 'default'));
+  const palette = theme.palette.mode === 'dark' ? chartPalette.dark : chartPalette.light;
+  const color = colorForGroup(String(data['group'] ?? 'default'), palette);
   const label = String(data['label'] ?? data['id'] ?? '');
 
   return (
@@ -702,7 +706,7 @@ export default function CypherGraph({
                 nodes={graphData.nodes}
                 links={graphData.links}
                 nodeGroupKey={nodeColorByKey}
-                getColor={colorForGroup}
+                getColor={(g) => colorForGroup(g, theme.palette.mode === 'dark' ? chartPalette.dark : chartPalette.light)}
               />
             )}
           </Box>

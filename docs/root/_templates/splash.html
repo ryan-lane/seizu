@@ -9,10 +9,10 @@
 <meta property="og:title" content="Seizu — A star chart for your security graph" />
 <meta property="og:description" content="Open-source Neo4j frontend for Cartography and security observability. Dashboards, Cypher console, and MCP server for LLM agents." />
 <meta property="og:type" content="website" />
-<link rel="icon" href="{{ pathto('_static/favicon.png', 1) }}" />
+<link rel="icon" type="image/svg+xml" href="{{ pathto('_static/favicon.svg', 1) }}" />
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&family=EB+Garamond:ital,wght@0,400;0,500;0,600;1,400&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&family=Manrope:wght@500;600;700;800&family=EB+Garamond:ital,wght@0,400;0,500;0,600;1,400&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
 <style>
   *, *::before, *::after { box-sizing: border-box; }
   :root {
@@ -21,18 +21,24 @@
     --font-mono: 'JetBrains Mono', monospace;
     --display-tracking: -0.015em;
     --display-style: italic;
-    --bg: #150a24;
+    /* Brand tokens — see AGENTS.MD > Branding. */
+    --brand-space: #0a0f22;     /* Space — primary background */
+    --brand-starlight: #8fb4ff; /* Starlight — primary accent on dark */
+    --brand-ember: #f5c16c;     /* Ember — warm accent on dark */
+    --brand-paper: #f5f6fb;     /* Paper — light surface */
+    --bg: var(--brand-space);
     --text: #e8edf8;
     --text-dim: #cbd5ea;
     --text-muted: #aab8d6;
     --text-faint: #8da0c8;
     --text-vfaint: #6a7a9c;
-    --accent: #8fb4ff;
-    --accent-warm: #f5c16c;
+    --accent: var(--brand-starlight);
+    --accent-warm: var(--brand-ember);
     --rule: rgba(140, 170, 230, 0.12);
     --rule-strong: rgba(140, 170, 230, 0.25);
     --panel: rgba(12, 18, 36, 0.75);
     --panel-hover: rgba(30, 45, 85, 0.5);
+    --font-wordmark: 'Manrope', -apple-system, BlinkMacSystemFont, sans-serif;
   }
   html, body { margin: 0; padding: 0; background: var(--bg); color: var(--text); }
   body {
@@ -83,11 +89,27 @@
   }
 
   /* ---------- Logo ---------- */
-  .logo { display: inline-flex; align-items: center; gap: 12px; }
-  .logo-text { font-family: var(--font-display); font-size: 28px; color: var(--text); letter-spacing: -0.01em; font-style: var(--display-style); }
-  .logo-text .ja { font-size: 20px; color: var(--accent); opacity: 0.7; margin-left: 2px; font-style: normal; }
+  .logo { display: inline-flex; align-items: center; gap: 12px; text-decoration: none; }
+  .logo-text {
+    font-family: var(--font-wordmark);
+    font-weight: 800;
+    font-size: 26px;
+    color: var(--text);
+    letter-spacing: -0.04em;
+    font-style: normal;
+  }
+  .logo-text .ja {
+    font-family: var(--font-display);
+    font-weight: 400;
+    font-size: 18px;
+    color: var(--accent);
+    opacity: 0.8;
+    margin-left: 6px;
+    font-style: var(--display-style);
+    letter-spacing: 0;
+  }
   .logo.small .logo-text { font-size: 22px; }
-  .logo.small .logo-text .ja { font-size: 16px; }
+  .logo.small .logo-text .ja { font-size: 15px; }
 
   /* ---------- Buttons ---------- */
   .btn-primary {
@@ -495,13 +517,33 @@
 <!-- ============== NAV ============== -->
 <nav class="nav" id="nav">
   <a class="logo small" href="{{ pathto('index') }}">
-    <svg width="22" height="22" viewBox="0 0 40 40" aria-hidden="true">
-      <circle cx="20" cy="20" r="14" fill="none" stroke="#8fb4ff" stroke-width="0.8" opacity="0.5" />
-      <ellipse cx="20" cy="20" rx="18" ry="6" fill="none" stroke="#8fb4ff" stroke-width="0.8" opacity="0.6" transform="rotate(-20 20 20)" />
-      <circle cx="20" cy="20" r="3" fill="#f5c16c" />
-      <circle cx="20" cy="20" r="5" fill="none" stroke="#f5c16c" stroke-width="0.4" opacity="0.6" />
+    <svg width="32" height="32" viewBox="0 0 140 140" aria-hidden="true">
+      <circle cx="70" cy="70" r="54" fill="none" stroke="#8fb4ff" stroke-width="2.2" opacity="0.35"/>
+      <circle cx="70" cy="70" r="54" fill="none" stroke="#8fb4ff" stroke-width="2.2" stroke-dasharray="3 9" opacity="0.85"/>
+      <g stroke="#8fb4ff" stroke-width="2" opacity="0.85" stroke-linecap="round">
+        <line x1="70" y1="6" x2="70" y2="16"/>
+        <line x1="70" y1="124" x2="70" y2="134"/>
+        <line x1="6" y1="70" x2="16" y2="70"/>
+        <line x1="124" y1="70" x2="134" y2="70"/>
+      </g>
+      <g stroke="#8fb4ff" stroke-width="1.4" stroke-linecap="round">
+        <line x1="40" y1="55" x2="62" y2="42"/>
+        <line x1="62" y1="42" x2="86" y2="52"/>
+        <line x1="86" y1="52" x2="100" y2="78"/>
+        <line x1="62" y1="42" x2="68" y2="78"/>
+        <line x1="68" y1="78" x2="100" y2="78"/>
+        <line x1="68" y1="78" x2="50" y2="98"/>
+      </g>
+      <g>
+        <circle cx="40" cy="55" r="3" fill="#8fb4ff"/>
+        <circle cx="62" cy="42" r="4.2" fill="#f5c16c"/>
+        <circle cx="86" cy="52" r="3" fill="#ffffff"/>
+        <circle cx="100" cy="78" r="3.4" fill="#8fb4ff"/>
+        <circle cx="68" cy="78" r="3.8" fill="#ffffff"/>
+        <circle cx="50" cy="98" r="2.6" fill="#8fb4ff"/>
+      </g>
     </svg>
-    <span class="logo-text">Seizu <span class="ja">星図</span></span>
+    <span class="logo-text">Seizu<span class="ja">星図</span></span>
   </a>
   <div class="nav-links">
     <a href="{{ pathto('install/backend') }}">Docs</a>
@@ -912,13 +954,33 @@ RETURN u.arn, g.name, p.name</pre>
   <div class="footer-grid">
     <div>
       <a class="logo small" href="{{ pathto('index') }}">
-        <svg width="22" height="22" viewBox="0 0 40 40" aria-hidden="true">
-          <circle cx="20" cy="20" r="14" fill="none" stroke="#8fb4ff" stroke-width="0.8" opacity="0.5" />
-          <ellipse cx="20" cy="20" rx="18" ry="6" fill="none" stroke="#8fb4ff" stroke-width="0.8" opacity="0.6" transform="rotate(-20 20 20)" />
-          <circle cx="20" cy="20" r="3" fill="#f5c16c" />
-          <circle cx="20" cy="20" r="5" fill="none" stroke="#f5c16c" stroke-width="0.4" opacity="0.6" />
+        <svg width="32" height="32" viewBox="0 0 140 140" aria-hidden="true">
+          <circle cx="70" cy="70" r="54" fill="none" stroke="#8fb4ff" stroke-width="2.2" opacity="0.35"/>
+          <circle cx="70" cy="70" r="54" fill="none" stroke="#8fb4ff" stroke-width="2.2" stroke-dasharray="3 9" opacity="0.85"/>
+          <g stroke="#8fb4ff" stroke-width="2" opacity="0.85" stroke-linecap="round">
+            <line x1="70" y1="6" x2="70" y2="16"/>
+            <line x1="70" y1="124" x2="70" y2="134"/>
+            <line x1="6" y1="70" x2="16" y2="70"/>
+            <line x1="124" y1="70" x2="134" y2="70"/>
+          </g>
+          <g stroke="#8fb4ff" stroke-width="1.4" stroke-linecap="round">
+            <line x1="40" y1="55" x2="62" y2="42"/>
+            <line x1="62" y1="42" x2="86" y2="52"/>
+            <line x1="86" y1="52" x2="100" y2="78"/>
+            <line x1="62" y1="42" x2="68" y2="78"/>
+            <line x1="68" y1="78" x2="100" y2="78"/>
+            <line x1="68" y1="78" x2="50" y2="98"/>
+          </g>
+          <g>
+            <circle cx="40" cy="55" r="3" fill="#8fb4ff"/>
+            <circle cx="62" cy="42" r="4.2" fill="#f5c16c"/>
+            <circle cx="86" cy="52" r="3" fill="#ffffff"/>
+            <circle cx="100" cy="78" r="3.4" fill="#8fb4ff"/>
+            <circle cx="68" cy="78" r="3.8" fill="#ffffff"/>
+            <circle cx="50" cy="98" r="2.6" fill="#8fb4ff"/>
+          </g>
         </svg>
-        <span class="logo-text">Seizu <span class="ja">星図</span></span>
+        <span class="logo-text">Seizu<span class="ja">星図</span></span>
       </a>
       <p class="blurb">A star chart for your security graph. Open source under Apache 2.0.</p>
     </div>

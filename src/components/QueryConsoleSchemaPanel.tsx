@@ -17,6 +17,7 @@ import ExpandMore from '@mui/icons-material/ExpandMore';
 import History from '@mui/icons-material/History';
 import { useLazyCypherQuery } from 'src/hooks/useCypherQuery';
 import { colorForGroup } from 'src/components/reports/CypherGraph';
+import { chartPalette } from 'src/theme/brand';
 import QueryConsoleHistoryPanel from 'src/components/QueryConsoleHistoryPanel';
 
 const LABELS_QUERY = 'CALL db.labels() YIELD label RETURN label ORDER BY label';
@@ -45,6 +46,7 @@ export default function QueryConsoleSchemaPanel({
   historyRefreshTrigger
 }: QueryConsoleSchemaProps) {
   const theme = useTheme();
+  const graphPalette = theme.palette.mode === 'dark' ? chartPalette.dark : chartPalette.light;
   const [activeTab, setActiveTab] = useState<ActiveTab>('schema');
 
   const [runLabels, { records: labelRecords }] =
@@ -216,11 +218,11 @@ export default function QueryConsoleSchemaPanel({
                             width: 14,
                             height: 14,
                             borderRadius: '50%',
-                            bgcolor: colorForGroup(label),
+                            bgcolor: colorForGroup(label, graphPalette),
                             flexShrink: 0,
                             mr: 1,
                             border: `2px solid ${theme.palette.background.paper}`,
-                            boxShadow: `0 0 0 1px ${colorForGroup(label)}`
+                            boxShadow: `0 0 0 1px ${colorForGroup(label, graphPalette)}`
                           }}
                         />
                         <Typography variant="body2" noWrap>

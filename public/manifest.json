@@ -3,6 +3,12 @@
   "name": "Seizu",
   "icons": [
     {
+      "src": "favicon.svg",
+      "type": "image/svg+xml",
+      "sizes": "any",
+      "purpose": "any"
+    },
+    {
       "src": "favicon.png",
       "sizes": "64x64 32x32 24x24 16x16",
       "type": "image/png"
@@ -10,6 +16,6 @@
   ],
   "start_url": ".",
   "display": "standalone",
-  "theme_color": "#000000",
-  "background_color": "#ffffff"
+  "theme_color": "#0a0f22",
+  "background_color": "#0a0f22"
 }

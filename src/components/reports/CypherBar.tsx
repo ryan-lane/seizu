@@ -14,7 +14,7 @@ import { useTheme } from '@mui/material/styles';
 import Info from '@mui/icons-material/Info';
 import Error from '@mui/icons-material/Error';
 import { BarChart } from '@mui/x-charts/BarChart';
-import { blueberryTwilightPalette } from '@mui/x-charts/colorPalettes';
+import { chartColorsFor } from 'src/theme/brand';
 import { useLazyCypherQuery, QueryRecord } from 'src/hooks/useCypherQuery';
 import CypherDetails from 'src/components/reports/CypherDetails';
 import QueryValidationBadge from 'src/components/reports/QueryValidationBadge';
@@ -205,7 +205,7 @@ export default function CypherBar({
             label: caption ?? 'Value'
           }]}
           borderRadius={6}
-          colors={blueberryTwilightPalette}
+          colors={chartColorsFor(theme.palette.mode)}
           grid={{ horizontal: true }}
           hideLegend={!hasLegend}
           height={350}

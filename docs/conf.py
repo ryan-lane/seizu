@@ -137,8 +137,8 @@ html_theme = "shibuya"
 # documentation.
 html_theme_options = {
     "github_url": "https://github.com/mappedsky/seizu",
-    "light_logo": "_static/logo-horizontal-with-text-black.png",
-    "dark_logo": "_static/logo-horizontal-with-text-white.png",
+    "light_logo": "_static/logo-horizontal-black.svg",
+    "dark_logo": "_static/logo-horizontal-white.svg",
 }
 
 # The name for this set of Sphinx documents.
@@ -150,12 +150,12 @@ html_theme_options = {
 
 # The name of an image file (relative to this directory) to place at the top
 # of the sidebar.
-html_logo = "images/favicon.png"
+html_logo = "images/favicon.svg"
 
 # The name of an image file (relative to this directory) to use as a favicon of
 # the docs.  This file should be a Windows icon file (.ico) being 16x16 or 32x32
 # pixels large.
-html_favicon = "images/favicon.png"
+html_favicon = "images/favicon.svg"
 
 # Add any paths that contain custom static files (such as style sheets) here,
 # relative to this directory. They are copied after the builtin static files,
