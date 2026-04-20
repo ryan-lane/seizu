@@ -33,6 +33,16 @@ docker compose run --rm seizu pipenv install <package>
 > **Always `pipenv sync --dev` before pytest** — the `.venv` is project-dir-persisted and may be stale after new packages are added.
 > **After editing `Pipfile`**, run `docker compose run --rm seizu pipenv lock` then `make lock` to regenerate `requirements.txt`. Commit both `Pipfile` and `Pipfile.lock` together.
 
+### Docs (Sphinx)
+
+Docs have their own isolated virtualenv under `docs/.venv` with pinned deps in `docs/requirements.txt`. Sphinx and its extensions are **not** part of the main project's `Pipfile` — do not add them there. `docs/build.sh` bootstraps the venv on first run and is invoked by `make docs`.
+
+```bash
+make docs   # runs docs/build.sh on the host using docs/.venv
+```
+
+To add or update a docs dependency, edit `docs/requirements.txt` and re-run `make docs` (the venv will pick up the change on next `pip install`).
+
 ### Linting
 
 Run pre-commit **on the host** (the `seizu` container lacks git):
@@ -272,6 +282,12 @@ Action schemas served via `GET /api/v1/config` as `scheduled_query_action_schema
 | `cartography` | Graph data sync (profile: `nostart`) |
 
 Dev URLs: frontend `http://localhost:3000`, backend `http://localhost:8080`, Authentik `http://localhost:9000`.
+
+**Dockerfile stages:**
+- `base` — Python + pipenv + user setup + `Pipfile`/`Pipfile.lock` copied in. No deps installed.
+- `dev` — `pipenv install --system --dev`; used by `docker-compose.yml` (`target: dev`) for everything local.
+- `nodebuilder` — `oven/bun` image that produces the frontend build.
+- `production` — `pipenv install --system --deploy` (prod-only, strict lock) + built frontend. The published image (`publish.yml`) explicitly builds `target: production`, so pytest/pre-commit/etc. never ship.
 
 **Reset named volumes:**
 ```bash

@@ -95,7 +95,10 @@ build_cli:
 	docker compose run --rm seizu bash -c "pip install --quiet build && python -m build"
 
 .PHONY: docs
-docs: schema
+# Builds the Sphinx site via docs/build.sh, which uses its own isolated
+# virtualenv under docs/.venv. No schema generation is needed — the docs
+# do not consume the JSON schema anymore.
+docs:
 	@bash docs/build.sh
 
 .PHONY: bun
