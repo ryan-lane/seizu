@@ -14,7 +14,7 @@ import { useTheme } from '@mui/material/styles';
 import Info from '@mui/icons-material/Info';
 import Error from '@mui/icons-material/Error';
 import { PieChart } from '@mui/x-charts/PieChart';
-import { blueberryTwilightPalette } from '@mui/x-charts/colorPalettes';
+import { chartColorsFor } from 'src/theme/brand';
 import { useLazyCypherQuery, QueryRecord } from 'src/hooks/useCypherQuery';
 import CypherDetails from 'src/components/reports/CypherDetails';
 import QueryValidationBadge from 'src/components/reports/QueryValidationBadge';
@@ -186,7 +186,7 @@ export default function CypherPie({
             faded: { additionalRadius: -4, color: theme.palette.action.disabled },
             valueFormatter: (item) => String(item.value)
           }]}
-          colors={blueberryTwilightPalette}
+          colors={chartColorsFor(theme.palette.mode)}
           hideLegend={!hasLegend}
           height={350}
           margin={

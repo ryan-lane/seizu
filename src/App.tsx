@@ -7,6 +7,7 @@ import GlobalStyles from 'src/components/GlobalStyles';
 import AuthProvider from 'src/components/AuthProvider';
 import shadows from 'src/theme/shadows';
 import typography from 'src/theme/typography';
+import { brand } from 'src/theme/brand';
 import routes from 'src/routes';
 import { AuthConfigContext, type AuthConfig, type OidcConfig } from 'src/authConfig.context';
 import { createUserManager } from 'src/userManager';
@@ -35,13 +36,23 @@ function App() {
   const theme = useMemo(
     () =>
       createTheme({
-        palette: {
-          mode: prefersDarkMode ? 'dark' : 'light',
-          primary: {
-            contrastText: '#ffffff',
-            main: '#5664d2'
-          }
-        },
+        palette: prefersDarkMode
+          ? {
+              mode: 'dark',
+              primary: { main: brand.starlight, contrastText: brand.space },
+              secondary: { main: brand.ember, contrastText: brand.space },
+              background: { default: brand.space, paper: '#111a33' },
+              text: { primary: brand.paper, secondary: '#aab8d6' },
+              divider: 'rgba(143, 180, 255, 0.15)'
+            }
+          : {
+              mode: 'light',
+              primary: { main: brand.starlightDark, contrastText: '#ffffff' },
+              secondary: { main: brand.emberDark, contrastText: '#ffffff' },
+              background: { default: brand.paper, paper: '#ffffff' },
+              text: { primary: brand.space, secondary: '#3b4a6b' },
+              divider: 'rgba(58, 90, 165, 0.16)'
+            },
         shadows,
         typography
       }),

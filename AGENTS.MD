@@ -357,6 +357,63 @@ Strict mypy: `check_untyped_defs = true`, `disallow_untyped_defs = true`.
 - When touching existing `# type: ignore` comments, fix the underlying issue and remove them.
 - Use `typing.cast` only for known-safe invariants the type system can't express.
 
+## Branding
+
+Seizu's brand is a deep-space observatory: a dark navy canvas, starlight-blue as the primary accent, and an amber "ember" as the warm accent. The mark is a dashed-orbit ring wrapping a six-node constellation with one amber anchor star; the wordmark is **Manrope ExtraBold (800)** at tight tracking. The tagline is "A star chart for your security graph." When in doubt, stick to these tokens — don't introduce additional brand colors or fonts.
+
+### Color system
+
+| Token | Hex | RGB | Role |
+|---|---|---|---|
+| Space | `#0A0F22` | `rgb(10 15 34)` | Primary background (dark surfaces), body text on light surfaces |
+| Starlight | `#8FB4FF` | `rgb(143 180 255)` | Primary accent on dark. Shift to `#3A5AA5` on light surfaces for AAA contrast. |
+| Ember | `#F5C16C` | `rgb(245 193 108)` | Warm accent on dark. Shift to `#C77B2A` on light surfaces for AAA contrast. |
+| Paper | `#F5F6FB` | `rgb(245 246 251)` | Light surface (docs, README background) |
+
+Don't invent shades. If you need opacity variants of Starlight, use `rgba(143, 180, 255, <alpha>)` — the splash page uses `0.04 / 0.08 / 0.12 / 0.25` as the common rungs.
+
+**Extended constellation accents** — for charts and supporting UI. Each has a light tone for dark surfaces and an AAA-contrast dark tone for light surfaces. Defined in `src/theme/brand.ts`; don't add one-off colors for data viz, extend this list instead.
+
+| Name | On dark | On light |
+|---|---|---|
+| Aurora (teal-green) | `#7AD4B3` | `#2E8866` |
+| Pulsar (violet) | `#C9A8FF` | `#7352B8` |
+| Flare (coral) | `#F08B7B` | `#B5463A` |
+| Beacon (cyan) | `#5DD1F0` | `#1F7FA3` |
+
+`chartColorsFor(mode)` exposes an ordered 6-color palette (Starlight → Ember → Aurora → Pulsar → Flare → Beacon) that MUI X Charts cycles through; both `CypherBar` and `CypherPie` consume it. Keep new chart components on this palette rather than bringing in MUI's stock `colorPalettes`.
+
+### Typography
+
+- **Wordmark:** Manrope 800, `letter-spacing: -0.04em` to `-0.05em` (tighter at larger sizes). Only used inside the Seizu logo/lockup.
+- **Display (headings, taglines):** Instrument Serif 400 — for the web app and brand collateral. The docs splash page opts into EB Garamond italic for editorial tone; both are sanctioned.
+- **UI / body:** Inter (web app), IBM Plex Sans (docs splash). Don't mix across a single surface.
+- **Mono (code, tags, mono labels):** JetBrains Mono.
+
+All four fonts are loaded from Google Fonts; the docs splash already preconnects. New pages should preconnect `https://fonts.googleapis.com` + `https://fonts.gstatic.com` before the stylesheet.
+
+### Logo assets
+
+The canonical SVGs live in two places: `public/static/images/` (served by the React app at `/static/images/`) and `images/` (top-level; `docs/root/images` is a symlink, so docs pick these up automatically, and the GitHub README links them via `/images/...`). Keep the two copies in sync when updating the mark.
+
+| File | When to use |
+|---|---|
+| `favicon.svg` (`public/` + `images/`) | Browser tab + PWA icon. Simplified form: orbit ring + amber core on Space fill. |
+| `logo-horizontal-white.svg` | Full lockup on dark surfaces (navbar, dark README, splash). |
+| `logo-horizontal-black.svg` | Full lockup on light surfaces (docs light mode, README light mode). |
+| `logo-mark.svg` | Mark-only on dark surfaces (social avatars, OG cards). |
+| `logo-mark-light.svg` | Mark-only on light surfaces. |
+
+**Favicon fallback:** `public/favicon.png` is kept only as a legacy fallback for browsers without SVG favicon support. Modern paths reference `favicon.svg` first via `<link rel="icon" type="image/svg+xml">`. Regenerating the PNG to match the new mark is a TODO — no tooling is wired into this repo yet.
+
+**Mark geometry (for reference, don't redraw from scratch):** `viewBox="0 0 140 140"`, orbit `r=54` centered at `(70,70)`, crosshair ticks at 12/3/6/9 o'clock, six constellation nodes at `(40,55)`, `(62,42)`, `(86,52)`, `(100,78)`, `(68,78)`, `(50,98)`. The amber anchor is the `(62,42)` node. At sub-24px, drop the constellation and use orbit ring + amber core only.
+
+### Where these tokens show up today
+
+- **Reporting app** — `src/components/Logo.tsx` (horizontal white lockup), `public/favicon.svg`, `public/manifest.json` (`theme_color: #0a0f22`), `index.html` meta. MUI theme and component styles don't inherit these yet; introduce them deliberately when touching theme code.
+- **Docs (Sphinx)** — `docs/conf.py` wires `html_logo`, `html_favicon`, and Shibuya `light_logo`/`dark_logo`. The splash template `docs/root/_templates/splash.html` declares `--brand-space / --brand-starlight / --brand-ember / --brand-paper` custom properties at `:root`; reuse those rather than hardcoding hex in new CSS.
+- **README.md** — references `/images/logo-horizontal-{black,white}.svg` with GitHub's `#gh-{light,dark}-mode-only` fragments.
+
 ## Frontend Style Guide
 
 ### List Views
