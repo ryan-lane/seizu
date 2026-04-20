@@ -121,7 +121,6 @@ _VALID_TOOL_BODY = {
 
 
 async def test_list_toolsets_success(mocker):
-    mocker.patch("reporting.settings.CSRF_DISABLE", True)
     mocker.patch(
         "reporting.routes.toolsets.report_store.list_toolsets",
         new=AsyncMock(return_value=[_toolset_item()]),
@@ -139,7 +138,6 @@ async def test_list_toolsets_success(mocker):
 
 
 async def test_list_toolsets_empty(mocker):
-    mocker.patch("reporting.settings.CSRF_DISABLE", True)
     mocker.patch(
         "reporting.routes.toolsets.report_store.list_toolsets",
         new=AsyncMock(return_value=[]),
@@ -159,7 +157,6 @@ async def test_list_toolsets_empty(mocker):
 
 
 async def test_create_toolset_success(mocker):
-    mocker.patch("reporting.settings.CSRF_DISABLE", True)
     mocker.patch(
         "reporting.routes.toolsets.report_store.create_toolset",
         new=AsyncMock(return_value=_toolset_item()),
@@ -174,7 +171,6 @@ async def test_create_toolset_success(mocker):
 
 
 async def test_create_toolset_invalid_body(mocker):
-    mocker.patch("reporting.settings.CSRF_DISABLE", True)
     app = _make_app()
     async with AsyncClient(
         transport=ASGITransport(app=app), base_url="http://test"
@@ -189,7 +185,6 @@ async def test_create_toolset_invalid_body(mocker):
 
 
 async def test_get_toolset_success(mocker):
-    mocker.patch("reporting.settings.CSRF_DISABLE", True)
     mocker.patch(
         "reporting.routes.toolsets.report_store.get_toolset",
         new=AsyncMock(return_value=_toolset_item()),
@@ -204,7 +199,6 @@ async def test_get_toolset_success(mocker):
 
 
 async def test_get_toolset_not_found(mocker):
-    mocker.patch("reporting.settings.CSRF_DISABLE", True)
     mocker.patch(
         "reporting.routes.toolsets.report_store.get_toolset",
         new=AsyncMock(return_value=None),
@@ -224,7 +218,6 @@ async def test_get_toolset_not_found(mocker):
 
 
 async def test_update_toolset_success(mocker):
-    mocker.patch("reporting.settings.CSRF_DISABLE", True)
     mocker.patch(
         "reporting.routes.toolsets.report_store.update_toolset",
         new=AsyncMock(return_value=_toolset_item(version=2)),
@@ -240,7 +233,6 @@ async def test_update_toolset_success(mocker):
 
 
 async def test_update_toolset_not_found(mocker):
-    mocker.patch("reporting.settings.CSRF_DISABLE", True)
     mocker.patch(
         "reporting.routes.toolsets.report_store.update_toolset",
         new=AsyncMock(return_value=None),
@@ -259,7 +251,6 @@ async def test_update_toolset_not_found(mocker):
 
 
 async def test_delete_toolset_success(mocker):
-    mocker.patch("reporting.settings.CSRF_DISABLE", True)
     mocker.patch(
         "reporting.routes.toolsets.report_store.delete_toolset",
         new=AsyncMock(return_value=True),
@@ -274,7 +265,6 @@ async def test_delete_toolset_success(mocker):
 
 
 async def test_delete_toolset_not_found(mocker):
-    mocker.patch("reporting.settings.CSRF_DISABLE", True)
     mocker.patch(
         "reporting.routes.toolsets.report_store.delete_toolset",
         new=AsyncMock(return_value=False),
@@ -293,7 +283,6 @@ async def test_delete_toolset_not_found(mocker):
 
 
 async def test_list_toolset_versions_success(mocker):
-    mocker.patch("reporting.settings.CSRF_DISABLE", True)
     mocker.patch(
         "reporting.routes.toolsets.report_store.get_toolset",
         new=AsyncMock(return_value=_toolset_item()),
@@ -313,7 +302,6 @@ async def test_list_toolset_versions_success(mocker):
 
 
 async def test_list_toolset_versions_toolset_not_found(mocker):
-    mocker.patch("reporting.settings.CSRF_DISABLE", True)
     mocker.patch(
         "reporting.routes.toolsets.report_store.get_toolset",
         new=AsyncMock(return_value=None),
@@ -332,7 +320,6 @@ async def test_list_toolset_versions_toolset_not_found(mocker):
 
 
 async def test_get_toolset_version_success(mocker):
-    mocker.patch("reporting.settings.CSRF_DISABLE", True)
     mocker.patch(
         "reporting.routes.toolsets.report_store.get_toolset_version",
         new=AsyncMock(return_value=_toolset_version()),
@@ -347,7 +334,6 @@ async def test_get_toolset_version_success(mocker):
 
 
 async def test_get_toolset_version_not_found(mocker):
-    mocker.patch("reporting.settings.CSRF_DISABLE", True)
     mocker.patch(
         "reporting.routes.toolsets.report_store.get_toolset_version",
         new=AsyncMock(return_value=None),
@@ -366,7 +352,6 @@ async def test_get_toolset_version_not_found(mocker):
 
 
 async def test_list_tools_success(mocker):
-    mocker.patch("reporting.settings.CSRF_DISABLE", True)
     mocker.patch(
         "reporting.routes.toolsets.report_store.get_toolset",
         new=AsyncMock(return_value=_toolset_item()),
@@ -386,7 +371,6 @@ async def test_list_tools_success(mocker):
 
 
 async def test_list_tools_toolset_not_found(mocker):
-    mocker.patch("reporting.settings.CSRF_DISABLE", True)
     mocker.patch(
         "reporting.routes.toolsets.report_store.get_toolset",
         new=AsyncMock(return_value=None),
@@ -405,7 +389,6 @@ async def test_list_tools_toolset_not_found(mocker):
 
 
 async def test_create_tool_success(mocker):
-    mocker.patch("reporting.settings.CSRF_DISABLE", True)
     mocker.patch(
         "reporting.routes.toolsets.validate_query",
         new=AsyncMock(return_value=ValidationResult()),
@@ -426,7 +409,6 @@ async def test_create_tool_success(mocker):
 
 
 async def test_create_tool_cypher_validation_error(mocker):
-    mocker.patch("reporting.settings.CSRF_DISABLE", True)
     mocker.patch(
         "reporting.routes.toolsets.validate_query",
         new=AsyncMock(
@@ -446,7 +428,6 @@ async def test_create_tool_cypher_validation_error(mocker):
 
 
 async def test_create_tool_toolset_not_found(mocker):
-    mocker.patch("reporting.settings.CSRF_DISABLE", True)
     mocker.patch(
         "reporting.routes.toolsets.validate_query",
         new=AsyncMock(return_value=ValidationResult()),
@@ -466,7 +447,6 @@ async def test_create_tool_toolset_not_found(mocker):
 
 
 async def test_create_tool_invalid_body(mocker):
-    mocker.patch("reporting.settings.CSRF_DISABLE", True)
     app = _make_app()
     async with AsyncClient(
         transport=ASGITransport(app=app), base_url="http://test"
@@ -483,7 +463,6 @@ async def test_create_tool_invalid_body(mocker):
 
 
 async def test_get_tool_success(mocker):
-    mocker.patch("reporting.settings.CSRF_DISABLE", True)
     mocker.patch(
         "reporting.routes.toolsets.report_store.get_tool",
         new=AsyncMock(return_value=_tool_item()),
@@ -498,7 +477,6 @@ async def test_get_tool_success(mocker):
 
 
 async def test_get_tool_not_found(mocker):
-    mocker.patch("reporting.settings.CSRF_DISABLE", True)
     mocker.patch(
         "reporting.routes.toolsets.report_store.get_tool",
         new=AsyncMock(return_value=None),
@@ -512,7 +490,6 @@ async def test_get_tool_not_found(mocker):
 
 
 async def test_get_tool_wrong_toolset(mocker):
-    mocker.patch("reporting.settings.CSRF_DISABLE", True)
     mocker.patch(
         "reporting.routes.toolsets.report_store.get_tool",
         new=AsyncMock(return_value=_tool_item(ts_id="other-toolset")),
@@ -531,7 +508,6 @@ async def test_get_tool_wrong_toolset(mocker):
 
 
 async def test_update_tool_success(mocker):
-    mocker.patch("reporting.settings.CSRF_DISABLE", True)
     mocker.patch(
         "reporting.routes.toolsets.report_store.get_tool",
         new=AsyncMock(return_value=_tool_item()),
@@ -555,7 +531,6 @@ async def test_update_tool_success(mocker):
 
 
 async def test_update_tool_not_found(mocker):
-    mocker.patch("reporting.settings.CSRF_DISABLE", True)
     mocker.patch(
         "reporting.routes.toolsets.report_store.get_tool",
         new=AsyncMock(return_value=None),
@@ -571,7 +546,6 @@ async def test_update_tool_not_found(mocker):
 
 
 async def test_update_tool_cypher_validation_error(mocker):
-    mocker.patch("reporting.settings.CSRF_DISABLE", True)
     mocker.patch(
         "reporting.routes.toolsets.report_store.get_tool",
         new=AsyncMock(return_value=_tool_item()),
@@ -599,7 +573,6 @@ async def test_update_tool_cypher_validation_error(mocker):
 
 
 async def test_delete_tool_success(mocker):
-    mocker.patch("reporting.settings.CSRF_DISABLE", True)
     mocker.patch(
         "reporting.routes.toolsets.report_store.get_tool",
         new=AsyncMock(return_value=_tool_item()),
@@ -618,7 +591,6 @@ async def test_delete_tool_success(mocker):
 
 
 async def test_delete_tool_not_found(mocker):
-    mocker.patch("reporting.settings.CSRF_DISABLE", True)
     mocker.patch(
         "reporting.routes.toolsets.report_store.get_tool",
         new=AsyncMock(return_value=None),
@@ -637,7 +609,6 @@ async def test_delete_tool_not_found(mocker):
 
 
 async def test_list_tool_versions_success(mocker):
-    mocker.patch("reporting.settings.CSRF_DISABLE", True)
     mocker.patch(
         "reporting.routes.toolsets.report_store.get_tool",
         new=AsyncMock(return_value=_tool_item()),
@@ -657,7 +628,6 @@ async def test_list_tool_versions_success(mocker):
 
 
 async def test_list_tool_versions_tool_not_found(mocker):
-    mocker.patch("reporting.settings.CSRF_DISABLE", True)
     mocker.patch(
         "reporting.routes.toolsets.report_store.get_tool",
         new=AsyncMock(return_value=None),
@@ -676,7 +646,6 @@ async def test_list_tool_versions_tool_not_found(mocker):
 
 
 async def test_get_tool_version_success(mocker):
-    mocker.patch("reporting.settings.CSRF_DISABLE", True)
     mocker.patch(
         "reporting.routes.toolsets.report_store.get_tool_version",
         new=AsyncMock(return_value=_tool_version()),
@@ -691,7 +660,6 @@ async def test_get_tool_version_success(mocker):
 
 
 async def test_get_tool_version_not_found(mocker):
-    mocker.patch("reporting.settings.CSRF_DISABLE", True)
     mocker.patch(
         "reporting.routes.toolsets.report_store.get_tool_version",
         new=AsyncMock(return_value=None),
@@ -712,7 +680,6 @@ async def test_get_tool_version_not_found(mocker):
 
 
 async def test_call_tool_success(mocker):
-    mocker.patch("reporting.settings.CSRF_DISABLE", True)
     mocker.patch(
         "reporting.routes.toolsets.report_store.get_tool",
         new=AsyncMock(return_value=_tool_item()),
@@ -734,7 +701,6 @@ async def test_call_tool_success(mocker):
 
 
 async def test_call_tool_with_arguments(mocker):
-    mocker.patch("reporting.settings.CSRF_DISABLE", True)
     mocker.patch(
         "reporting.routes.toolsets.report_store.get_tool",
         new=AsyncMock(return_value=_tool_item()),
@@ -758,7 +724,6 @@ async def test_call_tool_with_arguments(mocker):
 
 
 async def test_call_tool_not_found(mocker):
-    mocker.patch("reporting.settings.CSRF_DISABLE", True)
     mocker.patch(
         "reporting.routes.toolsets.report_store.get_tool",
         new=AsyncMock(return_value=None),
@@ -775,7 +740,6 @@ async def test_call_tool_not_found(mocker):
 
 
 async def test_call_tool_wrong_toolset(mocker):
-    mocker.patch("reporting.settings.CSRF_DISABLE", True)
     mocker.patch(
         "reporting.routes.toolsets.report_store.get_tool",
         new=AsyncMock(return_value=_tool_item(ts_id="other-toolset")),
@@ -792,7 +756,6 @@ async def test_call_tool_wrong_toolset(mocker):
 
 
 async def test_call_tool_disabled(mocker):
-    mocker.patch("reporting.settings.CSRF_DISABLE", True)
     disabled = _tool_item()
     disabled.enabled = False
     mocker.patch(
@@ -812,7 +775,6 @@ async def test_call_tool_disabled(mocker):
 
 
 async def test_call_tool_execution_error(mocker):
-    mocker.patch("reporting.settings.CSRF_DISABLE", True)
     mocker.patch(
         "reporting.routes.toolsets.report_store.get_tool",
         new=AsyncMock(return_value=_tool_item()),
@@ -833,7 +795,6 @@ async def test_call_tool_execution_error(mocker):
 
 
 async def test_get_tool_version_wrong_toolset(mocker):
-    mocker.patch("reporting.settings.CSRF_DISABLE", True)
     mocker.patch(
         "reporting.routes.toolsets.report_store.get_tool_version",
         new=AsyncMock(return_value=_tool_version(ts_id="other-toolset")),

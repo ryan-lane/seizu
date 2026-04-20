@@ -29,10 +29,6 @@ const HISTORY_PAGE = {
 describe('useQueryHistory', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    Object.defineProperty(document, 'cookie', {
-      writable: true,
-      value: '_csrf_token=testtoken'
-    });
   });
 
   it('does not fetch when auth_required and accessToken is null', () => {

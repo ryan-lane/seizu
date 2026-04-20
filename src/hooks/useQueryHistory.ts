@@ -22,15 +22,6 @@ interface HistoryState {
   data: QueryHistoryPage | null;
 }
 
-function getCsrfToken(): string {
-  return (
-    document.cookie
-      .split('; ')
-      .find((row) => row.startsWith('_csrf_token='))
-      ?.split('=')[1] || ''
-  );
-}
-
 export function useQueryHistory() {
   const { accessToken } = useContext(AuthContext);
   const { auth_required } = useContext(AuthConfigContext);
@@ -45,9 +36,7 @@ export function useQueryHistory() {
       if (auth_required && !accessToken) return;
       setState((s) => ({ ...s, loading: true, error: null }));
 
-      const headers: Record<string, string> = {
-        'X-CSRFToken': getCsrfToken()
-      };
+      const headers: Record<string, string> = {};
       if (accessToken) {
         headers.Authorization = `Bearer ${accessToken}`;
       }

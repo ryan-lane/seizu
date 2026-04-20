@@ -13,15 +13,6 @@ interface QueryState {
   queryErrors: string[];
 }
 
-function getCsrfToken(): string {
-  return (
-    document.cookie
-      .split('; ')
-      .find((row) => row.startsWith('_csrf_token='))
-      ?.split('=')[1] || ''
-  );
-}
-
 export function useLazyCypherQuery(
   cypher?: string,
   saveHistory: boolean = false
@@ -45,8 +36,7 @@ export function useLazyCypherQuery(
       setState({ loading: true, error: null, records: undefined, first: undefined, warnings: [], queryErrors: [] });
 
       const headers: Record<string, string> = {
-        'Content-Type': 'application/json',
-        'X-CSRFToken': getCsrfToken()
+        'Content-Type': 'application/json'
       };
       if (accessToken) {
         headers['Authorization'] = `Bearer ${accessToken}`;

@@ -64,7 +64,6 @@ def _make_app(current_user: CurrentUser = _ADMIN_USER) -> object:
 
 
 async def test_list_builtin_roles(mocker):
-    mocker.patch("reporting.settings.CSRF_DISABLE", True)
     app = _make_app()
     async with AsyncClient(
         transport=ASGITransport(app=app), base_url="http://test"
@@ -78,7 +77,6 @@ async def test_list_builtin_roles(mocker):
 
 
 async def test_list_builtin_roles_includes_permissions(mocker):
-    mocker.patch("reporting.settings.CSRF_DISABLE", True)
     app = _make_app()
     async with AsyncClient(
         transport=ASGITransport(app=app), base_url="http://test"
@@ -91,7 +89,6 @@ async def test_list_builtin_roles_includes_permissions(mocker):
 
 
 async def test_list_builtin_roles_forbidden_without_permission(mocker):
-    mocker.patch("reporting.settings.CSRF_DISABLE", True)
     app = _make_app(
         current_user=CurrentUser(
             user=_FAKE_USER, jwt_claims={}, permissions=frozenset()
@@ -110,7 +107,6 @@ async def test_list_builtin_roles_forbidden_without_permission(mocker):
 
 
 async def test_list_roles(mocker):
-    mocker.patch("reporting.settings.CSRF_DISABLE", True)
     mocker.patch(
         "reporting.routes.roles.report_store.list_roles",
         new=AsyncMock(return_value=[_FAKE_ROLE]),
@@ -126,7 +122,6 @@ async def test_list_roles(mocker):
 
 
 async def test_list_roles_empty(mocker):
-    mocker.patch("reporting.settings.CSRF_DISABLE", True)
     mocker.patch(
         "reporting.routes.roles.report_store.list_roles",
         new=AsyncMock(return_value=[]),
@@ -141,7 +136,6 @@ async def test_list_roles_empty(mocker):
 
 
 async def test_list_roles_forbidden_without_permission(mocker):
-    mocker.patch("reporting.settings.CSRF_DISABLE", True)
     app = _make_app(
         current_user=CurrentUser(
             user=_FAKE_USER, jwt_claims={}, permissions=frozenset()
@@ -160,7 +154,6 @@ async def test_list_roles_forbidden_without_permission(mocker):
 
 
 async def test_create_role(mocker):
-    mocker.patch("reporting.settings.CSRF_DISABLE", True)
     mocker.patch(
         "reporting.routes.roles.report_store.create_role",
         new=AsyncMock(return_value=_FAKE_ROLE),
@@ -179,7 +172,6 @@ async def test_create_role(mocker):
 
 
 async def test_create_role_forbidden_for_viewer(mocker):
-    mocker.patch("reporting.settings.CSRF_DISABLE", True)
     app = _make_app(current_user=_VIEWER_USER)
     async with AsyncClient(
         transport=ASGITransport(app=app), base_url="http://test"
@@ -197,7 +189,6 @@ async def test_create_role_forbidden_for_viewer(mocker):
 
 
 async def test_get_role(mocker):
-    mocker.patch("reporting.settings.CSRF_DISABLE", True)
     mocker.patch(
         "reporting.routes.roles.report_store.get_role",
         new=AsyncMock(return_value=_FAKE_ROLE),
@@ -212,7 +203,6 @@ async def test_get_role(mocker):
 
 
 async def test_get_role_not_found(mocker):
-    mocker.patch("reporting.settings.CSRF_DISABLE", True)
     mocker.patch(
         "reporting.routes.roles.report_store.get_role",
         new=AsyncMock(return_value=None),
@@ -231,7 +221,6 @@ async def test_get_role_not_found(mocker):
 
 
 async def test_update_role(mocker):
-    mocker.patch("reporting.settings.CSRF_DISABLE", True)
     updated = _FAKE_ROLE.model_copy(update={"name": "Updated Role"})
     mocker.patch(
         "reporting.routes.roles.report_store.update_role",
@@ -250,7 +239,6 @@ async def test_update_role(mocker):
 
 
 async def test_update_role_not_found(mocker):
-    mocker.patch("reporting.settings.CSRF_DISABLE", True)
     mocker.patch(
         "reporting.routes.roles.report_store.update_role",
         new=AsyncMock(return_value=None),
@@ -267,7 +255,6 @@ async def test_update_role_not_found(mocker):
 
 
 async def test_update_role_forbidden_for_viewer(mocker):
-    mocker.patch("reporting.settings.CSRF_DISABLE", True)
     app = _make_app(current_user=_VIEWER_USER)
     async with AsyncClient(
         transport=ASGITransport(app=app), base_url="http://test"
@@ -285,7 +272,6 @@ async def test_update_role_forbidden_for_viewer(mocker):
 
 
 async def test_delete_role(mocker):
-    mocker.patch("reporting.settings.CSRF_DISABLE", True)
     mocker.patch(
         "reporting.routes.roles.report_store.delete_role",
         new=AsyncMock(return_value=True),
@@ -300,7 +286,6 @@ async def test_delete_role(mocker):
 
 
 async def test_delete_role_not_found(mocker):
-    mocker.patch("reporting.settings.CSRF_DISABLE", True)
     mocker.patch(
         "reporting.routes.roles.report_store.delete_role",
         new=AsyncMock(return_value=False),
@@ -314,7 +299,6 @@ async def test_delete_role_not_found(mocker):
 
 
 async def test_delete_role_forbidden_for_viewer(mocker):
-    mocker.patch("reporting.settings.CSRF_DISABLE", True)
     app = _make_app(current_user=_VIEWER_USER)
     async with AsyncClient(
         transport=ASGITransport(app=app), base_url="http://test"
@@ -329,7 +313,6 @@ async def test_delete_role_forbidden_for_viewer(mocker):
 
 
 async def test_list_role_versions(mocker):
-    mocker.patch("reporting.settings.CSRF_DISABLE", True)
     mocker.patch(
         "reporting.routes.roles.report_store.get_role",
         new=AsyncMock(return_value=_FAKE_ROLE),
@@ -349,7 +332,6 @@ async def test_list_role_versions(mocker):
 
 
 async def test_list_role_versions_role_not_found(mocker):
-    mocker.patch("reporting.settings.CSRF_DISABLE", True)
     mocker.patch(
         "reporting.routes.roles.report_store.get_role",
         new=AsyncMock(return_value=None),
@@ -368,7 +350,6 @@ async def test_list_role_versions_role_not_found(mocker):
 
 
 async def test_get_role_version(mocker):
-    mocker.patch("reporting.settings.CSRF_DISABLE", True)
     mocker.patch(
         "reporting.routes.roles.report_store.get_role_version",
         new=AsyncMock(return_value=_FAKE_ROLE_VERSION),
@@ -384,7 +365,6 @@ async def test_get_role_version(mocker):
 
 
 async def test_get_role_version_not_found(mocker):
-    mocker.patch("reporting.settings.CSRF_DISABLE", True)
     mocker.patch(
         "reporting.routes.roles.report_store.get_role_version",
         new=AsyncMock(return_value=None),

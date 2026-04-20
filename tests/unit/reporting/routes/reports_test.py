@@ -60,7 +60,6 @@ def _report_version(report_id="rid1", version=1):
 
 
 async def test_list_reports_success(mocker):
-    mocker.patch("reporting.settings.CSRF_DISABLE", True)
     mocker.patch(
         "reporting.routes.reports.report_store.list_reports",
         new=AsyncMock(return_value=[_report_list_item()]),
@@ -79,7 +78,6 @@ async def test_list_reports_success(mocker):
 
 
 async def test_list_reports_empty(mocker):
-    mocker.patch("reporting.settings.CSRF_DISABLE", True)
     mocker.patch(
         "reporting.routes.reports.report_store.list_reports",
         new=AsyncMock(return_value=[]),
@@ -99,7 +97,6 @@ async def test_list_reports_empty(mocker):
 
 
 async def test_get_dashboard_report_success(mocker):
-    mocker.patch("reporting.settings.CSRF_DISABLE", True)
     mocker.patch(
         "reporting.routes.reports.report_store.get_dashboard_report",
         new=AsyncMock(return_value=_report_version()),
@@ -115,7 +112,6 @@ async def test_get_dashboard_report_success(mocker):
 
 
 async def test_get_dashboard_report_not_configured(mocker):
-    mocker.patch("reporting.settings.CSRF_DISABLE", True)
     mocker.patch(
         "reporting.routes.reports.report_store.get_dashboard_report",
         new=AsyncMock(return_value=None),
@@ -135,7 +131,6 @@ async def test_get_dashboard_report_not_configured(mocker):
 
 
 async def test_set_dashboard_report_success(mocker):
-    mocker.patch("reporting.settings.CSRF_DISABLE", True)
     mocker.patch(
         "reporting.routes.reports.report_store.set_dashboard_report",
         new=AsyncMock(return_value=True),
@@ -150,7 +145,6 @@ async def test_set_dashboard_report_success(mocker):
 
 
 async def test_set_dashboard_report_not_found(mocker):
-    mocker.patch("reporting.settings.CSRF_DISABLE", True)
     mocker.patch(
         "reporting.routes.reports.report_store.set_dashboard_report",
         new=AsyncMock(return_value=False),
@@ -170,7 +164,6 @@ async def test_set_dashboard_report_not_found(mocker):
 
 
 async def test_get_report_success(mocker):
-    mocker.patch("reporting.settings.CSRF_DISABLE", True)
     mocker.patch(
         "reporting.routes.reports.report_store.get_report_latest",
         new=AsyncMock(return_value=_report_version()),
@@ -187,7 +180,6 @@ async def test_get_report_success(mocker):
 
 
 async def test_get_report_not_found(mocker):
-    mocker.patch("reporting.settings.CSRF_DISABLE", True)
     mocker.patch(
         "reporting.routes.reports.report_store.get_report_latest",
         new=AsyncMock(return_value=None),
@@ -207,7 +199,6 @@ async def test_get_report_not_found(mocker):
 
 
 async def test_list_versions_success(mocker):
-    mocker.patch("reporting.settings.CSRF_DISABLE", True)
     mocker.patch(
         "reporting.routes.reports.report_store.list_report_versions",
         new=AsyncMock(
@@ -227,7 +218,6 @@ async def test_list_versions_success(mocker):
 
 
 async def test_list_versions_report_not_found(mocker):
-    mocker.patch("reporting.settings.CSRF_DISABLE", True)
     mocker.patch(
         "reporting.routes.reports.report_store.list_report_versions",
         new=AsyncMock(return_value=[]),
@@ -246,7 +236,6 @@ async def test_list_versions_report_not_found(mocker):
 
 
 async def test_get_version_success(mocker):
-    mocker.patch("reporting.settings.CSRF_DISABLE", True)
     mocker.patch(
         "reporting.routes.reports.report_store.get_report_version",
         new=AsyncMock(return_value=_report_version(version=3)),
@@ -261,7 +250,6 @@ async def test_get_version_success(mocker):
 
 
 async def test_get_version_not_found(mocker):
-    mocker.patch("reporting.settings.CSRF_DISABLE", True)
     mocker.patch(
         "reporting.routes.reports.report_store.get_report_version",
         new=AsyncMock(return_value=None),
@@ -281,7 +269,6 @@ async def test_get_version_not_found(mocker):
 
 
 async def test_create_report_success(mocker):
-    mocker.patch("reporting.settings.CSRF_DISABLE", True)
     mocker.patch(
         "reporting.routes.reports.report_store.create_report",
         new=AsyncMock(return_value=_report_list_item()),
@@ -298,7 +285,6 @@ async def test_create_report_success(mocker):
 
 
 async def test_create_report_passes_fields_to_service(mocker):
-    mocker.patch("reporting.settings.CSRF_DISABLE", True)
     mock_create = mocker.patch(
         "reporting.routes.reports.report_store.create_report",
         new=AsyncMock(return_value=_report_list_item()),
@@ -315,7 +301,6 @@ async def test_create_report_passes_fields_to_service(mocker):
 
 
 async def test_create_report_missing_required_fields(mocker):
-    mocker.patch("reporting.settings.CSRF_DISABLE", True)
     app = _make_app()
     async with AsyncClient(
         transport=ASGITransport(app=app), base_url="http://test"
@@ -325,7 +310,6 @@ async def test_create_report_missing_required_fields(mocker):
 
 
 async def test_create_report_non_json_body(mocker):
-    mocker.patch("reporting.settings.CSRF_DISABLE", True)
     app = _make_app()
     async with AsyncClient(
         transport=ASGITransport(app=app), base_url="http://test"
@@ -344,7 +328,6 @@ async def test_create_report_non_json_body(mocker):
 
 
 async def test_create_version_success(mocker):
-    mocker.patch("reporting.settings.CSRF_DISABLE", True)
     mocker.patch(
         "reporting.routes.reports.report_store.save_report_version",
         new=AsyncMock(return_value=_report_version(version=2)),
@@ -362,7 +345,6 @@ async def test_create_version_success(mocker):
 
 
 async def test_create_version_passes_fields_to_service(mocker):
-    mocker.patch("reporting.settings.CSRF_DISABLE", True)
     mock_save = mocker.patch(
         "reporting.routes.reports.report_store.save_report_version",
         new=AsyncMock(return_value=_report_version(version=2)),
@@ -384,7 +366,6 @@ async def test_create_version_passes_fields_to_service(mocker):
 
 
 async def test_create_version_report_not_found(mocker):
-    mocker.patch("reporting.settings.CSRF_DISABLE", True)
     mocker.patch(
         "reporting.routes.reports.report_store.save_report_version",
         new=AsyncMock(return_value=None),
@@ -402,7 +383,6 @@ async def test_create_version_report_not_found(mocker):
 
 
 async def test_create_version_missing_config_field(mocker):
-    mocker.patch("reporting.settings.CSRF_DISABLE", True)
     app = _make_app()
     async with AsyncClient(
         transport=ASGITransport(app=app), base_url="http://test"
@@ -415,7 +395,6 @@ async def test_create_version_missing_config_field(mocker):
 
 
 async def test_create_version_non_json_body(mocker):
-    mocker.patch("reporting.settings.CSRF_DISABLE", True)
     app = _make_app()
     async with AsyncClient(
         transport=ASGITransport(app=app), base_url="http://test"
@@ -434,7 +413,6 @@ async def test_create_version_non_json_body(mocker):
 
 
 async def test_delete_report_success(mocker):
-    mocker.patch("reporting.settings.CSRF_DISABLE", True)
     mocker.patch(
         "reporting.routes.reports.report_store.delete_report",
         new=AsyncMock(return_value=True),
@@ -449,7 +427,6 @@ async def test_delete_report_success(mocker):
 
 
 async def test_delete_report_not_found(mocker):
-    mocker.patch("reporting.settings.CSRF_DISABLE", True)
     mocker.patch(
         "reporting.routes.reports.report_store.delete_report",
         new=AsyncMock(return_value=False),
@@ -469,7 +446,6 @@ async def test_delete_report_not_found(mocker):
 
 
 async def test_pin_report_success(mocker):
-    mocker.patch("reporting.settings.CSRF_DISABLE", True)
     mocker.patch(
         "reporting.routes.reports.report_store.pin_report",
         new=AsyncMock(return_value=True),
@@ -484,7 +460,6 @@ async def test_pin_report_success(mocker):
 
 
 async def test_unpin_report_success(mocker):
-    mocker.patch("reporting.settings.CSRF_DISABLE", True)
     mocker.patch(
         "reporting.routes.reports.report_store.pin_report",
         new=AsyncMock(return_value=True),
@@ -499,7 +474,6 @@ async def test_unpin_report_success(mocker):
 
 
 async def test_pin_report_passes_fields_to_service(mocker):
-    mocker.patch("reporting.settings.CSRF_DISABLE", True)
     mock_pin = mocker.patch(
         "reporting.routes.reports.report_store.pin_report",
         new=AsyncMock(return_value=True),
@@ -513,7 +487,6 @@ async def test_pin_report_passes_fields_to_service(mocker):
 
 
 async def test_pin_report_not_found(mocker):
-    mocker.patch("reporting.settings.CSRF_DISABLE", True)
     mocker.patch(
         "reporting.routes.reports.report_store.pin_report",
         new=AsyncMock(return_value=False),
@@ -528,7 +501,6 @@ async def test_pin_report_not_found(mocker):
 
 
 async def test_pin_report_missing_body(mocker):
-    mocker.patch("reporting.settings.CSRF_DISABLE", True)
     app = _make_app()
     async with AsyncClient(
         transport=ASGITransport(app=app), base_url="http://test"
@@ -538,7 +510,6 @@ async def test_pin_report_missing_body(mocker):
 
 
 async def test_pin_report_wrong_type(mocker):
-    mocker.patch("reporting.settings.CSRF_DISABLE", True)
     app = _make_app()
     async with AsyncClient(
         transport=ASGITransport(app=app), base_url="http://test"

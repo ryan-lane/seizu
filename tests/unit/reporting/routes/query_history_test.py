@@ -58,7 +58,6 @@ def _make_history_item(
 
 
 async def test_list_query_history_empty(mocker):
-    mocker.patch("reporting.settings.CSRF_DISABLE", True)
     mocker.patch(
         "reporting.routes.query_history.report_store.list_query_history",
         new=AsyncMock(return_value=([], 0)),
@@ -79,7 +78,6 @@ async def test_list_query_history_empty(mocker):
 
 
 async def test_list_query_history_returns_items(mocker):
-    mocker.patch("reporting.settings.CSRF_DISABLE", True)
     item = _make_history_item()
     mocker.patch(
         "reporting.routes.query_history.report_store.list_query_history",
@@ -101,7 +99,6 @@ async def test_list_query_history_returns_items(mocker):
 
 
 async def test_list_query_history_pagination_params(mocker):
-    mocker.patch("reporting.settings.CSRF_DISABLE", True)
     mock_list = mocker.patch(
         "reporting.routes.query_history.report_store.list_query_history",
         new=AsyncMock(return_value=([], 0)),
@@ -126,7 +123,6 @@ async def test_list_query_history_pagination_params(mocker):
 
 async def test_list_query_history_scoped_to_current_user(mocker):
     """The route must pass the current user's ID, not any other user's."""
-    mocker.patch("reporting.settings.CSRF_DISABLE", True)
     mock_list = mocker.patch(
         "reporting.routes.query_history.report_store.list_query_history",
         new=AsyncMock(return_value=([], 0)),
@@ -147,7 +143,6 @@ async def test_list_query_history_scoped_to_current_user(mocker):
 
 
 async def test_list_query_history_invalid_page(mocker):
-    mocker.patch("reporting.settings.CSRF_DISABLE", True)
 
     app = _make_app()
     async with AsyncClient(
@@ -159,7 +154,6 @@ async def test_list_query_history_invalid_page(mocker):
 
 
 async def test_list_query_history_per_page_too_large(mocker):
-    mocker.patch("reporting.settings.CSRF_DISABLE", True)
 
     app = _make_app()
     async with AsyncClient(
@@ -172,7 +166,6 @@ async def test_list_query_history_per_page_too_large(mocker):
 
 @pytest.mark.parametrize("per_page", [1, 20, 100])
 async def test_list_query_history_valid_per_page_values(mocker, per_page):
-    mocker.patch("reporting.settings.CSRF_DISABLE", True)
     mocker.patch(
         "reporting.routes.query_history.report_store.list_query_history",
         new=AsyncMock(return_value=([], 0)),

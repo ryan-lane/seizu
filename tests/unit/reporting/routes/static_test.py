@@ -7,7 +7,6 @@ from reporting.app import create_app
 
 
 async def test_healthcheck(mocker):
-    mocker.patch("reporting.settings.CSRF_DISABLE", True)
     app = create_app()
     async with AsyncClient(
         transport=ASGITransport(app=app), base_url="http://test"
@@ -30,7 +29,6 @@ async def test_index(mocker, tmp_path):
     (static_dir / "app.js").write_text("// app")
 
     mocker.patch("reporting.settings.STATIC_FOLDER", str(tmp_path))
-    mocker.patch("reporting.settings.CSRF_DISABLE", True)
 
     app = create_app()
     async with AsyncClient(

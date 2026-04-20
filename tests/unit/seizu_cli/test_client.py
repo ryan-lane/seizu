@@ -9,10 +9,9 @@ from seizu_cli.client import SeizuClient
 
 @pytest.fixture
 def session_mock(mocker: pytest.MonkeyPatch) -> MagicMock:
-    """Patch requests.Session and stub out _bootstrap_csrf."""
+    """Patch requests.Session."""
     mock = MagicMock()
     mocker.patch("seizu_cli.client.requests.Session", return_value=mock)
-    mocker.patch.object(SeizuClient, "_bootstrap_csrf", return_value="")
     return mock
 
 
@@ -52,36 +51,6 @@ def test_sets_bearer_token(session_mock: MagicMock) -> None:
 def test_no_auth_header_without_token(session_mock: MagicMock) -> None:
     SeizuClient("http://localhost:8080")
     session_mock.headers.update.assert_not_called()
-
-
-def test_csrf_token_stored_on_init(mocker: pytest.MonkeyPatch) -> None:
-    mock_session = MagicMock()
-    config_resp = MagicMock()
-    config_resp.raise_for_status.return_value = None
-    mock_session.get.return_value = config_resp
-    mock_session.cookies.get.return_value = "csrf-from-cookie"
-    mocker.patch("seizu_cli.client.requests.Session", return_value=mock_session)
-
-    client = SeizuClient("http://localhost:8080")
-
-    assert client._csrf_token == "csrf-from-cookie"
-    mock_session.get.assert_called_once_with(
-        "http://localhost:8080/api/v1/config", timeout=10
-    )
-
-
-def test_bootstrap_csrf_silently_ignores_request_errors(
-    mocker: pytest.MonkeyPatch,
-) -> None:
-    import requests as req_mod
-
-    mock_session = MagicMock()
-    mock_session.get.side_effect = req_mod.ConnectionError("refused")
-    mock_session.cookies.get.return_value = None
-    mocker.patch("seizu_cli.client.requests.Session", return_value=mock_session)
-
-    client = SeizuClient("http://localhost:8080")
-    assert client._csrf_token == ""
 
 
 # ---------------------------------------------------------------------------
@@ -134,28 +103,6 @@ def test_get_falls_back_to_text_on_non_json_error(session_mock: MagicMock) -> No
 # ---------------------------------------------------------------------------
 
 
-def test_post_includes_csrf_header(session_mock: MagicMock) -> None:
-    client = SeizuClient("http://localhost:8080")
-    client._csrf_token = "csrf-xyz"
-    session_mock.post.return_value = _make_response(json_data={"id": "new"})
-
-    client.post("/api/v1/reports", json={"name": "test"})
-
-    _, call_kwargs = session_mock.post.call_args
-    assert call_kwargs["headers"]["X-CSRFToken"] == "csrf-xyz"
-
-
-def test_post_no_csrf_header_when_token_empty(session_mock: MagicMock) -> None:
-    client = SeizuClient("http://localhost:8080")
-    client._csrf_token = ""
-    session_mock.post.return_value = _make_response(json_data={})
-
-    client.post("/api/v1/reports", json={})
-
-    _, call_kwargs = session_mock.post.call_args
-    assert "X-CSRFToken" not in call_kwargs["headers"]
-
-
 def test_post_returns_json(session_mock: MagicMock) -> None:
     session_mock.post.return_value = _make_response(json_data={"report_id": "r1"})
     client = SeizuClient("http://localhost:8080")
@@ -183,17 +130,6 @@ def test_put_returns_json(session_mock: MagicMock) -> None:
     client = SeizuClient("http://localhost:8080")
     result = client.put("/api/v1/reports/r1/dashboard")
     assert result == {"updated": True}
-
-
-def test_put_includes_csrf_header(session_mock: MagicMock) -> None:
-    client = SeizuClient("http://localhost:8080")
-    client._csrf_token = "token-put"
-    session_mock.put.return_value = _make_response(json_data={})
-
-    client.put("/api/v1/toolsets/ts1", json={"name": "x"})
-
-    _, call_kwargs = session_mock.put.call_args
-    assert call_kwargs["headers"]["X-CSRFToken"] == "token-put"
 
 
 # ---------------------------------------------------------------------------

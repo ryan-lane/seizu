@@ -21,13 +21,7 @@ interface MeApiResponse {
 }
 
 function getApiHeaders(accessToken: string | null): Record<string, string> {
-  const csrfToken =
-    document.cookie
-      .split('; ')
-      .find((row) => row.startsWith('_csrf_token='))
-      ?.split('=')[1] ?? '';
-
-  const headers: Record<string, string> = { 'X-CSRFToken': csrfToken };
+  const headers: Record<string, string> = {};
   if (accessToken) {
     headers['Authorization'] = `Bearer ${accessToken}`;
   }
