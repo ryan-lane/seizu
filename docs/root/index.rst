@@ -19,7 +19,7 @@ Seizu includes:
 Getting started
 ---------------
 
-Seizu has a `quickstart guide <https://mappedsky.github.io/seizu/dev/docker-compose.html#quickstart>`_, which can be used for evaluation, or development.
+Seizu has a `quickstart guide <https://mappedsky.github.io/seizu/install/quickstart.html>`_, which can be used for evaluation, or development.
 
 Documentation
 -------------
@@ -29,12 +29,13 @@ Documentation
 * `Query Console <https://mappedsky.github.io/seizu/install/query-console.html>`_
 * `Scheduled query documentation <https://mappedsky.github.io/seizu/install/scheduled-queries.html>`_
 * `MCP Toolsets documentation <https://mappedsky.github.io/seizu/install/mcp-toolsets.html>`_
-* `Basic development documentation <https://mappedsky.github.io/seizu/dev/docker-compose.html>`_
+* `Basic development documentation <https://mappedsky.github.io/seizu/dev/dependencies.html>`_
 
 .. toctree::
     :caption: Installation & Configuration
     :hidden:
 
+    install/quickstart
     install/backend
     install/dashboard
     install/query-console
@@ -46,7 +47,6 @@ Documentation
     :caption: Development
     :hidden:
 
-    dev/docker-compose
     dev/dependencies
     dev/test
     dev/contributing

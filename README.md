@@ -17,11 +17,12 @@ Seizu includes:
 
 ## Getting started
 
-Seizu has a [quickstart guide](https://mappedsky.github.io/seizu/dev/docker-compose.html#quickstart), which can be used for evaluation, or development.
+Seizu has a [quickstart guide](https://mappedsky.github.io/seizu/install/quickstart.html), which can be used for evaluation, or development.
 
 ## Documentation
 
+* [Quickstart](https://mappedsky.github.io/seizu/install/quickstart.html)
 * [Installation documentation](https://mappedsky.github.io/seizu/install/backend.html)
 * [Dashboard configuration](https://mappedsky.github.io/seizu/install/dashboard.html)
 * [Scheduled query documentation](https://mappedsky.github.io/seizu/install/scheduled-queries.html)
-* [Basic development documentation](https://mappedsky.github.io/seizu/dev/docker-compose.html)
+* [Basic development documentation](https://mappedsky.github.io/seizu/dev/dependencies.html)
