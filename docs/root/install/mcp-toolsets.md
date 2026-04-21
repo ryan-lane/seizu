@@ -194,12 +194,19 @@ Both toolsets and tools keep a full version history. Open the **⋮** menu and s
 
 ## Built-in Tools
 
-The `graph` toolset is always available and provides two built-in tools:
+Seizu ships a set of read-only and admin tools that are always available (subject to RBAC) — no toolset needs to be created to use them. They appear on the Toolsets page with a **Built-in** badge and cannot be edited or deleted through the UI or CLI.
 
-| MCP tool name | Description |
-|---------------|-------------|
-| `graph__schema` | Returns all node labels, relationship types, and property keys in the Neo4j graph database. Takes no parameters. |
-| `graph__query` | Executes an ad-hoc read-only Cypher query. Takes a single `query` parameter (string). The query is validated before execution. |
+Built-in tools are grouped by area. Permissions for each tool mirror the equivalent REST endpoint — a user with only `seizu-viewer` sees the read-only tools; write/delete tools only appear for users with the matching permission.
+
+| Group | Tools |
+|-------|-------|
+| `graph` | `graph__schema` (Neo4j labels/relationship types/property keys), `graph__query` (validated read-only Cypher) |
+| `reports` | list / get / create / delete / pin / set_dashboard / get_dashboard reports, plus save/list/get version history |
+| `scheduled_queries` | Full CRUD plus version history. Create/update reuse the same Cypher + action-config validation as the REST routes. |
+| `toolsets` | Full CRUD for toolsets and nested tools, plus version history. Create/update tool calls reuse Cypher validation. |
+| `roles` | List built-in and user-defined roles; CRUD for user-defined roles; role version history. |
+
+Which groups are exposed is controlled by the `MCP_ENABLED_BUILTINS` setting (see [backend configuration](backend.html#mcp-server)). All groups are enabled by default.
 
 ## MCP Server
 
@@ -207,7 +214,7 @@ The MCP server is available at `/api/v1/mcp` when `MCP_ENABLED=true` (the defaul
 
 Authentication uses the same Bearer JWT tokens as the REST API. In development, authentication can be disabled via `DEVELOPMENT_ONLY_REQUIRE_AUTH=false`.
 
-Tool names are namespaced as `{toolset_name}__{tool_name}` (double underscore separator). Only tools in **enabled** toolsets are exposed to MCP clients.
+Tool names are namespaced as `{toolset_name}__{tool_name}` (double underscore separator) for user-defined tools, or `{group}__{action}` for built-ins (e.g. `graph__query`, `reports__list`). Only tools in **enabled** toolsets and built-in groups included in `MCP_ENABLED_BUILTINS` are exposed to MCP clients.
 
 ### Connecting Claude Desktop
 
