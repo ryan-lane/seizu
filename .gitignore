@@ -167,3 +167,6 @@ generated/
 
 # gunicorn arbiter control socket (created in CWD by the master process)
 gunicorn.ctl
+
+# claude working directory
+.claude

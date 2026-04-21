@@ -1,0 +1,219 @@
+"""Built-in ``scheduled_queries__*`` tools — CRUD for scheduled queries."""
+from typing import Any
+from typing import Dict
+from typing import Optional
+
+from reporting.authnz import CurrentUser
+from reporting.authnz.permissions import Permission
+from reporting.schema.report_config import CreateScheduledQueryRequest
+from reporting.services import report_store
+from reporting.services.mcp_builtins.base import BuiltinGroup
+from reporting.services.mcp_builtins.base import BuiltinTool
+from reporting.services.mcp_builtins.base import model_input_schema
+from reporting.services.query_validator import validate_query
+from reporting.services.scheduled_query_validation import validate_action_configs
+
+GROUP = "scheduled_queries"
+
+
+def _require_user(current_user: Optional[CurrentUser]) -> CurrentUser:
+    if current_user is None:
+        raise RuntimeError("No current user on the request context")
+    return current_user
+
+
+def _id_prop() -> Dict[str, Any]:
+    return {"scheduled_query_id": {"type": "string"}}
+
+
+async def _list(
+    args: Dict[str, Any], current_user: Optional[CurrentUser]
+) -> Dict[str, Any]:
+    items = await report_store.list_scheduled_queries()
+    return {"scheduled_queries": [i.model_dump() for i in items]}
+
+
+async def _get(
+    args: Dict[str, Any], current_user: Optional[CurrentUser]
+) -> Dict[str, Any]:
+    item = await report_store.get_scheduled_query(args["scheduled_query_id"])
+    if not item:
+        return {"error": "Scheduled query not found"}
+    return item.model_dump()
+
+
+async def _create(
+    args: Dict[str, Any], current_user: Optional[CurrentUser]
+) -> Dict[str, Any]:
+    user = _require_user(current_user)
+    body = CreateScheduledQueryRequest.model_validate(args)
+    err = validate_action_configs(body.actions)
+    if err:
+        return {"error": err}
+    validation = await validate_query(body.cypher)
+    if validation.has_errors:
+        return {"errors": validation.errors, "warnings": validation.warnings}
+    item = await report_store.create_scheduled_query(
+        name=body.name,
+        cypher=body.cypher,
+        params=body.params,
+        frequency=body.frequency,
+        watch_scans=body.watch_scans,
+        enabled=body.enabled,
+        actions=body.actions,
+        created_by=user.user.user_id,
+    )
+    return item.model_dump()
+
+
+async def _update(
+    args: Dict[str, Any], current_user: Optional[CurrentUser]
+) -> Dict[str, Any]:
+    user = _require_user(current_user)
+    sq_id = args["scheduled_query_id"]
+    body = CreateScheduledQueryRequest.model_validate(
+        {k: v for k, v in args.items() if k != "scheduled_query_id"}
+    )
+    err = validate_action_configs(body.actions)
+    if err:
+        return {"error": err}
+    validation = await validate_query(body.cypher)
+    if validation.has_errors:
+        return {"errors": validation.errors, "warnings": validation.warnings}
+    item = await report_store.update_scheduled_query(
+        sq_id=sq_id,
+        name=body.name,
+        cypher=body.cypher,
+        params=body.params,
+        frequency=body.frequency,
+        watch_scans=body.watch_scans,
+        enabled=body.enabled,
+        actions=body.actions,
+        updated_by=user.user.user_id,
+        comment=body.comment,
+    )
+    if not item:
+        return {"error": "Scheduled query not found"}
+    return item.model_dump()
+
+
+async def _delete(
+    args: Dict[str, Any], current_user: Optional[CurrentUser]
+) -> Dict[str, Any]:
+    ok = await report_store.delete_scheduled_query(args["scheduled_query_id"])
+    if not ok:
+        return {"error": "Scheduled query not found"}
+    return {"scheduled_query_id": args["scheduled_query_id"]}
+
+
+async def _list_versions(
+    args: Dict[str, Any], current_user: Optional[CurrentUser]
+) -> Dict[str, Any]:
+    sq_id = args["scheduled_query_id"]
+    item = await report_store.get_scheduled_query(sq_id)
+    if not item:
+        return {"error": "Scheduled query not found"}
+    versions = await report_store.list_scheduled_query_versions(sq_id)
+    return {"versions": [v.model_dump() for v in versions]}
+
+
+async def _get_version(
+    args: Dict[str, Any], current_user: Optional[CurrentUser]
+) -> Dict[str, Any]:
+    v = await report_store.get_scheduled_query_version(
+        args["scheduled_query_id"], int(args["version"])
+    )
+    if not v:
+        return {"error": "Scheduled query version not found"}
+    return v.model_dump()
+
+
+GROUP_DEF = BuiltinGroup(
+    name=GROUP,
+    tools=[
+        BuiltinTool(
+            name="scheduled_queries__list",
+            group=GROUP,
+            description="List all scheduled queries.",
+            input_schema={"type": "object", "properties": {}},
+            required_permissions=[Permission.SCHEDULED_QUERIES_READ.value],
+            handler=_list,
+        ),
+        BuiltinTool(
+            name="scheduled_queries__get",
+            group=GROUP,
+            description="Return a scheduled query by ID.",
+            input_schema={
+                "type": "object",
+                "properties": _id_prop(),
+                "required": ["scheduled_query_id"],
+            },
+            required_permissions=[Permission.SCHEDULED_QUERIES_READ.value],
+            handler=_get,
+        ),
+        BuiltinTool(
+            name="scheduled_queries__create",
+            group=GROUP,
+            description=(
+                "Create a new scheduled query. Cypher is validated (read-only) "
+                "and each action's config is checked against its declared schema."
+            ),
+            input_schema=model_input_schema(CreateScheduledQueryRequest),
+            required_permissions=[Permission.SCHEDULED_QUERIES_WRITE.value],
+            handler=_create,
+            requires_user=True,
+        ),
+        BuiltinTool(
+            name="scheduled_queries__update",
+            group=GROUP,
+            description="Update an existing scheduled query (creates a new version).",
+            input_schema=model_input_schema(
+                CreateScheduledQueryRequest,
+                extra_properties=_id_prop(),
+                extra_required=["scheduled_query_id"],
+            ),
+            required_permissions=[Permission.SCHEDULED_QUERIES_WRITE.value],
+            handler=_update,
+            requires_user=True,
+        ),
+        BuiltinTool(
+            name="scheduled_queries__delete",
+            group=GROUP,
+            description="Delete a scheduled query.",
+            input_schema={
+                "type": "object",
+                "properties": _id_prop(),
+                "required": ["scheduled_query_id"],
+            },
+            required_permissions=[Permission.SCHEDULED_QUERIES_DELETE.value],
+            handler=_delete,
+        ),
+        BuiltinTool(
+            name="scheduled_queries__list_versions",
+            group=GROUP,
+            description="List all versions of a scheduled query.",
+            input_schema={
+                "type": "object",
+                "properties": _id_prop(),
+                "required": ["scheduled_query_id"],
+            },
+            required_permissions=[Permission.SCHEDULED_QUERIES_READ.value],
+            handler=_list_versions,
+        ),
+        BuiltinTool(
+            name="scheduled_queries__get_version",
+            group=GROUP,
+            description="Return a specific version of a scheduled query.",
+            input_schema={
+                "type": "object",
+                "properties": {
+                    **_id_prop(),
+                    "version": {"type": "integer"},
+                },
+                "required": ["scheduled_query_id", "version"],
+            },
+            required_permissions=[Permission.SCHEDULED_QUERIES_READ.value],
+            handler=_get_version,
+        ),
+    ],
+)

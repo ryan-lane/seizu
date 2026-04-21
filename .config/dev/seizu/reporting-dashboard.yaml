@@ -477,7 +477,7 @@ toolsets:
         name: count_nodes_with_label
         description: >-
           Return the total number of nodes that have a specific label.
-          Use the seizu__schema tool first to discover available labels.
+          Use the graph__schema tool first to discover available labels.
         cypher: |-
           MATCH (n)
           WHERE $label IN labels(n)

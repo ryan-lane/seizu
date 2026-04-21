@@ -58,11 +58,15 @@ def _tool(
     )
 
 
-async def _list_tools(server):
+async def _list_tools(server, permissions=ALL_PERMISSIONS):
     """Call the registered list_tools handler."""
     handler = server.request_handlers[mcp_types.ListToolsRequest]
     req = mcp_types.ListToolsRequest(method="tools/list", params=None)
-    result = await handler(req)
+    token = _mcp_permissions.set(permissions)
+    try:
+        result = await handler(req)
+    finally:
+        _mcp_permissions.reset(token)
     return result.root.tools
 
 
@@ -102,8 +106,8 @@ async def test_list_tools_includes_builtin_schema_tool():
         server = _build_mcp_server()
         tools = await _list_tools(server)
         names = [t.name for t in tools]
-        assert "seizu__schema" in names
-        assert "seizu__query" in names
+        assert "graph__schema" in names
+        assert "graph__query" in names
 
 
 async def test_list_tools_includes_user_defined_tool():
@@ -174,14 +178,20 @@ async def test_list_tools_store_error_returns_builtins_only():
         server = _build_mcp_server()
         tools = await _list_tools(server)
         names = [t.name for t in tools]
-        assert "seizu__schema" in names
-        assert "seizu__query" in names
-        # No user tools — error was swallowed
-        assert len(tools) == 2
+        assert "graph__schema" in names
+        assert "graph__query" in names
+        # All tool names follow the <group>__<action> convention — no user
+        # tools were added because the store raised.
+        assert all("__" in n for n in names)
+        # Every surfaced tool is from a built-in group.
+        from reporting.services.mcp_builtins import list_builtin_tools
+
+        builtin_names = {t.name for t in list_builtin_tools()}
+        assert set(names) <= builtin_names
 
 
 # ---------------------------------------------------------------------------
-# call_tool — seizu__query
+# call_tool — graph__query
 # ---------------------------------------------------------------------------
 
 
@@ -189,7 +199,7 @@ async def test_call_tool_query_empty_query_string():
     # MCP library validates required params; an empty-string query bypasses that
     # and triggers our own guard inside the handler.
     server = _build_mcp_server()
-    result = await _call_tool(server, "seizu__query", {"query": "  "})
+    result = await _call_tool(server, "graph__query", {"query": "  "})
     data = json.loads(result[0].text)
     assert "error" in data
 
@@ -198,12 +208,12 @@ async def test_call_tool_query_validation_error():
     from reporting.services.query_validator import ValidationResult
 
     with patch(
-        "reporting.services.mcp_server.validate_query",
+        "reporting.services.mcp_builtins.graph.validate_query",
         new_callable=AsyncMock,
         return_value=ValidationResult(errors=["syntax error"], warnings=[]),
     ):
         server = _build_mcp_server()
-        result = await _call_tool(server, "seizu__query", {"query": "BAD CYPHER"})
+        result = await _call_tool(server, "graph__query", {"query": "BAD CYPHER"})
         data = json.loads(result[0].text)
         assert "errors" in data
         assert "syntax error" in data["errors"]
@@ -214,19 +224,19 @@ async def test_call_tool_query_success():
 
     with (
         patch(
-            "reporting.services.mcp_server.validate_query",
+            "reporting.services.mcp_builtins.graph.validate_query",
             new_callable=AsyncMock,
             return_value=ValidationResult(errors=[], warnings=[]),
         ),
         patch(
-            "reporting.services.mcp_server.reporting_neo4j.run_query",
+            "reporting.services.mcp_builtins.graph.reporting_neo4j.run_query",
             new_callable=AsyncMock,
             return_value=[{"n": 1}],
         ),
     ):
         server = _build_mcp_server()
         result = await _call_tool(
-            server, "seizu__query", {"query": "MATCH (n) RETURN n"}
+            server, "graph__query", {"query": "MATCH (n) RETURN n"}
         )
         data = json.loads(result[0].text)
         assert "results" in data
@@ -238,32 +248,32 @@ async def test_call_tool_query_execution_error():
 
     with (
         patch(
-            "reporting.services.mcp_server.validate_query",
+            "reporting.services.mcp_builtins.graph.validate_query",
             new_callable=AsyncMock,
             return_value=ValidationResult(errors=[], warnings=[]),
         ),
         patch(
-            "reporting.services.mcp_server.reporting_neo4j.run_query",
+            "reporting.services.mcp_builtins.graph.reporting_neo4j.run_query",
             new_callable=AsyncMock,
             side_effect=RuntimeError("neo4j down"),
         ),
     ):
         server = _build_mcp_server()
         result = await _call_tool(
-            server, "seizu__query", {"query": "MATCH (n) RETURN n"}
+            server, "graph__query", {"query": "MATCH (n) RETURN n"}
         )
         data = json.loads(result[0].text)
         assert "error" in data
 
 
 # ---------------------------------------------------------------------------
-# call_tool — seizu__schema
+# call_tool — graph__schema
 # ---------------------------------------------------------------------------
 
 
 async def test_call_tool_schema_success():
     with patch(
-        "reporting.services.mcp_server.reporting_neo4j.run_query",
+        "reporting.services.mcp_builtins.graph.reporting_neo4j.run_query",
         new_callable=AsyncMock,
         side_effect=[
             [{"label": "Person"}],
@@ -272,7 +282,7 @@ async def test_call_tool_schema_success():
         ],
     ):
         server = _build_mcp_server()
-        result = await _call_tool(server, "seizu__schema", {})
+        result = await _call_tool(server, "graph__schema", {})
         data = json.loads(result[0].text)
         assert data["labels"] == ["Person"]
         assert data["relationship_types"] == ["KNOWS"]
@@ -281,12 +291,12 @@ async def test_call_tool_schema_success():
 
 async def test_call_tool_schema_error():
     with patch(
-        "reporting.services.mcp_server.reporting_neo4j.run_query",
+        "reporting.services.mcp_builtins.graph.reporting_neo4j.run_query",
         new_callable=AsyncMock,
         side_effect=RuntimeError("neo4j down"),
     ):
         server = _build_mcp_server()
-        result = await _call_tool(server, "seizu__schema", {})
+        result = await _call_tool(server, "graph__schema", {})
         data = json.loads(result[0].text)
         assert "error" in data
 

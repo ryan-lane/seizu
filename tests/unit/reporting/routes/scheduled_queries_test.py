@@ -154,7 +154,7 @@ async def test_create_scheduled_query_success(mocker):
         new=AsyncMock(return_value=_sq_item()),
     )
     mocker.patch(
-        "reporting.routes.scheduled_queries.scheduled_query_modules.get_action_schemas",
+        "reporting.services.scheduled_query_validation.scheduled_query_modules.get_action_schemas",
         return_value={"log": []},
     )
     mocker.patch(
@@ -175,7 +175,7 @@ async def test_create_scheduled_query_success(mocker):
 
 async def test_create_scheduled_query_cypher_validation_error(mocker):
     mocker.patch(
-        "reporting.routes.scheduled_queries.scheduled_query_modules.get_action_schemas",
+        "reporting.services.scheduled_query_validation.scheduled_query_modules.get_action_schemas",
         return_value={"log": []},
     )
     mocker.patch(
@@ -212,7 +212,7 @@ async def test_create_scheduled_query_not_json(mocker):
 
 async def test_create_scheduled_query_invalid_body(mocker):
     mocker.patch(
-        "reporting.routes.scheduled_queries.scheduled_query_modules.get_action_schemas",
+        "reporting.services.scheduled_query_validation.scheduled_query_modules.get_action_schemas",
         return_value={"log": []},
     )
     app = _make_app()
@@ -228,7 +228,7 @@ async def test_create_scheduled_query_invalid_body(mocker):
 
 async def test_create_scheduled_query_unknown_action_type(mocker):
     mocker.patch(
-        "reporting.routes.scheduled_queries.scheduled_query_modules.get_action_schemas",
+        "reporting.services.scheduled_query_validation.scheduled_query_modules.get_action_schemas",
         return_value={"log": []},
     )
     body = dict(_VALID_SQ_BODY)
@@ -249,7 +249,7 @@ async def test_create_scheduled_query_action_config_error(mocker):
     from reporting.schema.report_config import ActionConfigFieldDef
 
     mocker.patch(
-        "reporting.routes.scheduled_queries.scheduled_query_modules.get_action_schemas",
+        "reporting.services.scheduled_query_validation.scheduled_query_modules.get_action_schemas",
         return_value={
             "log": [
                 ActionConfigFieldDef(
@@ -283,7 +283,7 @@ async def test_update_scheduled_query_success(mocker):
         new=AsyncMock(return_value=_sq_item(version=2)),
     )
     mocker.patch(
-        "reporting.routes.scheduled_queries.scheduled_query_modules.get_action_schemas",
+        "reporting.services.scheduled_query_validation.scheduled_query_modules.get_action_schemas",
         return_value={"log": []},
     )
     mocker.patch(
@@ -304,7 +304,7 @@ async def test_update_scheduled_query_success(mocker):
 
 async def test_update_scheduled_query_cypher_validation_error(mocker):
     mocker.patch(
-        "reporting.routes.scheduled_queries.scheduled_query_modules.get_action_schemas",
+        "reporting.services.scheduled_query_validation.scheduled_query_modules.get_action_schemas",
         return_value={"log": []},
     )
     mocker.patch(
@@ -332,7 +332,7 @@ async def test_update_scheduled_query_not_found(mocker):
         new=AsyncMock(return_value=None),
     )
     mocker.patch(
-        "reporting.routes.scheduled_queries.scheduled_query_modules.get_action_schemas",
+        "reporting.services.scheduled_query_validation.scheduled_query_modules.get_action_schemas",
         return_value={"log": []},
     )
     mocker.patch(
@@ -365,7 +365,7 @@ async def test_update_scheduled_query_not_json(mocker):
 
 async def test_update_scheduled_query_invalid_body(mocker):
     mocker.patch(
-        "reporting.routes.scheduled_queries.scheduled_query_modules.get_action_schemas",
+        "reporting.services.scheduled_query_validation.scheduled_query_modules.get_action_schemas",
         return_value={"log": []},
     )
     app = _make_app()

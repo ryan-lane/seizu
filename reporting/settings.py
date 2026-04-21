@@ -153,6 +153,16 @@ RBAC_DEFAULT_ROLE = str_env("RBAC_DEFAULT_ROLE", "seizu-viewer")
 # Whether to enable the MCP server at /api/v1/mcp.
 MCP_ENABLED = bool_env("MCP_ENABLED", True)
 
+# Which built-in MCP tool groups are exposed. Defaults to all groups; set to a
+# comma-separated subset (e.g. "graph,reports") to restrict which built-ins
+# Claude/other MCP clients can call.  User-defined toolsets are always
+# available regardless of this setting.  Known groups: graph, reports,
+# scheduled_queries, toolsets, roles.
+MCP_ENABLED_BUILTINS = list_env(
+    "MCP_ENABLED_BUILTINS",
+    ["graph", "reports", "scheduled_queries", "toolsets", "roles"],
+)
+
 # OAuth 2.0 Authorization Server Metadata (RFC 8414) for MCP clients.
 # When set, Seizu exposes /.well-known/oauth-authorization-server so MCP clients
 # (e.g. Claude Desktop) can discover the OAuth flow and authenticate users

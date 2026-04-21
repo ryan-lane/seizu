@@ -194,12 +194,12 @@ Both toolsets and tools keep a full version history. Open the **⋮** menu and s
 
 ## Built-in Tools
 
-The `seizu` toolset is always available and provides two built-in tools:
+The `graph` toolset is always available and provides two built-in tools:
 
 | MCP tool name | Description |
 |---------------|-------------|
-| `seizu__schema` | Returns all node labels, relationship types, and property keys in the Neo4j graph database. Takes no parameters. |
-| `seizu__query` | Executes an ad-hoc read-only Cypher query. Takes a single `query` parameter (string). The query is validated before execution. |
+| `graph__schema` | Returns all node labels, relationship types, and property keys in the Neo4j graph database. Takes no parameters. |
+| `graph__query` | Executes an ad-hoc read-only Cypher query. Takes a single `query` parameter (string). The query is validated before execution. |
 
 ## MCP Server
 

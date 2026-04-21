@@ -1,14 +1,11 @@
 import logging
 from typing import Any
-from typing import Dict
-from typing import List
 
 from fastapi import APIRouter
 from fastapi import Depends
 from fastapi import HTTPException
 from fastapi.responses import JSONResponse
 
-from reporting import scheduled_query_modules
 from reporting.authnz import CurrentUser
 from reporting.authnz import require_permission
 from reporting.authnz.permissions import Permission
@@ -20,33 +17,10 @@ from reporting.schema.report_config import ScheduledQueryVersion
 from reporting.schema.report_config import ScheduledQueryVersionListResponse
 from reporting.services import report_store
 from reporting.services.query_validator import validate_query
+from reporting.services.scheduled_query_validation import validate_action_configs
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
-
-
-def _validate_action_configs(
-    actions: List[Dict[str, Any]],
-) -> str | None:
-    """Validate each action's config against the module's declared schema.
-
-    Returns an error message string if validation fails, or None if valid.
-    """
-    schemas = scheduled_query_modules.get_action_schemas()
-    for action in actions:
-        action_type = action.get("action_type", "")
-        action_config = action.get("action_config", {})
-        if action_type not in schemas:
-            return (
-                f"Unknown action type '{action_type}'. Valid types: {sorted(schemas)}."
-            )
-        for field in schemas[action_type]:
-            if not field.required:
-                continue
-            value = action_config.get(field.name)
-            if value is None or value == "" or value == []:
-                return f"Action type '{action_type}' is missing required field '{field.name}'."
-    return None
 
 
 @router.get("/api/v1/scheduled-queries", response_model=ScheduledQueryListResponse)
@@ -87,7 +61,7 @@ async def create_scheduled_query(
     ),
 ) -> Any:
     """Create a new scheduled query."""
-    err = _validate_action_configs(body.actions)
+    err = validate_action_configs(body.actions)
     if err:
         raise HTTPException(status_code=400, detail=err)
     validation = await validate_query(body.cypher)
@@ -120,7 +94,7 @@ async def update_scheduled_query(
     ),
 ) -> Any:
     """Update a scheduled query."""
-    err = _validate_action_configs(body.actions)
+    err = validate_action_configs(body.actions)
     if err:
         raise HTTPException(status_code=400, detail=err)
     validation = await validate_query(body.cypher)

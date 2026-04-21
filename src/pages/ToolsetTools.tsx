@@ -56,51 +56,16 @@ import UserDisplay from 'src/components/UserDisplay';
 import { usePermissions } from 'src/hooks/usePermissions';
 
 // ---------------------------------------------------------------------------
-// Built-in seizu toolset sentinel
+// Built-in toolset detection
 // ---------------------------------------------------------------------------
+// The backend returns built-in groups through the same /api/v1/toolsets/<id>/tools
+// endpoint; their toolset_id is prefixed with `__builtin_`.  All we need here is
+// a prefix check to gate edit/delete actions.
 
-const BUILTIN_TOOLSET_ID = '__builtin_seizu__';
+const BUILTIN_PREFIX = '__builtin_';
 
-const BUILTIN_TOOLS: ToolItem[] = [
-  {
-    tool_id: '__builtin_seizu__schema__',
-    toolset_id: BUILTIN_TOOLSET_ID,
-    name: 'schema',
-    description:
-      'Returns the available node labels, relationship types, and property keys in the Neo4j graph database.',
-    cypher: '-- Built-in: CALL db.labels(), CALL db.relationshipTypes(), CALL db.propertyKeys()',
-    parameters: [],
-    enabled: true,
-    current_version: 1,
-    created_at: '',
-    updated_at: '',
-    created_by: '',
-    updated_by: null
-  },
-  {
-    tool_id: '__builtin_seizu__query__',
-    toolset_id: BUILTIN_TOOLSET_ID,
-    name: 'query',
-    description:
-      'Execute an ad-hoc read-only Cypher query against the Neo4j graph database. The query is validated before execution — write operations are not permitted.',
-    cypher: '-- Built-in: executes the provided query parameter after validation',
-    parameters: [
-      {
-        name: 'query',
-        type: 'string',
-        description: 'A read-only Cypher query to execute.',
-        required: true,
-        default: null
-      }
-    ],
-    enabled: true,
-    current_version: 1,
-    created_at: '',
-    updated_at: '',
-    created_by: '',
-    updated_by: null
-  }
-];
+const isBuiltinToolset = (id: string | undefined | null): boolean =>
+  !!id && id.startsWith(BUILTIN_PREFIX) && id.endsWith('__');
 
 // ---------------------------------------------------------------------------
 // Param form state
@@ -463,8 +428,8 @@ function ToolsetTools() {
   const navigate = useNavigate();
   const hasPermission = usePermissions();
 
-  const isBuiltin = toolsetId === BUILTIN_TOOLSET_ID;
-  const { tools, loading, error, refresh } = useToolsList(isBuiltin ? null : (toolsetId ?? null));
+  const isBuiltin = isBuiltinToolset(toolsetId);
+  const { tools, loading, error, refresh } = useToolsList(toolsetId ?? null);
   const mutations = useToolMutations(toolsetId ?? '');
 
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -506,7 +471,7 @@ function ToolsetTools() {
     }
   };
 
-  const displayTools: ToolItem[] = isBuiltin ? BUILTIN_TOOLS : tools;
+  const displayTools: ToolItem[] = tools;
 
   return (
     <>
@@ -535,20 +500,20 @@ function ToolsetTools() {
           )}
         </Box>
 
-        {!isBuiltin && loading && (
+        {loading && (
           <Box sx={{ display: 'flex', justifyContent: 'center', p: 4 }}>
             <CircularProgress />
           </Box>
         )}
 
-        {!isBuiltin && error && (
+        {error && (
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
             <Error />
             <Typography>Failed to load tools</Typography>
           </Box>
         )}
 
-        {(isBuiltin || (!loading && !error)) && (
+        {!loading && !error && (
           <TableContainer component={Paper} variant="outlined">
             <Table>
               <TableHead>
@@ -574,7 +539,7 @@ function ToolsetTools() {
                   </TableRow>
                 )}
                 {displayTools.map((item) => {
-                  const itemIsBuiltin = item.toolset_id === BUILTIN_TOOLSET_ID;
+                  const itemIsBuiltin = isBuiltinToolset(item.toolset_id);
                   return (
                     <TableRow key={item.tool_id} hover>
                       <TableCell>

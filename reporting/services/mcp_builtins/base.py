@@ -1,0 +1,107 @@
+"""Common types for MCP built-in tools.
+
+A *built-in* is a tool that ships with Seizu (as opposed to a user-defined
+toolset stored in the report store).  Each built-in has:
+
+* a namespaced ``name`` (``<group>__<action>``, e.g. ``reports__create``),
+* a short human-readable ``description``,
+* a JSON Schema ``input_schema`` the MCP client validates arguments against,
+* a list of permission strings the caller must hold, and
+* an async ``handler`` that runs the tool.
+
+Groups live in their own submodule (``reports.py``, ``toolsets.py`` …) and
+expose a module-level ``BUILTINS: List[BuiltinTool]`` plus a ``GROUP`` name so
+operators can enable/disable whole groups via ``MCP_ENABLED_BUILTINS``.
+"""
+from dataclasses import dataclass
+from dataclasses import field
+from typing import Any
+from typing import Awaitable
+from typing import Callable
+from typing import Dict
+from typing import List
+from typing import Optional
+from typing import Type
+
+from pydantic import BaseModel
+
+from reporting.authnz import CurrentUser
+
+BuiltinHandler = Callable[[Dict[str, Any], Optional[CurrentUser]], Awaitable[Any]]
+
+
+@dataclass
+class BuiltinTool:
+    """A single built-in MCP tool."""
+
+    name: str
+    group: str
+    description: str
+    input_schema: Dict[str, Any]
+    required_permissions: List[str]
+    handler: BuiltinHandler
+    # Whether the tool needs a resolved CurrentUser (writes that record
+    # created_by/updated_by).  Handlers that need a user raise if it's None.
+    requires_user: bool = False
+
+
+def model_input_schema(
+    model: Type[BaseModel],
+    *,
+    extra_properties: Optional[Dict[str, Any]] = None,
+    extra_required: Optional[List[str]] = None,
+) -> Dict[str, Any]:
+    """Convert a Pydantic model's JSON schema into an MCP input schema.
+
+    MCP clients expect a self-contained JSON Schema object (no external
+    ``$ref``s).  Pydantic emits ``$defs`` when the model has nested
+    BaseModels; we inline them here so the schema travels over the wire
+    intact.
+
+    ``extra_properties`` / ``extra_required`` let callers inject
+    path-parameter style fields (e.g. ``report_id``) that aren't part of the
+    request body model.
+    """
+    schema = model.model_json_schema()
+    _inline_refs(schema, schema.get("$defs", {}))
+    schema.pop("$defs", None)
+    schema.pop("title", None)
+    properties: Dict[str, Any] = dict(schema.get("properties", {}))
+    required: List[str] = list(schema.get("required", []))
+    if extra_properties:
+        # Caller-supplied path params come first so the schema reads
+        # naturally when rendered by an MCP client.
+        properties = {**extra_properties, **properties}
+    if extra_required:
+        required = list(extra_required) + [
+            r for r in required if r not in extra_required
+        ]
+    result: Dict[str, Any] = {"type": "object", "properties": properties}
+    if required:
+        result["required"] = required
+    return result
+
+
+def _inline_refs(node: Any, defs: Dict[str, Any]) -> None:
+    """Recursively replace ``$ref: "#/$defs/X"`` with the referenced schema."""
+    if isinstance(node, dict):
+        ref = node.get("$ref")
+        if isinstance(ref, str) and ref.startswith("#/$defs/"):
+            target = defs.get(ref.split("/")[-1], {})
+            # Copy the referenced schema's keys into this node, then drop $ref.
+            del node["$ref"]
+            for k, v in target.items():
+                node.setdefault(k, v)
+        for v in node.values():
+            _inline_refs(v, defs)
+    elif isinstance(node, list):
+        for v in node:
+            _inline_refs(v, defs)
+
+
+@dataclass
+class BuiltinGroup:
+    """A collection of related built-in tools, filterable as a unit."""
+
+    name: str
+    tools: List[BuiltinTool] = field(default_factory=list)

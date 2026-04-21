@@ -6,6 +6,7 @@ from fastapi import Depends
 from fastapi import HTTPException
 from fastapi.responses import JSONResponse
 
+from reporting import settings
 from reporting.authnz import CurrentUser
 from reporting.authnz import require_permission
 from reporting.authnz.permissions import Permission
@@ -29,10 +30,25 @@ from reporting.schema.mcp_config import UpdateToolsetRequest
 from reporting.schema.mcp_config import validate_tool_arguments
 from reporting.services import report_store
 from reporting.services import reporting_neo4j
+from reporting.services.mcp_builtins.synthetic import builtin_tool
+from reporting.services.mcp_builtins.synthetic import builtin_tools_for_group
+from reporting.services.mcp_builtins.synthetic import builtin_toolset
+from reporting.services.mcp_builtins.synthetic import builtin_toolsets
+from reporting.services.mcp_builtins.synthetic import group_name_from_toolset_id
+from reporting.services.mcp_builtins.synthetic import is_builtin_toolset_id
 from reporting.services.query_validator import validate_query
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
+
+
+def _reject_builtin_mutation(toolset_id: str) -> None:
+    """Raise 403 if the caller is attempting to mutate a synthetic built-in."""
+    if is_builtin_toolset_id(toolset_id):
+        raise HTTPException(
+            status_code=403,
+            detail="Built-in toolsets are read-only",
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -44,8 +60,10 @@ router = APIRouter()
 async def list_toolsets(
     current: CurrentUser = Depends(require_permission(Permission.TOOLSETS_READ)),
 ) -> ToolsetListResponse:
-    """List all toolsets."""
-    return ToolsetListResponse(toolsets=await report_store.list_toolsets())
+    """List all toolsets (built-ins first, then user-defined)."""
+    builtins = builtin_toolsets(settings.MCP_ENABLED_BUILTINS)
+    user_toolsets = await report_store.list_toolsets()
+    return ToolsetListResponse(toolsets=builtins + user_toolsets)
 
 
 @router.post("/api/v1/toolsets", response_model=ToolsetListItem, status_code=201)
@@ -54,6 +72,11 @@ async def create_toolset(
     current: CurrentUser = Depends(require_permission(Permission.TOOLSETS_WRITE)),
 ) -> ToolsetListItem:
     """Create a new toolset."""
+    if body.name.startswith("__builtin_"):
+        raise HTTPException(
+            status_code=400,
+            detail="Toolset names starting with '__builtin_' are reserved",
+        )
     return await report_store.create_toolset(
         name=body.name,
         description=body.description,
@@ -68,6 +91,12 @@ async def get_toolset(
     current: CurrentUser = Depends(require_permission(Permission.TOOLSETS_READ)),
 ) -> ToolsetListItem:
     """Return a toolset by ID."""
+    group = group_name_from_toolset_id(toolset_id)
+    if group is not None:
+        synthetic = builtin_toolset(group, settings.MCP_ENABLED_BUILTINS)
+        if synthetic is None:
+            raise HTTPException(status_code=404, detail="Toolset not found")
+        return synthetic
     item = await report_store.get_toolset(toolset_id)
     if not item:
         raise HTTPException(status_code=404, detail="Toolset not found")
@@ -81,6 +110,7 @@ async def update_toolset(
     current: CurrentUser = Depends(require_permission(Permission.TOOLSETS_WRITE)),
 ) -> Any:
     """Update a toolset (creates a new version)."""
+    _reject_builtin_mutation(toolset_id)
     item = await report_store.update_toolset(
         toolset_id=toolset_id,
         name=body.name,
@@ -100,6 +130,7 @@ async def delete_toolset(
     current: CurrentUser = Depends(require_permission(Permission.TOOLSETS_DELETE)),
 ) -> ToolsetIdResponse:
     """Delete a toolset and all its tools."""
+    _reject_builtin_mutation(toolset_id)
     ok = await report_store.delete_toolset(toolset_id)
     if not ok:
         raise HTTPException(status_code=404, detail="Toolset not found")
@@ -115,6 +146,9 @@ async def list_toolset_versions(
     current: CurrentUser = Depends(require_permission(Permission.TOOLSETS_READ)),
 ) -> ToolsetVersionListResponse:
     """List all versions of a toolset."""
+    if is_builtin_toolset_id(toolset_id):
+        # Built-ins ship with the application — no stored version history.
+        return ToolsetVersionListResponse(versions=[])
     item = await report_store.get_toolset(toolset_id)
     if not item:
         raise HTTPException(status_code=404, detail="Toolset not found")
@@ -132,6 +166,8 @@ async def get_toolset_version(
     current: CurrentUser = Depends(require_permission(Permission.TOOLSETS_READ)),
 ) -> ToolsetVersion:
     """Return a specific version of a toolset."""
+    if is_builtin_toolset_id(toolset_id):
+        raise HTTPException(status_code=404, detail="Toolset version not found")
     v = await report_store.get_toolset_version(toolset_id, version)
     if not v:
         raise HTTPException(status_code=404, detail="Toolset version not found")
@@ -152,6 +188,13 @@ async def list_tools(
     current: CurrentUser = Depends(require_permission(Permission.TOOLS_READ)),
 ) -> ToolListResponse:
     """List all tools in a toolset."""
+    group = group_name_from_toolset_id(toolset_id)
+    if group is not None:
+        if builtin_toolset(group, settings.MCP_ENABLED_BUILTINS) is None:
+            raise HTTPException(status_code=404, detail="Toolset not found")
+        return ToolListResponse(
+            tools=builtin_tools_for_group(group, settings.MCP_ENABLED_BUILTINS)
+        )
     ts = await report_store.get_toolset(toolset_id)
     if not ts:
         raise HTTPException(status_code=404, detail="Toolset not found")
@@ -169,6 +212,7 @@ async def create_tool(
     current: CurrentUser = Depends(require_permission(Permission.TOOLS_WRITE)),
 ) -> Any:
     """Create a new tool within a toolset."""
+    _reject_builtin_mutation(toolset_id)
     validation = await validate_query(body.cypher)
     if validation.has_errors:
         return JSONResponse(
@@ -202,6 +246,11 @@ async def get_tool(
     current: CurrentUser = Depends(require_permission(Permission.TOOLS_READ)),
 ) -> ToolItem:
     """Return a tool by ID."""
+    if is_builtin_toolset_id(toolset_id):
+        synthetic = builtin_tool(tool_id, settings.MCP_ENABLED_BUILTINS)
+        if synthetic is None or synthetic.toolset_id != toolset_id:
+            raise HTTPException(status_code=404, detail="Tool not found")
+        return synthetic
     tool = await report_store.get_tool(tool_id)
     if not tool or tool.toolset_id != toolset_id:
         raise HTTPException(status_code=404, detail="Tool not found")
@@ -219,6 +268,7 @@ async def update_tool(
     current: CurrentUser = Depends(require_permission(Permission.TOOLS_WRITE)),
 ) -> Any:
     """Update a tool (creates a new version)."""
+    _reject_builtin_mutation(toolset_id)
     existing = await report_store.get_tool(tool_id)
     if not existing or existing.toolset_id != toolset_id:
         raise HTTPException(status_code=404, detail="Tool not found")
@@ -256,6 +306,7 @@ async def delete_tool(
     current: CurrentUser = Depends(require_permission(Permission.TOOLS_DELETE)),
 ) -> ToolIdResponse:
     """Delete a tool."""
+    _reject_builtin_mutation(toolset_id)
     existing = await report_store.get_tool(tool_id)
     if not existing or existing.toolset_id != toolset_id:
         raise HTTPException(status_code=404, detail="Tool not found")
@@ -276,6 +327,15 @@ async def call_tool(
     current: CurrentUser = Depends(require_permission(Permission.TOOLS_CALL)),
 ) -> Any:
     """Execute a tool's Cypher query with the provided arguments."""
+    if is_builtin_toolset_id(toolset_id):
+        # Built-in handlers are backed by Python, not Cypher — they're invoked
+        # by the MCP server, not this REST route.  Surface a clear error so
+        # clients know to use the MCP endpoint instead of executing an empty
+        # placeholder Cypher string.
+        raise HTTPException(
+            status_code=400,
+            detail="Built-in tools are invoked via the MCP server",
+        )
     tool = await report_store.get_tool(tool_id)
     if not tool or tool.toolset_id != toolset_id:
         raise HTTPException(status_code=404, detail="Tool not found")
@@ -308,6 +368,12 @@ async def list_tool_versions(
     current: CurrentUser = Depends(require_permission(Permission.TOOLS_READ)),
 ) -> ToolVersionListResponse:
     """List all versions of a tool."""
+    if is_builtin_toolset_id(toolset_id):
+        # Confirm the tool actually exists so we still 404 typos.
+        synthetic = builtin_tool(tool_id, settings.MCP_ENABLED_BUILTINS)
+        if synthetic is None or synthetic.toolset_id != toolset_id:
+            raise HTTPException(status_code=404, detail="Tool not found")
+        return ToolVersionListResponse(versions=[])
     tool = await report_store.get_tool(tool_id)
     if not tool or tool.toolset_id != toolset_id:
         raise HTTPException(status_code=404, detail="Tool not found")
@@ -326,6 +392,8 @@ async def get_tool_version(
     current: CurrentUser = Depends(require_permission(Permission.TOOLS_READ)),
 ) -> ToolVersion:
     """Return a specific version of a tool."""
+    if is_builtin_toolset_id(toolset_id):
+        raise HTTPException(status_code=404, detail="Tool version not found")
     v = await report_store.get_tool_version(tool_id, version)
     if not v or v.toolset_id != toolset_id:
         raise HTTPException(status_code=404, detail="Tool version not found")
