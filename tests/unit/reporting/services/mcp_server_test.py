@@ -502,12 +502,32 @@ def test_build_oauth_metadata_includes_jwks_uri_when_set():
 
 
 async def test_auth_middleware_passes_through_when_auth_disabled():
+    from reporting.authnz import CurrentUser
+    from reporting.schema.report_config import User
     from reporting.services.mcp_server import _MCPAuthMiddleware
 
     inner = AsyncMock()
     middleware = _MCPAuthMiddleware(inner)
 
-    with patch.object(mcp_module.settings, "DEVELOPMENT_ONLY_REQUIRE_AUTH", False):
+    dev_user = CurrentUser(
+        user=User(
+            user_id="dev",
+            sub="dev@example.com",
+            iss="dev",
+            email="dev@example.com",
+            display_name=None,
+            created_at=_NOW,
+            last_login=_NOW,
+        ),
+        jwt_claims={},
+        permissions=ALL_PERMISSIONS,
+    )
+
+    with patch.object(
+        mcp_module.settings, "DEVELOPMENT_ONLY_REQUIRE_AUTH", False
+    ), patch.object(
+        mcp_module, "_build_dev_current_user", AsyncMock(return_value=dev_user)
+    ):
         scope = {"type": "http", "path": "/mcp"}
         await middleware(scope, AsyncMock(), AsyncMock())
 
