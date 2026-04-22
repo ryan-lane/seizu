@@ -8,6 +8,7 @@ from mcp import types as mcp_types
 from reporting.authnz import CurrentUser
 from reporting.authnz.permissions import ALL_PERMISSIONS
 from reporting.schema.report_config import ReportListItem
+from reporting.schema.report_config import ReportVersion
 from reporting.schema.report_config import User
 from reporting.services.mcp_server import _build_mcp_server
 from reporting.services.mcp_server import _mcp_current_user
@@ -130,3 +131,233 @@ async def test_reports_create_requires_write_permission():
         _mcp_current_user.reset(user_tok)
     data = json.loads(result.root.content[0].text)
     assert "Permission denied" in data["error"]
+
+
+def _report_version(version: int = 1) -> ReportVersion:
+    return ReportVersion(
+        report_id="r1",
+        name="n",
+        version=version,
+        config={"rows": []},
+        created_at=_NOW,
+        created_by="u1",
+    )
+
+
+async def test_reports_get_returns_latest():
+    with patch(
+        "reporting.services.mcp_builtins.reports.report_store.get_report_latest",
+        new_callable=AsyncMock,
+        return_value=_report_version(),
+    ):
+        server = _build_mcp_server()
+        result = await _call(server, "reports__get", {"report_id": "r1"})
+        data = json.loads(result[0].text)
+
+    assert data["report_id"] == "r1"
+
+
+async def test_reports_get_returns_error_when_missing():
+    with patch(
+        "reporting.services.mcp_builtins.reports.report_store.get_report_latest",
+        new_callable=AsyncMock,
+        return_value=None,
+    ):
+        server = _build_mcp_server()
+        result = await _call(server, "reports__get", {"report_id": "nope"})
+        data = json.loads(result[0].text)
+
+    assert data == {"error": "Report not found"}
+
+
+async def test_reports_get_dashboard_returns_report():
+    with patch(
+        "reporting.services.mcp_builtins.reports.report_store.get_dashboard_report",
+        new_callable=AsyncMock,
+        return_value=_report_version(),
+    ):
+        server = _build_mcp_server()
+        result = await _call(server, "reports__get_dashboard", {})
+        data = json.loads(result[0].text)
+
+    assert data["report_id"] == "r1"
+
+
+async def test_reports_get_dashboard_returns_error_when_none():
+    with patch(
+        "reporting.services.mcp_builtins.reports.report_store.get_dashboard_report",
+        new_callable=AsyncMock,
+        return_value=None,
+    ):
+        server = _build_mcp_server()
+        result = await _call(server, "reports__get_dashboard", {})
+        data = json.loads(result[0].text)
+
+    assert data == {"error": "No dashboard report configured"}
+
+
+async def test_reports_create_version_success():
+    with patch(
+        "reporting.services.mcp_builtins.reports.report_store.save_report_version",
+        new_callable=AsyncMock,
+        return_value=_report_version(2),
+    ) as mock_save:
+        server = _build_mcp_server()
+        result = await _call(
+            server,
+            "reports__create_version",
+            {
+                "report_id": "r1",
+                "config": {"rows": []},
+                "comment": "why",
+            },
+        )
+        data = json.loads(result[0].text)
+
+    assert data["version"] == 2
+    mock_save.assert_awaited_once_with(
+        report_id="r1",
+        config={"rows": []},
+        created_by="u1",
+        comment="why",
+    )
+
+
+async def test_reports_create_version_returns_error_when_missing():
+    with patch(
+        "reporting.services.mcp_builtins.reports.report_store.save_report_version",
+        new_callable=AsyncMock,
+        return_value=None,
+    ):
+        server = _build_mcp_server()
+        result = await _call(
+            server,
+            "reports__create_version",
+            {"report_id": "nope", "config": {}},
+        )
+        data = json.loads(result[0].text)
+
+    assert data == {"error": "Report not found"}
+
+
+async def test_reports_delete_success():
+    with patch(
+        "reporting.services.mcp_builtins.reports.report_store.delete_report",
+        new_callable=AsyncMock,
+        return_value=True,
+    ):
+        server = _build_mcp_server()
+        result = await _call(server, "reports__delete", {"report_id": "r1"})
+        data = json.loads(result[0].text)
+
+    assert data == {"report_id": "r1"}
+
+
+async def test_reports_delete_returns_error_when_missing():
+    with patch(
+        "reporting.services.mcp_builtins.reports.report_store.delete_report",
+        new_callable=AsyncMock,
+        return_value=False,
+    ):
+        server = _build_mcp_server()
+        result = await _call(server, "reports__delete", {"report_id": "nope"})
+        data = json.loads(result[0].text)
+
+    assert data == {"error": "Report not found"}
+
+
+async def test_reports_pin_returns_error_when_missing():
+    with patch(
+        "reporting.services.mcp_builtins.reports.report_store.pin_report",
+        new_callable=AsyncMock,
+        return_value=False,
+    ):
+        server = _build_mcp_server()
+        result = await _call(
+            server, "reports__pin", {"report_id": "nope", "pinned": True}
+        )
+        data = json.loads(result[0].text)
+
+    assert data == {"error": "Report not found"}
+
+
+async def test_reports_set_dashboard_success():
+    with patch(
+        "reporting.services.mcp_builtins.reports.report_store.set_dashboard_report",
+        new_callable=AsyncMock,
+        return_value=True,
+    ):
+        server = _build_mcp_server()
+        result = await _call(server, "reports__set_dashboard", {"report_id": "r1"})
+        data = json.loads(result[0].text)
+
+    assert data == {"report_id": "r1"}
+
+
+async def test_reports_set_dashboard_returns_error_when_missing():
+    with patch(
+        "reporting.services.mcp_builtins.reports.report_store.set_dashboard_report",
+        new_callable=AsyncMock,
+        return_value=False,
+    ):
+        server = _build_mcp_server()
+        result = await _call(server, "reports__set_dashboard", {"report_id": "nope"})
+        data = json.loads(result[0].text)
+
+    assert data == {"error": "Report not found"}
+
+
+async def test_reports_list_versions_returns_versions():
+    with patch(
+        "reporting.services.mcp_builtins.reports.report_store.list_report_versions",
+        new_callable=AsyncMock,
+        return_value=[_report_version(1), _report_version(2)],
+    ):
+        server = _build_mcp_server()
+        result = await _call(server, "reports__list_versions", {"report_id": "r1"})
+        data = json.loads(result[0].text)
+
+    assert len(data["versions"]) == 2
+
+
+async def test_reports_list_versions_returns_error_when_missing():
+    with patch(
+        "reporting.services.mcp_builtins.reports.report_store.list_report_versions",
+        new_callable=AsyncMock,
+        return_value=[],
+    ):
+        server = _build_mcp_server()
+        result = await _call(server, "reports__list_versions", {"report_id": "nope"})
+        data = json.loads(result[0].text)
+
+    assert data == {"error": "Report not found"}
+
+
+async def test_reports_get_version_returns_version():
+    with patch(
+        "reporting.services.mcp_builtins.reports.report_store.get_report_version",
+        new_callable=AsyncMock,
+        return_value=_report_version(3),
+    ):
+        server = _build_mcp_server()
+        result = await _call(
+            server, "reports__get_version", {"report_id": "r1", "version": 3}
+        )
+        data = json.loads(result[0].text)
+
+    assert data["version"] == 3
+
+
+async def test_reports_get_version_returns_error_when_missing():
+    with patch(
+        "reporting.services.mcp_builtins.reports.report_store.get_report_version",
+        new_callable=AsyncMock,
+        return_value=None,
+    ):
+        server = _build_mcp_server()
+        result = await _call(
+            server, "reports__get_version", {"report_id": "r1", "version": 99}
+        )
+        data = json.loads(result[0].text)
+
+    assert data == {"error": "Version not found"}
