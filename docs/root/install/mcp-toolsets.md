@@ -206,7 +206,7 @@ Built-in tools are grouped by area. Permissions for each tool mirror the equival
 | `toolsets` | Full CRUD for toolsets and nested tools, plus version history. Create/update tool calls reuse Cypher validation. |
 | `roles` | List built-in and user-defined roles; CRUD for user-defined roles; role version history. |
 
-Which groups are exposed is controlled by the `MCP_ENABLED_BUILTINS` setting (see [backend configuration](backend.html#mcp-server)). All groups are enabled by default.
+Which groups are exposed is controlled by the `MCP_ENABLED_BUILTINS` setting (see [backend configuration](backend.html#mcp-server)). All groups are enabled by default; set it to ``none`` to disable all built-ins, or to a comma-separated list (e.g. ``graph,reports``) to enable only specific groups.
 
 ## MCP Server
 

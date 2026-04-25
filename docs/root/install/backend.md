@@ -127,7 +127,13 @@ Admins can create custom roles with arbitrary permission subsets via the API (``
 Seizu exposes a [Model Context Protocol (MCP)](https://modelcontextprotocol.io/) server at ``/api/v1/mcp``, allowing LLM agents such as Claude to query the Neo4j graph database using user-defined tools and a set of built-in management tools.
 
 * ``MCP_ENABLED``: Enable or disable the MCP server endpoint. Set to ``False`` to turn off the endpoint entirely; default: ``True``
-* ``MCP_ENABLED_BUILTINS``: Comma-separated list of built-in tool groups to expose. Known groups: ``graph``, ``reports``, ``scheduled_queries``, ``toolsets``, ``roles``. User-defined toolsets are always available regardless of this setting; default: all five groups
+* ``MCP_ENABLED_BUILTINS``: Controls which built-in tool groups are exposed. User-defined toolsets are always available regardless of this setting. Three modes:
+
+  * Unset or empty (default) — all built-in groups are enabled.
+  * ``none`` — all built-in groups are disabled; only user-defined toolsets are visible.
+  * Comma-separated list (e.g. ``graph,reports``) — only the listed groups are enabled.
+
+  Known groups: ``graph``, ``reports``, ``scheduled_queries``, ``toolsets``, ``roles``.
 
 #### MCP OAuth metadata (optional)
 
