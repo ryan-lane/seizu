@@ -104,7 +104,11 @@ class _MCPMiddleware:
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
         if scope["type"] in ("http", "websocket"):
             path = scope.get("path", "")
-            if path == "/api/v1/mcp" or path.startswith("/api/v1/mcp/"):
+            if (
+                path == "/api/v1/mcp"
+                or path.startswith("/api/v1/mcp/")
+                or path.startswith("/.well-known/oauth-")
+            ):
                 await self._mcp_app(scope, receive, send)
                 return
         await self._app(scope, receive, send)

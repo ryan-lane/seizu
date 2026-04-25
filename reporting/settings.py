@@ -61,6 +61,11 @@ JWT_AUDIENCE = str_env("JWT_AUDIENCE", "")
 # When DEVELOPMENT_ONLY_REQUIRE_AUTH is True, these are included in the config
 # response so the frontend can build its UserManager without build-time env vars.
 OIDC_AUTHORITY = str_env("OIDC_AUTHORITY", "")
+# Internal authority URL used by the server to fetch OIDC discovery documents.
+# In most deployments this equals OIDC_AUTHORITY. Set this when the server
+# cannot reach the public OIDC_AUTHORITY hostname (e.g. docker dev environments
+# with split internal/external hostnames). Defaults to OIDC_AUTHORITY when unset.
+OIDC_INTERNAL_AUTHORITY = str_env("OIDC_INTERNAL_AUTHORITY", "")
 OIDC_CLIENT_ID = str_env("OIDC_CLIENT_ID", "")
 OIDC_REDIRECT_URI = str_env("OIDC_REDIRECT_URI", "")
 OIDC_SCOPE = str_env("OIDC_SCOPE", "openid email")
@@ -173,3 +178,13 @@ MCP_ENABLED_BUILTINS = list_env(
 MCP_OAUTH_ISSUER = str_env("MCP_OAUTH_ISSUER", "")
 MCP_OAUTH_AUTHORIZATION_ENDPOINT = str_env("MCP_OAUTH_AUTHORIZATION_ENDPOINT", "")
 MCP_OAUTH_TOKEN_ENDPOINT = str_env("MCP_OAUTH_TOKEN_ENDPOINT", "")
+# Public base URL of the MCP endpoint (e.g. https://seizu.example.com/api/v1/mcp).
+# Required for OAuth discovery: used in the WWW-Authenticate resource_metadata
+# header and the RFC 9728 protected resource metadata document.
+# Leave empty to disable protected-resource metadata.
+MCP_RESOURCE_URL = str_env("MCP_RESOURCE_URL", "")
+# Override the RFC 7591 dynamic client registration endpoint advertised in the
+# OAuth metadata. When unset and both MCP_RESOURCE_URL and OIDC_CLIENT_ID are
+# configured, Seizu serves its own lightweight DCR endpoint that returns the
+# pre-configured OIDC_CLIENT_ID so MCP clients don't need a DCR-capable IdP.
+MCP_OAUTH_REGISTRATION_ENDPOINT = str_env("MCP_OAUTH_REGISTRATION_ENDPOINT", "")
