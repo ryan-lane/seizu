@@ -224,10 +224,10 @@ The frontend dev server does *not* proxy MCP traffic; always point your MCP clie
 
 #### Claude Code (CLI)
 
-Add Seizu as an MCP server with the `http` transport:
+Add Seizu as an MCP server with the `http` transport. Pass `--callback-port` to pin the OAuth callback to a fixed port — without it Claude picks a random port on each run, which won't match the redirect URI registered in your OIDC provider:
 
 ```bash
-claude mcp add --transport http seizu https://your-seizu-host/api/v1/mcp
+claude mcp add --transport http --callback-port 8888 seizu https://your-seizu-host/api/v1/mcp
 ```
 
 Or add it directly to `.mcp.json` in your project root:
@@ -237,7 +237,10 @@ Or add it directly to `.mcp.json` in your project root:
   "mcpServers": {
     "seizu": {
       "type": "http",
-      "url": "https://your-seizu-host/api/v1/mcp"
+      "url": "https://your-seizu-host/api/v1/mcp",
+      "oauth": {
+        "callbackPort": 8888
+      }
     }
   }
 }
@@ -251,7 +254,10 @@ Add an MCP server entry to your Claude Desktop configuration file (`~/Library/Ap
 {
   "mcpServers": {
     "seizu": {
-      "url": "https://your-seizu-host/api/v1/mcp"
+      "url": "https://your-seizu-host/api/v1/mcp",
+      "oauth": {
+        "callbackPort": 8888
+      }
     }
   }
 }
@@ -261,13 +267,13 @@ Add an MCP server entry to your Claude Desktop configuration file (`~/Library/Ap
 
 If Seizu is configured with OAuth metadata (auto-discovered from `OIDC_AUTHORITY`, or set explicitly via `MCP_OAUTH_AUTHORIZATION_ENDPOINT` / `MCP_OAUTH_TOKEN_ENDPOINT`), Claude will discover the OIDC provider via `/api/v1/mcp/.well-known/oauth-authorization-server` and prompt users to authenticate inside the client.
 
-Before enabling auth, register Claude's fixed OAuth callback URI in your OIDC provider:
+The `callbackPort` in the config above pins the OAuth callback server to port **8888**. Register that port as a redirect URI in your OIDC provider before connecting:
 
 ```
 http://localhost:8888/callback
 ```
 
-Claude completes the OAuth flow by starting a local HTTP server on port **8888** to receive the authorization code. Without the redirect URI registered, the OAuth handshake will be rejected. For the development Authentik stack this is pre-configured automatically by the blueprint. For any other OIDC provider (Authentik in production, Okta, Keycloak, etc.) you must add it manually.
+Without this, the OAuth handshake will be rejected. For the development Authentik stack this is pre-configured automatically by the blueprint. For any other OIDC provider (Authentik in production, Okta, Keycloak, etc.) you must add it manually.
 
 > **VM / remote development:** If Claude is running on the VM, its OAuth callback server binds to port **8888 on the VM**. Authentik redirects the browser (on your local machine) to `http://localhost:8888/callback`, which means your local machine's port 8888 must be tunnelled to the VM. Add `-L 8888:localhost:8888` to your SSH tunnel command alongside the other ports — see the [quickstart](../dev/docker-compose.html#running-on-a-vm-or-remote-host) for the full tunnel commands.
 
