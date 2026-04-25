@@ -56,11 +56,9 @@ def test_every_builtin_has_required_permissions():
         assert tool.required_permissions, f"{tool.name} is missing required_permissions"
 
 
-# Parametrize over the full registry, evaluated at collection time with all
-# groups explicitly named so the test is independent of settings.
 @pytest.mark.parametrize(
     "tool",
-    list_builtin_tools(all_group_names()),
+    list_builtin_tools(),
     ids=lambda t: t.name,
 )
 async def test_each_builtin_enforces_its_required_permission(tool):
