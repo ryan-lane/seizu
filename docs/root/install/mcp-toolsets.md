@@ -257,13 +257,17 @@ Add an MCP server entry to your Claude Desktop configuration file (`~/Library/Ap
 }
 ```
 
-If Seizu is configured with OAuth metadata (`MCP_OAUTH_AUTHORIZATION_ENDPOINT` and `MCP_OAUTH_TOKEN_ENDPOINT`, or auto-discovered via `OIDC_AUTHORITY`), Claude will automatically discover the OIDC provider via the metadata endpoint at `/api/v1/mcp/.well-known/oauth-authorization-server` and prompt users to authenticate inside the client.
+#### With OAuth authentication
 
-#### OAuth callback port
+If Seizu is configured with OAuth metadata (auto-discovered from `OIDC_AUTHORITY`, or set explicitly via `MCP_OAUTH_AUTHORIZATION_ENDPOINT` / `MCP_OAUTH_TOKEN_ENDPOINT`), Claude will discover the OIDC provider via `/api/v1/mcp/.well-known/oauth-authorization-server` and prompt users to authenticate inside the client.
 
-When Claude completes the MCP OAuth flow it starts a local HTTP server on port **8888** to receive the authorization callback. Your OIDC provider must have `http://localhost:8888/callback` registered as an allowed redirect URI, otherwise the OAuth handshake will be rejected.
+Before enabling auth, register Claude's fixed OAuth callback URI in your OIDC provider:
 
-For the development Authentik stack this redirect URI is pre-configured automatically by the blueprint. For any other OIDC provider (Authentik in production, Okta, Keycloak, etc.) you must add it manually.
+```
+http://localhost:8888/callback
+```
+
+Claude completes the OAuth flow by starting a local HTTP server on port **8888** to receive the authorization code. Without the redirect URI registered, the OAuth handshake will be rejected. For the development Authentik stack this is pre-configured automatically by the blueprint. For any other OIDC provider (Authentik in production, Okta, Keycloak, etc.) you must add it manually.
 
 > **VM / remote development:** If Claude is running on the VM, its OAuth callback server binds to port **8888 on the VM**. Authentik redirects the browser (on your local machine) to `http://localhost:8888/callback`, which means your local machine's port 8888 must be tunnelled to the VM. Add `-L 8888:localhost:8888` to your SSH tunnel command alongside the other ports — see the [quickstart](../dev/docker-compose.html#running-on-a-vm-or-remote-host) for the full tunnel commands.
 
