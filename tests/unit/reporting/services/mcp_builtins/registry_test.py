@@ -48,8 +48,9 @@ def test_find_builtin_respects_group_filter():
         assert find_builtin("reports__list") is None
 
 
-def test_list_builtin_tools_none_sentinel_disables_all():
-    with patch("reporting.settings.MCP_ENABLED_BUILTINS", ["none"]):
+@pytest.mark.parametrize("sentinel", ["none", "NONE", "None", " none ", " NONE "])
+def test_list_builtin_tools_none_sentinel_disables_all(sentinel):
+    with patch("reporting.settings.MCP_ENABLED_BUILTINS", [sentinel]):
         assert list_builtin_tools() == []
 
 

@@ -56,9 +56,10 @@ def _get_allowed() -> Optional[set]:
     enabled = settings.MCP_ENABLED_BUILTINS
     if not enabled:
         return None
-    if enabled == ["none"]:
+    normalized = [v.strip().lower() for v in enabled]
+    if normalized == ["none"]:
         return set()
-    return set(enabled)
+    return set(normalized)
 
 
 def list_builtin_groups() -> List[BuiltinGroup]:
