@@ -1,4 +1,4 @@
-FROM python:3.12-slim AS base
+FROM python:3.12-slim-bookworm AS base
 
 RUN groupadd seizu && \
     useradd -s /bin/bash -d /home/seizu -m -g seizu seizu

@@ -18,6 +18,19 @@ dependencies = [
 [project.scripts]
 seizu = "seizu_cli.main:app"
 
+[tool.ruff]
+line-length = 120
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP"]
+# E203: whitespace before ':' (handled by ruff-format; matches prior black/flake8 behavior)
+# E701: multiple statements on one line (colon) — intentionally allowed as before
+ignore = ["E203", "E701"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["reporting", "seizu_cli", "seizu_schema"]
+
 [tool.hatch.build.targets.wheel]
 # Ship the CLI package and the shared schema package.
 # The reporting/ backend is not part of the pip-installable distribution.
