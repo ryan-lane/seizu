@@ -216,9 +216,48 @@ Authentication uses the same Bearer JWT tokens as the REST API. In development, 
 
 Tool names are namespaced as `{toolset_name}__{tool_name}` (double underscore separator) for user-defined tools, or `{group}__{action}` for built-ins (e.g. `graph__query`, `reports__list`). Only tools in **enabled** toolsets and built-in groups included in `MCP_ENABLED_BUILTINS` are exposed to MCP clients.
 
-### Connecting Claude Desktop
+### Connecting Claude
 
-Add an MCP server entry to your Claude Desktop configuration:
+The MCP server is always available on port **8080** (the backend API port). The frontend dev server on port 3000 does *not* proxy MCP traffic — always point your MCP client directly at port 8080.
+
+#### Claude Code (CLI)
+
+Add Seizu as an MCP server with the `http` transport:
+
+```bash
+claude mcp add --transport http seizu http://localhost:8080/api/v1/mcp
+```
+
+Or add it directly to `.mcp.json` in your project root:
+
+```json
+{
+  "mcpServers": {
+    "seizu": {
+      "type": "http",
+      "url": "http://localhost:8080/api/v1/mcp"
+    }
+  }
+}
+```
+
+#### Claude Desktop
+
+Add an MCP server entry to your Claude Desktop configuration file (`~/Library/Application Support/Claude/claude_desktop_config.json` on macOS, `~/.config/Claude/claude_desktop_config.json` on Linux):
+
+**Local development:**
+
+```json
+{
+  "mcpServers": {
+    "seizu": {
+      "url": "http://localhost:8080/api/v1/mcp"
+    }
+  }
+}
+```
+
+**Production:**
 
 ```json
 {
@@ -230,6 +269,14 @@ Add an MCP server entry to your Claude Desktop configuration:
 }
 ```
 
-If Seizu is configured with OAuth metadata (`MCP_OAUTH_AUTHORIZATION_ENDPOINT` and `MCP_OAUTH_TOKEN_ENDPOINT`), Claude Desktop will automatically discover the OIDC provider via the metadata endpoint at `/api/v1/mcp/.well-known/oauth-authorization-server` and prompt users to authenticate inside the client.
+If Seizu is configured with OAuth metadata (`MCP_OAUTH_AUTHORIZATION_ENDPOINT` and `MCP_OAUTH_TOKEN_ENDPOINT`), Claude will automatically discover the OIDC provider via the metadata endpoint at `/api/v1/mcp/.well-known/oauth-authorization-server` and prompt users to authenticate inside the client.
+
+#### OAuth callback port
+
+When Claude completes the MCP OAuth flow it starts a local HTTP server on port **8888** to receive the authorization callback. Your OIDC provider must have `http://localhost:8888/callback` registered as an allowed redirect URI, otherwise the OAuth handshake will be rejected.
+
+For the development Authentik stack this redirect URI is pre-configured automatically by the blueprint. For any other OIDC provider (Authentik in production, Okta, Keycloak, etc.) you must add it manually.
+
+> **VM / remote development:** If Claude is running on the VM, its OAuth callback server binds to port **8888 on the VM**. Authentik redirects the browser (on your local machine) to `http://localhost:8888/callback`, which means your local machine's port 8888 must be tunnelled to the VM. Add `-L 8888:localhost:8888` to your SSH tunnel command alongside the other ports — see the [quickstart](../dev/docker-compose.html#running-on-a-vm-or-remote-host) for the full tunnel commands.
 
 See the [backend configuration](backend.html#mcp-server) for available settings.

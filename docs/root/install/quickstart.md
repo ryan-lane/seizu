@@ -19,7 +19,33 @@ make logs seizu-node
 
 Once fully started, the UI will be accessible at: http://localhost:3000
 
-The backend API is accessible at: http://localhost:8080
+The backend API (and MCP server) is accessible at: http://localhost:8080
+
+## Running on a VM or remote host
+
+If the docker-compose stack is running on a virtual machine or remote host rather than your local machine, you must forward the relevant ports over SSH before the UI and MCP clients can reach the stack. Only ports 3000 and 8080 are exposed to the host by the default compose configuration:
+
+| Port | Service |
+|------|---------|
+| 3000 | Frontend dev server (UI) |
+| 8080 | Backend API and MCP server |
+| 9000 | Authentik OIDC provider (only when the `auth` profile is active) |
+| 8888 | Claude MCP OAuth callback (only when using Claude with auth enabled) |
+
+Forward ports with SSH local port forwarding:
+
+```bash
+# Basic stack (no auth)
+ssh -L 3000:localhost:3000 -L 8080:localhost:8080 user@vm-host
+
+# With Authentik auth enabled
+ssh -L 3000:localhost:3000 -L 8080:localhost:8080 -L 9000:localhost:9000 user@vm-host
+
+# With Authentik auth enabled and Claude running on the VM
+ssh -L 3000:localhost:3000 -L 8080:localhost:8080 -L 9000:localhost:9000 -L 8888:localhost:8888 user@vm-host
+```
+
+Add `-N` to open the tunnels without starting a shell, or `-f -N` to background them. Once the tunnels are up, http://localhost:3000 and http://localhost:8080 resolve to the remote stack as if it were running locally.
 
 ## Seeding reports
 
