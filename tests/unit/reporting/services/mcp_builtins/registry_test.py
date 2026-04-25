@@ -48,6 +48,11 @@ def test_find_builtin_respects_group_filter():
         assert find_builtin("reports__list") is None
 
 
+def test_list_builtin_tools_none_sentinel_disables_all():
+    with patch("reporting.settings.MCP_ENABLED_BUILTINS", ["none"]):
+        assert list_builtin_tools() == []
+
+
 def test_find_builtin_unknown_name_returns_none():
     assert find_builtin("nonexistent__tool") is None
 

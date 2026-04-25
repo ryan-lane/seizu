@@ -47,12 +47,18 @@ def all_group_names() -> List[str]:
 def _get_allowed() -> Optional[set]:
     """Read MCP_ENABLED_BUILTINS from settings and return the allowed group set.
 
-    Returns None when the list is empty, meaning all groups are enabled.
+    Returns None when unset/empty (all groups enabled).
+    Returns an empty set when set to the sentinel value "none" (all disabled).
+    Returns a set of group names otherwise.
     """
     from reporting import settings
 
     enabled = settings.MCP_ENABLED_BUILTINS
-    return set(enabled) if enabled else None
+    if not enabled:
+        return None
+    if enabled == ["none"]:
+        return set()
+    return set(enabled)
 
 
 def list_builtin_groups() -> List[BuiltinGroup]:
