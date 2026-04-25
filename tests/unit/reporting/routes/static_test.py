@@ -1,16 +1,13 @@
 import re
 
-from httpx import ASGITransport
-from httpx import AsyncClient
+from httpx import ASGITransport, AsyncClient
 
 from reporting.app import create_app
 
 
 async def test_healthcheck(mocker):
     app = create_app()
-    async with AsyncClient(
-        transport=ASGITransport(app=app), base_url="http://test"
-    ) as client:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         ret = await client.get("/healthcheck")
     assert ret.status_code == 200
     assert ret.json() == {"success": True}
@@ -31,9 +28,7 @@ async def test_index(mocker, tmp_path):
     mocker.patch("reporting.settings.STATIC_FOLDER", str(tmp_path))
 
     app = create_app()
-    async with AsyncClient(
-        transport=ASGITransport(app=app), base_url="http://test"
-    ) as client:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         # SPA fallback serves index.html for unknown paths
         ret = await client.get("/")
         assert ret.status_code == 200

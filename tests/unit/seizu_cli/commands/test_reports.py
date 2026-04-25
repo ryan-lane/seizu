@@ -1,4 +1,5 @@
 """Tests for seizu_cli.commands.reports."""
+
 from unittest.mock import MagicMock
 
 import pytest
@@ -128,9 +129,7 @@ def test_create_report(mock_client: MagicMock) -> None:
     assert result.exit_code == 0
     assert "r-new" in result.output
     assert "New Report" in result.output
-    mock_client.post.assert_called_once_with(
-        "/api/v1/reports", json={"name": "New Report"}
-    )
+    mock_client.post.assert_called_once_with("/api/v1/reports", json={"name": "New Report"})
 
 
 def test_create_report_api_error(mock_client: MagicMock) -> None:

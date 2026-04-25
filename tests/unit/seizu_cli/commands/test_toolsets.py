@@ -1,4 +1,5 @@
 """Tests for seizu_cli.commands.toolsets (toolsets + nested tools)."""
+
 from unittest.mock import MagicMock
 
 import pytest
@@ -445,17 +446,13 @@ def test_call_tool_with_args_json(mock_client: MagicMock) -> None:
 
 
 def test_call_tool_invalid_args_json(mock_client: MagicMock) -> None:
-    result = runner.invoke(
-        app, ["tools", "call", "ts1", "tool1", "--args-json", "not-json"]
-    )
+    result = runner.invoke(app, ["tools", "call", "ts1", "tool1", "--args-json", "not-json"])
     assert result.exit_code == 1
     mock_client.post.assert_not_called()
 
 
 def test_call_tool_invalid_arg_format(mock_client: MagicMock) -> None:
-    result = runner.invoke(
-        app, ["tools", "call", "ts1", "tool1", "--arg", "no-equals-sign"]
-    )
+    result = runner.invoke(app, ["tools", "call", "ts1", "tool1", "--arg", "no-equals-sign"])
     assert result.exit_code == 1
     mock_client.post.assert_not_called()
 
@@ -494,6 +491,4 @@ def test_tool_version_get(mock_client: MagicMock) -> None:
     mock_client.get.return_value = _tool_detail(version=3)
     result = runner.invoke(app, ["tools", "version-get", "ts1", "tool1", "3"])
     assert result.exit_code == 0
-    mock_client.get.assert_called_once_with(
-        "/api/v1/toolsets/ts1/tools/tool1/versions/3"
-    )
+    mock_client.get.assert_called_once_with("/api/v1/toolsets/ts1/tools/tool1/versions/3")

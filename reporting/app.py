@@ -1,25 +1,19 @@
 import base64
 import os
 import secrets
+from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from typing import Any
-from typing import AsyncIterator
 from urllib.parse import urlparse
 
 import secure
-from fastapi import FastAPI
-from fastapi import HTTPException
-from fastapi import Request
-from fastapi.responses import FileResponse
-from fastapi.responses import HTMLResponse
-from fastapi.responses import JSONResponse
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import Response
 from starlette.types import ASGIApp as StarletteASGIApp
-from starlette.types import Receive
-from starlette.types import Scope
-from starlette.types import Send
+from starlette.types import Receive, Scope, Send
 
 from reporting import settings
 from reporting.routes import config as config_routes
@@ -34,7 +28,6 @@ from reporting.routes import toolsets as toolsets_routes
 from reporting.routes import users as users_routes
 from reporting.routes import validate as validate_routes
 from reporting.services import report_store
-
 
 _CSP_NONCE_PLACEHOLDER = "{{ csp_nonce() }}"
 
@@ -81,9 +74,7 @@ class _SecurityHeadersMiddleware(BaseHTTPMiddleware):
         request.state.csp_nonce = _generate_csp_nonce()
         response = await call_next(request)
         self._secure_headers.set_headers(response)
-        response.headers["Content-Security-Policy"] = _build_csp_policy(
-            request.state.csp_nonce
-        )
+        response.headers["Content-Security-Policy"] = _build_csp_policy(request.state.csp_nonce)
         return response
 
 
@@ -104,11 +95,7 @@ class _MCPMiddleware:
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
         if scope["type"] in ("http", "websocket"):
             path = scope.get("path", "")
-            if (
-                path == "/api/v1/mcp"
-                or path.startswith("/api/v1/mcp/")
-                or path.startswith("/.well-known/oauth-")
-            ):
+            if path == "/api/v1/mcp" or path.startswith("/api/v1/mcp/") or path.startswith("/.well-known/oauth-"):
                 await self._mcp_app(scope, receive, send)
                 return
         await self._app(scope, receive, send)
@@ -116,9 +103,7 @@ class _MCPMiddleware:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
-    should_init = settings.DYNAMODB_CREATE_TABLE or (
-        settings.REPORT_STORE_BACKEND == "sqlmodel"
-    )
+    should_init = settings.DYNAMODB_CREATE_TABLE or (settings.REPORT_STORE_BACKEND == "sqlmodel")
     if should_init:
         await report_store.initialize()
     mcp_session_manager = getattr(app.state, "mcp_session_manager", None)
@@ -150,9 +135,7 @@ def create_app() -> FastAPI:
     app.add_middleware(_SecurityHeadersMiddleware, secure_headers=secure_headers)
 
     @app.exception_handler(HTTPException)
-    async def http_exception_handler(
-        request: Request, exc: HTTPException
-    ) -> JSONResponse:
+    async def http_exception_handler(request: Request, exc: HTTPException) -> JSONResponse:
         return JSONResponse(
             status_code=exc.status_code,
             content={
@@ -224,7 +207,7 @@ def _register_static_routes(app: FastAPI, static_folder: str) -> None:
         # Fall back to serving index.html for all other paths (SPA)
         index_path = os.path.join(static_folder, "index.html")
         if os.path.isfile(index_path):
-            with open(index_path, "r", encoding="utf-8") as f:
+            with open(index_path, encoding="utf-8") as f:
                 content = _inject_csp_nonce(f.read(), request.state.csp_nonce)
             return HTMLResponse(
                 content=content,

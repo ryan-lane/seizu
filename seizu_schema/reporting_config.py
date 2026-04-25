@@ -4,16 +4,11 @@ This module is the single authoritative source for the reporting dashboard
 configuration schema.  It is used by both the ``reporting`` backend and the
 ``seizu_cli`` CLI; neither package defines these models independently.
 """
-from typing import Any
-from typing import Dict
-from typing import List
-from typing import Literal
-from typing import Optional
+
+from typing import Any, Literal
 
 import yaml
-from pydantic import BaseModel
-from pydantic import Field
-from pydantic import field_validator
+from pydantic import BaseModel, Field, field_validator
 
 
 class InputDefault(BaseModel):
@@ -42,7 +37,7 @@ class Input(BaseModel):
         examples=["autocomplete"],
     )
 
-    cypher: Optional[str] = Field(
+    cypher: str | None = Field(
         default=None,
         description="The Cypher query to execute. Must return ``value``.",
         examples=[
@@ -55,7 +50,7 @@ class Input(BaseModel):
         ],
     )
 
-    default: Optional[InputDefault] = Field(
+    default: InputDefault | None = Field(
         default=None,
         description="The default value to set if no value is selected.",
         examples=[
@@ -68,7 +63,7 @@ class Input(BaseModel):
         ],
     )
 
-    size: Optional[int] = Field(
+    size: int | None = Field(
         default=2,
         description="The size of the input element.",
         examples=["2"],
@@ -76,17 +71,14 @@ class Input(BaseModel):
 
 
 class BarPanelSettings(BaseModel):
-    legend: Optional[str] = Field(
+    legend: str | None = Field(
         default=None,
-        description=(
-            "The type of legend to use; ``row`` or ``column``. If unset,"
-            " then no legend will be used."
-        ),
+        description=("The type of legend to use; ``row`` or ``column``. If unset, then no legend will be used."),
     )
 
 
 class PiePanelSettings(BaseModel):
-    legend: Optional[str] = Field(
+    legend: str | None = Field(
         default=None,
         description=(
             "The type of legend to use; ``row`` or ``column``. If unset,"
@@ -97,20 +89,14 @@ class PiePanelSettings(BaseModel):
 
 
 class GraphPanelSettings(BaseModel):
-    node_label: Optional[str] = Field(
+    node_label: str | None = Field(
         default=None,
-        description=(
-            "The node property to display as the node label."
-            " Defaults to ``label`` if unset."
-        ),
+        description=("The node property to display as the node label. Defaults to ``label`` if unset."),
     )
 
-    node_color_by: Optional[str] = Field(
+    node_color_by: str | None = Field(
         default=None,
-        description=(
-            "The node property to use for color grouping."
-            " Defaults to ``group`` if unset."
-        ),
+        description=("The node property to use for color grouping. Defaults to ``group`` if unset."),
     )
 
 
@@ -120,13 +106,13 @@ class PanelParam(BaseModel):
         examples=["severity"],
     )
 
-    input_id: Optional[str] = Field(
+    input_id: str | None = Field(
         default=None,
         description="Reference to the query in the inputs section.",
         examples=["cve_base_severity"],
     )
 
-    value: Optional[Any] = Field(
+    value: Any | None = Field(
         default=None,
         description="The parameter value to pass into the query.",
         examples=[
@@ -156,13 +142,13 @@ class Panel(BaseModel):
         examples=["table"],
     )
 
-    cypher: Optional[str] = Field(
+    cypher: str | None = Field(
         default=None,
         description="A reference to a cypher from the cypher section of the configuration.",
         examples=["cves"],
     )
 
-    details_cypher: Optional[str] = Field(
+    details_cypher: str | None = Field(
         default=None,
         description=(
             "A reference to a cypher from the cypher section of the configuration."
@@ -173,7 +159,7 @@ class Panel(BaseModel):
         examples=["cves-details"],
     )
 
-    params: List[PanelParam] = Field(
+    params: list[PanelParam] = Field(
         default_factory=list,
         description=(
             "A list of parameters to send into the query. The parameters can"
@@ -192,13 +178,13 @@ class Panel(BaseModel):
         ],
     )
 
-    caption: Optional[str] = Field(
+    caption: str | None = Field(
         default=None,
         description="The caption to use for the panel.",
         examples=["Critical CVEs"],
     )
 
-    table_id: Optional[str] = Field(
+    table_id: str | None = Field(
         default=None,
         description=(
             "The cypher attribute to use for the table's unique ID, if using a"
@@ -209,11 +195,9 @@ class Panel(BaseModel):
         examples=["cve_id"],
     )
 
-    markdown: Optional[str] = Field(
+    markdown: str | None = Field(
         default=None,
-        description=(
-            "The markdown to use for the panel. Only used for type ``markdown``."
-        ),
+        description=("The markdown to use for the panel. Only used for type ``markdown``."),
         examples=[
             """
             .. code-block:: markdown
@@ -229,19 +213,19 @@ class Panel(BaseModel):
         ],
     )
 
-    size: Optional[int] = Field(
+    size: int | None = Field(
         default=2,
         description="The size of the panel.",
         examples=["2"],
     )
 
-    threshold: Optional[float] = Field(
+    threshold: float | None = Field(
         default=None,
         description="The threshold value for progress panels.",
         examples=["70"],
     )
 
-    bar_settings: Optional[BarPanelSettings] = Field(
+    bar_settings: BarPanelSettings | None = Field(
         default=None,
         description="Settings specific to bar panels.",
         examples=[
@@ -254,7 +238,7 @@ class Panel(BaseModel):
         ],
     )
 
-    pie_settings: Optional[PiePanelSettings] = Field(
+    pie_settings: PiePanelSettings | None = Field(
         default=None,
         description="Settings specific to pie panels.",
         examples=[
@@ -267,7 +251,7 @@ class Panel(BaseModel):
         ],
     )
 
-    graph_settings: Optional[GraphPanelSettings] = Field(
+    graph_settings: GraphPanelSettings | None = Field(
         default=None,
         description="Settings specific to graph panels.",
         examples=[
@@ -281,12 +265,9 @@ class Panel(BaseModel):
         ],
     )
 
-    metric: Optional[str] = Field(
+    metric: str | None = Field(
         default=None,
-        description=(
-            "The statsd metric to send from the panel data."
-            " Only used for ``count`` and ``progress`` panels."
-        ),
+        description=("The statsd metric to send from the panel data. Only used for ``count`` and ``progress`` panels."),
         examples=["cves.severity"],
     )
 
@@ -297,7 +278,7 @@ class Row(BaseModel):
         examples=["CVEs"],
     )
 
-    panels: List[Panel] = Field(
+    panels: list[Panel] = Field(
         description="The panels to show in the row.",
         examples=[
             """
@@ -320,8 +301,7 @@ class Report(BaseModel):
     schema_version: int = Field(
         default=1,
         description=(
-            "The schema version of the report config."
-            " Increment when making breaking changes to the report schema."
+            "The schema version of the report config. Increment when making breaking changes to the report schema."
         ),
         examples=[1],
     )
@@ -331,7 +311,7 @@ class Report(BaseModel):
         examples=["CVEs"],
     )
 
-    queries: Dict[str, str] = Field(
+    queries: dict[str, str] = Field(
         default_factory=dict,
         description=(
             "Named Cypher queries for this report."
@@ -350,7 +330,7 @@ class Report(BaseModel):
         ],
     )
 
-    inputs: List[Input] = Field(
+    inputs: list[Input] = Field(
         default_factory=list,
         description="The inputs to use for the report.",
         examples=[
@@ -372,7 +352,7 @@ class Report(BaseModel):
         ],
     )
 
-    rows: List[Row] = Field(
+    rows: list[Row] = Field(
         default_factory=list,
         description="The rows of the report.",
         examples=[
@@ -394,7 +374,7 @@ class Report(BaseModel):
 
 
 class ScheduledQueryWatchScan(BaseModel):
-    grouptype: Optional[str] = Field(
+    grouptype: str | None = Field(
         default=".*",
         description=(
             "Match against the grouptype attribute of the SyncMetadata"
@@ -404,7 +384,7 @@ class ScheduledQueryWatchScan(BaseModel):
         examples=["CVE"],
     )
 
-    syncedtype: Optional[str] = Field(
+    syncedtype: str | None = Field(
         default=".*",
         description=(
             "Match against the syncedtype attribute of the SyncMetadata"
@@ -414,7 +394,7 @@ class ScheduledQueryWatchScan(BaseModel):
         examples=["year"],
     )
 
-    groupid: Optional[str] = Field(
+    groupid: str | None = Field(
         default=".*",
         description=(
             "Match against the groupid attribute of the SyncMetadata"
@@ -431,7 +411,7 @@ class ScheduledQueryAction(BaseModel):
         examples=["slack", "sqs"],
     )
 
-    action_config: Dict[str, Any] = Field(
+    action_config: dict[str, Any] = Field(
         description=(
             "The configuration for the action. See the documentation for the"
             " relevant scheduled query module for information about the"
@@ -482,7 +462,7 @@ class ScheduledQuery(BaseModel):
         examples=["recent-cves"],
     )
 
-    params: List[ScheduledQueryParam] = Field(
+    params: list[ScheduledQueryParam] = Field(
         default_factory=list,
         description=(
             "A dictionary of parameters to pass to the cypher query. The keys"
@@ -504,16 +484,13 @@ class ScheduledQuery(BaseModel):
         ],
     )
 
-    frequency: Optional[int] = Field(
+    frequency: int | None = Field(
         default=None,
-        description=(
-            "The frequency of the scheduled query in minutes. Mutually"
-            " exclusive with ``watch_scans``."
-        ),
+        description=("The frequency of the scheduled query in minutes. Mutually exclusive with ``watch_scans``."),
         examples=["1440"],
     )
 
-    watch_scans: List[ScheduledQueryWatchScan] = Field(
+    watch_scans: list[ScheduledQueryWatchScan] = Field(
         default_factory=list,
         description=(
             "The scans to watch for the scheduled query. Based on"
@@ -534,16 +511,13 @@ class ScheduledQuery(BaseModel):
         ],
     )
 
-    enabled: Optional[bool] = Field(
+    enabled: bool | None = Field(
         default=True,
-        description=(
-            "Whether the scheduled query should be enabled. If not set, the"
-            " scheduled query will be enabled."
-        ),
+        description=("Whether the scheduled query should be enabled. If not set, the scheduled query will be enabled."),
         examples=["true"],
     )
 
-    actions: List[ScheduledQueryAction] = Field(
+    actions: list[ScheduledQueryAction] = Field(
         default_factory=list,
         description=("The actions to perform when the scheduled query is triggered."),
         examples=[
@@ -569,7 +543,7 @@ class ToolParamDef(BaseModel):
     type: Literal["string", "integer", "float", "boolean"]
     description: str = ""
     required: bool = True
-    default: Optional[Any] = None
+    default: Any | None = None
 
 
 class ToolDef(BaseModel):
@@ -578,7 +552,7 @@ class ToolDef(BaseModel):
     name: str
     description: str = ""
     cypher: str
-    parameters: List[ToolParamDef] = Field(default_factory=list)
+    parameters: list[ToolParamDef] = Field(default_factory=list)
     enabled: bool = True
 
 
@@ -588,11 +562,11 @@ class ToolsetDef(BaseModel):
     name: str
     description: str = ""
     enabled: bool = True
-    tools: Dict[str, ToolDef] = Field(default_factory=dict)
+    tools: dict[str, ToolDef] = Field(default_factory=dict)
 
 
 class ReportingConfig(BaseModel):
-    queries: Dict[str, str] = Field(
+    queries: dict[str, str] = Field(
         default_factory=dict,
         description="The queries to use for the report.",
         examples=[
@@ -610,7 +584,7 @@ class ReportingConfig(BaseModel):
         ],
     )
 
-    dashboard: Optional[str] = Field(
+    dashboard: str | None = Field(
         default=None,
         description=(
             "Key of the report in the ``reports`` section to use as the default"
@@ -619,7 +593,7 @@ class ReportingConfig(BaseModel):
         examples=["dashboard"],
     )
 
-    reports: Dict[str, Report] = Field(
+    reports: dict[str, Report] = Field(
         default_factory=dict,
         description="The reports to use for the report.",
         examples=[
@@ -639,7 +613,7 @@ class ReportingConfig(BaseModel):
         ],
     )
 
-    scheduled_queries: List[ScheduledQuery] = Field(
+    scheduled_queries: list[ScheduledQuery] = Field(
         default_factory=list,
         description="The scheduled queries to run.",
         examples=[
@@ -658,7 +632,7 @@ class ReportingConfig(BaseModel):
         ],
     )
 
-    toolsets: Dict[str, ToolsetDef] = Field(
+    toolsets: dict[str, ToolsetDef] = Field(
         default_factory=dict,
         description="Toolset definitions for MCP tool exposure.",
         examples=[
@@ -689,7 +663,7 @@ class ReportingConfig(BaseModel):
         return v
 
 
-def output_json_schema() -> Dict[str, Any]:
+def output_json_schema() -> dict[str, Any]:
     schema = ReportingConfig.model_json_schema()
     schema["$schema"] = "https://json-schema.org/draft/2020-12/schema"
     return schema

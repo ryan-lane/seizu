@@ -1,7 +1,6 @@
 from fastapi import APIRouter
 
-from reporting import scheduled_query_modules
-from reporting import settings
+from reporting import scheduled_query_modules, settings
 from reporting.schema import reporting_config
 
 router = APIRouter()
@@ -20,8 +19,7 @@ async def get_config() -> dict:
             "scope": settings.OIDC_SCOPE,
         }
     action_schemas = {
-        name: [f.model_dump() for f in fields]
-        for name, fields in scheduled_query_modules.get_action_schemas().items()
+        name: [f.model_dump() for f in fields] for name, fields in scheduled_query_modules.get_action_schemas().items()
     }
     return {
         "auth_required": settings.DEVELOPMENT_ONLY_REQUIRE_AUTH,

@@ -1,6 +1,6 @@
 """CLI configuration loaded from ~/.config/seizu/seizu.conf."""
+
 from pathlib import Path
-from typing import Optional
 
 import yaml
 from pydantic import BaseModel
@@ -13,11 +13,11 @@ _DEFAULT_SEED_FILE = _DEFAULT_CONFIG_DIR / "reporting-dashboard.yaml"
 class SeizuConfig(BaseModel):
     """Parsed contents of ~/.config/seizu/seizu.conf."""
 
-    api_url: Optional[str] = None
-    seed_file: Optional[str] = None
+    api_url: str | None = None
+    seed_file: str | None = None
 
 
-def load_config(config_file: Optional[Path] = None) -> SeizuConfig:
+def load_config(config_file: Path | None = None) -> SeizuConfig:
     """Load the CLI config file.
 
     Reads *config_file* if provided, otherwise falls back to

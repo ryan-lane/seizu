@@ -1,18 +1,14 @@
 """Tests for the ``reports__*`` MCP built-in group."""
+
 import json
-from unittest.mock import AsyncMock
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 from mcp import types as mcp_types
 
 from reporting.authnz import CurrentUser
 from reporting.authnz.permissions import ALL_PERMISSIONS
-from reporting.schema.report_config import ReportListItem
-from reporting.schema.report_config import ReportVersion
-from reporting.schema.report_config import User
-from reporting.services.mcp_server import _build_mcp_server
-from reporting.services.mcp_server import _mcp_current_user
-from reporting.services.mcp_server import _mcp_permissions
+from reporting.schema.report_config import ReportListItem, ReportVersion, User
+from reporting.services.mcp_server import _build_mcp_server, _mcp_current_user, _mcp_permissions
 
 _NOW = "2024-01-01T00:00:00+00:00"
 
@@ -101,9 +97,7 @@ async def test_reports_pin_calls_store():
         return_value=True,
     ) as mock_pin:
         server = _build_mcp_server()
-        result = await _call(
-            server, "reports__pin", {"report_id": "r1", "pinned": True}
-        )
+        result = await _call(server, "reports__pin", {"report_id": "r1", "pinned": True})
         data = json.loads(result[0].text)
 
     assert data == {"report_id": "r1", "pinned": True}
@@ -118,9 +112,7 @@ async def test_reports_create_requires_write_permission():
     handler = _build_mcp_server().request_handlers[mcp_types.CallToolRequest]
     req = mcp_types.CallToolRequest(
         method="tools/call",
-        params=mcp_types.CallToolRequestParams(
-            name="reports__create", arguments={"name": "x"}
-        ),
+        params=mcp_types.CallToolRequestParams(name="reports__create", arguments={"name": "x"}),
     )
     perm_tok = _mcp_permissions.set(readonly)
     user_tok = _mcp_current_user.set(_current_user())
@@ -273,9 +265,7 @@ async def test_reports_pin_returns_error_when_missing():
         return_value=False,
     ):
         server = _build_mcp_server()
-        result = await _call(
-            server, "reports__pin", {"report_id": "nope", "pinned": True}
-        )
+        result = await _call(server, "reports__pin", {"report_id": "nope", "pinned": True})
         data = json.loads(result[0].text)
 
     assert data == {"error": "Report not found"}
@@ -340,9 +330,7 @@ async def test_reports_get_version_returns_version():
         return_value=_report_version(3),
     ):
         server = _build_mcp_server()
-        result = await _call(
-            server, "reports__get_version", {"report_id": "r1", "version": 3}
-        )
+        result = await _call(server, "reports__get_version", {"report_id": "r1", "version": 3})
         data = json.loads(result[0].text)
 
     assert data["version"] == 3
@@ -355,9 +343,7 @@ async def test_reports_get_version_returns_error_when_missing():
         return_value=None,
     ):
         server = _build_mcp_server()
-        result = await _call(
-            server, "reports__get_version", {"report_id": "r1", "version": 99}
-        )
+        result = await _call(server, "reports__get_version", {"report_id": "r1", "version": 99})
         data = json.loads(result[0].text)
 
     assert data == {"error": "Version not found"}

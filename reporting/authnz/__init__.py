@@ -1,20 +1,12 @@
 import asyncio
 import logging
-from dataclasses import dataclass
-from dataclasses import field
-from datetime import datetime
-from datetime import timezone
-from typing import Callable
-from typing import Dict
-from typing import FrozenSet
-from typing import Optional
+from collections.abc import Callable
+from dataclasses import dataclass, field
+from datetime import UTC, datetime
 
 import jwt
-from fastapi import Depends
-from fastapi import HTTPException
-from fastapi import status
-from fastapi.security import HTTPAuthorizationCredentials
-from fastapi.security import HTTPBearer
+from fastapi import Depends, HTTPException, status
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jwt import PyJWKClient
 
 from reporting import settings
@@ -22,7 +14,7 @@ from reporting.schema.report_config import User
 
 logger = logging.getLogger(__name__)
 
-_jwks_client: Optional[PyJWKClient] = None
+_jwks_client: PyJWKClient | None = None
 
 _bearer_scheme = HTTPBearer(auto_error=False)
 
@@ -30,8 +22,8 @@ _bearer_scheme = HTTPBearer(auto_error=False)
 @dataclass
 class CurrentUser:
     user: User
-    jwt_claims: Dict
-    permissions: FrozenSet[str] = field(default_factory=frozenset)
+    jwt_claims: dict
+    permissions: frozenset[str] = field(default_factory=frozenset)
 
 
 def _get_jwks_client() -> PyJWKClient:
@@ -41,7 +33,7 @@ def _get_jwks_client() -> PyJWKClient:
     return _jwks_client
 
 
-async def _get_jwt_payload(token: str) -> Dict:
+async def _get_jwt_payload(token: str) -> dict:
     """
     Get the JWT payload from a Bearer token string.
 
@@ -50,7 +42,7 @@ async def _get_jwt_payload(token: str) -> Dict:
     client = _get_jwks_client()
     signing_key = await asyncio.to_thread(client.get_signing_key_from_jwt, token)
 
-    decode_kwargs: Dict = {
+    decode_kwargs: dict = {
         "algorithms": settings.ALLOWED_JWT_ALGORITHMS,
     }
     if settings.JWT_ISSUER:
@@ -71,22 +63,19 @@ def get_email() -> str:
         )
         return email
     raise RuntimeError(
-        "get_email() called in auth-required mode without a request context. "
-        "Use get_current_user() instead."
+        "get_email() called in auth-required mode without a request context. Use get_current_user() instead."
     )
 
 
 async def get_current_user(
-    credentials: Optional[HTTPAuthorizationCredentials] = Depends(_bearer_scheme),
+    credentials: HTTPAuthorizationCredentials | None = Depends(_bearer_scheme),
 ) -> CurrentUser:
     """Validate the JWT and return a CurrentUser.
 
     In development mode (auth disabled) a synthetic dev user is returned.
     """
+    from reporting.authnz.permissions import ALL_PERMISSIONS, resolve_permissions
     from reporting.services import report_store
-
-    from reporting.authnz.permissions import ALL_PERMISSIONS
-    from reporting.authnz.permissions import resolve_permissions
 
     if not settings.DEVELOPMENT_ONLY_REQUIRE_AUTH:
         email = settings.DEVELOPMENT_ONLY_AUTH_USER_EMAIL
@@ -124,11 +113,7 @@ async def get_current_user(
         ) from exc
 
     raw_iat = payload.get("iat")
-    token_iat = (
-        datetime.fromtimestamp(raw_iat, tz=timezone.utc)
-        if raw_iat is not None
-        else None
-    )
+    token_iat = datetime.fromtimestamp(raw_iat, tz=UTC) if raw_iat is not None else None
     jwt_claims = {
         "email": payload[settings.JWT_EMAIL_CLAIM],
         "display_name": payload.get("name"),
@@ -191,6 +176,4 @@ async def sync_user_profile(
         display_name=claims.get("display_name"),
         token_iat=claims.get("token_iat"),
     )
-    return CurrentUser(
-        user=updated_user, jwt_claims=claims, permissions=current.permissions
-    )
+    return CurrentUser(user=updated_user, jwt_claims=claims, permissions=current.permissions)

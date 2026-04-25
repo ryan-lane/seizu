@@ -1,75 +1,56 @@
 """Built-in ``reports__*`` tools — CRUD + pin/dashboard for reports."""
+
 from typing import Any
-from typing import Dict
-from typing import Optional
 
 from reporting.authnz import CurrentUser
 from reporting.authnz.permissions import Permission
-from reporting.schema.report_config import CreateReportRequest
-from reporting.schema.report_config import CreateVersionRequest
-from reporting.schema.report_config import PinReportRequest
+from reporting.schema.report_config import CreateReportRequest, CreateVersionRequest, PinReportRequest
 from reporting.services import report_store
-from reporting.services.mcp_builtins.base import BuiltinGroup
-from reporting.services.mcp_builtins.base import BuiltinTool
-from reporting.services.mcp_builtins.base import model_input_schema
+from reporting.services.mcp_builtins.base import BuiltinGroup, BuiltinTool, model_input_schema
 
 GROUP = "reports"
 
 
-def _require_user(current_user: Optional[CurrentUser]) -> CurrentUser:
+def _require_user(current_user: CurrentUser | None) -> CurrentUser:
     if current_user is None:
         raise RuntimeError("No current user on the request context")
     return current_user
 
 
-def _report_id_prop() -> Dict[str, Any]:
+def _report_id_prop() -> dict[str, Any]:
     return {"report_id": {"type": "string", "description": "The report ID."}}
 
 
-async def _list(
-    args: Dict[str, Any], current_user: Optional[CurrentUser]
-) -> Dict[str, Any]:
+async def _list(args: dict[str, Any], current_user: CurrentUser | None) -> dict[str, Any]:
     reports = await report_store.list_reports()
     return {"reports": [r.model_dump() for r in reports]}
 
 
-async def _get(
-    args: Dict[str, Any], current_user: Optional[CurrentUser]
-) -> Dict[str, Any]:
+async def _get(args: dict[str, Any], current_user: CurrentUser | None) -> dict[str, Any]:
     report = await report_store.get_report_latest(args["report_id"])
     if not report:
         return {"error": "Report not found"}
     return report.model_dump()
 
 
-async def _get_dashboard(
-    args: Dict[str, Any], current_user: Optional[CurrentUser]
-) -> Dict[str, Any]:
+async def _get_dashboard(args: dict[str, Any], current_user: CurrentUser | None) -> dict[str, Any]:
     report = await report_store.get_dashboard_report()
     if not report:
         return {"error": "No dashboard report configured"}
     return report.model_dump()
 
 
-async def _create(
-    args: Dict[str, Any], current_user: Optional[CurrentUser]
-) -> Dict[str, Any]:
+async def _create(args: dict[str, Any], current_user: CurrentUser | None) -> dict[str, Any]:
     user = _require_user(current_user)
     body = CreateReportRequest.model_validate(args)
-    item = await report_store.create_report(
-        name=body.name, created_by=user.user.user_id
-    )
+    item = await report_store.create_report(name=body.name, created_by=user.user.user_id)
     return item.model_dump()
 
 
-async def _create_version(
-    args: Dict[str, Any], current_user: Optional[CurrentUser]
-) -> Dict[str, Any]:
+async def _create_version(args: dict[str, Any], current_user: CurrentUser | None) -> dict[str, Any]:
     user = _require_user(current_user)
     report_id = args["report_id"]
-    body = CreateVersionRequest.model_validate(
-        {k: v for k, v in args.items() if k != "report_id"}
-    )
+    body = CreateVersionRequest.model_validate({k: v for k, v in args.items() if k != "report_id"})
     version = await report_store.save_report_version(
         report_id=report_id,
         config=body.config,
@@ -81,52 +62,38 @@ async def _create_version(
     return version.model_dump()
 
 
-async def _delete(
-    args: Dict[str, Any], current_user: Optional[CurrentUser]
-) -> Dict[str, Any]:
+async def _delete(args: dict[str, Any], current_user: CurrentUser | None) -> dict[str, Any]:
     ok = await report_store.delete_report(args["report_id"])
     if not ok:
         return {"error": "Report not found"}
     return {"report_id": args["report_id"]}
 
 
-async def _pin(
-    args: Dict[str, Any], current_user: Optional[CurrentUser]
-) -> Dict[str, Any]:
+async def _pin(args: dict[str, Any], current_user: CurrentUser | None) -> dict[str, Any]:
     report_id = args["report_id"]
-    body = PinReportRequest.model_validate(
-        {k: v for k, v in args.items() if k != "report_id"}
-    )
+    body = PinReportRequest.model_validate({k: v for k, v in args.items() if k != "report_id"})
     ok = await report_store.pin_report(report_id, body.pinned)
     if not ok:
         return {"error": "Report not found"}
     return {"report_id": report_id, "pinned": body.pinned}
 
 
-async def _set_dashboard(
-    args: Dict[str, Any], current_user: Optional[CurrentUser]
-) -> Dict[str, Any]:
+async def _set_dashboard(args: dict[str, Any], current_user: CurrentUser | None) -> dict[str, Any]:
     ok = await report_store.set_dashboard_report(args["report_id"])
     if not ok:
         return {"error": "Report not found"}
     return {"report_id": args["report_id"]}
 
 
-async def _list_versions(
-    args: Dict[str, Any], current_user: Optional[CurrentUser]
-) -> Dict[str, Any]:
+async def _list_versions(args: dict[str, Any], current_user: CurrentUser | None) -> dict[str, Any]:
     versions = await report_store.list_report_versions(args["report_id"])
     if not versions:
         return {"error": "Report not found"}
     return {"versions": [v.model_dump() for v in versions]}
 
 
-async def _get_version(
-    args: Dict[str, Any], current_user: Optional[CurrentUser]
-) -> Dict[str, Any]:
-    version = await report_store.get_report_version(
-        args["report_id"], int(args["version"])
-    )
+async def _get_version(args: dict[str, Any], current_user: CurrentUser | None) -> dict[str, Any]:
+    version = await report_store.get_report_version(args["report_id"], int(args["version"]))
     if not version:
         return {"error": "Version not found"}
     return version.model_dump()

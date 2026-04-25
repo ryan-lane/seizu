@@ -1,14 +1,16 @@
 """Tests for reporting.authnz.permissions."""
+
 from unittest.mock import AsyncMock
 
-from reporting.authnz.permissions import ADMIN_PERMISSIONS
-from reporting.authnz.permissions import ALL_PERMISSIONS
-from reporting.authnz.permissions import BUILTIN_ROLES
-from reporting.authnz.permissions import EDITOR_PERMISSIONS
-from reporting.authnz.permissions import Permission
-from reporting.authnz.permissions import resolve_permissions
-from reporting.authnz.permissions import VIEWER_PERMISSIONS
-
+from reporting.authnz.permissions import (
+    ADMIN_PERMISSIONS,
+    ALL_PERMISSIONS,
+    BUILTIN_ROLES,
+    EDITOR_PERMISSIONS,
+    VIEWER_PERMISSIONS,
+    Permission,
+    resolve_permissions,
+)
 
 # ---------------------------------------------------------------------------
 # Role hierarchy

@@ -1,7 +1,7 @@
 """Tests for extract_panel_stats helper in report_store.base."""
+
 from reporting.schema.report_config import PanelStat
 from reporting.services.report_store.base import extract_panel_stats
-
 
 _QUERIES = {
     "cves-total": "MATCH (c:CVE) RETURN count(c.id) AS total",

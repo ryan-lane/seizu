@@ -6,18 +6,13 @@ FastAPI's router runs.  Authentication is enforced by _MCPAuthMiddleware which
 validates the Bearer token using the same JWT logic as the rest of the API.
 The session manager lifespan is managed by the FastAPI app's lifespan context.
 """
+
 import asyncio
 import contextvars
 import json
 import logging
-from datetime import datetime
-from datetime import timezone
+from datetime import UTC, datetime
 from typing import Any
-from typing import Dict
-from typing import FrozenSet
-from typing import List
-from typing import Optional
-from typing import Tuple
 
 import httpx
 import jwt
@@ -25,23 +20,17 @@ from jwt import PyJWKClient
 from mcp.server.fastmcp.server import StreamableHTTPASGIApp
 from mcp.server.lowlevel import Server
 from mcp.server.streamable_http_manager import StreamableHTTPSessionManager
-from mcp.types import TextContent
-from mcp.types import Tool
+from mcp.types import TextContent, Tool
 from starlette.requests import Request
 from starlette.responses import JSONResponse as StarletteJSONResponse
-from starlette.types import ASGIApp
-from starlette.types import Receive
-from starlette.types import Scope
-from starlette.types import Send
+from starlette.types import ASGIApp, Receive, Scope, Send
 
 from reporting import settings
 from reporting.authnz import CurrentUser
 from reporting.routes.query import _serialize_neo4j_value
 from reporting.schema.mcp_config import validate_tool_arguments
-from reporting.services import report_store
-from reporting.services import reporting_neo4j
-from reporting.services.mcp_builtins import find_builtin
-from reporting.services.mcp_builtins import list_builtin_tools
+from reporting.services import report_store, reporting_neo4j
+from reporting.services.mcp_builtins import find_builtin, list_builtin_tools
 
 logger = logging.getLogger(__name__)
 
@@ -51,23 +40,23 @@ logger = logging.getLogger(__name__)
 
 # Resolved permission set for the current MCP request. Set by
 # _MCPAuthMiddleware.
-_mcp_permissions: contextvars.ContextVar[FrozenSet[str]] = contextvars.ContextVar(
+_mcp_permissions: contextvars.ContextVar[frozenset[str]] = contextvars.ContextVar(
     "_mcp_permissions", default=frozenset()
 )
 
 # The resolved CurrentUser for the current MCP request. Set by
 # _MCPAuthMiddleware. Built-ins that create/update records rely on this to
 # populate created_by / updated_by.
-_mcp_current_user: contextvars.ContextVar[
-    Optional[CurrentUser]
-] = contextvars.ContextVar("_mcp_current_user", default=None)
+_mcp_current_user: contextvars.ContextVar[CurrentUser | None] = contextvars.ContextVar(
+    "_mcp_current_user", default=None
+)
 
 
 # ---------------------------------------------------------------------------
 # Parameter schema conversion
 # ---------------------------------------------------------------------------
 
-_PARAM_TYPE_MAP: Dict[str, str] = {
+_PARAM_TYPE_MAP: dict[str, str] = {
     "string": "string",
     "integer": "integer",
     "float": "number",
@@ -75,13 +64,13 @@ _PARAM_TYPE_MAP: Dict[str, str] = {
 }
 
 
-def _build_input_schema(parameters: List[Any]) -> Dict[str, Any]:
+def _build_input_schema(parameters: list[Any]) -> dict[str, Any]:
     """Convert a list of ToolParamDef to a JSON Schema object."""
-    properties: Dict[str, Any] = {}
-    required: List[str] = []
+    properties: dict[str, Any] = {}
+    required: list[str] = []
     for p in parameters:
         schema_type = _PARAM_TYPE_MAP.get(p.type, "string")
-        prop: Dict[str, Any] = {"type": schema_type}
+        prop: dict[str, Any] = {"type": schema_type}
         if p.description:
             prop["description"] = p.description
         if p.default is not None:
@@ -89,7 +78,7 @@ def _build_input_schema(parameters: List[Any]) -> Dict[str, Any]:
         properties[p.name] = prop
         if p.required:
             required.append(p.name)
-    result: Dict[str, Any] = {"type": "object", "properties": properties}
+    result: dict[str, Any] = {"type": "object", "properties": properties}
     if required:
         result["required"] = required
     return result
@@ -100,12 +89,12 @@ def _build_input_schema(parameters: List[Any]) -> Dict[str, Any]:
 # ---------------------------------------------------------------------------
 
 
-def _text(payload: Any) -> List[TextContent]:
+def _text(payload: Any) -> list[TextContent]:
     """Serialize *payload* to JSON and wrap it as a single MCP TextContent."""
     return [TextContent(type="text", text=json.dumps(payload, indent=2, default=str))]
 
 
-def _missing_permissions(required: List[str], granted: FrozenSet[str]) -> List[str]:
+def _missing_permissions(required: list[str], granted: frozenset[str]) -> list[str]:
     return [p for p in required if p not in granted]
 
 
@@ -113,8 +102,8 @@ def _build_mcp_server() -> Server:
     server: Server = Server("seizu")
 
     @server.list_tools()
-    async def list_tools() -> List[Tool]:
-        tools: List[Tool] = []
+    async def list_tools() -> list[Tool]:
+        tools: list[Tool] = []
         perms = _mcp_permissions.get()
 
         # Built-in tools registered by reporting/services/mcp_builtins
@@ -155,9 +144,7 @@ def _build_mcp_server() -> Server:
         return tools
 
     @server.call_tool()
-    async def call_tool(
-        name: str, arguments: Optional[Dict[str, Any]]
-    ) -> List[TextContent]:
+    async def call_tool(name: str, arguments: dict[str, Any] | None) -> list[TextContent]:
         args = arguments or {}
         perms = _mcp_permissions.get()
 
@@ -203,13 +190,8 @@ def _build_mcp_server() -> Server:
             params_with_defaults = {p.name: p.default for p in target_tool.parameters}
             params_with_defaults.update(args)
 
-            results = await reporting_neo4j.run_query(
-                target_tool.cypher, parameters=params_with_defaults
-            )
-            serialized = [
-                {key: _serialize_neo4j_value(value) for key, value in record.items()}
-                for record in results
-            ]
+            results = await reporting_neo4j.run_query(target_tool.cypher, parameters=params_with_defaults)
+            serialized = [{key: _serialize_neo4j_value(value) for key, value in record.items()} for record in results]
             return _text(serialized)
         except Exception:
             logger.exception("Failed to execute MCP tool %s", name)
@@ -222,7 +204,7 @@ def _build_mcp_server() -> Server:
 # Auth middleware
 # ---------------------------------------------------------------------------
 
-_jwks_client_cache: Optional[PyJWKClient] = None
+_jwks_client_cache: PyJWKClient | None = None
 
 
 def _get_jwks_client() -> PyJWKClient:
@@ -250,16 +232,12 @@ async def _build_dev_current_user() -> CurrentUser:
     )
 
 
-async def _build_current_user_from_jwt(payload: Dict[str, Any]) -> CurrentUser:
+async def _build_current_user_from_jwt(payload: dict[str, Any]) -> CurrentUser:
     """Resolve a CurrentUser from an already-validated JWT payload."""
     from reporting.authnz.permissions import resolve_permissions
 
     raw_iat = payload.get("iat")
-    token_iat = (
-        datetime.fromtimestamp(raw_iat, tz=timezone.utc)
-        if raw_iat is not None
-        else None
-    )
+    token_iat = datetime.fromtimestamp(raw_iat, tz=UTC) if raw_iat is not None else None
     jwt_claims = {
         "email": payload[settings.JWT_EMAIL_CLAIM],
         "display_name": payload.get("name"),
@@ -308,7 +286,7 @@ class _MCPAuthMiddleware:
 
         # Extract Authorization header
         headers = dict(scope.get("headers", []))
-        auth_header: Optional[bytes] = headers.get(b"authorization")
+        auth_header: bytes | None = headers.get(b"authorization")
         if not auth_header:
             await self._send_401(scope, receive, send)
             return
@@ -321,10 +299,8 @@ class _MCPAuthMiddleware:
         bearer_token = auth_str[7:].strip()
         try:
             client = _get_jwks_client()
-            signing_key = await asyncio.to_thread(
-                client.get_signing_key_from_jwt, bearer_token
-            )
-            decode_kwargs: Dict[str, Any] = {
+            signing_key = await asyncio.to_thread(client.get_signing_key_from_jwt, bearer_token)
+            decode_kwargs: dict[str, Any] = {
                 "algorithms": settings.ALLOWED_JWT_ALGORITHMS,
             }
             if settings.JWT_ISSUER:
@@ -356,12 +332,8 @@ class _MCPAuthMiddleware:
         from starlette.responses import JSONResponse
 
         www_auth = "Bearer"
-        if settings.MCP_RESOURCE_URL and (
-            settings.MCP_OAUTH_AUTHORIZATION_ENDPOINT or settings.OIDC_AUTHORITY
-        ):
-            resource_metadata_url = (
-                f"{settings.MCP_RESOURCE_URL}/.well-known/oauth-protected-resource"
-            )
+        if settings.MCP_RESOURCE_URL and (settings.MCP_OAUTH_AUTHORIZATION_ENDPOINT or settings.OIDC_AUTHORITY):
+            resource_metadata_url = f"{settings.MCP_RESOURCE_URL}/.well-known/oauth-protected-resource"
             www_auth = f'Bearer resource_metadata="{resource_metadata_url}"'
 
         response = JSONResponse(
@@ -382,7 +354,7 @@ _WELL_KNOWN_PROTECTED_RESOURCE_PATH = "/.well-known/oauth-protected-resource"
 _WELL_KNOWN_REGISTRATION_PATH = "/.well-known/oauth-registration"
 
 
-async def _fetch_oidc_discovery(authority: str) -> Optional[Dict[str, Any]]:
+async def _fetch_oidc_discovery(authority: str) -> dict[str, Any] | None:
     """Fetch {authority}/.well-known/openid-configuration, return parsed JSON or None."""
     url = f"{authority.rstrip('/')}/.well-known/openid-configuration"
     try:
@@ -395,7 +367,7 @@ async def _fetch_oidc_discovery(authority: str) -> Optional[Dict[str, Any]]:
         return None
 
 
-async def _build_oauth_metadata() -> Optional[Dict[str, Any]]:
+async def _build_oauth_metadata() -> dict[str, Any] | None:
     """Return the RFC 8414 metadata dict, or None if OAuth cannot be configured.
 
     This document is served at {MCP_RESOURCE_URL}/.well-known/oauth-authorization-server.
@@ -413,7 +385,7 @@ async def _build_oauth_metadata() -> Optional[Dict[str, Any]]:
     oidc_authority = settings.OIDC_AUTHORITY
     auth_endpoint = settings.MCP_OAUTH_AUTHORIZATION_ENDPOINT
     token_endpoint = settings.MCP_OAUTH_TOKEN_ENDPOINT
-    jwks_uri: Optional[str] = None
+    jwks_uri: str | None = None
 
     if oidc_authority and (not auth_endpoint or not token_endpoint):
         discovery_authority = settings.OIDC_INTERNAL_AUTHORITY or oidc_authority
@@ -424,15 +396,10 @@ async def _build_oauth_metadata() -> Optional[Dict[str, Any]]:
             raw_jwks = discovery.get("jwks_uri", "")
             # When fetching via an internal authority, endpoints use the internal
             # hostname. Rewrite the origin so MCP clients outside docker can reach them.
-            if (
-                settings.OIDC_INTERNAL_AUTHORITY
-                and discovery_authority != oidc_authority
-            ):
+            if settings.OIDC_INTERNAL_AUTHORITY and discovery_authority != oidc_authority:
                 from urllib.parse import urlparse
 
-                int_origin = "{0.scheme}://{0.netloc}".format(
-                    urlparse(discovery_authority)
-                )
+                int_origin = "{0.scheme}://{0.netloc}".format(urlparse(discovery_authority))
                 ext_origin = "{0.scheme}://{0.netloc}".format(urlparse(oidc_authority))
                 raw_auth = raw_auth.replace(int_origin, ext_origin, 1)
                 raw_token = raw_token.replace(int_origin, ext_origin, 1)
@@ -451,7 +418,7 @@ async def _build_oauth_metadata() -> Optional[Dict[str, Any]]:
         return None
 
     scopes = settings.OIDC_SCOPE.split() if settings.OIDC_SCOPE else ["openid", "email"]
-    metadata: Dict[str, Any] = {
+    metadata: dict[str, Any] = {
         "issuer": metadata_issuer,
         "authorization_endpoint": auth_endpoint,
         "token_endpoint": token_endpoint,
@@ -469,15 +436,9 @@ async def _build_oauth_metadata() -> Optional[Dict[str, Any]]:
     # Claude Desktop) don't reject the auth server. Use the explicit override
     # if set; otherwise derive from MCP_RESOURCE_URL when OIDC_CLIENT_ID is
     # available (our built-in lightweight DCR endpoint).
-    registration_endpoint: Optional[str] = settings.MCP_OAUTH_REGISTRATION_ENDPOINT
-    if (
-        not registration_endpoint
-        and settings.MCP_RESOURCE_URL
-        and settings.OIDC_CLIENT_ID
-    ):
-        registration_endpoint = (
-            f"{settings.MCP_RESOURCE_URL}{_WELL_KNOWN_REGISTRATION_PATH}"
-        )
+    registration_endpoint: str | None = settings.MCP_OAUTH_REGISTRATION_ENDPOINT
+    if not registration_endpoint and settings.MCP_RESOURCE_URL and settings.OIDC_CLIENT_ID:
+        registration_endpoint = f"{settings.MCP_RESOURCE_URL}{_WELL_KNOWN_REGISTRATION_PATH}"
     if registration_endpoint:
         metadata["registration_endpoint"] = registration_endpoint
 
@@ -507,14 +468,12 @@ async def _oauth_registration_handler(request: Request) -> StarletteJSONResponse
         return StarletteJSONResponse({"error": "method_not_allowed"}, status_code=405)
     client_id = settings.OIDC_CLIENT_ID
     if not client_id:
-        return StarletteJSONResponse(
-            {"error": "client_registration_not_supported"}, status_code=400
-        )
+        return StarletteJSONResponse({"error": "client_registration_not_supported"}, status_code=400)
     try:
-        body: Dict[str, Any] = await request.json()
+        body: dict[str, Any] = await request.json()
     except Exception:
         body = {}
-    redirect_uris: List[str] = body.get("redirect_uris") or []
+    redirect_uris: list[str] = body.get("redirect_uris") or []
     return StarletteJSONResponse(
         {
             "client_id": client_id,
@@ -527,7 +486,7 @@ async def _oauth_registration_handler(request: Request) -> StarletteJSONResponse
     )
 
 
-def _build_protected_resource_metadata() -> Optional[Dict[str, Any]]:
+def _build_protected_resource_metadata() -> dict[str, Any] | None:
     """Return RFC 9728 protected resource metadata, or None if OAuth not configured.
 
     authorization_servers points to our own MCP endpoint, which serves a valid
@@ -538,11 +497,7 @@ def _build_protected_resource_metadata() -> Optional[Dict[str, Any]]:
     if not settings.MCP_RESOURCE_URL:
         return None
     # Only advertise OAuth discovery if OIDC/OAuth is actually configured
-    if (
-        not settings.OIDC_AUTHORITY
-        and not settings.MCP_OAUTH_AUTHORIZATION_ENDPOINT
-        and not settings.MCP_OAUTH_ISSUER
-    ):
+    if not settings.OIDC_AUTHORITY and not settings.MCP_OAUTH_AUTHORIZATION_ENDPOINT and not settings.MCP_OAUTH_ISSUER:
         return None
     auth_server = settings.MCP_OAUTH_ISSUER or settings.MCP_RESOURCE_URL
     return {
@@ -577,9 +532,7 @@ class _MCPDispatcher:
             if _WELL_KNOWN_PROTECTED_RESOURCE_PATH in path:
                 metadata = _build_protected_resource_metadata()
                 if metadata is None:
-                    response = StarletteJSONResponse(
-                        {"error": "Not found"}, status_code=404
-                    )
+                    response = StarletteJSONResponse({"error": "Not found"}, status_code=404)
                 else:
                     response = StarletteJSONResponse(metadata)
                 await response(scope, receive, send)
@@ -597,7 +550,7 @@ class _MCPDispatcher:
 # ---------------------------------------------------------------------------
 
 
-def get_mcp_app() -> Tuple[StreamableHTTPSessionManager, ASGIApp]:
+def get_mcp_app() -> tuple[StreamableHTTPSessionManager, ASGIApp]:
     """Return (session_manager, mcp_asgi_app) for integration into the FastAPI app.
 
     The caller must:

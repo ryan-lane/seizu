@@ -13,21 +13,16 @@ Groups live in their own submodule (``reports.py``, ``toolsets.py`` …) and
 expose a module-level ``BUILTINS: List[BuiltinTool]`` plus a ``GROUP`` name so
 operators can enable/disable whole groups via ``MCP_ENABLED_BUILTINS``.
 """
-from dataclasses import dataclass
-from dataclasses import field
+
+from collections.abc import Awaitable, Callable
+from dataclasses import dataclass, field
 from typing import Any
-from typing import Awaitable
-from typing import Callable
-from typing import Dict
-from typing import List
-from typing import Optional
-from typing import Type
 
 from pydantic import BaseModel
 
 from reporting.authnz import CurrentUser
 
-BuiltinHandler = Callable[[Dict[str, Any], Optional[CurrentUser]], Awaitable[Any]]
+BuiltinHandler = Callable[[dict[str, Any], CurrentUser | None], Awaitable[Any]]
 
 
 @dataclass
@@ -37,8 +32,8 @@ class BuiltinTool:
     name: str
     group: str
     description: str
-    input_schema: Dict[str, Any]
-    required_permissions: List[str]
+    input_schema: dict[str, Any]
+    required_permissions: list[str]
     handler: BuiltinHandler
     # Whether the tool needs a resolved CurrentUser (writes that record
     # created_by/updated_by).  Handlers that need a user raise if it's None.
@@ -46,11 +41,11 @@ class BuiltinTool:
 
 
 def model_input_schema(
-    model: Type[BaseModel],
+    model: type[BaseModel],
     *,
-    extra_properties: Optional[Dict[str, Any]] = None,
-    extra_required: Optional[List[str]] = None,
-) -> Dict[str, Any]:
+    extra_properties: dict[str, Any] | None = None,
+    extra_required: list[str] | None = None,
+) -> dict[str, Any]:
     """Convert a Pydantic model's JSON schema into an MCP input schema.
 
     MCP clients expect a self-contained JSON Schema object (no external
@@ -66,23 +61,21 @@ def model_input_schema(
     _inline_refs(schema, schema.get("$defs", {}))
     schema.pop("$defs", None)
     schema.pop("title", None)
-    properties: Dict[str, Any] = dict(schema.get("properties", {}))
-    required: List[str] = list(schema.get("required", []))
+    properties: dict[str, Any] = dict(schema.get("properties", {}))
+    required: list[str] = list(schema.get("required", []))
     if extra_properties:
         # Caller-supplied path params come first so the schema reads
         # naturally when rendered by an MCP client.
         properties = {**extra_properties, **properties}
     if extra_required:
-        required = list(extra_required) + [
-            r for r in required if r not in extra_required
-        ]
-    result: Dict[str, Any] = {"type": "object", "properties": properties}
+        required = list(extra_required) + [r for r in required if r not in extra_required]
+    result: dict[str, Any] = {"type": "object", "properties": properties}
     if required:
         result["required"] = required
     return result
 
 
-def _inline_refs(node: Any, defs: Dict[str, Any]) -> None:
+def _inline_refs(node: Any, defs: dict[str, Any]) -> None:
     """Recursively replace ``$ref: "#/$defs/X"`` with the referenced schema."""
     if isinstance(node, dict):
         ref = node.get("$ref")
@@ -104,4 +97,4 @@ class BuiltinGroup:
     """A collection of related built-in tools, filterable as a unit."""
 
     name: str
-    tools: List[BuiltinTool] = field(default_factory=list)
+    tools: list[BuiltinTool] = field(default_factory=list)

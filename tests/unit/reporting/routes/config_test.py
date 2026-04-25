@@ -1,5 +1,4 @@
-from httpx import ASGITransport
-from httpx import AsyncClient
+from httpx import ASGITransport, AsyncClient
 
 from reporting.app import create_app
 
@@ -10,9 +9,7 @@ def _make_app():
 
 async def test_config(mocker):
     app = _make_app()
-    async with AsyncClient(
-        transport=ASGITransport(app=app), base_url="http://test"
-    ) as client:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         ret = await client.get("/api/v1/config")
     assert ret.status_code == 200
     ret_json = ret.json()
@@ -26,9 +23,7 @@ async def test_config(mocker):
 async def test_config_auth_required_true(mocker):
     mocker.patch("reporting.settings.DEVELOPMENT_ONLY_REQUIRE_AUTH", True)
     app = _make_app()
-    async with AsyncClient(
-        transport=ASGITransport(app=app), base_url="http://test"
-    ) as client:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         ret = await client.get("/api/v1/config")
     assert ret.json()["auth_required"] is True
 
@@ -36,9 +31,7 @@ async def test_config_auth_required_true(mocker):
 async def test_config_auth_required_false(mocker):
     mocker.patch("reporting.settings.DEVELOPMENT_ONLY_REQUIRE_AUTH", False)
     app = _make_app()
-    async with AsyncClient(
-        transport=ASGITransport(app=app), base_url="http://test"
-    ) as client:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         ret = await client.get("/api/v1/config")
     assert ret.json()["auth_required"] is False
 
@@ -53,9 +46,7 @@ async def test_config_oidc_included_when_auth_required(mocker):
     )
     mocker.patch("reporting.settings.OIDC_SCOPE", "openid email")
     app = _make_app()
-    async with AsyncClient(
-        transport=ASGITransport(app=app), base_url="http://test"
-    ) as client:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         ret = await client.get("/api/v1/config")
     oidc = ret.json()["oidc"]
     assert oidc["authority"] == "https://idp.example.com/o/app"
@@ -76,9 +67,7 @@ async def test_config_oidc_included_when_auth_not_required(mocker):
     )
     mocker.patch("reporting.settings.OIDC_SCOPE", "openid email")
     app = _make_app()
-    async with AsyncClient(
-        transport=ASGITransport(app=app), base_url="http://test"
-    ) as client:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         ret = await client.get("/api/v1/config")
     assert ret.json()["oidc"]["authority"] == "https://idp.example.com/o/app"
 
@@ -87,9 +76,7 @@ async def test_config_oidc_null_when_authority_not_configured(mocker):
     mocker.patch("reporting.settings.DEVELOPMENT_ONLY_REQUIRE_AUTH", True)
     mocker.patch("reporting.settings.OIDC_AUTHORITY", "")
     app = _make_app()
-    async with AsyncClient(
-        transport=ASGITransport(app=app), base_url="http://test"
-    ) as client:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         ret = await client.get("/api/v1/config")
     assert ret.json()["oidc"] is None
 

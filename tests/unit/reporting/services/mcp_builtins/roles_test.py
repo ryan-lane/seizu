@@ -1,19 +1,15 @@
 """Tests for the ``roles__*`` MCP built-in group."""
+
 import json
-from unittest.mock import AsyncMock
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 from mcp import types as mcp_types
 
 from reporting.authnz import CurrentUser
-from reporting.authnz.permissions import ALL_PERMISSIONS
-from reporting.authnz.permissions import Permission
-from reporting.schema.rbac import RoleItem
-from reporting.schema.rbac import RoleVersion
+from reporting.authnz.permissions import ALL_PERMISSIONS, Permission
+from reporting.schema.rbac import RoleItem, RoleVersion
 from reporting.schema.report_config import User
-from reporting.services.mcp_server import _build_mcp_server
-from reporting.services.mcp_server import _mcp_current_user
-from reporting.services.mcp_server import _mcp_permissions
+from reporting.services.mcp_server import _build_mcp_server, _mcp_current_user, _mcp_permissions
 
 _NOW = "2024-01-01T00:00:00+00:00"
 
@@ -40,9 +36,7 @@ async def _call(server, name, arguments, permissions=None):
         method="tools/call",
         params=mcp_types.CallToolRequestParams(name=name, arguments=arguments),
     )
-    perm_tok = _mcp_permissions.set(
-        permissions if permissions is not None else ALL_PERMISSIONS
-    )
+    perm_tok = _mcp_permissions.set(permissions if permissions is not None else ALL_PERMISSIONS)
     user_tok = _mcp_current_user.set(_current_user())
     try:
         result = await handler(req)
@@ -235,14 +229,17 @@ async def test_roles_delete_returns_error_when_missing():
 
 
 async def test_roles_list_versions_returns_versions():
-    with patch(
-        "reporting.services.mcp_builtins.roles.report_store.get_role",
-        new_callable=AsyncMock,
-        return_value=_role(),
-    ), patch(
-        "reporting.services.mcp_builtins.roles.report_store.list_role_versions",
-        new_callable=AsyncMock,
-        return_value=[_role_version()],
+    with (
+        patch(
+            "reporting.services.mcp_builtins.roles.report_store.get_role",
+            new_callable=AsyncMock,
+            return_value=_role(),
+        ),
+        patch(
+            "reporting.services.mcp_builtins.roles.report_store.list_role_versions",
+            new_callable=AsyncMock,
+            return_value=[_role_version()],
+        ),
     ):
         server = _build_mcp_server()
         result = await _call(server, "roles__list_versions", {"role_id": "role1"})
@@ -272,9 +269,7 @@ async def test_roles_get_version_returns_version():
         return_value=_role_version(),
     ):
         server = _build_mcp_server()
-        result = await _call(
-            server, "roles__get_version", {"role_id": "role1", "version": 1}
-        )
+        result = await _call(server, "roles__get_version", {"role_id": "role1", "version": 1})
         data = json.loads(result[0].text)
 
     assert data["version"] == 1
@@ -287,9 +282,7 @@ async def test_roles_get_version_returns_error_when_missing():
         return_value=None,
     ):
         server = _build_mcp_server()
-        result = await _call(
-            server, "roles__get_version", {"role_id": "role1", "version": 99}
-        )
+        result = await _call(server, "roles__get_version", {"role_id": "role1", "version": 99})
         data = json.loads(result[0].text)
 
     assert data == {"error": "Role version not found"}

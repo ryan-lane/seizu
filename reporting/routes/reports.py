@@ -1,21 +1,20 @@
 import logging
 from typing import Any
 
-from fastapi import APIRouter
-from fastapi import Depends
-from fastapi import HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 
-from reporting.authnz import CurrentUser
-from reporting.authnz import require_permission
+from reporting.authnz import CurrentUser, require_permission
 from reporting.authnz.permissions import Permission
-from reporting.schema.report_config import CreateReportRequest
-from reporting.schema.report_config import CreateVersionRequest
-from reporting.schema.report_config import PinReportRequest
-from reporting.schema.report_config import ReportIdResponse
-from reporting.schema.report_config import ReportListItem
-from reporting.schema.report_config import ReportListResponse
-from reporting.schema.report_config import ReportVersion
-from reporting.schema.report_config import ReportVersionListResponse
+from reporting.schema.report_config import (
+    CreateReportRequest,
+    CreateVersionRequest,
+    PinReportRequest,
+    ReportIdResponse,
+    ReportListItem,
+    ReportListResponse,
+    ReportVersion,
+    ReportVersionListResponse,
+)
 from reporting.services import report_store
 
 logger = logging.getLogger(__name__)
@@ -57,9 +56,7 @@ async def pin_report(
 @router.put("/api/v1/reports/{report_id}/dashboard", response_model=ReportIdResponse)
 async def set_dashboard_report(
     report_id: str,
-    current: CurrentUser = Depends(
-        require_permission(Permission.REPORTS_SET_DASHBOARD)
-    ),
+    current: CurrentUser = Depends(require_permission(Permission.REPORTS_SET_DASHBOARD)),
 ) -> ReportIdResponse:
     """Set a report as the default dashboard."""
     ok = await report_store.set_dashboard_report(report_id)
@@ -80,9 +77,7 @@ async def get_report(
     return report
 
 
-@router.get(
-    "/api/v1/reports/{report_id}/versions", response_model=ReportVersionListResponse
-)
+@router.get("/api/v1/reports/{report_id}/versions", response_model=ReportVersionListResponse)
 async def list_versions(
     report_id: str,
     current: CurrentUser = Depends(require_permission(Permission.REPORTS_READ)),

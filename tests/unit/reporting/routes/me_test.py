@@ -1,10 +1,7 @@
-from httpx import ASGITransport
-from httpx import AsyncClient
+from httpx import ASGITransport, AsyncClient
 
 from reporting.app import create_app
-from reporting.authnz import CurrentUser
-from reporting.authnz import get_current_user
-from reporting.authnz import sync_user_profile
+from reporting.authnz import CurrentUser, get_current_user, sync_user_profile
 from reporting.authnz.permissions import ALL_PERMISSIONS
 from reporting.schema.report_config import User
 
@@ -18,9 +15,7 @@ _FAKE_USER = User(
     last_login="2024-01-01T00:00:00+00:00",
 )
 
-_FAKE_CURRENT_USER = CurrentUser(
-    user=_FAKE_USER, jwt_claims={}, permissions=ALL_PERMISSIONS
-)
+_FAKE_CURRENT_USER = CurrentUser(user=_FAKE_USER, jwt_claims={}, permissions=ALL_PERMISSIONS)
 
 
 def _make_app(synced_user: User = _FAKE_USER) -> object:
@@ -34,9 +29,7 @@ def _make_app(synced_user: User = _FAKE_USER) -> object:
 
 async def test_get_current_user_success(mocker):
     app = _make_app()
-    async with AsyncClient(
-        transport=ASGITransport(app=app), base_url="http://test"
-    ) as client:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         ret = await client.get("/api/v1/me")
     assert ret.status_code == 200
     user = ret.json()["user"]
@@ -51,13 +44,9 @@ async def test_get_current_user_success(mocker):
 
 async def test_get_current_user_returns_synced_profile(mocker):
     """The route should return the result of sync_user_profile, not the raw lookup."""
-    updated_user = _FAKE_USER.model_copy(
-        update={"email": "alice-new@example.com", "display_name": "Alice Updated"}
-    )
+    updated_user = _FAKE_USER.model_copy(update={"email": "alice-new@example.com", "display_name": "Alice Updated"})
     app = _make_app(synced_user=updated_user)
-    async with AsyncClient(
-        transport=ASGITransport(app=app), base_url="http://test"
-    ) as client:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         ret = await client.get("/api/v1/me")
     assert ret.status_code == 200
     assert ret.json()["user"]["email"] == "alice-new@example.com"

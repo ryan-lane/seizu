@@ -1,4 +1,5 @@
 """Tests for seizu_cli.commands.auth (login / logout / whoami)."""
+
 from unittest.mock import MagicMock
 
 import pytest
@@ -74,17 +75,13 @@ def test_login_success(mocker: pytest.MonkeyPatch) -> None:
     mock_store = MagicMock()
     mock_store.description.return_value = "OS keyring"
     mocker.patch("seizu_cli.commands.auth.auth.get_store", return_value=mock_store)
-    mocker.patch(
-        "seizu_cli.commands.auth.auth.device_authorize", return_value="access-token-123"
-    )
+    mocker.patch("seizu_cli.commands.auth.auth.device_authorize", return_value="access-token-123")
 
     result = runner.invoke(app, ["login"])
 
     assert result.exit_code == 0
     assert "Logged in" in result.output
-    mock_store.save_token.assert_called_once_with(
-        "http://localhost:8080", "access-token-123"
-    )
+    mock_store.save_token.assert_called_once_with("http://localhost:8080", "access-token-123")
 
 
 def test_login_device_authorize_error(mocker: pytest.MonkeyPatch) -> None:

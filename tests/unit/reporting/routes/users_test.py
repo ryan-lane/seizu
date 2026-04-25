@@ -1,11 +1,9 @@
 from unittest.mock import AsyncMock
 
-from httpx import ASGITransport
-from httpx import AsyncClient
+from httpx import ASGITransport, AsyncClient
 
 from reporting.app import create_app
-from reporting.authnz import CurrentUser
-from reporting.authnz import get_current_user
+from reporting.authnz import CurrentUser, get_current_user
 from reporting.authnz.permissions import ALL_PERMISSIONS
 from reporting.schema.report_config import User
 
@@ -19,12 +17,8 @@ _FAKE_USER = User(
     last_login="2024-01-01T00:00:00+00:00",
 )
 
-_FAKE_CURRENT_USER = CurrentUser(
-    user=_FAKE_USER, jwt_claims={}, permissions=ALL_PERMISSIONS
-)
-_UNPRIVILEGED_CURRENT_USER = CurrentUser(
-    user=_FAKE_USER, jwt_claims={}, permissions=frozenset()
-)
+_FAKE_CURRENT_USER = CurrentUser(user=_FAKE_USER, jwt_claims={}, permissions=ALL_PERMISSIONS)
+_UNPRIVILEGED_CURRENT_USER = CurrentUser(user=_FAKE_USER, jwt_claims={}, permissions=frozenset())
 
 
 def _make_app(get_user_return=_FAKE_USER):
@@ -39,9 +33,7 @@ async def test_get_user_success(mocker):
         new=AsyncMock(return_value=_FAKE_USER),
     )
     app, _ = _make_app()
-    async with AsyncClient(
-        transport=ASGITransport(app=app), base_url="http://test"
-    ) as client:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         ret = await client.get("/api/v1/users/uid1")
     assert ret.status_code == 200
     assert ret.json()["user_id"] == "uid1"
@@ -58,9 +50,7 @@ async def test_get_user_not_found(mocker):
         new=AsyncMock(return_value=None),
     )
     app, _ = _make_app(get_user_return=None)
-    async with AsyncClient(
-        transport=ASGITransport(app=app), base_url="http://test"
-    ) as client:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         ret = await client.get("/api/v1/users/nonexistent")
     assert ret.status_code == 404
 
@@ -68,8 +58,6 @@ async def test_get_user_not_found(mocker):
 async def test_get_user_requires_users_read_permission():
     app = create_app()
     app.dependency_overrides[get_current_user] = lambda: _UNPRIVILEGED_CURRENT_USER
-    async with AsyncClient(
-        transport=ASGITransport(app=app), base_url="http://test"
-    ) as client:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         ret = await client.get("/api/v1/users/uid1")
     assert ret.status_code == 403

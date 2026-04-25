@@ -1,40 +1,40 @@
 import logging
 from typing import Any
 
-from fastapi import APIRouter
-from fastapi import Depends
-from fastapi import HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import JSONResponse
 
-from reporting.authnz import CurrentUser
-from reporting.authnz import require_permission
+from reporting.authnz import CurrentUser, require_permission
 from reporting.authnz.permissions import Permission
 from reporting.routes.query import _serialize_neo4j_value
-from reporting.schema.mcp_config import CallToolRequest
-from reporting.schema.mcp_config import CallToolResponse
-from reporting.schema.mcp_config import CreateToolRequest
-from reporting.schema.mcp_config import CreateToolsetRequest
-from reporting.schema.mcp_config import ToolIdResponse
-from reporting.schema.mcp_config import ToolItem
-from reporting.schema.mcp_config import ToolListResponse
-from reporting.schema.mcp_config import ToolsetIdResponse
-from reporting.schema.mcp_config import ToolsetListItem
-from reporting.schema.mcp_config import ToolsetListResponse
-from reporting.schema.mcp_config import ToolsetVersion
-from reporting.schema.mcp_config import ToolsetVersionListResponse
-from reporting.schema.mcp_config import ToolVersion
-from reporting.schema.mcp_config import ToolVersionListResponse
-from reporting.schema.mcp_config import UpdateToolRequest
-from reporting.schema.mcp_config import UpdateToolsetRequest
-from reporting.schema.mcp_config import validate_tool_arguments
-from reporting.services import report_store
-from reporting.services import reporting_neo4j
-from reporting.services.mcp_builtins.synthetic import builtin_tool
-from reporting.services.mcp_builtins.synthetic import builtin_tools_for_group
-from reporting.services.mcp_builtins.synthetic import builtin_toolset
-from reporting.services.mcp_builtins.synthetic import builtin_toolsets
-from reporting.services.mcp_builtins.synthetic import group_name_from_toolset_id
-from reporting.services.mcp_builtins.synthetic import is_builtin_toolset_id
+from reporting.schema.mcp_config import (
+    CallToolRequest,
+    CallToolResponse,
+    CreateToolRequest,
+    CreateToolsetRequest,
+    ToolIdResponse,
+    ToolItem,
+    ToolListResponse,
+    ToolsetIdResponse,
+    ToolsetListItem,
+    ToolsetListResponse,
+    ToolsetVersion,
+    ToolsetVersionListResponse,
+    ToolVersion,
+    ToolVersionListResponse,
+    UpdateToolRequest,
+    UpdateToolsetRequest,
+    validate_tool_arguments,
+)
+from reporting.services import report_store, reporting_neo4j
+from reporting.services.mcp_builtins.synthetic import (
+    builtin_tool,
+    builtin_tools_for_group,
+    builtin_toolset,
+    builtin_toolsets,
+    group_name_from_toolset_id,
+    is_builtin_toolset_id,
+)
 from reporting.services.query_validator import validate_query
 
 logger = logging.getLogger(__name__)
@@ -345,13 +345,8 @@ async def call_tool(
     if errors:
         return JSONResponse(content={"errors": errors}, status_code=400)
     try:
-        results = await reporting_neo4j.run_query(
-            tool.cypher, parameters=body.arguments
-        )
-        serialized = [
-            {key: _serialize_neo4j_value(value) for key, value in record.items()}
-            for record in results
-        ]
+        results = await reporting_neo4j.run_query(tool.cypher, parameters=body.arguments)
+        serialized = [{key: _serialize_neo4j_value(value) for key, value in record.items()} for record in results]
         return CallToolResponse(results=serialized)
     except Exception:
         logger.exception("Tool execution failed: %s", tool_id)

@@ -1,23 +1,23 @@
 import asyncio
 import logging
 import signal
-from datetime import datetime
-from datetime import timedelta
+from datetime import datetime, timedelta
 from typing import Any
-from typing import Dict
-from typing import List
 
-from reporting import scheduled_query_modules
-from reporting import settings
-from reporting import setup_logging  # noqa:F401
+from reporting import (
+    scheduled_query_modules,
+    settings,
+    setup_logging,  # noqa:F401
+)
 from reporting.schema.report_config import ScheduledQueryItem
-from reporting.schema.reporting_config import ScheduledQuery
-from reporting.schema.reporting_config import ScheduledQueryAction
-from reporting.schema.reporting_config import ScheduledQueryParam
-from reporting.schema.reporting_config import ScheduledQueryWatchScan
+from reporting.schema.reporting_config import (
+    ScheduledQuery,
+    ScheduledQueryAction,
+    ScheduledQueryParam,
+    ScheduledQueryWatchScan,
+)
 from reporting.services import report_store
-from reporting.services.reporting_neo4j import check_watch_scan_triggered
-from reporting.services.reporting_neo4j import run_query_with_retry
+from reporting.services.reporting_neo4j import check_watch_scan_triggered, run_query_with_retry
 
 logger = logging.getLogger(__name__)
 
@@ -60,9 +60,7 @@ async def _is_triggered(item: ScheduledQueryItem, sq: ScheduledQuery) -> bool:
             extra={"scheduled_query_id": item.scheduled_query_id},
         )
         return True
-    if sq.watch_scans and await check_watch_scan_triggered(
-        item.last_scheduled_at, sq.watch_scans
-    ):
+    if sq.watch_scans and await check_watch_scan_triggered(item.last_scheduled_at, sq.watch_scans):
         logger.debug(
             "Watch scan trigger fired",
             extra={"scheduled_query_id": item.scheduled_query_id},
@@ -81,12 +79,8 @@ async def schedule_query(item: ScheduledQueryItem) -> None:
     if not await _is_triggered(item, sq):
         logger.debug("No trigger for query", extra={"scheduled_query_id": sq_id})
         return
-    if not await report_store.acquire_scheduled_query_lock(
-        sq_id, item.last_scheduled_at
-    ):
-        logger.debug(
-            "Could not acquire lock for query", extra={"scheduled_query_id": sq_id}
-        )
+    if not await report_store.acquire_scheduled_query_lock(sq_id, item.last_scheduled_at):
+        logger.debug("Could not acquire lock for query", extra={"scheduled_query_id": sq_id})
         return
     logger.debug("Got lock for query", extra={"scheduled_query_id": sq_id})
     try:
@@ -108,9 +102,7 @@ async def schedule_query(item: ScheduledQueryItem) -> None:
             extra={"scheduled_query_id": sq_id},
         )
         try:
-            await report_store.record_scheduled_query_result(
-                sq_id, "failure", error=str(exc)
-            )
+            await report_store.record_scheduled_query_result(sq_id, "failure", error=str(exc))
         except Exception:
             logger.exception(
                 "Failed to record query result",
@@ -121,7 +113,7 @@ async def schedule_query(item: ScheduledQueryItem) -> None:
 async def _handle_results(
     scheduled_query_id: str,
     action: ScheduledQueryAction,
-    results: List[Dict[str, Any]],
+    results: list[dict[str, Any]],
 ) -> None:
     action_type = action.action_type
     if not action_type:
@@ -149,9 +141,7 @@ async def _handle_results(
 
 async def _schedule_queries() -> None:
     _bootstrap()
-    should_init = settings.DYNAMODB_CREATE_TABLE or (
-        settings.REPORT_STORE_BACKEND == "sqlmodel"
-    )
+    should_init = settings.DYNAMODB_CREATE_TABLE or (settings.REPORT_STORE_BACKEND == "sqlmodel")
     if should_init:
         await report_store.initialize()
     await scheduled_query_modules.load_modules()

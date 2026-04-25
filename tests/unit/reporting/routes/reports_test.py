@@ -1,15 +1,11 @@
 from unittest.mock import AsyncMock
 
-from httpx import ASGITransport
-from httpx import AsyncClient
+from httpx import ASGITransport, AsyncClient
 
 from reporting.app import create_app
-from reporting.authnz import CurrentUser
-from reporting.authnz import get_current_user
+from reporting.authnz import CurrentUser, get_current_user
 from reporting.authnz.permissions import ALL_PERMISSIONS
-from reporting.schema.report_config import ReportListItem
-from reporting.schema.report_config import ReportVersion
-from reporting.schema.report_config import User
+from reporting.schema.report_config import ReportListItem, ReportVersion, User
 
 _FAKE_USER = User(
     user_id="test-user-id",
@@ -21,9 +17,7 @@ _FAKE_USER = User(
     last_login="2024-01-01T00:00:00+00:00",
 )
 
-_FAKE_CURRENT_USER = CurrentUser(
-    user=_FAKE_USER, jwt_claims={}, permissions=ALL_PERMISSIONS
-)
+_FAKE_CURRENT_USER = CurrentUser(user=_FAKE_USER, jwt_claims={}, permissions=ALL_PERMISSIONS)
 
 
 def _make_app():
@@ -65,9 +59,7 @@ async def test_list_reports_success(mocker):
         new=AsyncMock(return_value=[_report_list_item()]),
     )
     app = _make_app()
-    async with AsyncClient(
-        transport=ASGITransport(app=app), base_url="http://test"
-    ) as client:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         ret = await client.get("/api/v1/reports")
     assert ret.status_code == 200
     reports = ret.json()["reports"]
@@ -83,9 +75,7 @@ async def test_list_reports_empty(mocker):
         new=AsyncMock(return_value=[]),
     )
     app = _make_app()
-    async with AsyncClient(
-        transport=ASGITransport(app=app), base_url="http://test"
-    ) as client:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         ret = await client.get("/api/v1/reports")
     assert ret.status_code == 200
     assert ret.json()["reports"] == []
@@ -102,9 +92,7 @@ async def test_get_dashboard_report_success(mocker):
         new=AsyncMock(return_value=_report_version()),
     )
     app = _make_app()
-    async with AsyncClient(
-        transport=ASGITransport(app=app), base_url="http://test"
-    ) as client:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         ret = await client.get("/api/v1/reports/dashboard")
     assert ret.status_code == 200
     assert ret.json()["report_id"] == "rid1"
@@ -117,9 +105,7 @@ async def test_get_dashboard_report_not_configured(mocker):
         new=AsyncMock(return_value=None),
     )
     app = _make_app()
-    async with AsyncClient(
-        transport=ASGITransport(app=app), base_url="http://test"
-    ) as client:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         ret = await client.get("/api/v1/reports/dashboard")
     assert ret.status_code == 404
     assert "dashboard" in ret.json()["error"].lower()
@@ -136,9 +122,7 @@ async def test_set_dashboard_report_success(mocker):
         new=AsyncMock(return_value=True),
     )
     app = _make_app()
-    async with AsyncClient(
-        transport=ASGITransport(app=app), base_url="http://test"
-    ) as client:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         ret = await client.put("/api/v1/reports/rid1/dashboard")
     assert ret.status_code == 200
     assert ret.json()["report_id"] == "rid1"
@@ -150,9 +134,7 @@ async def test_set_dashboard_report_not_found(mocker):
         new=AsyncMock(return_value=False),
     )
     app = _make_app()
-    async with AsyncClient(
-        transport=ASGITransport(app=app), base_url="http://test"
-    ) as client:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         ret = await client.put("/api/v1/reports/missing/dashboard")
     assert ret.status_code == 404
     assert "not found" in ret.json()["error"].lower()
@@ -169,9 +151,7 @@ async def test_get_report_success(mocker):
         new=AsyncMock(return_value=_report_version()),
     )
     app = _make_app()
-    async with AsyncClient(
-        transport=ASGITransport(app=app), base_url="http://test"
-    ) as client:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         ret = await client.get("/api/v1/reports/rid1")
     assert ret.status_code == 200
     assert ret.json()["report_id"] == "rid1"
@@ -185,9 +165,7 @@ async def test_get_report_not_found(mocker):
         new=AsyncMock(return_value=None),
     )
     app = _make_app()
-    async with AsyncClient(
-        transport=ASGITransport(app=app), base_url="http://test"
-    ) as client:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         ret = await client.get("/api/v1/reports/missing")
     assert ret.status_code == 404
     assert "not found" in ret.json()["error"].lower()
@@ -201,14 +179,10 @@ async def test_get_report_not_found(mocker):
 async def test_list_versions_success(mocker):
     mocker.patch(
         "reporting.routes.reports.report_store.list_report_versions",
-        new=AsyncMock(
-            return_value=[_report_version(version=2), _report_version(version=1)]
-        ),
+        new=AsyncMock(return_value=[_report_version(version=2), _report_version(version=1)]),
     )
     app = _make_app()
-    async with AsyncClient(
-        transport=ASGITransport(app=app), base_url="http://test"
-    ) as client:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         ret = await client.get("/api/v1/reports/rid1/versions")
     assert ret.status_code == 200
     versions = ret.json()["versions"]
@@ -223,9 +197,7 @@ async def test_list_versions_report_not_found(mocker):
         new=AsyncMock(return_value=[]),
     )
     app = _make_app()
-    async with AsyncClient(
-        transport=ASGITransport(app=app), base_url="http://test"
-    ) as client:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         ret = await client.get("/api/v1/reports/missing/versions")
     assert ret.status_code == 404
 
@@ -241,9 +213,7 @@ async def test_get_version_success(mocker):
         new=AsyncMock(return_value=_report_version(version=3)),
     )
     app = _make_app()
-    async with AsyncClient(
-        transport=ASGITransport(app=app), base_url="http://test"
-    ) as client:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         ret = await client.get("/api/v1/reports/rid1/versions/3")
     assert ret.status_code == 200
     assert ret.json()["version"] == 3
@@ -255,9 +225,7 @@ async def test_get_version_not_found(mocker):
         new=AsyncMock(return_value=None),
     )
     app = _make_app()
-    async with AsyncClient(
-        transport=ASGITransport(app=app), base_url="http://test"
-    ) as client:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         ret = await client.get("/api/v1/reports/rid1/versions/99")
     assert ret.status_code == 404
     assert "not found" in ret.json()["error"].lower()
@@ -274,9 +242,7 @@ async def test_create_report_success(mocker):
         new=AsyncMock(return_value=_report_list_item()),
     )
     app = _make_app()
-    async with AsyncClient(
-        transport=ASGITransport(app=app), base_url="http://test"
-    ) as client:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         ret = await client.post("/api/v1/reports", json={"name": "My Report"})
     assert ret.status_code == 201
     assert ret.json()["report_id"] == "rid1"
@@ -290,9 +256,7 @@ async def test_create_report_passes_fields_to_service(mocker):
         new=AsyncMock(return_value=_report_list_item()),
     )
     app = _make_app()
-    async with AsyncClient(
-        transport=ASGITransport(app=app), base_url="http://test"
-    ) as client:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         await client.post("/api/v1/reports", json={"name": "My Report"})
     mock_create.assert_called_once_with(
         name="My Report",
@@ -302,18 +266,14 @@ async def test_create_report_passes_fields_to_service(mocker):
 
 async def test_create_report_missing_required_fields(mocker):
     app = _make_app()
-    async with AsyncClient(
-        transport=ASGITransport(app=app), base_url="http://test"
-    ) as client:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         ret = await client.post("/api/v1/reports", json={})
     assert ret.status_code == 422
 
 
 async def test_create_report_non_json_body(mocker):
     app = _make_app()
-    async with AsyncClient(
-        transport=ASGITransport(app=app), base_url="http://test"
-    ) as client:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         ret = await client.post(
             "/api/v1/reports",
             content=b"not json",
@@ -333,9 +293,7 @@ async def test_create_version_success(mocker):
         new=AsyncMock(return_value=_report_version(version=2)),
     )
     app = _make_app()
-    async with AsyncClient(
-        transport=ASGITransport(app=app), base_url="http://test"
-    ) as client:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         ret = await client.post(
             "/api/v1/reports/rid1/versions",
             json={"config": {"rows": []}, "comment": "v2"},
@@ -350,9 +308,7 @@ async def test_create_version_passes_fields_to_service(mocker):
         new=AsyncMock(return_value=_report_version(version=2)),
     )
     app = _make_app()
-    async with AsyncClient(
-        transport=ASGITransport(app=app), base_url="http://test"
-    ) as client:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         await client.post(
             "/api/v1/reports/rid1/versions",
             json={"config": {"rows": [{"name": "r"}]}, "comment": "update"},
@@ -371,9 +327,7 @@ async def test_create_version_report_not_found(mocker):
         new=AsyncMock(return_value=None),
     )
     app = _make_app()
-    async with AsyncClient(
-        transport=ASGITransport(app=app), base_url="http://test"
-    ) as client:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         ret = await client.post(
             "/api/v1/reports/missing/versions",
             json={"config": {}},
@@ -384,9 +338,7 @@ async def test_create_version_report_not_found(mocker):
 
 async def test_create_version_missing_config_field(mocker):
     app = _make_app()
-    async with AsyncClient(
-        transport=ASGITransport(app=app), base_url="http://test"
-    ) as client:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         ret = await client.post(
             "/api/v1/reports/rid1/versions",
             json={"comment": "no config"},
@@ -396,9 +348,7 @@ async def test_create_version_missing_config_field(mocker):
 
 async def test_create_version_non_json_body(mocker):
     app = _make_app()
-    async with AsyncClient(
-        transport=ASGITransport(app=app), base_url="http://test"
-    ) as client:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         ret = await client.post(
             "/api/v1/reports/rid1/versions",
             content=b"not json",
@@ -418,9 +368,7 @@ async def test_delete_report_success(mocker):
         new=AsyncMock(return_value=True),
     )
     app = _make_app()
-    async with AsyncClient(
-        transport=ASGITransport(app=app), base_url="http://test"
-    ) as client:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         ret = await client.delete("/api/v1/reports/rid1")
     assert ret.status_code == 200
     assert ret.json()["report_id"] == "rid1"
@@ -432,9 +380,7 @@ async def test_delete_report_not_found(mocker):
         new=AsyncMock(return_value=False),
     )
     app = _make_app()
-    async with AsyncClient(
-        transport=ASGITransport(app=app), base_url="http://test"
-    ) as client:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         ret = await client.delete("/api/v1/reports/missing")
     assert ret.status_code == 404
     assert "not found" in ret.json()["error"].lower()
@@ -451,9 +397,7 @@ async def test_pin_report_success(mocker):
         new=AsyncMock(return_value=True),
     )
     app = _make_app()
-    async with AsyncClient(
-        transport=ASGITransport(app=app), base_url="http://test"
-    ) as client:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         ret = await client.put("/api/v1/reports/rid1/pin", json={"pinned": True})
     assert ret.status_code == 200
     assert ret.json()["report_id"] == "rid1"
@@ -465,9 +409,7 @@ async def test_unpin_report_success(mocker):
         new=AsyncMock(return_value=True),
     )
     app = _make_app()
-    async with AsyncClient(
-        transport=ASGITransport(app=app), base_url="http://test"
-    ) as client:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         ret = await client.put("/api/v1/reports/rid1/pin", json={"pinned": False})
     assert ret.status_code == 200
     assert ret.json()["report_id"] == "rid1"
@@ -479,9 +421,7 @@ async def test_pin_report_passes_fields_to_service(mocker):
         new=AsyncMock(return_value=True),
     )
     app = _make_app()
-    async with AsyncClient(
-        transport=ASGITransport(app=app), base_url="http://test"
-    ) as client:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         await client.put("/api/v1/reports/rid1/pin", json={"pinned": True})
     mock_pin.assert_called_once_with("rid1", True)
 
@@ -492,9 +432,7 @@ async def test_pin_report_not_found(mocker):
         new=AsyncMock(return_value=False),
     )
     app = _make_app()
-    async with AsyncClient(
-        transport=ASGITransport(app=app), base_url="http://test"
-    ) as client:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         ret = await client.put("/api/v1/reports/missing/pin", json={"pinned": True})
     assert ret.status_code == 404
     assert "not found" in ret.json()["error"].lower()
@@ -502,17 +440,13 @@ async def test_pin_report_not_found(mocker):
 
 async def test_pin_report_missing_body(mocker):
     app = _make_app()
-    async with AsyncClient(
-        transport=ASGITransport(app=app), base_url="http://test"
-    ) as client:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         ret = await client.put("/api/v1/reports/rid1/pin")
     assert ret.status_code == 422
 
 
 async def test_pin_report_wrong_type(mocker):
     app = _make_app()
-    async with AsyncClient(
-        transport=ASGITransport(app=app), base_url="http://test"
-    ) as client:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         ret = await client.put("/api/v1/reports/rid1/pin", json={})
     assert ret.status_code == 422

@@ -1,17 +1,13 @@
 """Seizu CLI entry point."""
+
 from pathlib import Path
-from typing import Optional
 
 import typer
 
-from seizu_cli import auth
+from seizu_cli import auth, state
 from seizu_cli import config as cli_config
-from seizu_cli import state
 from seizu_cli.commands import auth as auth_commands
-from seizu_cli.commands import reports
-from seizu_cli.commands import scheduled_queries
-from seizu_cli.commands import seed
-from seizu_cli.commands import toolsets
+from seizu_cli.commands import reports, scheduled_queries, seed, toolsets
 
 app = typer.Typer(
     help="Seizu CLI — manage reports, scheduled queries, and toolsets via the Seizu API.",
@@ -25,37 +21,26 @@ app.add_typer(auth_commands.app, name="auth")
 
 @app.callback()
 def main(
-    api_url: Optional[str] = typer.Option(
+    api_url: str | None = typer.Option(
         None,
         envvar="SEIZU_API_URL",
-        help=(
-            "Seizu API base URL. "
-            "Overrides the 'api_url' setting in ~/.config/seizu/seizu.conf."
-        ),
+        help=("Seizu API base URL. Overrides the 'api_url' setting in ~/.config/seizu/seizu.conf."),
     ),
-    token: Optional[str] = typer.Option(
+    token: str | None = typer.Option(
         None,
         envvar="SEIZU_TOKEN",
-        help=(
-            "Bearer token for API authentication. "
-            "If omitted, a stored token from 'seizu login' is used."
-        ),
+        help=("Bearer token for API authentication. If omitted, a stored token from 'seizu login' is used."),
     ),
-    credentials_file: Optional[Path] = typer.Option(
+    credentials_file: Path | None = typer.Option(
         None,
         envvar="SEIZU_CREDENTIALS_FILE",
-        help=(
-            "Path to a JSON credentials file. "
-            "Forces file-based token storage even if an OS keyring is available."
-        ),
+        help=("Path to a JSON credentials file. Forces file-based token storage even if an OS keyring is available."),
     ),
-    config_file: Optional[Path] = typer.Option(
+    config_file: Path | None = typer.Option(
         None,
         "--config-file",
         envvar="SEIZU_CONFIG_FILE",
-        help=(
-            "Path to the CLI config file. " "Defaults to ~/.config/seizu/seizu.conf."
-        ),
+        help=("Path to the CLI config file. Defaults to ~/.config/seizu/seizu.conf."),
     ),
 ) -> None:
     """Seizu CLI — manage reports, scheduled queries, and toolsets via the Seizu API.
@@ -150,7 +135,7 @@ def whoami_cmd() -> None:
 
 @app.command("seed")
 def seed_cmd(
-    config: Optional[str] = typer.Option(
+    config: str | None = typer.Option(
         None,
         envvar="REPORTING_CONFIG_FILE",
         help=(
@@ -175,7 +160,7 @@ def seed_cmd(
 
 @app.command("export")
 def export_cmd(
-    config: Optional[str] = typer.Option(
+    config: str | None = typer.Option(
         None,
         envvar="REPORTING_CONFIG_FILE",
         help=(

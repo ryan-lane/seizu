@@ -1,7 +1,4 @@
-from reporting.utils.settings import bool_env
-from reporting.utils.settings import int_env
-from reporting.utils.settings import list_env
-from reporting.utils.settings import str_env
+from reporting.utils.settings import bool_env, int_env, list_env, str_env
 
 # Whether or not reporting is run in debug mode. Never run reporting in debug
 # mode outside of development!
@@ -87,9 +84,7 @@ NEO4J_URI = str_env("NEO4J_URI", "bolt://localhost:7687")
 # Valid values: WARNING (default), INFORMATION, OFF.
 # Set to OFF to suppress schema warnings about missing labels/properties when
 # the database is not fully populated (e.g. in development).
-NEO4J_NOTIFICATIONS_MIN_SEVERITY = str_env(
-    "NEO4J_NOTIFICATIONS_MIN_SEVERITY", "WARNING"
-)
+NEO4J_NOTIFICATIONS_MIN_SEVERITY = str_env("NEO4J_NOTIFICATIONS_MIN_SEVERITY", "WARNING")
 
 # Username to connect to neo4j
 NEO4J_USER = str_env("NEO4J_USER")

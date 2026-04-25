@@ -4,11 +4,15 @@ import logging
 import neo4j.exceptions
 from datadog.dogstatsd import statsd
 
-from reporting import settings
-from reporting import setup_logging  # noqa:F401
+from reporting import (
+    settings,
+    setup_logging,  # noqa:F401
+)
 from reporting.schema.report_config import PanelStat
-from reporting.services import report_store
-from reporting.services import reporting_statsd  # noqa:F401
+from reporting.services import (
+    report_store,
+    reporting_statsd,  # noqa:F401
+)
 from reporting.services.reporting_neo4j import run_query_with_retry
 
 logger = logging.getLogger(__name__)
@@ -40,9 +44,7 @@ async def send_stats_for_panel_stat(stat: PanelStat) -> None:
             _tags = [f"{stat.input_param_name}:{value}"]  # noqa: E231
             _tags.extend(tags)
             try:
-                metric_results = await run_query_with_retry(
-                    stat.cypher, parameters=_params
-                )
+                metric_results = await run_query_with_retry(stat.cypher, parameters=_params)
             except neo4j.exceptions.ServiceUnavailable:
                 logger.exception(
                     "Failed to record metric",
@@ -51,9 +53,7 @@ async def send_stats_for_panel_stat(stat: PanelStat) -> None:
                 continue
             for metric_result in metric_results:
                 if stat.panel_type == "progress":
-                    statsd.gauge(
-                        f"{metric}.numerator", metric_result["numerator"], tags=_tags
-                    )
+                    statsd.gauge(f"{metric}.numerator", metric_result["numerator"], tags=_tags)
                     statsd.gauge(
                         f"{metric}.denominator",
                         metric_result["denominator"],
@@ -63,27 +63,17 @@ async def send_stats_for_panel_stat(stat: PanelStat) -> None:
                     statsd.gauge(f"{metric}.total", metric_result["total"], tags=_tags)
     else:
         try:
-            metric_results = await run_query_with_retry(
-                stat.cypher, parameters=stat.static_params
-            )
+            metric_results = await run_query_with_retry(stat.cypher, parameters=stat.static_params)
         except neo4j.exceptions.ServiceUnavailable:
-            logger.exception(
-                "Failed to record metric", extra={"metric": metric, "tags": tags}
-            )
+            logger.exception("Failed to record metric", extra={"metric": metric, "tags": tags})
             return
         except neo4j.exceptions.CypherSyntaxError:
-            logger.exception(
-                "Failed to record metric", extra={"metric": metric, "tags": tags}
-            )
+            logger.exception("Failed to record metric", extra={"metric": metric, "tags": tags})
             return
         for metric_result in metric_results:
             if stat.panel_type == "progress":
-                statsd.gauge(
-                    f"{metric}.numerator", metric_result["numerator"], tags=tags
-                )
-                statsd.gauge(
-                    f"{metric}.denominator", metric_result["denominator"], tags=tags
-                )
+                statsd.gauge(f"{metric}.numerator", metric_result["numerator"], tags=tags)
+                statsd.gauge(f"{metric}.denominator", metric_result["denominator"], tags=tags)
             elif stat.panel_type == "count":
                 statsd.gauge(f"{metric}.total", metric_result["total"], tags=tags)
 

@@ -1,11 +1,8 @@
 from typing import Any
 
-from fastapi import APIRouter
-from fastapi import Depends
-from fastapi import Query
+from fastapi import APIRouter, Depends, Query
 
-from reporting.authnz import CurrentUser
-from reporting.authnz import require_permission
+from reporting.authnz import CurrentUser, require_permission
 from reporting.authnz.permissions import Permission
 from reporting.schema.report_config import QueryHistoryListResponse
 from reporting.services import report_store

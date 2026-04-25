@@ -1,15 +1,12 @@
 from unittest.mock import AsyncMock
 
 import pytest
-from httpx import ASGITransport
-from httpx import AsyncClient
+from httpx import ASGITransport, AsyncClient
 
 from reporting.app import create_app
-from reporting.authnz import CurrentUser
-from reporting.authnz import get_current_user
+from reporting.authnz import CurrentUser, get_current_user
 from reporting.authnz.permissions import ALL_PERMISSIONS
-from reporting.schema.report_config import QueryHistoryItem
-from reporting.schema.report_config import User
+from reporting.schema.report_config import QueryHistoryItem, User
 
 _FAKE_USER = User(
     user_id="test-user-id",
@@ -29,15 +26,9 @@ _OTHER_USER = User(
     last_login="2024-01-01T00:00:00+00:00",
 )
 
-_FAKE_CURRENT_USER = CurrentUser(
-    user=_FAKE_USER, jwt_claims={}, permissions=ALL_PERMISSIONS
-)
-_OTHER_CURRENT_USER = CurrentUser(
-    user=_OTHER_USER, jwt_claims={}, permissions=ALL_PERMISSIONS
-)
-_UNPRIVILEGED_CURRENT_USER = CurrentUser(
-    user=_FAKE_USER, jwt_claims={}, permissions=frozenset()
-)
+_FAKE_CURRENT_USER = CurrentUser(user=_FAKE_USER, jwt_claims={}, permissions=ALL_PERMISSIONS)
+_OTHER_CURRENT_USER = CurrentUser(user=_OTHER_USER, jwt_claims={}, permissions=ALL_PERMISSIONS)
+_UNPRIVILEGED_CURRENT_USER = CurrentUser(user=_FAKE_USER, jwt_claims={}, permissions=frozenset())
 
 
 def _make_app(current_user: CurrentUser = _FAKE_CURRENT_USER) -> object:
@@ -67,9 +58,7 @@ async def test_list_query_history_empty(mocker):
     )
 
     app = _make_app()
-    async with AsyncClient(
-        transport=ASGITransport(app=app), base_url="http://test"
-    ) as client:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         ret = await client.get("/api/v1/query-history")
 
     assert ret.status_code == 200
@@ -88,9 +77,7 @@ async def test_list_query_history_returns_items(mocker):
     )
 
     app = _make_app()
-    async with AsyncClient(
-        transport=ASGITransport(app=app), base_url="http://test"
-    ) as client:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         ret = await client.get("/api/v1/query-history")
 
     assert ret.status_code == 200
@@ -108,9 +95,7 @@ async def test_list_query_history_pagination_params(mocker):
     )
 
     app = _make_app()
-    async with AsyncClient(
-        transport=ASGITransport(app=app), base_url="http://test"
-    ) as client:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         ret = await client.get("/api/v1/query-history?page=2&per_page=10")
 
     assert ret.status_code == 200
@@ -133,9 +118,7 @@ async def test_list_query_history_scoped_to_current_user(mocker):
 
     # Use a different authenticated user.
     app = _make_app(current_user=_OTHER_CURRENT_USER)
-    async with AsyncClient(
-        transport=ASGITransport(app=app), base_url="http://test"
-    ) as client:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         await client.get("/api/v1/query-history")
 
     mock_list.assert_awaited_once_with(
@@ -148,9 +131,7 @@ async def test_list_query_history_scoped_to_current_user(mocker):
 async def test_list_query_history_invalid_page(mocker):
 
     app = _make_app()
-    async with AsyncClient(
-        transport=ASGITransport(app=app), base_url="http://test"
-    ) as client:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         ret = await client.get("/api/v1/query-history?page=0")
 
     assert ret.status_code == 422
@@ -159,9 +140,7 @@ async def test_list_query_history_invalid_page(mocker):
 async def test_list_query_history_per_page_too_large(mocker):
 
     app = _make_app()
-    async with AsyncClient(
-        transport=ASGITransport(app=app), base_url="http://test"
-    ) as client:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         ret = await client.get("/api/v1/query-history?per_page=101")
 
     assert ret.status_code == 422
@@ -175,9 +154,7 @@ async def test_list_query_history_valid_per_page_values(mocker, per_page):
     )
 
     app = _make_app()
-    async with AsyncClient(
-        transport=ASGITransport(app=app), base_url="http://test"
-    ) as client:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         ret = await client.get(f"/api/v1/query-history?per_page={per_page}")
 
     assert ret.status_code == 200
@@ -185,8 +162,6 @@ async def test_list_query_history_valid_per_page_values(mocker, per_page):
 
 async def test_list_query_history_requires_query_history_read_permission():
     app = _make_app(current_user=_UNPRIVILEGED_CURRENT_USER)
-    async with AsyncClient(
-        transport=ASGITransport(app=app), base_url="http://test"
-    ) as client:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         ret = await client.get("/api/v1/query-history")
     assert ret.status_code == 403

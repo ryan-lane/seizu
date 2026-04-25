@@ -1,49 +1,31 @@
 import logging
-from datetime import datetime
-from datetime import timezone
+from datetime import UTC, datetime
 from typing import Any
-from typing import Dict
-from typing import List
-from typing import Optional
 
 from snowflake import SnowflakeGenerator
-from sqlalchemy import and_
-from sqlalchemy import Column
-from sqlalchemy import JSON
-from sqlalchemy import null
-from sqlalchemy import UniqueConstraint
-from sqlalchemy import update
+from sqlalchemy import JSON, Column, UniqueConstraint, and_, null, update
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.ext.asyncio import AsyncEngine
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.ext.asyncio import create_async_engine
-from sqlmodel import col
-from sqlmodel import Field
-from sqlmodel import select
-from sqlmodel import SQLModel
+from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, create_async_engine
+from sqlmodel import Field, SQLModel, col, select
 
 from reporting import settings
-from reporting.schema.mcp_config import ToolItem
-from reporting.schema.mcp_config import ToolParamDef
-from reporting.schema.mcp_config import ToolsetListItem
-from reporting.schema.mcp_config import ToolsetVersion
-from reporting.schema.mcp_config import ToolVersion
-from reporting.schema.rbac import RoleItem
-from reporting.schema.rbac import RoleVersion
-from reporting.schema.report_config import PanelStat
-from reporting.schema.report_config import QueryHistoryItem
-from reporting.schema.report_config import ReportListItem
-from reporting.schema.report_config import ReportVersion
-from reporting.schema.report_config import ScheduledQueryItem
-from reporting.schema.report_config import ScheduledQueryVersion
-from reporting.schema.report_config import User
-from reporting.services.report_store.base import extract_panel_stats
-from reporting.services.report_store.base import ReportStore
+from reporting.schema.mcp_config import ToolItem, ToolParamDef, ToolsetListItem, ToolsetVersion, ToolVersion
+from reporting.schema.rbac import RoleItem, RoleVersion
+from reporting.schema.report_config import (
+    PanelStat,
+    QueryHistoryItem,
+    ReportListItem,
+    ReportVersion,
+    ScheduledQueryItem,
+    ScheduledQueryVersion,
+    User,
+)
+from reporting.services.report_store.base import ReportStore, extract_panel_stats
 
 logger = logging.getLogger(__name__)
 
-_engine: Optional[AsyncEngine] = None
-_snowflake_gen: Optional[SnowflakeGenerator] = None
+_engine: AsyncEngine | None = None
+_snowflake_gen: SnowflakeGenerator | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -54,13 +36,13 @@ _snowflake_gen: Optional[SnowflakeGenerator] = None
 class ReportVersionRecord(SQLModel, table=True):  # type: ignore
     __tablename__ = "report_versions"
     __table_args__ = (UniqueConstraint("report_id", "version"),)
-    id: Optional[int] = Field(default=None, primary_key=True)
+    id: int | None = Field(default=None, primary_key=True)
     report_id: str = Field(index=True)
     version: int
-    config: Dict[str, Any] = Field(default={}, sa_column=Column(JSON, nullable=False))
+    config: dict[str, Any] = Field(default={}, sa_column=Column(JSON, nullable=False))
     created_at: str
     created_by: str
-    comment: Optional[str] = None
+    comment: str | None = None
 
 
 class DashboardPointerRecord(SQLModel, table=True):  # type: ignore
@@ -87,24 +69,22 @@ class UserRecord(SQLModel, table=True):  # type: ignore
     sub: str
     iss: str
     email: str
-    display_name: Optional[str] = None
+    display_name: str | None = None
     created_at: str
     last_login: str
-    archived_at: Optional[str] = None
+    archived_at: str | None = None
 
 
 class PanelStatRecord(SQLModel, table=True):  # type: ignore
     __tablename__ = "panel_stats"
-    id: Optional[int] = Field(default=None, primary_key=True)
+    id: int | None = Field(default=None, primary_key=True)
     report_id: str = Field(index=True)
     metric: str
     panel_type: str
     cypher: str
-    static_params: Dict[str, Any] = Field(
-        default={}, sa_column=Column(JSON, nullable=False)
-    )
-    input_param_name: Optional[str] = None
-    input_cypher: Optional[str] = None
+    static_params: dict[str, Any] = Field(default={}, sa_column=Column(JSON, nullable=False))
+    input_param_name: str | None = None
+    input_cypher: str | None = None
 
 
 class ScheduledQueryRecord(SQLModel, table=True):  # type: ignore
@@ -112,51 +92,37 @@ class ScheduledQueryRecord(SQLModel, table=True):  # type: ignore
     scheduled_query_id: str = Field(primary_key=True)
     name: str
     cypher: str
-    params: List[Dict[str, Any]] = Field(
-        default=[], sa_column=Column(JSON, nullable=False)
-    )
-    frequency: Optional[int] = None
-    watch_scans: List[Dict[str, Any]] = Field(
-        default=[], sa_column=Column(JSON, nullable=False)
-    )
+    params: list[dict[str, Any]] = Field(default=[], sa_column=Column(JSON, nullable=False))
+    frequency: int | None = None
+    watch_scans: list[dict[str, Any]] = Field(default=[], sa_column=Column(JSON, nullable=False))
     enabled: bool = True
-    actions: List[Dict[str, Any]] = Field(
-        default=[], sa_column=Column(JSON, nullable=False)
-    )
+    actions: list[dict[str, Any]] = Field(default=[], sa_column=Column(JSON, nullable=False))
     current_version: int = 0
     created_at: str
     updated_at: str
     created_by: str
-    updated_by: Optional[str] = None
-    last_run_status: Optional[str] = None
-    last_run_at: Optional[str] = None
-    last_errors: List[Dict[str, str]] = Field(
-        default=[], sa_column=Column(JSON, nullable=False)
-    )
-    last_scheduled_at: Optional[str] = None
+    updated_by: str | None = None
+    last_run_status: str | None = None
+    last_run_at: str | None = None
+    last_errors: list[dict[str, str]] = Field(default=[], sa_column=Column(JSON, nullable=False))
+    last_scheduled_at: str | None = None
 
 
 class ScheduledQueryVersionRecord(SQLModel, table=True):  # type: ignore
     __tablename__ = "scheduled_query_versions"
     __table_args__ = (UniqueConstraint("scheduled_query_id", "version"),)
-    id: Optional[int] = Field(default=None, primary_key=True)
+    id: int | None = Field(default=None, primary_key=True)
     scheduled_query_id: str = Field(index=True)
     version: int
     cypher: str
-    params: List[Dict[str, Any]] = Field(
-        default=[], sa_column=Column(JSON, nullable=False)
-    )
-    frequency: Optional[int] = None
-    watch_scans: List[Dict[str, Any]] = Field(
-        default=[], sa_column=Column(JSON, nullable=False)
-    )
+    params: list[dict[str, Any]] = Field(default=[], sa_column=Column(JSON, nullable=False))
+    frequency: int | None = None
+    watch_scans: list[dict[str, Any]] = Field(default=[], sa_column=Column(JSON, nullable=False))
     enabled: bool = True
-    actions: List[Dict[str, Any]] = Field(
-        default=[], sa_column=Column(JSON, nullable=False)
-    )
+    actions: list[dict[str, Any]] = Field(default=[], sa_column=Column(JSON, nullable=False))
     created_at: str
     created_by: str
-    comment: Optional[str] = None
+    comment: str | None = None
 
 
 class ToolsetRecord(SQLModel, table=True):  # type: ignore
@@ -169,13 +135,13 @@ class ToolsetRecord(SQLModel, table=True):  # type: ignore
     created_at: str
     updated_at: str
     created_by: str
-    updated_by: Optional[str] = None
+    updated_by: str | None = None
 
 
 class ToolsetVersionRecord(SQLModel, table=True):  # type: ignore
     __tablename__ = "toolset_versions"
     __table_args__ = (UniqueConstraint("toolset_id", "version"),)
-    id: Optional[int] = Field(default=None, primary_key=True)
+    id: int | None = Field(default=None, primary_key=True)
     toolset_id: str = Field(index=True)
     version: int
     name: str
@@ -183,7 +149,7 @@ class ToolsetVersionRecord(SQLModel, table=True):  # type: ignore
     enabled: bool = True
     created_at: str
     created_by: str
-    comment: Optional[str] = None
+    comment: str | None = None
 
 
 class ToolRecord(SQLModel, table=True):  # type: ignore
@@ -193,39 +159,35 @@ class ToolRecord(SQLModel, table=True):  # type: ignore
     name: str
     description: str = ""
     cypher: str
-    parameters: List[Dict[str, Any]] = Field(
-        default=[], sa_column=Column(JSON, nullable=False)
-    )
+    parameters: list[dict[str, Any]] = Field(default=[], sa_column=Column(JSON, nullable=False))
     enabled: bool = True
     current_version: int = 0
     created_at: str
     updated_at: str
     created_by: str
-    updated_by: Optional[str] = None
+    updated_by: str | None = None
 
 
 class ToolVersionRecord(SQLModel, table=True):  # type: ignore
     __tablename__ = "tool_versions"
     __table_args__ = (UniqueConstraint("tool_id", "version"),)
-    id: Optional[int] = Field(default=None, primary_key=True)
+    id: int | None = Field(default=None, primary_key=True)
     tool_id: str = Field(index=True)
     toolset_id: str
     version: int
     name: str
     description: str = ""
     cypher: str
-    parameters: List[Dict[str, Any]] = Field(
-        default=[], sa_column=Column(JSON, nullable=False)
-    )
+    parameters: list[dict[str, Any]] = Field(default=[], sa_column=Column(JSON, nullable=False))
     enabled: bool = True
     created_at: str
     created_by: str
-    comment: Optional[str] = None
+    comment: str | None = None
 
 
 class QueryHistoryRecord(SQLModel, table=True):  # type: ignore
     __tablename__ = "query_history"
-    id: Optional[int] = Field(default=None, primary_key=True)
+    id: int | None = Field(default=None, primary_key=True)
     history_id: str = Field(unique=True)
     user_id: str = Field(index=True)
     query: str
@@ -237,26 +199,26 @@ class RoleRecord(SQLModel, table=True):  # type: ignore
     role_id: str = Field(primary_key=True)
     name: str = Field(unique=True)
     description: str = ""
-    permissions: List[str] = Field(default=[], sa_column=Column(JSON, nullable=False))
+    permissions: list[str] = Field(default=[], sa_column=Column(JSON, nullable=False))
     current_version: int = 0
     created_at: str
     updated_at: str
     created_by: str
-    updated_by: Optional[str] = None
+    updated_by: str | None = None
 
 
 class RoleVersionRecord(SQLModel, table=True):  # type: ignore
     __tablename__ = "role_versions"
     __table_args__ = (UniqueConstraint("role_id", "version"),)
-    id: Optional[int] = Field(default=None, primary_key=True)
+    id: int | None = Field(default=None, primary_key=True)
     role_id: str = Field(index=True)
     version: int
     name: str
     description: str = ""
-    permissions: List[str] = Field(default=[], sa_column=Column(JSON, nullable=False))
+    permissions: list[str] = Field(default=[], sa_column=Column(JSON, nullable=False))
     created_at: str
     created_by: str
-    comment: Optional[str] = None
+    comment: str | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -309,7 +271,7 @@ class SQLModelReportStore(ReportStore):
         except IntegrityError:
             logger.info("SQL report store tables already exist")
 
-    async def list_reports(self) -> List[ReportListItem]:
+    async def list_reports(self) -> list[ReportListItem]:
         async with AsyncSession(_get_engine()) as session:
             result = await session.execute(select(ReportRecord))
             rows = result.scalars().all()
@@ -325,7 +287,7 @@ class SQLModelReportStore(ReportStore):
                 for r in rows
             ]
 
-    async def get_report_latest(self, report_id: str) -> Optional[ReportVersion]:
+    async def get_report_latest(self, report_id: str) -> ReportVersion | None:
         async with AsyncSession(_get_engine()) as session:
             report = await session.get(ReportRecord, report_id)
             if not report:
@@ -350,9 +312,7 @@ class SQLModelReportStore(ReportStore):
                 comment=row.comment,
             )
 
-    async def get_report_version(
-        self, report_id: str, version: int
-    ) -> Optional[ReportVersion]:
+    async def get_report_version(self, report_id: str, version: int) -> ReportVersion | None:
         async with AsyncSession(_get_engine()) as session:
             report = await session.get(ReportRecord, report_id)
             if not report:
@@ -376,7 +336,7 @@ class SQLModelReportStore(ReportStore):
                 comment=row.comment,
             )
 
-    async def list_report_versions(self, report_id: str) -> List[ReportVersion]:
+    async def list_report_versions(self, report_id: str) -> list[ReportVersion]:
         async with AsyncSession(_get_engine()) as session:
             report = await session.get(ReportRecord, report_id)
             if not report:
@@ -408,7 +368,7 @@ class SQLModelReportStore(ReportStore):
     ) -> ReportListItem:
         """Create a new empty report (no initial version) and return the ReportListItem."""
         report_id = generate_report_id()
-        now = datetime.now(tz=timezone.utc).isoformat()
+        now = datetime.now(tz=UTC).isoformat()
 
         async with AsyncSession(_get_engine()) as session:
             session.add(
@@ -433,10 +393,10 @@ class SQLModelReportStore(ReportStore):
     async def save_report_version(
         self,
         report_id: str,
-        config: Dict[str, Any],
+        config: dict[str, Any],
         created_by: str,
-        comment: Optional[str] = None,
-    ) -> Optional[ReportVersion]:
+        comment: str | None = None,
+    ) -> ReportVersion | None:
         async with AsyncSession(_get_engine()) as session:
             report = await session.get(ReportRecord, report_id)
             if not report:
@@ -444,7 +404,7 @@ class SQLModelReportStore(ReportStore):
 
             version = report.current_version + 1
             name = report.name
-            now = datetime.now(tz=timezone.utc).isoformat()
+            now = datetime.now(tz=UTC).isoformat()
 
             session.add(
                 ReportVersionRecord(
@@ -461,9 +421,7 @@ class SQLModelReportStore(ReportStore):
             session.add(report)
 
             # Replace panel stats for this report atomically with the version write.
-            old_stats_stmt = select(PanelStatRecord).where(
-                PanelStatRecord.report_id == report_id
-            )
+            old_stats_stmt = select(PanelStatRecord).where(PanelStatRecord.report_id == report_id)
             old_stats_result = await session.execute(old_stats_stmt)
             for old_stat in old_stats_result.scalars().all():
                 await session.delete(old_stat)
@@ -503,16 +461,12 @@ class SQLModelReportStore(ReportStore):
             if pointer and pointer.report_id == report_id:
                 await session.delete(pointer)
 
-            stmt = select(ReportVersionRecord).where(
-                ReportVersionRecord.report_id == report_id
-            )
+            stmt = select(ReportVersionRecord).where(ReportVersionRecord.report_id == report_id)
             result = await session.execute(stmt)
             for version_record in result.scalars().all():
                 await session.delete(version_record)
 
-            stats_stmt = select(PanelStatRecord).where(
-                PanelStatRecord.report_id == report_id
-            )
+            stats_stmt = select(PanelStatRecord).where(PanelStatRecord.report_id == report_id)
             stats_result = await session.execute(stats_stmt)
             for stat_record in stats_result.scalars().all():
                 await session.delete(stat_record)
@@ -530,7 +484,7 @@ class SQLModelReportStore(ReportStore):
             await session.commit()
         return True
 
-    async def get_dashboard_report_id(self) -> Optional[str]:
+    async def get_dashboard_report_id(self) -> str | None:
         async with AsyncSession(_get_engine()) as session:
             row = await session.get(DashboardPointerRecord, 1)
             if not row:
@@ -542,26 +496,24 @@ class SQLModelReportStore(ReportStore):
             exists = await session.get(ReportRecord, report_id)
             if not exists:
                 return False
-            now = datetime.now(tz=timezone.utc).isoformat()
+            now = datetime.now(tz=UTC).isoformat()
             existing = await session.get(DashboardPointerRecord, 1)
             if existing:
                 existing.report_id = report_id
                 existing.updated_at = now
                 session.add(existing)
             else:
-                session.add(
-                    DashboardPointerRecord(id=1, report_id=report_id, updated_at=now)
-                )
+                session.add(DashboardPointerRecord(id=1, report_id=report_id, updated_at=now))
             await session.commit()
         return True
 
-    async def get_dashboard_report(self) -> Optional[ReportVersion]:
+    async def get_dashboard_report(self) -> ReportVersion | None:
         report_id = await self.get_dashboard_report_id()
         if not report_id:
             return None
         return await self.get_report_latest(report_id)
 
-    async def list_panel_stats(self) -> List[PanelStat]:
+    async def list_panel_stats(self) -> list[PanelStat]:
         """Return all PanelStat records across all reports."""
         async with AsyncSession(_get_engine()) as session:
             result = await session.execute(select(PanelStatRecord))
@@ -579,7 +531,7 @@ class SQLModelReportStore(ReportStore):
                 for r in rows
             ]
 
-    async def list_scheduled_queries(self) -> List[ScheduledQueryItem]:
+    async def list_scheduled_queries(self) -> list[ScheduledQueryItem]:
         async with AsyncSession(_get_engine()) as session:
             result = await session.execute(select(ScheduledQueryRecord))
             rows = result.scalars().all()
@@ -606,7 +558,7 @@ class SQLModelReportStore(ReportStore):
                 for r in rows
             ]
 
-    async def get_scheduled_query(self, sq_id: str) -> Optional[ScheduledQueryItem]:
+    async def get_scheduled_query(self, sq_id: str) -> ScheduledQueryItem | None:
         async with AsyncSession(_get_engine()) as session:
             record = await session.get(ScheduledQueryRecord, sq_id)
             if not record:
@@ -635,15 +587,15 @@ class SQLModelReportStore(ReportStore):
         self,
         name: str,
         cypher: str,
-        params: List[Dict[str, Any]],
-        frequency: Optional[int],
-        watch_scans: List[Dict[str, Any]],
+        params: list[dict[str, Any]],
+        frequency: int | None,
+        watch_scans: list[dict[str, Any]],
         enabled: bool,
-        actions: List[Dict[str, Any]],
+        actions: list[dict[str, Any]],
         created_by: str,
     ) -> ScheduledQueryItem:
         sq_id = generate_report_id()
-        now = datetime.now(tz=timezone.utc).isoformat()
+        now = datetime.now(tz=UTC).isoformat()
         version = 1
         async with AsyncSession(_get_engine()) as session:
             record = ScheduledQueryRecord(
@@ -703,15 +655,15 @@ class SQLModelReportStore(ReportStore):
         sq_id: str,
         name: str,
         cypher: str,
-        params: List[Dict[str, Any]],
-        frequency: Optional[int],
-        watch_scans: List[Dict[str, Any]],
+        params: list[dict[str, Any]],
+        frequency: int | None,
+        watch_scans: list[dict[str, Any]],
         enabled: bool,
-        actions: List[Dict[str, Any]],
+        actions: list[dict[str, Any]],
         updated_by: str,
-        comment: Optional[str] = None,
-    ) -> Optional[ScheduledQueryItem]:
-        now = datetime.now(tz=timezone.utc).isoformat()
+        comment: str | None = None,
+    ) -> ScheduledQueryItem | None:
+        now = datetime.now(tz=UTC).isoformat()
         async with AsyncSession(_get_engine()) as session:
             record = await session.get(ScheduledQueryRecord, sq_id)
             if not record:
@@ -770,9 +722,7 @@ class SQLModelReportStore(ReportStore):
             last_scheduled_at=orig_last_scheduled_at,
         )
 
-    async def list_scheduled_query_versions(
-        self, sq_id: str
-    ) -> List[ScheduledQueryVersion]:
+    async def list_scheduled_query_versions(self, sq_id: str) -> list[ScheduledQueryVersion]:
         async with AsyncSession(_get_engine()) as session:
             sq = await session.get(ScheduledQueryRecord, sq_id)
             if not sq:
@@ -802,9 +752,7 @@ class SQLModelReportStore(ReportStore):
                 for r in rows
             ]
 
-    async def get_scheduled_query_version(
-        self, sq_id: str, version: int
-    ) -> Optional[ScheduledQueryVersion]:
+    async def get_scheduled_query_version(self, sq_id: str, version: int) -> ScheduledQueryVersion | None:
         async with AsyncSession(_get_engine()) as session:
             sq = await session.get(ScheduledQueryRecord, sq_id)
             if not sq:
@@ -833,10 +781,8 @@ class SQLModelReportStore(ReportStore):
                 comment=row.comment,
             )
 
-    async def acquire_scheduled_query_lock(
-        self, sq_id: str, expected_last_scheduled_at: Optional[str]
-    ) -> bool:
-        now = datetime.now(tz=timezone.utc).isoformat()
+    async def acquire_scheduled_query_lock(self, sq_id: str, expected_last_scheduled_at: str | None) -> bool:
+        now = datetime.now(tz=UTC).isoformat()
         async with AsyncSession(_get_engine()) as session:
             if expected_last_scheduled_at is None:
                 condition = and_(
@@ -846,22 +792,15 @@ class SQLModelReportStore(ReportStore):
             else:
                 condition = and_(
                     ScheduledQueryRecord.scheduled_query_id == sq_id,
-                    ScheduledQueryRecord.last_scheduled_at
-                    == expected_last_scheduled_at,
+                    ScheduledQueryRecord.last_scheduled_at == expected_last_scheduled_at,
                 )
-            stmt = (
-                update(ScheduledQueryRecord)
-                .where(condition)
-                .values(last_scheduled_at=now)
-            )
+            stmt = update(ScheduledQueryRecord).where(condition).values(last_scheduled_at=now)
             result = await session.execute(stmt)
             await session.commit()
         return result.rowcount == 1
 
-    async def record_scheduled_query_result(
-        self, sq_id: str, status: str, error: Optional[str] = None
-    ) -> None:
-        now = datetime.now(tz=timezone.utc).isoformat()
+    async def record_scheduled_query_result(self, sq_id: str, status: str, error: str | None = None) -> None:
+        now = datetime.now(tz=UTC).isoformat()
         async with AsyncSession(_get_engine()) as session:
             record = await session.get(ScheduledQueryRecord, sq_id)
             if not record:
@@ -882,9 +821,7 @@ class SQLModelReportStore(ReportStore):
             record = await session.get(ScheduledQueryRecord, sq_id)
             if not record:
                 return False
-            stmt = select(ScheduledQueryVersionRecord).where(
-                ScheduledQueryVersionRecord.scheduled_query_id == sq_id
-            )
+            stmt = select(ScheduledQueryVersionRecord).where(ScheduledQueryVersionRecord.scheduled_query_id == sq_id)
             result = await session.execute(stmt)
             for ver in result.scalars().all():
                 await session.delete(ver)
@@ -897,15 +834,11 @@ class SQLModelReportStore(ReportStore):
         sub: str,
         iss: str,
         email: str,
-        display_name: Optional[str] = None,
+        display_name: str | None = None,
     ) -> User:
-        now = datetime.now(tz=timezone.utc).isoformat()
+        now = datetime.now(tz=UTC).isoformat()
         async with AsyncSession(_get_engine()) as session:
-            stmt = (
-                select(UserRecord)
-                .where(UserRecord.iss == iss)
-                .where(UserRecord.sub == sub)
-            )
+            stmt = select(UserRecord).where(UserRecord.iss == iss).where(UserRecord.sub == sub)
             result = await session.execute(stmt)
             record = result.scalars().first()
             if not record:
@@ -938,8 +871,8 @@ class SQLModelReportStore(ReportStore):
         self,
         user_id: str,
         email: str,
-        display_name: Optional[str] = None,
-        token_iat: Optional[datetime] = None,
+        display_name: str | None = None,
+        token_iat: datetime | None = None,
     ) -> User:
         async with AsyncSession(_get_engine()) as session:
             record = await session.get(UserRecord, user_id)
@@ -972,7 +905,7 @@ class SQLModelReportStore(ReportStore):
             archived_at=record.archived_at,
         )
 
-    async def get_user(self, user_id: str) -> Optional[User]:
+    async def get_user(self, user_id: str) -> User | None:
         async with AsyncSession(_get_engine()) as session:
             record = await session.get(UserRecord, user_id)
             if not record:
@@ -989,7 +922,7 @@ class SQLModelReportStore(ReportStore):
             )
 
     async def archive_user(self, user_id: str) -> bool:
-        now = datetime.now(tz=timezone.utc).isoformat()
+        now = datetime.now(tz=UTC).isoformat()
         async with AsyncSession(_get_engine()) as session:
             record = await session.get(UserRecord, user_id)
             if not record:
@@ -1016,13 +949,13 @@ class SQLModelReportStore(ReportStore):
             updated_by=record.updated_by,
         )
 
-    async def list_toolsets(self) -> List[ToolsetListItem]:
+    async def list_toolsets(self) -> list[ToolsetListItem]:
         async with AsyncSession(_get_engine()) as session:
             result = await session.execute(select(ToolsetRecord))
             rows = result.scalars().all()
             return [self._toolset_item_from_record(r) for r in rows]
 
-    async def get_toolset(self, toolset_id: str) -> Optional[ToolsetListItem]:
+    async def get_toolset(self, toolset_id: str) -> ToolsetListItem | None:
         async with AsyncSession(_get_engine()) as session:
             record = await session.get(ToolsetRecord, toolset_id)
             if not record:
@@ -1037,7 +970,7 @@ class SQLModelReportStore(ReportStore):
         created_by: str,
     ) -> ToolsetListItem:
         toolset_id = generate_report_id()
-        now = datetime.now(tz=timezone.utc).isoformat()
+        now = datetime.now(tz=UTC).isoformat()
         version = 1
         async with AsyncSession(_get_engine()) as session:
             record = ToolsetRecord(
@@ -1084,9 +1017,9 @@ class SQLModelReportStore(ReportStore):
         description: str,
         enabled: bool,
         updated_by: str,
-        comment: Optional[str] = None,
-    ) -> Optional[ToolsetListItem]:
-        now = datetime.now(tz=timezone.utc).isoformat()
+        comment: str | None = None,
+    ) -> ToolsetListItem | None:
+        now = datetime.now(tz=UTC).isoformat()
         async with AsyncSession(_get_engine()) as session:
             record = await session.get(ToolsetRecord, toolset_id)
             if not record:
@@ -1136,18 +1069,14 @@ class SQLModelReportStore(ReportStore):
             tools_stmt = select(ToolRecord).where(ToolRecord.toolset_id == toolset_id)
             tools_result = await session.execute(tools_stmt)
             for tool_record in tools_result.scalars().all():
-                versions_stmt = select(ToolVersionRecord).where(
-                    ToolVersionRecord.tool_id == tool_record.tool_id
-                )
+                versions_stmt = select(ToolVersionRecord).where(ToolVersionRecord.tool_id == tool_record.tool_id)
                 versions_result = await session.execute(versions_stmt)
                 for ver in versions_result.scalars().all():
                     await session.delete(ver)
                 await session.delete(tool_record)
 
             # Delete all toolset versions
-            ts_versions_stmt = select(ToolsetVersionRecord).where(
-                ToolsetVersionRecord.toolset_id == toolset_id
-            )
+            ts_versions_stmt = select(ToolsetVersionRecord).where(ToolsetVersionRecord.toolset_id == toolset_id)
             ts_versions_result = await session.execute(ts_versions_stmt)
             for ver in ts_versions_result.scalars().all():
                 await session.delete(ver)
@@ -1156,7 +1085,7 @@ class SQLModelReportStore(ReportStore):
             await session.commit()
         return True
 
-    async def list_toolset_versions(self, toolset_id: str) -> List[ToolsetVersion]:
+    async def list_toolset_versions(self, toolset_id: str) -> list[ToolsetVersion]:
         async with AsyncSession(_get_engine()) as session:
             ts = await session.get(ToolsetRecord, toolset_id)
             if not ts:
@@ -1182,9 +1111,7 @@ class SQLModelReportStore(ReportStore):
                 for r in rows
             ]
 
-    async def get_toolset_version(
-        self, toolset_id: str, version: int
-    ) -> Optional[ToolsetVersion]:
+    async def get_toolset_version(self, toolset_id: str, version: int) -> ToolsetVersion | None:
         async with AsyncSession(_get_engine()) as session:
             stmt = (
                 select(ToolsetVersionRecord)
@@ -1217,10 +1144,7 @@ class SQLModelReportStore(ReportStore):
             name=record.name,
             description=record.description or "",
             cypher=record.cypher,
-            parameters=[
-                ToolParamDef(**p) if isinstance(p, dict) else p
-                for p in (record.parameters or [])
-            ],
+            parameters=[ToolParamDef(**p) if isinstance(p, dict) else p for p in (record.parameters or [])],
             enabled=record.enabled,
             current_version=record.current_version,
             created_at=record.created_at,
@@ -1229,13 +1153,13 @@ class SQLModelReportStore(ReportStore):
             updated_by=record.updated_by,
         )
 
-    async def list_tools(self, toolset_id: str) -> List[ToolItem]:
+    async def list_tools(self, toolset_id: str) -> list[ToolItem]:
         async with AsyncSession(_get_engine()) as session:
             stmt = select(ToolRecord).where(ToolRecord.toolset_id == toolset_id)
             result = await session.execute(stmt)
             return [self._tool_item_from_record(r) for r in result.scalars().all()]
 
-    async def get_tool(self, tool_id: str) -> Optional[ToolItem]:
+    async def get_tool(self, tool_id: str) -> ToolItem | None:
         async with AsyncSession(_get_engine()) as session:
             record = await session.get(ToolRecord, tool_id)
             if not record:
@@ -1248,16 +1172,16 @@ class SQLModelReportStore(ReportStore):
         name: str,
         description: str,
         cypher: str,
-        parameters: List[Dict[str, Any]],
+        parameters: list[dict[str, Any]],
         enabled: bool,
         created_by: str,
-    ) -> Optional[ToolItem]:
+    ) -> ToolItem | None:
         async with AsyncSession(_get_engine()) as session:
             ts = await session.get(ToolsetRecord, toolset_id)
             if not ts:
                 return None
             tool_id = generate_report_id()
-            now = datetime.now(tz=timezone.utc).isoformat()
+            now = datetime.now(tz=UTC).isoformat()
             version = 1
             record = ToolRecord(
                 tool_id=tool_id,
@@ -1296,9 +1220,7 @@ class SQLModelReportStore(ReportStore):
             name=name,
             description=description,
             cypher=cypher,
-            parameters=[
-                ToolParamDef(**p) if isinstance(p, dict) else p for p in parameters
-            ],
+            parameters=[ToolParamDef(**p) if isinstance(p, dict) else p for p in parameters],
             enabled=enabled,
             current_version=version,
             created_at=now,
@@ -1313,12 +1235,12 @@ class SQLModelReportStore(ReportStore):
         name: str,
         description: str,
         cypher: str,
-        parameters: List[Dict[str, Any]],
+        parameters: list[dict[str, Any]],
         enabled: bool,
         updated_by: str,
-        comment: Optional[str] = None,
-    ) -> Optional[ToolItem]:
-        now = datetime.now(tz=timezone.utc).isoformat()
+        comment: str | None = None,
+    ) -> ToolItem | None:
+        now = datetime.now(tz=UTC).isoformat()
         async with AsyncSession(_get_engine()) as session:
             record = await session.get(ToolRecord, tool_id)
             if not record:
@@ -1358,9 +1280,7 @@ class SQLModelReportStore(ReportStore):
             name=name,
             description=description,
             cypher=cypher,
-            parameters=[
-                ToolParamDef(**p) if isinstance(p, dict) else p for p in parameters
-            ],
+            parameters=[ToolParamDef(**p) if isinstance(p, dict) else p for p in parameters],
             enabled=enabled,
             current_version=version,
             created_at=original_created_at,
@@ -1382,7 +1302,7 @@ class SQLModelReportStore(ReportStore):
             await session.commit()
         return True
 
-    async def list_tool_versions(self, tool_id: str) -> List[ToolVersion]:
+    async def list_tool_versions(self, tool_id: str) -> list[ToolVersion]:
         async with AsyncSession(_get_engine()) as session:
             tool = await session.get(ToolRecord, tool_id)
             if not tool:
@@ -1401,10 +1321,7 @@ class SQLModelReportStore(ReportStore):
                     name=r.name,
                     description=r.description or "",
                     cypher=r.cypher,
-                    parameters=[
-                        ToolParamDef(**p) if isinstance(p, dict) else p
-                        for p in (r.parameters or [])
-                    ],
+                    parameters=[ToolParamDef(**p) if isinstance(p, dict) else p for p in (r.parameters or [])],
                     enabled=r.enabled,
                     version=r.version,
                     created_at=r.created_at,
@@ -1414,9 +1331,7 @@ class SQLModelReportStore(ReportStore):
                 for r in rows
             ]
 
-    async def get_tool_version(
-        self, tool_id: str, version: int
-    ) -> Optional[ToolVersion]:
+    async def get_tool_version(self, tool_id: str, version: int) -> ToolVersion | None:
         async with AsyncSession(_get_engine()) as session:
             stmt = (
                 select(ToolVersionRecord)
@@ -1433,10 +1348,7 @@ class SQLModelReportStore(ReportStore):
                 name=row.name,
                 description=row.description or "",
                 cypher=row.cypher,
-                parameters=[
-                    ToolParamDef(**p) if isinstance(p, dict) else p
-                    for p in (row.parameters or [])
-                ],
+                parameters=[ToolParamDef(**p) if isinstance(p, dict) else p for p in (row.parameters or [])],
                 enabled=row.enabled,
                 version=row.version,
                 created_at=row.created_at,
@@ -1444,7 +1356,7 @@ class SQLModelReportStore(ReportStore):
                 comment=row.comment,
             )
 
-    async def list_enabled_tools(self) -> List[ToolItem]:
+    async def list_enabled_tools(self) -> list[ToolItem]:
         from sqlmodel import col
 
         async with AsyncSession(_get_engine()) as session:
@@ -1470,7 +1382,7 @@ class SQLModelReportStore(ReportStore):
     async def save_query_history(self, user_id: str, query: str) -> QueryHistoryItem:
         """Append a query execution to the user's history."""
         history_id = generate_report_id()
-        now = datetime.now(tz=timezone.utc).isoformat()
+        now = datetime.now(tz=UTC).isoformat()
         record = QueryHistoryRecord(
             history_id=history_id,
             user_id=user_id,
@@ -1487,17 +1399,13 @@ class SQLModelReportStore(ReportStore):
             executed_at=now,
         )
 
-    async def list_query_history(
-        self, user_id: str, page: int, per_page: int
-    ) -> tuple[List[QueryHistoryItem], int]:
+    async def list_query_history(self, user_id: str, page: int, per_page: int) -> tuple[list[QueryHistoryItem], int]:
         """Return a paginated page of query history (newest first) and the total count."""
         from sqlalchemy import func
 
         async with AsyncSession(_get_engine()) as session:
             count_stmt = (
-                select(func.count())
-                .select_from(QueryHistoryRecord)
-                .where(col(QueryHistoryRecord.user_id) == user_id)
+                select(func.count()).select_from(QueryHistoryRecord).where(col(QueryHistoryRecord.user_id) == user_id)
             )
             count_result = await session.execute(count_stmt)
             total = count_result.scalar() or 0
@@ -1526,7 +1434,7 @@ class SQLModelReportStore(ReportStore):
     # Roles (user-defined, versioned)
     # ------------------------------------------------------------------
 
-    async def list_roles(self) -> List[RoleItem]:
+    async def list_roles(self) -> list[RoleItem]:
         async with AsyncSession(_get_engine()) as session:
             result = await session.execute(select(RoleRecord))
             rows = result.scalars().all()
@@ -1545,7 +1453,7 @@ class SQLModelReportStore(ReportStore):
                 for r in rows
             ]
 
-    async def get_role(self, role_id: str) -> Optional[RoleItem]:
+    async def get_role(self, role_id: str) -> RoleItem | None:
         async with AsyncSession(_get_engine()) as session:
             r = await session.get(RoleRecord, role_id)
             if not r:
@@ -1562,7 +1470,7 @@ class SQLModelReportStore(ReportStore):
                 updated_by=r.updated_by,
             )
 
-    async def get_role_by_name(self, name: str) -> Optional[RoleItem]:
+    async def get_role_by_name(self, name: str) -> RoleItem | None:
         async with AsyncSession(_get_engine()) as session:
             stmt = select(RoleRecord).where(col(RoleRecord.name) == name)
             result = await session.execute(stmt)
@@ -1585,11 +1493,11 @@ class SQLModelReportStore(ReportStore):
         self,
         name: str,
         description: str,
-        permissions: List[str],
+        permissions: list[str],
         created_by: str,
     ) -> RoleItem:
         role_id = generate_report_id()
-        now = datetime.now(tz=timezone.utc).isoformat()
+        now = datetime.now(tz=UTC).isoformat()
         version = 1
         async with AsyncSession(_get_engine()) as session:
             session.add(
@@ -1634,15 +1542,15 @@ class SQLModelReportStore(ReportStore):
         role_id: str,
         name: str,
         description: str,
-        permissions: List[str],
+        permissions: list[str],
         updated_by: str,
-        comment: Optional[str] = None,
-    ) -> Optional[RoleItem]:
+        comment: str | None = None,
+    ) -> RoleItem | None:
         async with AsyncSession(_get_engine()) as session:
             r = await session.get(RoleRecord, role_id)
             if not r:
                 return None
-            now = datetime.now(tz=timezone.utc).isoformat()
+            now = datetime.now(tz=UTC).isoformat()
             version = r.current_version + 1
             r.name = name
             r.description = description
@@ -1682,9 +1590,7 @@ class SQLModelReportStore(ReportStore):
             r = await session.get(RoleRecord, role_id)
             if not r:
                 return False
-            stmt = select(RoleVersionRecord).where(
-                col(RoleVersionRecord.role_id) == role_id
-            )
+            stmt = select(RoleVersionRecord).where(col(RoleVersionRecord.role_id) == role_id)
             result = await session.execute(stmt)
             for row in result.scalars().all():
                 await session.delete(row)
@@ -1692,7 +1598,7 @@ class SQLModelReportStore(ReportStore):
             await session.commit()
             return True
 
-    async def list_role_versions(self, role_id: str) -> List[RoleVersion]:
+    async def list_role_versions(self, role_id: str) -> list[RoleVersion]:
         async with AsyncSession(_get_engine()) as session:
             stmt = (
                 select(RoleVersionRecord)
@@ -1714,9 +1620,7 @@ class SQLModelReportStore(ReportStore):
                 for r in result.scalars().all()
             ]
 
-    async def get_role_version(
-        self, role_id: str, version: int
-    ) -> Optional[RoleVersion]:
+    async def get_role_version(self, role_id: str, version: int) -> RoleVersion | None:
         async with AsyncSession(_get_engine()) as session:
             stmt = (
                 select(RoleVersionRecord)

@@ -5,9 +5,7 @@ import jwt
 import pytest
 from jwt.api_jwk import PyJWK
 
-from reporting.authnz import _get_jwt_payload
-from reporting.authnz import CurrentUser
-from reporting.authnz import get_current_user
+from reporting.authnz import CurrentUser, _get_jwt_payload, get_current_user
 
 # JWK that matches the private key
 FAKE_KEY = {
@@ -152,8 +150,9 @@ async def test_get_current_user_extracts_sub_and_iss(mocker):
     mock_client = _make_mock_client(mocker, signing_key)
     mocker.patch("reporting.authnz._get_jwks_client", return_value=mock_client)
 
-    from reporting.schema.report_config import User
     from fastapi.security import HTTPAuthorizationCredentials
+
+    from reporting.schema.report_config import User
 
     fake_user = User(
         user_id="uid1",
@@ -201,8 +200,9 @@ async def test_get_current_user_resolves_permissions_from_role_claim(mocker):
     mock_client = _make_mock_client(mocker, signing_key)
     mocker.patch("reporting.authnz._get_jwks_client", return_value=mock_client)
 
-    from reporting.schema.report_config import User
     from fastapi.security import HTTPAuthorizationCredentials
+
+    from reporting.schema.report_config import User
 
     fake_user = User(
         user_id="uid1",

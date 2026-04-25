@@ -1,5 +1,4 @@
-from unittest.mock import AsyncMock
-from unittest.mock import MagicMock
+from unittest.mock import AsyncMock, MagicMock
 
 import neo4j.exceptions
 import pytest
@@ -46,9 +45,7 @@ async def test_run_query(mocker):
 async def test_run_query_with_single_retry_failure(mocker):
     run_query_mock = mocker.patch(
         "reporting.services.reporting_neo4j.run_query",
-        new=AsyncMock(
-            side_effect=[neo4j.exceptions.ServiceUnavailable(), ["test-result"]]
-        ),
+        new=AsyncMock(side_effect=[neo4j.exceptions.ServiceUnavailable(), ["test-result"]]),
     )
     result = await reporting_neo4j.run_query_with_retry("test", {})
     assert result == ["test-result"]
@@ -80,9 +77,7 @@ async def test_run_tx(mocker):
 async def test_run_tx_with_single_retry_failure(mocker):
     run_tx_mock = mocker.patch(
         "reporting.services.reporting_neo4j.run_tx",
-        new=AsyncMock(
-            side_effect=[neo4j.exceptions.ServiceUnavailable(), ["test-result"]]
-        ),
+        new=AsyncMock(side_effect=[neo4j.exceptions.ServiceUnavailable(), ["test-result"]]),
     )
     tx_mock = AsyncMock()
     result = await reporting_neo4j.run_tx_with_retry(tx_mock, "test")
@@ -106,9 +101,7 @@ async def test__scan_time(mocker):
         "reporting.services.reporting_neo4j.run_query_with_retry",
         new=AsyncMock(return_value=[{"maxlastupdated": 1}]),
     )
-    assert (
-        await reporting_neo4j._scan_time(ScheduledQueryWatchScan(grouptype="test")) == 1
-    )
+    assert await reporting_neo4j._scan_time(ScheduledQueryWatchScan(grouptype="test")) == 1
 
 
 async def test__scan_time_no_results(mocker):
@@ -116,9 +109,7 @@ async def test__scan_time_no_results(mocker):
         "reporting.services.reporting_neo4j.run_query_with_retry",
         new=AsyncMock(return_value=[{"maxlastupdated": None}]),
     )
-    assert (
-        await reporting_neo4j._scan_time(ScheduledQueryWatchScan(grouptype="test")) == 0
-    )
+    assert await reporting_neo4j._scan_time(ScheduledQueryWatchScan(grouptype="test")) == 0
 
 
 async def test_check_watch_scan_triggered_true(mocker):
@@ -151,7 +142,5 @@ async def test_check_watch_scan_triggered_none_last_scheduled(mocker):
         new=AsyncMock(return_value=1),
     )
     # None → scheduled_unix = 0, any non-zero scan_time triggers
-    result = await reporting_neo4j.check_watch_scan_triggered(
-        None, [ScheduledQueryWatchScan(grouptype="test")]
-    )
+    result = await reporting_neo4j.check_watch_scan_triggered(None, [ScheduledQueryWatchScan(grouptype="test")])
     assert result is True

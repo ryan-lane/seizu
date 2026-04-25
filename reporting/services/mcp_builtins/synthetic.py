@@ -10,42 +10,27 @@ ID shape (preserved for frontend backwards compat):
 * tool:    ``__builtin_<full_tool_name>__``     where ``full_tool_name`` is
            already ``<group>__<action>`` — e.g. ``__builtin_reports__create__``
 """
-from typing import Any
-from typing import Dict
-from typing import List
-from typing import Optional
 
-from reporting.schema.mcp_config import ToolItem
-from reporting.schema.mcp_config import ToolParamDef
-from reporting.schema.mcp_config import ToolsetListItem
-from reporting.services.mcp_builtins import find_builtin
-from reporting.services.mcp_builtins import list_builtin_groups
-from reporting.services.mcp_builtins.base import BuiltinGroup
-from reporting.services.mcp_builtins.base import BuiltinTool
+from typing import Any
+
+from reporting.schema.mcp_config import ToolItem, ToolParamDef, ToolsetListItem
+from reporting.services.mcp_builtins import find_builtin, list_builtin_groups
+from reporting.services.mcp_builtins.base import BuiltinGroup, BuiltinTool
 
 _BUILTIN_PREFIX = "__builtin_"
 _EPOCH = "1970-01-01T00:00:00+00:00"
 
-_GROUP_DESCRIPTIONS: Dict[str, str] = {
-    "graph": (
-        "Built-in graph tools: Neo4j schema discovery and validated ad-hoc "
-        "Cypher queries."
-    ),
+_GROUP_DESCRIPTIONS: dict[str, str] = {
+    "graph": ("Built-in graph tools: Neo4j schema discovery and validated ad-hoc Cypher queries."),
     "reports": (
         "Built-in report management: list, get, create, delete, pin, and set "
         "the default dashboard; version history operations included."
     ),
-    "scheduled_queries": (
-        "Built-in scheduled query management: full CRUD plus version history."
-    ),
+    "scheduled_queries": ("Built-in scheduled query management: full CRUD plus version history."),
     "toolsets": (
-        "Built-in toolset and tool management: full CRUD for toolsets and "
-        "their nested tools, with version history."
+        "Built-in toolset and tool management: full CRUD for toolsets and their nested tools, with version history."
     ),
-    "roles": (
-        "Built-in role management: list built-in roles, CRUD for user-defined "
-        "roles, and version history."
-    ),
+    "roles": ("Built-in role management: list built-in roles, CRUD for user-defined roles, and version history."),
 }
 
 
@@ -61,13 +46,13 @@ def builtin_tool_id(tool_name: str) -> str:
     return f"{_BUILTIN_PREFIX}{tool_name}__"
 
 
-def group_name_from_toolset_id(toolset_id: str) -> Optional[str]:
+def group_name_from_toolset_id(toolset_id: str) -> str | None:
     if not is_builtin_toolset_id(toolset_id):
         return None
     return toolset_id[len(_BUILTIN_PREFIX) : -2]
 
 
-def tool_name_from_tool_id(tool_id: str) -> Optional[str]:
+def tool_name_from_tool_id(tool_id: str) -> str | None:
     if not tool_id.startswith(_BUILTIN_PREFIX) or not tool_id.endswith("__"):
         return None
     return tool_id[len(_BUILTIN_PREFIX) : -2]
@@ -81,7 +66,7 @@ _JSON_TYPE_MAP = {
 }
 
 
-def _params_from_input_schema(schema: Dict[str, Any]) -> List[ToolParamDef]:
+def _params_from_input_schema(schema: dict[str, Any]) -> list[ToolParamDef]:
     """Best-effort mapping from a JSON Schema object to ``ToolParamDef``s.
 
     ``ToolParamDef`` only models scalar types, so nested objects/arrays are
@@ -90,7 +75,7 @@ def _params_from_input_schema(schema: Dict[str, Any]) -> List[ToolParamDef]:
     """
     properties = schema.get("properties", {}) or {}
     required = set(schema.get("required", []) or [])
-    params: List[ToolParamDef] = []
+    params: list[ToolParamDef] = []
     for name, prop in properties.items():
         json_type = prop.get("type")
         if isinstance(json_type, list):
@@ -143,25 +128,25 @@ def builtin_tool_to_tool_item(tool: BuiltinTool) -> ToolItem:
     )
 
 
-def builtin_toolsets() -> List[ToolsetListItem]:
+def builtin_toolsets() -> list[ToolsetListItem]:
     return [builtin_group_to_toolset(g) for g in list_builtin_groups()]
 
 
-def builtin_toolset(group_name: str) -> Optional[ToolsetListItem]:
+def builtin_toolset(group_name: str) -> ToolsetListItem | None:
     for g in list_builtin_groups():
         if g.name == group_name:
             return builtin_group_to_toolset(g)
     return None
 
 
-def builtin_tools_for_group(group_name: str) -> List[ToolItem]:
+def builtin_tools_for_group(group_name: str) -> list[ToolItem]:
     for g in list_builtin_groups():
         if g.name == group_name:
             return [builtin_tool_to_tool_item(t) for t in g.tools]
     return []
 
 
-def builtin_tool(tool_id: str) -> Optional[ToolItem]:
+def builtin_tool(tool_id: str) -> ToolItem | None:
     tool_name = tool_name_from_tool_id(tool_id)
     if tool_name is None:
         return None

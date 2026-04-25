@@ -127,9 +127,7 @@ async def test_schedule_query_failure_records_error(mocker):
         new=AsyncMock(),
     )
     await scheduled_queries.schedule_query(item)
-    record_result_mock.assert_called_once_with(
-        item.scheduled_query_id, "failure", error="test error"
-    )
+    record_result_mock.assert_called_once_with(item.scheduled_query_id, "failure", error="test error")
 
 
 async def test___handle_results_no_action_type(mocker):
@@ -149,9 +147,7 @@ async def test___handle_results_unknown_action(mocker):
         action_config={"sqs_queue": "test"},
     )
     results = [{"details": {"hello": "world"}}]
-    mocker.patch(
-        "reporting.scheduled_query_modules.get_module_names", return_value=["slack"]
-    )
+    mocker.patch("reporting.scheduled_query_modules.get_module_names", return_value=["slack"])
     await scheduled_queries._handle_results(sq_id, action, results)
     assert mod_mock.call_count == 0
 
@@ -165,9 +161,7 @@ async def test___handle_results_known_action(mocker):
         action_config={"sqs_queue": "test"},
     )
     results = [{"details": {"hello": "world"}}, {"details": {"foo": "bar"}}]
-    mocker.patch(
-        "reporting.scheduled_query_modules.get_module_names", return_value=["sqs"]
-    )
+    mocker.patch("reporting.scheduled_query_modules.get_module_names", return_value=["sqs"])
     await scheduled_queries._handle_results(sq_id, action, results)
     assert mod_mock.call_count == 1
 

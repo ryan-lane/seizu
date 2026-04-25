@@ -1,10 +1,10 @@
 """Tests for seizu_cli.client.SeizuClient."""
+
 from unittest.mock import MagicMock
 
 import pytest
 
-from seizu_cli.client import APIError
-from seizu_cli.client import SeizuClient
+from seizu_cli.client import APIError, SeizuClient
 
 
 @pytest.fixture
@@ -43,9 +43,7 @@ def test_strips_trailing_slash(session_mock: MagicMock) -> None:
 
 def test_sets_bearer_token(session_mock: MagicMock) -> None:
     SeizuClient("http://localhost:8080", token="tok-abc")
-    session_mock.headers.update.assert_called_once_with(
-        {"Authorization": "Bearer tok-abc"}
-    )
+    session_mock.headers.update.assert_called_once_with({"Authorization": "Bearer tok-abc"})
 
 
 def test_no_auth_header_without_token(session_mock: MagicMock) -> None:
@@ -63,15 +61,11 @@ def test_get_returns_json(session_mock: MagicMock) -> None:
     client = SeizuClient("http://localhost:8080")
     result = client.get("/api/v1/test")
     assert result == {"items": [1, 2]}
-    session_mock.get.assert_called_once_with(
-        "http://localhost:8080/api/v1/test", timeout=30
-    )
+    session_mock.get.assert_called_once_with("http://localhost:8080/api/v1/test", timeout=30)
 
 
 def test_get_raises_api_error_on_404(session_mock: MagicMock) -> None:
-    session_mock.get.return_value = _make_response(
-        ok=False, status_code=404, json_data={"error": "not found"}
-    )
+    session_mock.get.return_value = _make_response(ok=False, status_code=404, json_data={"error": "not found"})
     client = SeizuClient("http://localhost:8080")
     with pytest.raises(APIError) as exc_info:
         client.get("/api/v1/missing")

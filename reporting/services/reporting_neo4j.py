@@ -1,25 +1,17 @@
 import logging
 from datetime import datetime
-from typing import cast
-from typing import Dict
-from typing import List
-from typing import Literal
-from typing import Optional
+from typing import Literal, cast
 
 import neo4j.exceptions
-from neo4j import AsyncGraphDatabase
-from neo4j import AsyncTransaction
-from neo4j import Driver
-from neo4j import GraphDatabase
-from neo4j import Record
+from neo4j import AsyncGraphDatabase, AsyncTransaction, Driver, GraphDatabase, Record
 
 from reporting import settings
 from reporting.schema.reporting_config import ScheduledQueryWatchScan
 
 logger = logging.getLogger(__name__)
 
-_ASYNC_CLIENT_CACHE: Optional[neo4j.AsyncDriver] = None
-_SYNC_CLIENT_CACHE: Optional[Driver] = None
+_ASYNC_CLIENT_CACHE: neo4j.AsyncDriver | None = None
+_SYNC_CLIENT_CACHE: Driver | None = None
 
 
 def _get_async_neo4j_client() -> neo4j.AsyncDriver:
@@ -59,7 +51,7 @@ def _get_sync_neo4j_client() -> Driver:
     return _SYNC_CLIENT_CACHE
 
 
-async def run_query(cypher: str, parameters: Dict = None) -> List[Record]:
+async def run_query(cypher: str, parameters: dict = None) -> list[Record]:
     results = []
     driver = _get_async_neo4j_client()
     async with driver.session() as session:
@@ -69,7 +61,7 @@ async def run_query(cypher: str, parameters: Dict = None) -> List[Record]:
     return results
 
 
-async def run_query_with_retry(cypher: str, parameters: Dict = None) -> List[Record]:
+async def run_query_with_retry(cypher: str, parameters: dict = None) -> list[Record]:
     attempt = 1
     while True:
         try:
@@ -81,9 +73,7 @@ async def run_query_with_retry(cypher: str, parameters: Dict = None) -> List[Rec
         attempt = attempt + 1
 
 
-async def run_tx(
-    tx: AsyncTransaction, cypher: str, parameters: Dict = None
-) -> List[Record]:
+async def run_tx(tx: AsyncTransaction, cypher: str, parameters: dict = None) -> list[Record]:
     results = []
     query_results = await tx.run(cypher, parameters=parameters)
     async for result in query_results:
@@ -91,9 +81,7 @@ async def run_tx(
     return results
 
 
-async def run_tx_with_retry(
-    tx: AsyncTransaction, cypher: str, parameters: Dict = None
-) -> List[Record]:
+async def run_tx_with_retry(tx: AsyncTransaction, cypher: str, parameters: dict = None) -> list[Record]:
     attempt = 1
     while True:
         try:
@@ -129,8 +117,8 @@ async def _scan_time(scan_type: ScheduledQueryWatchScan) -> int:
 
 
 async def check_watch_scan_triggered(
-    last_scheduled_at: Optional[str],
-    watch_scans: List[ScheduledQueryWatchScan],
+    last_scheduled_at: str | None,
+    watch_scans: list[ScheduledQueryWatchScan],
 ) -> bool:
     """Return True if any watched SyncMetadata node was updated after last_scheduled_at.
 
@@ -145,9 +133,7 @@ async def check_watch_scan_triggered(
 
     for scan_type in watch_scans:
         scan_time = await _scan_time(scan_type)
-        logger.debug(
-            f"scan_type: {scan_type}, scan_time: {scan_time}, scheduled: {scheduled_unix}"
-        )
+        logger.debug(f"scan_type: {scan_type}, scan_time: {scan_time}, scheduled: {scheduled_unix}")
         if scan_time > scheduled_unix:
             return True
     return False
