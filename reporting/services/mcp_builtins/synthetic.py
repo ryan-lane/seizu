@@ -143,37 +143,29 @@ def builtin_tool_to_tool_item(tool: BuiltinTool) -> ToolItem:
     )
 
 
-def builtin_toolsets(
-    enabled_groups: Optional[List[str]] = None,
-) -> List[ToolsetListItem]:
-    return [builtin_group_to_toolset(g) for g in list_builtin_groups(enabled_groups)]
+def builtin_toolsets() -> List[ToolsetListItem]:
+    return [builtin_group_to_toolset(g) for g in list_builtin_groups()]
 
 
-def builtin_toolset(
-    group_name: str, enabled_groups: Optional[List[str]] = None
-) -> Optional[ToolsetListItem]:
-    for g in list_builtin_groups(enabled_groups):
+def builtin_toolset(group_name: str) -> Optional[ToolsetListItem]:
+    for g in list_builtin_groups():
         if g.name == group_name:
             return builtin_group_to_toolset(g)
     return None
 
 
-def builtin_tools_for_group(
-    group_name: str, enabled_groups: Optional[List[str]] = None
-) -> List[ToolItem]:
-    for g in list_builtin_groups(enabled_groups):
+def builtin_tools_for_group(group_name: str) -> List[ToolItem]:
+    for g in list_builtin_groups():
         if g.name == group_name:
             return [builtin_tool_to_tool_item(t) for t in g.tools]
     return []
 
 
-def builtin_tool(
-    tool_id: str, enabled_groups: Optional[List[str]] = None
-) -> Optional[ToolItem]:
+def builtin_tool(tool_id: str) -> Optional[ToolItem]:
     tool_name = tool_name_from_tool_id(tool_id)
     if tool_name is None:
         return None
-    t = find_builtin(tool_name, enabled_groups)
+    t = find_builtin(tool_name)
     if t is None:
         return None
     return builtin_tool_to_tool_item(t)

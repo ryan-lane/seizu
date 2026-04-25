@@ -1,5 +1,6 @@
 """Tests for the MCP built-in registry (filtering + group resolution)."""
 import json
+from unittest.mock import patch
 
 import mcp.types as mcp_types
 import pytest
@@ -22,14 +23,15 @@ def test_all_group_names_includes_known_groups():
 
 
 def test_list_builtin_tools_empty_filter_returns_all():
-    # An empty / None filter means "all groups" — matches the default in
-    # settings.py when the env var is unset.
-    all_tools = list_builtin_tools(None)
+    # Empty MCP_ENABLED_BUILTINS means all groups are enabled.
+    with patch("reporting.settings.MCP_ENABLED_BUILTINS", []):
+        all_tools = list_builtin_tools()
     assert {t.group for t in all_tools} == set(all_group_names())
 
 
 def test_list_builtin_tools_filters_by_group():
-    tools = list_builtin_tools(["graph"])
+    with patch("reporting.settings.MCP_ENABLED_BUILTINS", ["graph"]):
+        tools = list_builtin_tools()
     assert {t.group for t in tools} == {"graph"}
     assert {t.name for t in tools} == {"graph__schema", "graph__query"}
 
@@ -42,7 +44,8 @@ def test_find_builtin_returns_tool():
 
 def test_find_builtin_respects_group_filter():
     # Reports group disabled — lookup should miss even though the tool exists.
-    assert find_builtin("reports__list", ["graph"]) is None
+    with patch("reporting.settings.MCP_ENABLED_BUILTINS", ["graph"]):
+        assert find_builtin("reports__list") is None
 
 
 def test_find_builtin_unknown_name_returns_none():
