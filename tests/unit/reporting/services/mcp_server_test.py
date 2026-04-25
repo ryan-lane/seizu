@@ -1,8 +1,10 @@
 """Unit tests for reporting/services/mcp_server.py."""
 import json
 from unittest.mock import AsyncMock
+from unittest.mock import MagicMock
 from unittest.mock import patch
 
+import pytest
 from mcp import types as mcp_types
 
 from reporting.authnz.permissions import ALL_PERMISSIONS
@@ -13,6 +15,7 @@ from reporting.services import mcp_server as mcp_module
 from reporting.services.mcp_server import _build_mcp_server
 from reporting.services.mcp_server import _build_oauth_metadata
 from reporting.services.mcp_server import _mcp_permissions
+from reporting.services.mcp_server import _oauth_registration_handler
 
 
 # ---------------------------------------------------------------------------
@@ -58,11 +61,15 @@ def _tool(
     )
 
 
-async def _list_tools(server):
+async def _list_tools(server, permissions=ALL_PERMISSIONS):
     """Call the registered list_tools handler."""
     handler = server.request_handlers[mcp_types.ListToolsRequest]
     req = mcp_types.ListToolsRequest(method="tools/list", params=None)
-    result = await handler(req)
+    token = _mcp_permissions.set(permissions)
+    try:
+        result = await handler(req)
+    finally:
+        _mcp_permissions.reset(token)
     return result.root.tools
 
 
@@ -102,8 +109,8 @@ async def test_list_tools_includes_builtin_schema_tool():
         server = _build_mcp_server()
         tools = await _list_tools(server)
         names = [t.name for t in tools]
-        assert "seizu__schema" in names
-        assert "seizu__query" in names
+        assert "graph__schema" in names
+        assert "graph__query" in names
 
 
 async def test_list_tools_includes_user_defined_tool():
@@ -174,14 +181,20 @@ async def test_list_tools_store_error_returns_builtins_only():
         server = _build_mcp_server()
         tools = await _list_tools(server)
         names = [t.name for t in tools]
-        assert "seizu__schema" in names
-        assert "seizu__query" in names
-        # No user tools — error was swallowed
-        assert len(tools) == 2
+        assert "graph__schema" in names
+        assert "graph__query" in names
+        # All tool names follow the <group>__<action> convention — no user
+        # tools were added because the store raised.
+        assert all("__" in n for n in names)
+        # Every surfaced tool is from a built-in group.
+        from reporting.services.mcp_builtins import list_builtin_tools
+
+        builtin_names = {t.name for t in list_builtin_tools()}
+        assert set(names) <= builtin_names
 
 
 # ---------------------------------------------------------------------------
-# call_tool — seizu__query
+# call_tool — graph__query
 # ---------------------------------------------------------------------------
 
 
@@ -189,7 +202,7 @@ async def test_call_tool_query_empty_query_string():
     # MCP library validates required params; an empty-string query bypasses that
     # and triggers our own guard inside the handler.
     server = _build_mcp_server()
-    result = await _call_tool(server, "seizu__query", {"query": "  "})
+    result = await _call_tool(server, "graph__query", {"query": "  "})
     data = json.loads(result[0].text)
     assert "error" in data
 
@@ -198,12 +211,12 @@ async def test_call_tool_query_validation_error():
     from reporting.services.query_validator import ValidationResult
 
     with patch(
-        "reporting.services.mcp_server.validate_query",
+        "reporting.services.mcp_builtins.graph.validate_query",
         new_callable=AsyncMock,
         return_value=ValidationResult(errors=["syntax error"], warnings=[]),
     ):
         server = _build_mcp_server()
-        result = await _call_tool(server, "seizu__query", {"query": "BAD CYPHER"})
+        result = await _call_tool(server, "graph__query", {"query": "BAD CYPHER"})
         data = json.loads(result[0].text)
         assert "errors" in data
         assert "syntax error" in data["errors"]
@@ -214,19 +227,19 @@ async def test_call_tool_query_success():
 
     with (
         patch(
-            "reporting.services.mcp_server.validate_query",
+            "reporting.services.mcp_builtins.graph.validate_query",
             new_callable=AsyncMock,
             return_value=ValidationResult(errors=[], warnings=[]),
         ),
         patch(
-            "reporting.services.mcp_server.reporting_neo4j.run_query",
+            "reporting.services.mcp_builtins.graph.reporting_neo4j.run_query",
             new_callable=AsyncMock,
             return_value=[{"n": 1}],
         ),
     ):
         server = _build_mcp_server()
         result = await _call_tool(
-            server, "seizu__query", {"query": "MATCH (n) RETURN n"}
+            server, "graph__query", {"query": "MATCH (n) RETURN n"}
         )
         data = json.loads(result[0].text)
         assert "results" in data
@@ -238,32 +251,32 @@ async def test_call_tool_query_execution_error():
 
     with (
         patch(
-            "reporting.services.mcp_server.validate_query",
+            "reporting.services.mcp_builtins.graph.validate_query",
             new_callable=AsyncMock,
             return_value=ValidationResult(errors=[], warnings=[]),
         ),
         patch(
-            "reporting.services.mcp_server.reporting_neo4j.run_query",
+            "reporting.services.mcp_builtins.graph.reporting_neo4j.run_query",
             new_callable=AsyncMock,
             side_effect=RuntimeError("neo4j down"),
         ),
     ):
         server = _build_mcp_server()
         result = await _call_tool(
-            server, "seizu__query", {"query": "MATCH (n) RETURN n"}
+            server, "graph__query", {"query": "MATCH (n) RETURN n"}
         )
         data = json.loads(result[0].text)
         assert "error" in data
 
 
 # ---------------------------------------------------------------------------
-# call_tool — seizu__schema
+# call_tool — graph__schema
 # ---------------------------------------------------------------------------
 
 
 async def test_call_tool_schema_success():
     with patch(
-        "reporting.services.mcp_server.reporting_neo4j.run_query",
+        "reporting.services.mcp_builtins.graph.reporting_neo4j.run_query",
         new_callable=AsyncMock,
         side_effect=[
             [{"label": "Person"}],
@@ -272,7 +285,7 @@ async def test_call_tool_schema_success():
         ],
     ):
         server = _build_mcp_server()
-        result = await _call_tool(server, "seizu__schema", {})
+        result = await _call_tool(server, "graph__schema", {})
         data = json.loads(result[0].text)
         assert data["labels"] == ["Person"]
         assert data["relationship_types"] == ["KNOWS"]
@@ -281,12 +294,12 @@ async def test_call_tool_schema_success():
 
 async def test_call_tool_schema_error():
     with patch(
-        "reporting.services.mcp_server.reporting_neo4j.run_query",
+        "reporting.services.mcp_builtins.graph.reporting_neo4j.run_query",
         new_callable=AsyncMock,
         side_effect=RuntimeError("neo4j down"),
     ):
         server = _build_mcp_server()
-        result = await _call_tool(server, "seizu__schema", {})
+        result = await _call_tool(server, "graph__schema", {})
         data = json.loads(result[0].text)
         assert "error" in data
 
@@ -403,66 +416,58 @@ async def test_call_tool_user_defined_execution_error():
 # ---------------------------------------------------------------------------
 
 
-def test_build_oauth_metadata_returns_none_when_not_configured():
+async def test_build_oauth_metadata_returns_none_when_not_configured():
     with (
         patch.object(mcp_module.settings, "MCP_OAUTH_AUTHORIZATION_ENDPOINT", ""),
         patch.object(mcp_module.settings, "MCP_OAUTH_TOKEN_ENDPOINT", ""),
+        patch.object(mcp_module.settings, "MCP_OAUTH_ISSUER", ""),
+        patch.object(mcp_module.settings, "MCP_RESOURCE_URL", ""),
+        patch.object(mcp_module.settings, "OIDC_AUTHORITY", ""),
+        patch(
+            "reporting.services.mcp_server._fetch_oidc_discovery",
+            new_callable=AsyncMock,
+            return_value=None,
+        ),
     ):
-        assert _build_oauth_metadata() is None
+        assert await _build_oauth_metadata() is None
 
 
-def test_build_oauth_metadata_returns_dict_when_configured():
+async def test_build_oauth_metadata_uses_mcp_resource_url_as_issuer():
+    """RFC 8414: issuer must equal the URL from which the document is served."""
+    discovery_doc = {
+        "authorization_endpoint": "https://idp.example.com/authorize",
+        "token_endpoint": "https://idp.example.com/token",
+    }
     with (
+        patch.object(mcp_module.settings, "MCP_OAUTH_AUTHORIZATION_ENDPOINT", ""),
+        patch.object(mcp_module.settings, "MCP_OAUTH_TOKEN_ENDPOINT", ""),
+        patch.object(mcp_module.settings, "MCP_OAUTH_ISSUER", ""),
         patch.object(
             mcp_module.settings,
-            "MCP_OAUTH_AUTHORIZATION_ENDPOINT",
-            "https://idp.example.com/authorize",
+            "MCP_RESOURCE_URL",
+            "https://seizu.example.com/api/v1/mcp",
         ),
         patch.object(
-            mcp_module.settings,
-            "MCP_OAUTH_TOKEN_ENDPOINT",
-            "https://idp.example.com/token",
+            mcp_module.settings, "OIDC_AUTHORITY", "https://idp.example.com/o/seizu"
         ),
-        patch.object(
-            mcp_module.settings, "MCP_OAUTH_ISSUER", "https://idp.example.com"
-        ),
-        patch.object(mcp_module.settings, "JWT_ISSUER", ""),
+        patch.object(mcp_module.settings, "OIDC_INTERNAL_AUTHORITY", ""),
         patch.object(mcp_module.settings, "OIDC_SCOPE", "openid email"),
-        patch.object(mcp_module.settings, "JWKS_URL", ""),
+        patch(
+            "reporting.services.mcp_server._fetch_oidc_discovery",
+            new_callable=AsyncMock,
+            return_value=discovery_doc,
+        ),
     ):
-        result = _build_oauth_metadata()
+        result = await _build_oauth_metadata()
         assert result is not None
+        assert result["issuer"] == "https://seizu.example.com/api/v1/mcp"
         assert result["authorization_endpoint"] == "https://idp.example.com/authorize"
         assert result["token_endpoint"] == "https://idp.example.com/token"
-        assert result["issuer"] == "https://idp.example.com"
         assert "S256" in result["code_challenge_methods_supported"]
 
 
-def test_build_oauth_metadata_falls_back_to_jwt_issuer():
-    with (
-        patch.object(
-            mcp_module.settings,
-            "MCP_OAUTH_AUTHORIZATION_ENDPOINT",
-            "https://idp.example.com/authorize",
-        ),
-        patch.object(
-            mcp_module.settings,
-            "MCP_OAUTH_TOKEN_ENDPOINT",
-            "https://idp.example.com/token",
-        ),
-        patch.object(mcp_module.settings, "MCP_OAUTH_ISSUER", ""),
-        patch.object(
-            mcp_module.settings, "JWT_ISSUER", "https://idp.example.com/fallback"
-        ),
-        patch.object(mcp_module.settings, "OIDC_SCOPE", "openid email"),
-        patch.object(mcp_module.settings, "JWKS_URL", ""),
-    ):
-        result = _build_oauth_metadata()
-        assert result is not None
-        assert result["issuer"] == "https://idp.example.com/fallback"
-
-
-def test_build_oauth_metadata_includes_jwks_uri_when_set():
+async def test_build_oauth_metadata_mcp_oauth_issuer_overrides_resource_url():
+    """MCP_OAUTH_ISSUER overrides issuer for RFC 8414-compliant IdPs."""
     with (
         patch.object(
             mcp_module.settings,
@@ -477,11 +482,135 @@ def test_build_oauth_metadata_includes_jwks_uri_when_set():
         patch.object(
             mcp_module.settings, "MCP_OAUTH_ISSUER", "https://idp.example.com"
         ),
-        patch.object(mcp_module.settings, "JWT_ISSUER", ""),
+        patch.object(
+            mcp_module.settings,
+            "MCP_RESOURCE_URL",
+            "https://seizu.example.com/api/v1/mcp",
+        ),
+        patch.object(mcp_module.settings, "OIDC_AUTHORITY", ""),
         patch.object(mcp_module.settings, "OIDC_SCOPE", "openid email"),
-        patch.object(mcp_module.settings, "JWKS_URL", "https://idp.example.com/jwks"),
     ):
-        result = _build_oauth_metadata()
+        result = await _build_oauth_metadata()
+        assert result is not None
+        assert result["issuer"] == "https://idp.example.com"
+
+
+async def test_build_oauth_metadata_derives_endpoints_from_oidc_authority():
+    discovery_doc = {
+        "authorization_endpoint": "https://idp.example.com/authorize",
+        "token_endpoint": "https://idp.example.com/token",
+    }
+    with (
+        patch.object(mcp_module.settings, "MCP_OAUTH_AUTHORIZATION_ENDPOINT", ""),
+        patch.object(mcp_module.settings, "MCP_OAUTH_TOKEN_ENDPOINT", ""),
+        patch.object(mcp_module.settings, "MCP_OAUTH_ISSUER", ""),
+        patch.object(
+            mcp_module.settings,
+            "MCP_RESOURCE_URL",
+            "https://seizu.example.com/api/v1/mcp",
+        ),
+        patch.object(mcp_module.settings, "OIDC_AUTHORITY", "https://idp.example.com"),
+        patch.object(mcp_module.settings, "OIDC_INTERNAL_AUTHORITY", ""),
+        patch.object(mcp_module.settings, "OIDC_SCOPE", "openid email"),
+        patch(
+            "reporting.services.mcp_server._fetch_oidc_discovery",
+            new_callable=AsyncMock,
+            return_value=discovery_doc,
+        ),
+    ):
+        result = await _build_oauth_metadata()
+        assert result is not None
+        assert result["authorization_endpoint"] == "https://idp.example.com/authorize"
+        assert result["token_endpoint"] == "https://idp.example.com/token"
+
+
+async def test_build_oauth_metadata_rewrites_internal_urls_to_external():
+    """Endpoints discovered via an internal authority have their origin rewritten."""
+    discovery_doc = {
+        "authorization_endpoint": "http://internal-idp:9000/application/o/authorize/",
+        "token_endpoint": "http://internal-idp:9000/application/o/token/",
+    }
+    with (
+        patch.object(mcp_module.settings, "MCP_OAUTH_AUTHORIZATION_ENDPOINT", ""),
+        patch.object(mcp_module.settings, "MCP_OAUTH_TOKEN_ENDPOINT", ""),
+        patch.object(mcp_module.settings, "MCP_OAUTH_ISSUER", ""),
+        patch.object(
+            mcp_module.settings,
+            "MCP_RESOURCE_URL",
+            "http://localhost:8080/api/v1/mcp",
+        ),
+        patch.object(
+            mcp_module.settings,
+            "OIDC_AUTHORITY",
+            "http://localhost:9000/application/o/seizu",
+        ),
+        patch.object(
+            mcp_module.settings,
+            "OIDC_INTERNAL_AUTHORITY",
+            "http://internal-idp:9000/application/o/seizu",
+        ),
+        patch.object(mcp_module.settings, "OIDC_SCOPE", "openid email"),
+        patch(
+            "reporting.services.mcp_server._fetch_oidc_discovery",
+            new_callable=AsyncMock,
+            return_value=discovery_doc,
+        ),
+    ):
+        result = await _build_oauth_metadata()
+        assert result is not None
+        assert (
+            result["authorization_endpoint"]
+            == "http://localhost:9000/application/o/authorize/"
+        )
+        assert result["token_endpoint"] == "http://localhost:9000/application/o/token/"
+
+
+async def test_build_oauth_metadata_returns_none_when_discovery_fails():
+    with (
+        patch.object(mcp_module.settings, "MCP_OAUTH_AUTHORIZATION_ENDPOINT", ""),
+        patch.object(mcp_module.settings, "MCP_OAUTH_TOKEN_ENDPOINT", ""),
+        patch.object(mcp_module.settings, "MCP_OAUTH_ISSUER", ""),
+        patch.object(
+            mcp_module.settings,
+            "MCP_RESOURCE_URL",
+            "https://seizu.example.com/api/v1/mcp",
+        ),
+        patch.object(mcp_module.settings, "OIDC_AUTHORITY", "https://idp.example.com"),
+        patch.object(mcp_module.settings, "OIDC_INTERNAL_AUTHORITY", ""),
+        patch(
+            "reporting.services.mcp_server._fetch_oidc_discovery",
+            new_callable=AsyncMock,
+            return_value=None,
+        ),
+    ):
+        assert await _build_oauth_metadata() is None
+
+
+async def test_build_oauth_metadata_includes_jwks_uri_from_discovery():
+    discovery_doc = {
+        "authorization_endpoint": "https://idp.example.com/authorize",
+        "token_endpoint": "https://idp.example.com/token",
+        "jwks_uri": "https://idp.example.com/jwks",
+    }
+    with (
+        patch.object(mcp_module.settings, "MCP_OAUTH_AUTHORIZATION_ENDPOINT", ""),
+        patch.object(mcp_module.settings, "MCP_OAUTH_TOKEN_ENDPOINT", ""),
+        patch.object(mcp_module.settings, "MCP_OAUTH_ISSUER", ""),
+        patch.object(
+            mcp_module.settings,
+            "MCP_RESOURCE_URL",
+            "https://seizu.example.com/api/v1/mcp",
+        ),
+        patch.object(mcp_module.settings, "OIDC_AUTHORITY", "https://idp.example.com"),
+        patch.object(mcp_module.settings, "OIDC_INTERNAL_AUTHORITY", ""),
+        patch.object(mcp_module.settings, "OIDC_SCOPE", "openid email"),
+        patch(
+            "reporting.services.mcp_server._fetch_oidc_discovery",
+            new_callable=AsyncMock,
+            return_value=discovery_doc,
+        ),
+    ):
+        result = await _build_oauth_metadata()
         assert result is not None
         assert result["jwks_uri"] == "https://idp.example.com/jwks"
 
@@ -492,12 +621,32 @@ def test_build_oauth_metadata_includes_jwks_uri_when_set():
 
 
 async def test_auth_middleware_passes_through_when_auth_disabled():
+    from reporting.authnz import CurrentUser
+    from reporting.schema.report_config import User
     from reporting.services.mcp_server import _MCPAuthMiddleware
 
     inner = AsyncMock()
     middleware = _MCPAuthMiddleware(inner)
 
-    with patch.object(mcp_module.settings, "DEVELOPMENT_ONLY_REQUIRE_AUTH", False):
+    dev_user = CurrentUser(
+        user=User(
+            user_id="dev",
+            sub="dev@example.com",
+            iss="dev",
+            email="dev@example.com",
+            display_name=None,
+            created_at=_NOW,
+            last_login=_NOW,
+        ),
+        jwt_claims={},
+        permissions=ALL_PERMISSIONS,
+    )
+
+    with patch.object(
+        mcp_module.settings, "DEVELOPMENT_ONLY_REQUIRE_AUTH", False
+    ), patch.object(
+        mcp_module, "_build_dev_current_user", AsyncMock(return_value=dev_user)
+    ):
         scope = {"type": "http", "path": "/mcp"}
         await middleware(scope, AsyncMock(), AsyncMock())
 
@@ -547,6 +696,177 @@ async def test_auth_middleware_returns_401_when_no_token():
     assert any(m.get("status") == 401 for m in status_messages)
 
 
+async def test_auth_middleware_passes_protected_resource_unauthenticated():
+    from reporting.services.mcp_server import _MCPAuthMiddleware
+
+    inner = AsyncMock()
+    middleware = _MCPAuthMiddleware(inner)
+
+    with patch.object(mcp_module.settings, "DEVELOPMENT_ONLY_REQUIRE_AUTH", True):
+        scope = {
+            "type": "http",
+            "path": "/.well-known/oauth-protected-resource",
+            "headers": [],
+        }
+        await middleware(scope, AsyncMock(), AsyncMock())
+
+    inner.assert_called_once()
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        # in-path form (served under MCP prefix)
+        "/api/v1/mcp/.well-known/oauth-authorization-server",
+        # origin-based form (MCP client derives from server URL origin)
+        "/.well-known/oauth-authorization-server",
+        # RFC 8414 path-suffix form
+        "/.well-known/oauth-authorization-server/api/v1/mcp",
+    ],
+)
+async def test_auth_middleware_passes_all_well_known_auth_server_forms(path: str):
+    from reporting.services.mcp_server import _MCPAuthMiddleware
+
+    inner = AsyncMock()
+    middleware = _MCPAuthMiddleware(inner)
+
+    with patch.object(mcp_module.settings, "DEVELOPMENT_ONLY_REQUIRE_AUTH", True):
+        scope = {"type": "http", "path": path, "headers": []}
+        await middleware(scope, AsyncMock(), AsyncMock())
+
+    inner.assert_called_once()
+
+
+async def test_auth_middleware_401_includes_resource_metadata_when_oauth_configured():
+    from reporting.services.mcp_server import _MCPAuthMiddleware
+
+    inner = AsyncMock()
+    middleware = _MCPAuthMiddleware(inner)
+
+    with (
+        patch.object(mcp_module.settings, "DEVELOPMENT_ONLY_REQUIRE_AUTH", True),
+        patch.object(
+            mcp_module.settings,
+            "OIDC_AUTHORITY",
+            "https://idp.example.com",
+        ),
+        patch.object(mcp_module.settings, "MCP_OAUTH_AUTHORIZATION_ENDPOINT", ""),
+        patch.object(
+            mcp_module.settings,
+            "MCP_RESOURCE_URL",
+            "https://seizu.example.com/api/v1/mcp",
+        ),
+    ):
+        scope = {
+            "type": "http",
+            "method": "GET",
+            "path": "/mcp",
+            "headers": [],
+            "query_string": b"",
+        }
+        receive = AsyncMock(return_value={"type": "http.request", "body": b""})
+        sent = []
+
+        async def capture_send(message):
+            sent.append(message)
+
+        await middleware(scope, receive, capture_send)
+
+    start = next(m for m in sent if m.get("type") == "http.response.start")
+    assert start["status"] == 401
+    headers = dict(start["headers"])
+    www_auth = headers[b"www-authenticate"].decode()
+    expected_metadata_url = (
+        "https://seizu.example.com/api/v1/mcp/.well-known/oauth-protected-resource"
+    )
+    assert f'resource_metadata="{expected_metadata_url}"' in www_auth
+
+
+async def test_auth_middleware_401_plain_bearer_when_oauth_not_configured():
+    from reporting.services.mcp_server import _MCPAuthMiddleware
+
+    inner = AsyncMock()
+    middleware = _MCPAuthMiddleware(inner)
+
+    with (
+        patch.object(mcp_module.settings, "DEVELOPMENT_ONLY_REQUIRE_AUTH", True),
+        patch.object(mcp_module.settings, "MCP_OAUTH_AUTHORIZATION_ENDPOINT", ""),
+        patch.object(mcp_module.settings, "OIDC_AUTHORITY", ""),
+        patch.object(mcp_module.settings, "MCP_RESOURCE_URL", ""),
+    ):
+        scope = {
+            "type": "http",
+            "method": "GET",
+            "path": "/mcp",
+            "headers": [],
+            "query_string": b"",
+        }
+        receive = AsyncMock(return_value={"type": "http.request", "body": b""})
+        sent = []
+
+        async def capture_send(message):
+            sent.append(message)
+
+        await middleware(scope, receive, capture_send)
+
+    start = next(m for m in sent if m.get("type") == "http.response.start")
+    assert start["status"] == 401
+    headers = dict(start["headers"])
+    www_auth = headers[b"www-authenticate"].decode()
+    assert www_auth == "Bearer"
+
+
+async def test_auth_middleware_returns_401_on_bad_jwt_claims():
+    """Malformed JWT claims (KeyError) must return 401, not 500."""
+    from reporting.services.mcp_server import _MCPAuthMiddleware
+
+    inner = AsyncMock()
+    middleware = _MCPAuthMiddleware(inner)
+
+    async def _bad_user(_payload):
+        raise KeyError("email")
+
+    with (
+        patch.object(mcp_module.settings, "DEVELOPMENT_ONLY_REQUIRE_AUTH", True),
+        patch.object(mcp_module.settings, "MCP_OAUTH_AUTHORIZATION_ENDPOINT", ""),
+        patch.object(mcp_module.settings, "MCP_RESOURCE_URL", ""),
+        patch.object(mcp_module.settings, "JWKS_URL", "https://idp.example.com/jwks"),
+        patch(
+            "reporting.services.mcp_server._get_jwks_client",
+        ) as mock_get_client,
+        patch(
+            "reporting.services.mcp_server._build_current_user_from_jwt",
+            side_effect=_bad_user,
+        ),
+        patch("reporting.services.mcp_server.jwt.decode", return_value={"sub": "u1"}),
+    ):
+        mock_signing_key = MagicMock()
+        mock_client = mock_get_client.return_value
+        mock_client.get_signing_key_from_jwt = lambda _token: mock_signing_key
+
+        scope = {
+            "type": "http",
+            "method": "POST",
+            "path": "/mcp",
+            "scheme": "https",
+            "headers": [
+                (b"host", b"seizu.example.com"),
+                (b"authorization", b"Bearer validtoken"),
+            ],
+            "query_string": b"",
+        }
+        receive = AsyncMock(return_value={"type": "http.request", "body": b""})
+        sent = []
+
+        async def capture_send(message):
+            sent.append(message)
+
+        await middleware(scope, receive, capture_send)
+
+    start = next(m for m in sent if m.get("type") == "http.response.start")
+    assert start["status"] == 401
+
+
 async def test_auth_middleware_passes_non_http_scope():
     from reporting.services.mcp_server import _MCPAuthMiddleware
 
@@ -557,3 +877,394 @@ async def test_auth_middleware_passes_non_http_scope():
     await middleware(scope, AsyncMock(), AsyncMock())
 
     inner.assert_called_once()
+
+
+# ---------------------------------------------------------------------------
+# _build_protected_resource_metadata
+# ---------------------------------------------------------------------------
+
+
+def test_build_protected_resource_metadata_returns_none_when_not_configured():
+    from reporting.services.mcp_server import _build_protected_resource_metadata
+
+    with (
+        patch.object(mcp_module.settings, "MCP_OAUTH_ISSUER", ""),
+        patch.object(mcp_module.settings, "OIDC_AUTHORITY", ""),
+        patch.object(mcp_module.settings, "MCP_RESOURCE_URL", ""),
+    ):
+        assert _build_protected_resource_metadata() is None
+
+
+def test_build_protected_resource_metadata_returns_none_when_resource_url_missing():
+    from reporting.services.mcp_server import _build_protected_resource_metadata
+
+    with (
+        patch.object(
+            mcp_module.settings, "MCP_OAUTH_ISSUER", "https://idp.example.com"
+        ),
+        patch.object(mcp_module.settings, "OIDC_AUTHORITY", ""),
+        patch.object(mcp_module.settings, "MCP_RESOURCE_URL", ""),
+    ):
+        assert _build_protected_resource_metadata() is None
+
+
+def test_build_protected_resource_metadata_uses_explicit_issuer():
+    from reporting.services.mcp_server import _build_protected_resource_metadata
+
+    with (
+        patch.object(
+            mcp_module.settings, "MCP_OAUTH_ISSUER", "https://idp.example.com"
+        ),
+        patch.object(mcp_module.settings, "OIDC_AUTHORITY", ""),
+        patch.object(
+            mcp_module.settings,
+            "MCP_RESOURCE_URL",
+            "https://seizu.example.com/api/v1/mcp",
+        ),
+    ):
+        result = _build_protected_resource_metadata()
+        assert result is not None
+        assert result["resource"] == "https://seizu.example.com/api/v1/mcp"
+        assert result["authorization_servers"] == ["https://idp.example.com"]
+
+
+def test_build_protected_resource_metadata_points_to_mcp_server_when_no_explicit_issuer():
+    # When MCP_OAUTH_ISSUER is not set, authorization_servers always points to
+    # our own MCP server so MCP clients discover our RFC 8414 endpoint rather
+    # than an IdP that may not support it (e.g. Authentik).
+    from reporting.services.mcp_server import _build_protected_resource_metadata
+
+    with (
+        patch.object(mcp_module.settings, "MCP_OAUTH_ISSUER", ""),
+        patch.object(mcp_module.settings, "OIDC_AUTHORITY", "https://idp.example.com"),
+        patch.object(
+            mcp_module.settings,
+            "MCP_RESOURCE_URL",
+            "https://seizu.example.com/api/v1/mcp",
+        ),
+    ):
+        result = _build_protected_resource_metadata()
+        assert result is not None
+        assert result["authorization_servers"] == [
+            "https://seizu.example.com/api/v1/mcp"
+        ]
+
+
+# ---------------------------------------------------------------------------
+# _MCPDispatcher URL form tests
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        # in-path form
+        "/api/v1/mcp/.well-known/oauth-authorization-server",
+        # origin-based form
+        "/.well-known/oauth-authorization-server",
+        # RFC 8414 path-suffix form
+        "/.well-known/oauth-authorization-server/api/v1/mcp",
+    ],
+)
+async def test_dispatcher_serves_oauth_metadata_for_all_url_forms(path: str):
+    from reporting.services.mcp_server import _MCPDispatcher
+
+    inner = AsyncMock()
+    dispatcher = _MCPDispatcher(inner)
+
+    with (
+        patch(
+            "reporting.services.mcp_server._build_oauth_metadata",
+            new=AsyncMock(
+                return_value={
+                    "issuer": "http://localhost:8080/api/v1/mcp",
+                    "authorization_endpoint": "http://idp.example.com/authorize",
+                    "token_endpoint": "http://idp.example.com/token",
+                }
+            ),
+        ),
+    ):
+        sent = []
+
+        async def capture_send(message):
+            sent.append(message)
+
+        scope = {
+            "type": "http",
+            "method": "GET",
+            "path": path,
+            "headers": [],
+            "query_string": b"",
+        }
+        receive = AsyncMock(return_value={"type": "http.request", "body": b""})
+        await dispatcher(scope, receive, capture_send)
+
+    # Should have sent a response (not forwarded to inner MCP app)
+    inner.assert_not_called()
+    start_messages = [m for m in sent if m.get("type") == "http.response.start"]
+    assert any(m.get("status") == 200 for m in start_messages)
+
+
+# ---------------------------------------------------------------------------
+# _build_oauth_metadata — registration_endpoint
+# ---------------------------------------------------------------------------
+
+
+async def test_build_oauth_metadata_includes_registration_endpoint_from_resource_url():
+    """Built-in DCR endpoint is derived from MCP_RESOURCE_URL when OIDC_CLIENT_ID is set."""
+    discovery_doc = {
+        "authorization_endpoint": "https://idp.example.com/authorize",
+        "token_endpoint": "https://idp.example.com/token",
+    }
+    with (
+        patch.object(mcp_module.settings, "MCP_OAUTH_AUTHORIZATION_ENDPOINT", ""),
+        patch.object(mcp_module.settings, "MCP_OAUTH_TOKEN_ENDPOINT", ""),
+        patch.object(mcp_module.settings, "MCP_OAUTH_ISSUER", ""),
+        patch.object(mcp_module.settings, "MCP_OAUTH_REGISTRATION_ENDPOINT", ""),
+        patch.object(
+            mcp_module.settings,
+            "MCP_RESOURCE_URL",
+            "https://seizu.example.com/api/v1/mcp",
+        ),
+        patch.object(mcp_module.settings, "OIDC_AUTHORITY", "https://idp.example.com"),
+        patch.object(mcp_module.settings, "OIDC_CLIENT_ID", "my-client-id"),
+        patch.object(mcp_module.settings, "OIDC_INTERNAL_AUTHORITY", ""),
+        patch.object(mcp_module.settings, "OIDC_SCOPE", "openid email"),
+        patch(
+            "reporting.services.mcp_server._fetch_oidc_discovery",
+            new_callable=AsyncMock,
+            return_value=discovery_doc,
+        ),
+    ):
+        result = await _build_oauth_metadata()
+        assert result is not None
+        assert result["registration_endpoint"] == (
+            "https://seizu.example.com/api/v1/mcp/.well-known/oauth-registration"
+        )
+
+
+async def test_build_oauth_metadata_uses_explicit_registration_endpoint():
+    """MCP_OAUTH_REGISTRATION_ENDPOINT overrides the built-in derived endpoint."""
+    with (
+        patch.object(
+            mcp_module.settings,
+            "MCP_OAUTH_AUTHORIZATION_ENDPOINT",
+            "https://idp.example.com/authorize",
+        ),
+        patch.object(
+            mcp_module.settings,
+            "MCP_OAUTH_TOKEN_ENDPOINT",
+            "https://idp.example.com/token",
+        ),
+        patch.object(
+            mcp_module.settings, "MCP_OAUTH_ISSUER", "https://idp.example.com"
+        ),
+        patch.object(
+            mcp_module.settings,
+            "MCP_OAUTH_REGISTRATION_ENDPOINT",
+            "https://idp.example.com/register",
+        ),
+        patch.object(
+            mcp_module.settings,
+            "MCP_RESOURCE_URL",
+            "https://seizu.example.com/api/v1/mcp",
+        ),
+        patch.object(mcp_module.settings, "OIDC_CLIENT_ID", "my-client-id"),
+        patch.object(mcp_module.settings, "OIDC_SCOPE", "openid email"),
+    ):
+        result = await _build_oauth_metadata()
+        assert result is not None
+        assert result["registration_endpoint"] == "https://idp.example.com/register"
+
+
+async def test_build_oauth_metadata_omits_registration_endpoint_when_no_client_id():
+    """No registration_endpoint when OIDC_CLIENT_ID is empty and no explicit override."""
+    discovery_doc = {
+        "authorization_endpoint": "https://idp.example.com/authorize",
+        "token_endpoint": "https://idp.example.com/token",
+    }
+    with (
+        patch.object(mcp_module.settings, "MCP_OAUTH_AUTHORIZATION_ENDPOINT", ""),
+        patch.object(mcp_module.settings, "MCP_OAUTH_TOKEN_ENDPOINT", ""),
+        patch.object(mcp_module.settings, "MCP_OAUTH_ISSUER", ""),
+        patch.object(mcp_module.settings, "MCP_OAUTH_REGISTRATION_ENDPOINT", ""),
+        patch.object(
+            mcp_module.settings,
+            "MCP_RESOURCE_URL",
+            "https://seizu.example.com/api/v1/mcp",
+        ),
+        patch.object(mcp_module.settings, "OIDC_AUTHORITY", "https://idp.example.com"),
+        patch.object(mcp_module.settings, "OIDC_CLIENT_ID", ""),
+        patch.object(mcp_module.settings, "OIDC_INTERNAL_AUTHORITY", ""),
+        patch.object(mcp_module.settings, "OIDC_SCOPE", "openid email"),
+        patch(
+            "reporting.services.mcp_server._fetch_oidc_discovery",
+            new_callable=AsyncMock,
+            return_value=discovery_doc,
+        ),
+    ):
+        result = await _build_oauth_metadata()
+        assert result is not None
+        assert "registration_endpoint" not in result
+
+
+# ---------------------------------------------------------------------------
+# _oauth_registration_handler
+# ---------------------------------------------------------------------------
+
+
+async def test_registration_handler_returns_client_id_and_echoes_redirect_uris():
+    from starlette.requests import Request
+
+    req_body = json.dumps(
+        {"redirect_uris": ["http://localhost:3000/auth/callback"]}
+    ).encode()
+    with patch.object(mcp_module.settings, "OIDC_CLIENT_ID", "test-client-id"):
+        scope = {
+            "type": "http",
+            "method": "POST",
+            "path": "/.well-known/oauth-registration",
+            "headers": [(b"content-type", b"application/json")],
+            "query_string": b"",
+        }
+        receive = AsyncMock(
+            return_value={"type": "http.request", "body": req_body, "more_body": False}
+        )
+        sent = []
+
+        async def capture_send(message):
+            sent.append(message)
+
+        request = Request(scope, receive)
+        response = await _oauth_registration_handler(request)
+        await response(scope, receive, capture_send)
+
+    start = next(m for m in sent if m.get("type") == "http.response.start")
+    assert start["status"] == 201
+    body_parts = [m["body"] for m in sent if m.get("type") == "http.response.body"]
+    body = json.loads(b"".join(body_parts))
+    assert body["client_id"] == "test-client-id"
+    assert body["redirect_uris"] == ["http://localhost:3000/auth/callback"]
+    assert body["token_endpoint_auth_method"] == "none"
+
+
+async def test_registration_handler_empty_body_returns_empty_redirect_uris():
+    from starlette.requests import Request
+
+    with patch.object(mcp_module.settings, "OIDC_CLIENT_ID", "test-client-id"):
+        scope = {
+            "type": "http",
+            "method": "POST",
+            "path": "/.well-known/oauth-registration",
+            "headers": [(b"content-type", b"application/json")],
+            "query_string": b"",
+        }
+        receive = AsyncMock(
+            return_value={"type": "http.request", "body": b"{}", "more_body": False}
+        )
+        sent = []
+
+        async def capture_send(message):
+            sent.append(message)
+
+        request = Request(scope, receive)
+        response = await _oauth_registration_handler(request)
+        await response(scope, receive, capture_send)
+
+    start = next(m for m in sent if m.get("type") == "http.response.start")
+    assert start["status"] == 201
+    body_parts = [m["body"] for m in sent if m.get("type") == "http.response.body"]
+    body = json.loads(b"".join(body_parts))
+    assert body["redirect_uris"] == []
+
+
+async def test_registration_handler_returns_400_when_no_client_id():
+    from starlette.requests import Request
+
+    with patch.object(mcp_module.settings, "OIDC_CLIENT_ID", ""):
+        scope = {
+            "type": "http",
+            "method": "POST",
+            "path": "/.well-known/oauth-registration",
+            "headers": [],
+            "query_string": b"",
+        }
+        receive = AsyncMock(
+            return_value={"type": "http.request", "body": b"{}", "more_body": False}
+        )
+        sent = []
+
+        async def capture_send(message):
+            sent.append(message)
+
+        request = Request(scope, receive)
+        response = await _oauth_registration_handler(request)
+        await response(scope, receive, capture_send)
+
+    start = next(m for m in sent if m.get("type") == "http.response.start")
+    assert start["status"] == 400
+
+
+async def test_registration_handler_returns_405_for_get():
+    from starlette.requests import Request
+
+    scope = {
+        "type": "http",
+        "method": "GET",
+        "path": "/.well-known/oauth-registration",
+        "headers": [],
+        "query_string": b"",
+    }
+    receive = AsyncMock(return_value={"type": "http.request", "body": b""})
+    sent = []
+
+    async def capture_send(message):
+        sent.append(message)
+
+    request = Request(scope, receive)
+    response = await _oauth_registration_handler(request)
+    await response(scope, receive, capture_send)
+
+    start = next(m for m in sent if m.get("type") == "http.response.start")
+    assert start["status"] == 405
+
+
+# ---------------------------------------------------------------------------
+# _MCPDispatcher — registration endpoint routing
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        "/api/v1/mcp/.well-known/oauth-registration",
+        "/.well-known/oauth-registration",
+    ],
+)
+async def test_dispatcher_routes_registration_endpoint(path: str):
+    from reporting.services.mcp_server import _MCPDispatcher
+
+    inner = AsyncMock()
+    dispatcher = _MCPDispatcher(inner)
+
+    with patch.object(mcp_module.settings, "OIDC_CLIENT_ID", "test-client"):
+        sent = []
+
+        async def capture_send(message):
+            sent.append(message)
+
+        scope = {
+            "type": "http",
+            "method": "POST",
+            "path": path,
+            "headers": [],
+            "query_string": b"",
+        }
+        receive = AsyncMock(
+            return_value={"type": "http.request", "body": b"{}", "more_body": False}
+        )
+        await dispatcher(scope, receive, capture_send)
+
+    inner.assert_not_called()
+    start_messages = [m for m in sent if m.get("type") == "http.response.start"]
+    assert any(m.get("status") == 201 for m in start_messages)

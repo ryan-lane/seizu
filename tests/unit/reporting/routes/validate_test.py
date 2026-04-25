@@ -22,6 +22,9 @@ _FAKE_USER = User(
 _FAKE_CURRENT_USER = CurrentUser(
     user=_FAKE_USER, jwt_claims={}, permissions=ALL_PERMISSIONS
 )
+_UNPRIVILEGED_CURRENT_USER = CurrentUser(
+    user=_FAKE_USER, jwt_claims={}, permissions=frozenset()
+)
 
 
 def _mock_validate(mocker, errors=None, warnings=None):
@@ -130,3 +133,16 @@ async def test_validate_missing_query_field(mocker):
             json={"params": {"name": "Alice"}},
         )
     assert ret.status_code == 422
+
+
+async def test_validate_requires_query_validate_permission():
+    app = create_app()
+    app.dependency_overrides[get_current_user] = lambda: _UNPRIVILEGED_CURRENT_USER
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        ret = await client.post(
+            "/api/v1/validate",
+            json={"query": "MATCH (n) RETURN n"},
+        )
+    assert ret.status_code == 403

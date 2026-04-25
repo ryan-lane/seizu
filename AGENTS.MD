@@ -201,12 +201,21 @@ Seizu exposes an MCP (Model Context Protocol) server at `/api/v1/mcp` when `MCP_
 
 **Key details:**
 - Transport: StreamableHTTP, wired into FastAPI via `_MCPMiddleware` (pure ASGI middleware in `reporting/app.py`) that intercepts `/api/v1/mcp*` before FastAPI routing; avoids a Starlette 1.0.0 issue where `Mount("/api/v1/mcp")` requires a trailing slash and the SPA catch-all returns 405
-- Auth: `_MCPAuthMiddleware` validates Bearer JWT tokens using the same `PyJWKClient` logic as the REST API; passes through unauthenticated in dev (`DEVELOPMENT_ONLY_REQUIRE_AUTH=false`)
-- Tool names: namespaced as `{toolset_name}__{tool_name}` (double underscore)
-- Tool listing: `@server.list_tools()` queries `report_store.list_enabled_tools()` at request time (dynamic, not static)
-- Tool execution: `@server.call_tool()` runs the tool's Cypher query via `reporting_neo4j.run_query()`
+- Auth: `_MCPAuthMiddleware` validates Bearer JWT tokens using the same `PyJWKClient` logic as the REST API; passes through unauthenticated in dev (`DEVELOPMENT_ONLY_REQUIRE_AUTH=false`). It populates two `contextvars.ContextVar`s for the duration of the request: `_mcp_permissions` (the resolved `frozenset[str]` of permissions) and `_mcp_current_user` (a `CurrentUser`). Built-in handlers that need to attribute writes to a user (e.g. `reports__create`) read the latter.
+- Tool names: namespaced as `{group}__{action}` (built-ins) or `{toolset_name}__{tool_name}` (user-defined), both using double underscore
+- Tool listing: `@server.list_tools()` merges `list_builtin_tools(settings.MCP_ENABLED_BUILTINS)` with `report_store.list_enabled_tools()` at request time, filtering built-ins by the caller's resolved permissions
+- Tool execution: `@server.call_tool()` dispatches to `find_builtin(name, settings.MCP_ENABLED_BUILTINS)` first, falling back to user-defined tools executed via `reporting_neo4j.run_query()`. Built-in handlers enforce their own `required_permissions` before running.
 
-**Built-in tool:** `seizu__schema` — always available; runs `CALL db.labels()`, `CALL db.relationshipTypes()`, `CALL db.propertyKeys()` and returns the graph schema.
+**Built-in tools** live in `reporting/services/mcp_builtins/` — one module per group, registered in `reporting/services/mcp_builtins/__init__.py`. Each tool is a `BuiltinTool` dataclass (see `base.py`) with `name`, `group`, `description`, `input_schema`, `required_permissions`, and an async `handler(args, current_user)`. Handlers share the same service-layer code (`report_store`, `validate_action_configs`, `validate_query`, etc.) used by the REST routes — no logic is duplicated. Permission requirements mirror the REST endpoints.
+
+**Built-in groups** (all enabled by default via `MCP_ENABLED_BUILTINS`):
+- `graph` — `graph__schema` (Neo4j schema introspection), `graph__query` (validated read-only Cypher)
+- `reports` — list/get/create/delete/pin/set_dashboard/get_dashboard reports, plus version history operations
+- `scheduled_queries` — full CRUD + version history; create/update reuse `validate_action_configs` and `validate_query`
+- `toolsets` — full CRUD for toolsets and nested tools + version history; create/update tool calls reuse `validate_query`
+- `roles` — list built-in + user-defined roles, CRUD for user-defined roles, version history
+
+To add a new built-in group, drop a new `reporting/services/mcp_builtins/<group>.py` exporting a `GROUP_DEF: BuiltinGroup`, then append it to `_GROUPS` in `reporting/services/mcp_builtins/__init__.py` and the default list in `settings.MCP_ENABLED_BUILTINS`.
 
 **OAuth metadata endpoint:** `GET /api/v1/mcp/.well-known/oauth-authorization-server` (RFC 8414). Enabled when `MCP_OAUTH_AUTHORIZATION_ENDPOINT` and `MCP_OAUTH_TOKEN_ENDPOINT` are set. Allows MCP clients (e.g. Claude Desktop) to discover the OIDC provider and authenticate users without a pre-issued token. The auth middleware passes `.well-known` requests through unauthenticated. Settings: `MCP_OAUTH_ISSUER`, `MCP_OAUTH_AUTHORIZATION_ENDPOINT`, `MCP_OAUTH_TOKEN_ENDPOINT`.
 

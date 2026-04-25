@@ -35,6 +35,9 @@ _FAKE_CURRENT_USER = CurrentUser(
 _OTHER_CURRENT_USER = CurrentUser(
     user=_OTHER_USER, jwt_claims={}, permissions=ALL_PERMISSIONS
 )
+_UNPRIVILEGED_CURRENT_USER = CurrentUser(
+    user=_FAKE_USER, jwt_claims={}, permissions=frozenset()
+)
 
 
 def _make_app(current_user: CurrentUser = _FAKE_CURRENT_USER) -> object:
@@ -178,3 +181,12 @@ async def test_list_query_history_valid_per_page_values(mocker, per_page):
         ret = await client.get(f"/api/v1/query-history?per_page={per_page}")
 
     assert ret.status_code == 200
+
+
+async def test_list_query_history_requires_query_history_read_permission():
+    app = _make_app(current_user=_UNPRIVILEGED_CURRENT_USER)
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        ret = await client.get("/api/v1/query-history")
+    assert ret.status_code == 403

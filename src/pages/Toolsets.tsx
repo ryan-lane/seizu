@@ -48,22 +48,16 @@ import UserDisplay from 'src/components/UserDisplay';
 import { usePermissions } from 'src/hooks/usePermissions';
 
 // ---------------------------------------------------------------------------
-// Built-in synthetic toolset
+// Built-in synthetic toolsets
 // ---------------------------------------------------------------------------
+// The backend surfaces built-in groups through the same /api/v1/toolsets
+// endpoint with ids prefixed by `__builtin_`.  We only need the prefix here
+// to hide edit/delete actions on those rows.
 
-const BUILTIN_TOOLSET_ID = '__builtin_seizu__';
+const BUILTIN_PREFIX = '__builtin_';
 
-const BUILTIN_TOOLSET: ToolsetListItem = {
-  toolset_id: BUILTIN_TOOLSET_ID,
-  name: 'seizu',
-  description: 'Built-in Seizu toolset providing schema discovery for the Neo4j graph.',
-  enabled: true,
-  current_version: 1,
-  created_at: '',
-  updated_at: '',
-  created_by: '',
-  updated_by: null
-};
+const isBuiltinToolset = (id: string): boolean =>
+  id.startsWith(BUILTIN_PREFIX) && id.endsWith('__');
 
 // ---------------------------------------------------------------------------
 // Create/Edit dialog
@@ -291,7 +285,7 @@ function Toolsets() {
     }
   };
 
-  const allRows: ToolsetListItem[] = [BUILTIN_TOOLSET, ...toolsets];
+  const allRows: ToolsetListItem[] = toolsets;
 
   return (
     <>
@@ -343,7 +337,7 @@ function Toolsets() {
                   </TableRow>
                 )}
                 {allRows.map((item) => {
-                  const isBuiltin = item.toolset_id === BUILTIN_TOOLSET_ID;
+                  const isBuiltin = isBuiltinToolset(item.toolset_id);
                   return (
                     <TableRow key={item.toolset_id} hover>
                       <TableCell>
@@ -352,11 +346,7 @@ function Toolsets() {
                             variant="body2"
                             fontWeight={500}
                             sx={{ cursor: 'pointer', '&:hover': { textDecoration: 'underline' } }}
-                            onClick={() => navigate(
-                              isBuiltin
-                                ? `/app/toolsets/${BUILTIN_TOOLSET_ID}/tools`
-                                : `/app/toolsets/${item.toolset_id}/tools`
-                            )}
+                            onClick={() => navigate(`/app/toolsets/${item.toolset_id}/tools`)}
                           >
                             {item.name}
                           </Typography>

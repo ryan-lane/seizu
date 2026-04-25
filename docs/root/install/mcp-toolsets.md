@@ -194,12 +194,19 @@ Both toolsets and tools keep a full version history. Open the **⋮** menu and s
 
 ## Built-in Tools
 
-The `seizu` toolset is always available and provides two built-in tools:
+Seizu ships a set of read-only and admin tools that are always available (subject to RBAC) — no toolset needs to be created to use them. They appear on the Toolsets page with a **Built-in** badge and cannot be edited or deleted through the UI or CLI.
 
-| MCP tool name | Description |
-|---------------|-------------|
-| `seizu__schema` | Returns all node labels, relationship types, and property keys in the Neo4j graph database. Takes no parameters. |
-| `seizu__query` | Executes an ad-hoc read-only Cypher query. Takes a single `query` parameter (string). The query is validated before execution. |
+Built-in tools are grouped by area. Permissions for each tool mirror the equivalent REST endpoint — a user with only `seizu-viewer` sees the read-only tools; write/delete tools only appear for users with the matching permission.
+
+| Group | Tools |
+|-------|-------|
+| `graph` | `graph__schema` (Neo4j labels/relationship types/property keys), `graph__query` (validated read-only Cypher) |
+| `reports` | list / get / create / delete / pin / set_dashboard / get_dashboard reports, plus save/list/get version history |
+| `scheduled_queries` | Full CRUD plus version history. Create/update reuse the same Cypher + action-config validation as the REST routes. |
+| `toolsets` | Full CRUD for toolsets and nested tools, plus version history. Create/update tool calls reuse Cypher validation. |
+| `roles` | List built-in and user-defined roles; CRUD for user-defined roles; role version history. |
+
+Which groups are exposed is controlled by the `MCP_ENABLED_BUILTINS` setting (see [backend configuration](backend.html#mcp-server)). All groups are enabled by default; set it to ``none`` to disable all built-ins, or to a comma-separated list (e.g. ``graph,reports``) to enable only specific groups.
 
 ## MCP Server
 
@@ -207,22 +214,67 @@ The MCP server is available at `/api/v1/mcp` when `MCP_ENABLED=true` (the defaul
 
 Authentication uses the same Bearer JWT tokens as the REST API. In development, authentication can be disabled via `DEVELOPMENT_ONLY_REQUIRE_AUTH=false`.
 
-Tool names are namespaced as `{toolset_name}__{tool_name}` (double underscore separator). Only tools in **enabled** toolsets are exposed to MCP clients.
+Tool names are namespaced as `{toolset_name}__{tool_name}` (double underscore separator) for user-defined tools, or `{group}__{action}` for built-ins (e.g. `graph__query`, `reports__list`). Only tools in **enabled** toolsets and built-in groups included in `MCP_ENABLED_BUILTINS` are exposed to MCP clients.
 
-### Connecting Claude Desktop
+### Connecting Claude
 
-Add an MCP server entry to your Claude Desktop configuration:
+The MCP endpoint is always at `<base-url>/api/v1/mcp`, where `<base-url>` is the scheme, host, and port on which Seizu is reachable. The backend port is controlled by the `PORT` setting (default: `8080`). If Seizu sits behind a reverse proxy or load balancer, use the public URL — set `MCP_RESOURCE_URL` to that URL so OAuth discovery headers point to the right place.
+
+The frontend dev server does *not* proxy MCP traffic; always point your MCP client at the backend directly.
+
+#### Claude Code (CLI)
+
+Add Seizu as an MCP server with the `http` transport. Pass `--callback-port` to pin the OAuth callback to a fixed port — without it Claude picks a random port on each run, which won't match the redirect URI registered in your OIDC provider:
+
+```bash
+claude mcp add --transport http --callback-port 8888 seizu https://your-seizu-host/api/v1/mcp
+```
+
+Or add it directly to `.mcp.json` in your project root:
 
 ```json
 {
   "mcpServers": {
     "seizu": {
-      "url": "https://your-seizu-host/api/v1/mcp"
+      "type": "http",
+      "url": "https://your-seizu-host/api/v1/mcp",
+      "oauth": {
+        "callbackPort": 8888
+      }
     }
   }
 }
 ```
 
-If Seizu is configured with OAuth metadata (`MCP_OAUTH_AUTHORIZATION_ENDPOINT` and `MCP_OAUTH_TOKEN_ENDPOINT`), Claude Desktop will automatically discover the OIDC provider via the metadata endpoint at `/api/v1/mcp/.well-known/oauth-authorization-server` and prompt users to authenticate inside the client.
+#### Claude Desktop
+
+Add an MCP server entry to your Claude Desktop configuration file (`~/Library/Application Support/Claude/claude_desktop_config.json` on macOS, `~/.config/Claude/claude_desktop_config.json` on Linux):
+
+```json
+{
+  "mcpServers": {
+    "seizu": {
+      "url": "https://your-seizu-host/api/v1/mcp",
+      "oauth": {
+        "callbackPort": 8888
+      }
+    }
+  }
+}
+```
+
+#### With OAuth authentication
+
+If Seizu is configured with OAuth metadata (auto-discovered from `OIDC_AUTHORITY`, or set explicitly via `MCP_OAUTH_AUTHORIZATION_ENDPOINT` / `MCP_OAUTH_TOKEN_ENDPOINT`), Claude will discover the OIDC provider via `/api/v1/mcp/.well-known/oauth-authorization-server` and prompt users to authenticate inside the client.
+
+The `callbackPort` in the config above pins the OAuth callback server to port **8888**. Register that port as a redirect URI in your OIDC provider before connecting:
+
+```
+http://localhost:8888/callback
+```
+
+Without this, the OAuth handshake will be rejected. For the development Authentik stack this is pre-configured automatically by the blueprint. For any other OIDC provider (Authentik in production, Okta, Keycloak, etc.) you must add it manually.
+
+> **VM / remote development:** If Claude is running on the VM, its OAuth callback server binds to port **8888 on the VM**. Authentik redirects the browser (on your local machine) to `http://localhost:8888/callback`, which means your local machine's port 8888 must be tunnelled to the VM. Add `-L 8888:localhost:8888` to your SSH tunnel command alongside the other ports — see the [quickstart](../dev/docker-compose.html#running-on-a-vm-or-remote-host) for the full tunnel commands.
 
 See the [backend configuration](backend.html#mcp-server) for available settings.

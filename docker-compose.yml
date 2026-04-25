@@ -280,6 +280,9 @@ services:
       # OIDC client config served to the frontend via GET /api/v1/config.
       # The redirect_uri must be the publicly reachable callback URL in the browser.
       - OIDC_AUTHORITY=http://localhost:9000/application/o/seizu
+      # Internal authority URL for server-side OIDC discovery (differs from
+      # OIDC_AUTHORITY in docker dev due to split internal/external hostnames).
+      - OIDC_INTERNAL_AUTHORITY=http://authentik-server:9000/application/o/seizu
       - OIDC_CLIENT_ID=seizu
       - OIDC_REDIRECT_URI=http://localhost:3000/auth/callback
       - "OIDC_SCOPE=openid email profile"
@@ -301,10 +304,13 @@ services:
       - SQL_DATABASE_URL=postgresql://seizu:seizu@postgres:5432/seizu
       # MCP server — set MCP_ENABLED=false to disable the endpoint
       - MCP_ENABLED=true
-      # MCP OAuth metadata — set these to enable in-client auth for Claude Desktop
-      - MCP_OAUTH_AUTHORIZATION_ENDPOINT
-      - MCP_OAUTH_TOKEN_ENDPOINT
-      - MCP_OAUTH_ISSUER
+      # MCP OAuth metadata — authorization/token endpoints are derived automatically
+      # from OIDC_AUTHORITY via OIDC discovery. Override with MCP_OAUTH_* vars if
+      # your MCP clients need a different OIDC application than the web frontend.
+      # MCP_OAUTH_AUTHORIZATION_ENDPOINT=
+      # MCP_OAUTH_TOKEN_ENDPOINT=
+      # MCP_OAUTH_ISSUER=
+      - MCP_RESOURCE_URL=http://localhost:8080/api/v1/mcp
       # In dev the project is bind-mounted here; the production image copies
       # the frontend build to /build via the Dockerfile nodebuilder stage.
       - STATIC_FOLDER=/home/seizu/seizu/build

@@ -10,6 +10,8 @@ import asyncio
 import contextvars
 import json
 import logging
+from datetime import datetime
+from datetime import timezone
 from typing import Any
 from typing import Dict
 from typing import FrozenSet
@@ -17,6 +19,7 @@ from typing import List
 from typing import Optional
 from typing import Tuple
 
+import httpx
 import jwt
 from jwt import PyJWKClient
 from mcp.server.fastmcp.server import StreamableHTTPASGIApp
@@ -32,35 +35,33 @@ from starlette.types import Scope
 from starlette.types import Send
 
 from reporting import settings
+from reporting.authnz import CurrentUser
 from reporting.routes.query import _serialize_neo4j_value
 from reporting.schema.mcp_config import validate_tool_arguments
 from reporting.services import report_store
 from reporting.services import reporting_neo4j
-from reporting.services.query_validator import validate_query
+from reporting.services.mcp_builtins import find_builtin
+from reporting.services.mcp_builtins import list_builtin_tools
 
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
-# Built-in seizu toolset
+# Request-scoped context
 # ---------------------------------------------------------------------------
 
-_BUILTIN_SCHEMA_TOOL_NAME = "seizu__schema"
-_BUILTIN_QUERY_TOOL_NAME = "seizu__query"
-
-# Context variable that holds the current request's resolved permissions.
-# Set by _MCPAuthMiddleware before passing to the MCP app.
+# Resolved permission set for the current MCP request. Set by
+# _MCPAuthMiddleware.
 _mcp_permissions: contextvars.ContextVar[FrozenSet[str]] = contextvars.ContextVar(
     "_mcp_permissions", default=frozenset()
 )
 
-_LABELS_QUERY = "CALL db.labels() YIELD label RETURN label ORDER BY label"
-_RELS_QUERY = (
-    "CALL db.relationshipTypes() YIELD relationshipType "
-    "RETURN relationshipType AS type ORDER BY type"
-)
-_PROPS_QUERY = (
-    "CALL db.propertyKeys() YIELD propertyKey RETURN propertyKey AS key ORDER BY key"
-)
+# The resolved CurrentUser for the current MCP request. Set by
+# _MCPAuthMiddleware. Built-ins that create/update records rely on this to
+# populate created_by / updated_by.
+_mcp_current_user: contextvars.ContextVar[
+    Optional[CurrentUser]
+] = contextvars.ContextVar("_mcp_current_user", default=None)
+
 
 # ---------------------------------------------------------------------------
 # Parameter schema conversion
@@ -99,44 +100,37 @@ def _build_input_schema(parameters: List[Any]) -> Dict[str, Any]:
 # ---------------------------------------------------------------------------
 
 
+def _text(payload: Any) -> List[TextContent]:
+    """Serialize *payload* to JSON and wrap it as a single MCP TextContent."""
+    return [TextContent(type="text", text=json.dumps(payload, indent=2, default=str))]
+
+
+def _missing_permissions(required: List[str], granted: FrozenSet[str]) -> List[str]:
+    return [p for p in required if p not in granted]
+
+
 def _build_mcp_server() -> Server:
     server: Server = Server("seizu")
 
     @server.list_tools()
     async def list_tools() -> List[Tool]:
         tools: List[Tool] = []
+        perms = _mcp_permissions.get()
 
-        # Built-in seizu toolset — always available
-        tools.append(
-            Tool(
-                name=_BUILTIN_SCHEMA_TOOL_NAME,
-                description=(
-                    "Returns the available node labels, relationship types, and property "
-                    "keys in the Neo4j graph database."
-                ),
-                inputSchema={"type": "object", "properties": {}},
+        # Built-in tools registered by reporting/services/mcp_builtins
+        for builtin in list_builtin_tools():
+            # Only surface tools the caller has permission for; this keeps
+            # Claude from seeing admin-only write tools when logged in as a
+            # viewer.
+            if _missing_permissions(builtin.required_permissions, perms):
+                continue
+            tools.append(
+                Tool(
+                    name=builtin.name,
+                    description=builtin.description,
+                    inputSchema=builtin.input_schema,
+                )
             )
-        )
-        tools.append(
-            Tool(
-                name=_BUILTIN_QUERY_TOOL_NAME,
-                description=(
-                    "Execute an ad-hoc read-only Cypher query against the Neo4j graph "
-                    "database. The query is validated before execution — write operations "
-                    "are not permitted."
-                ),
-                inputSchema={
-                    "type": "object",
-                    "properties": {
-                        "query": {
-                            "type": "string",
-                            "description": "A read-only Cypher query to execute.",
-                        }
-                    },
-                    "required": ["query"],
-                },
-            )
-        )
 
         # User-defined tools from the store
         try:
@@ -167,99 +161,22 @@ def _build_mcp_server() -> Server:
         args = arguments or {}
         perms = _mcp_permissions.get()
 
-        # Built-in ad-hoc query tool
-        if name == _BUILTIN_QUERY_TOOL_NAME:
-            if "query:execute" not in perms:
-                return [
-                    TextContent(
-                        type="text",
-                        text=json.dumps({"error": "Permission denied: query:execute"}),
-                    )
-                ]
-            cypher = str(args.get("query", "")).strip()
-            if not cypher:
-                return [
-                    TextContent(
-                        type="text",
-                        text=json.dumps({"error": "query parameter is required"}),
-                    )
-                ]
-            validation = await validate_query(cypher)
-            if validation.has_errors:
-                return [
-                    TextContent(
-                        type="text",
-                        text=json.dumps(
-                            {
-                                "errors": validation.errors,
-                                "warnings": validation.warnings,
-                            }
-                        ),
-                    )
-                ]
+        # Built-in tool dispatch
+        builtin = find_builtin(name)
+        if builtin is not None:
+            missing = _missing_permissions(builtin.required_permissions, perms)
+            if missing:
+                return _text({"error": f"Permission denied: {', '.join(missing)}"})
             try:
-                results = await reporting_neo4j.run_query(cypher)
-                serialized = [
-                    {
-                        key: _serialize_neo4j_value(value)
-                        for key, value in record.items()
-                    }
-                    for record in results
-                ]
-                return [
-                    TextContent(
-                        type="text",
-                        text=json.dumps(
-                            {"results": serialized, "warnings": validation.warnings},
-                            indent=2,
-                        ),
-                    )
-                ]
+                result = await builtin.handler(args, _mcp_current_user.get())
+                return _text(result)
             except Exception:
-                logger.exception("Failed to execute seizu__query tool")
-                return [
-                    TextContent(
-                        type="text",
-                        text=json.dumps({"error": "Query execution failed"}),
-                    )
-                ]
-
-        # Built-in schema tool
-        if name == _BUILTIN_SCHEMA_TOOL_NAME:
-            if "query:execute" not in perms:
-                return [
-                    TextContent(
-                        type="text",
-                        text=json.dumps({"error": "Permission denied: query:execute"}),
-                    )
-                ]
-            try:
-                labels_results = await reporting_neo4j.run_query(_LABELS_QUERY)
-                rels_results = await reporting_neo4j.run_query(_RELS_QUERY)
-                props_results = await reporting_neo4j.run_query(_PROPS_QUERY)
-                schema = {
-                    "labels": [r["label"] for r in labels_results],
-                    "relationship_types": [r["type"] for r in rels_results],
-                    "property_keys": [r["key"] for r in props_results],
-                }
-                return [TextContent(type="text", text=json.dumps(schema, indent=2))]
-            except Exception:
-                logger.exception("Failed to execute schema tool")
-                return [
-                    TextContent(
-                        type="text",
-                        text=json.dumps({"error": "Failed to retrieve schema"}),
-                    )
-                ]
+                logger.exception("Failed to execute built-in MCP tool %s", name)
+                return _text({"error": f"Failed to execute tool '{name}'"})
 
         # User-defined tool — look up by namespaced name
         if "tools:call" not in perms:
-            return [
-                TextContent(
-                    type="text",
-                    text=json.dumps({"error": "Permission denied: tools:call"}),
-                )
-            ]
+            return _text({"error": "Permission denied: tools:call"})
         try:
             enabled_tools = await report_store.list_enabled_tools()
             toolsets = await report_store.list_toolsets()
@@ -274,21 +191,11 @@ def _build_mcp_server() -> Server:
                     break
 
             if target_tool is None:
-                return [
-                    TextContent(
-                        type="text",
-                        text=json.dumps({"error": f"Tool '{name}' not found"}),
-                    )
-                ]
+                return _text({"error": f"Tool '{name}' not found"})
 
             arg_errors = validate_tool_arguments(target_tool.parameters, args)
             if arg_errors:
-                return [
-                    TextContent(
-                        type="text",
-                        text=json.dumps({"errors": arg_errors}),
-                    )
-                ]
+                return _text({"errors": arg_errors})
 
             # Apply parameter defaults so optional params are passed as null
             # rather than absent — Neo4j raises ParameterMissing if a $param
@@ -303,15 +210,10 @@ def _build_mcp_server() -> Server:
                 {key: _serialize_neo4j_value(value) for key, value in record.items()}
                 for record in results
             ]
-            return [TextContent(type="text", text=json.dumps(serialized, indent=2))]
+            return _text(serialized)
         except Exception:
             logger.exception("Failed to execute MCP tool %s", name)
-            return [
-                TextContent(
-                    type="text",
-                    text=json.dumps({"error": f"Failed to execute tool '{name}'"}),
-                )
-            ]
+            return _text({"error": f"Failed to execute tool '{name}'"})
 
     return server
 
@@ -330,6 +232,49 @@ def _get_jwks_client() -> PyJWKClient:
     return _jwks_client_cache
 
 
+async def _build_dev_current_user() -> CurrentUser:
+    """Return a synthetic CurrentUser for dev mode (auth disabled)."""
+    from reporting.authnz.permissions import ALL_PERMISSIONS
+
+    email = settings.DEVELOPMENT_ONLY_AUTH_USER_EMAIL
+    user = await report_store.get_or_create_user(
+        sub=email,
+        iss="dev",
+        email=email,
+        display_name=None,
+    )
+    return CurrentUser(
+        user=user,
+        jwt_claims={"email": email, "display_name": None, "token_iat": None},
+        permissions=ALL_PERMISSIONS,
+    )
+
+
+async def _build_current_user_from_jwt(payload: Dict[str, Any]) -> CurrentUser:
+    """Resolve a CurrentUser from an already-validated JWT payload."""
+    from reporting.authnz.permissions import resolve_permissions
+
+    raw_iat = payload.get("iat")
+    token_iat = (
+        datetime.fromtimestamp(raw_iat, tz=timezone.utc)
+        if raw_iat is not None
+        else None
+    )
+    jwt_claims = {
+        "email": payload[settings.JWT_EMAIL_CLAIM],
+        "display_name": payload.get("name"),
+        "token_iat": token_iat,
+    }
+    user = await report_store.get_or_create_user(
+        sub=payload[settings.JWT_SUB_CLAIM],
+        iss=payload[settings.JWT_ISS_CLAIM],
+        email=payload[settings.JWT_EMAIL_CLAIM],
+        display_name=payload.get("name"),
+    )
+    permissions = await resolve_permissions(payload)
+    return CurrentUser(user=user, jwt_claims=jwt_claims, permissions=permissions)
+
+
 class _MCPAuthMiddleware:
     """ASGI middleware that validates Bearer tokens before passing to the MCP app."""
 
@@ -342,18 +287,22 @@ class _MCPAuthMiddleware:
             return
 
         if not settings.DEVELOPMENT_ONLY_REQUIRE_AUTH:
-            # Auth disabled in dev — grant all permissions and pass through
-            from reporting.authnz.permissions import ALL_PERMISSIONS
-
-            token = _mcp_permissions.set(ALL_PERMISSIONS)
+            # Auth disabled in dev — grant all permissions and synthesize a user
+            current_user = await _build_dev_current_user()
+            perm_token = _mcp_permissions.set(current_user.permissions)
+            user_token = _mcp_current_user.set(current_user)
             try:
                 await self._app(scope, receive, send)
             finally:
-                _mcp_permissions.reset(token)
+                _mcp_permissions.reset(perm_token)
+                _mcp_current_user.reset(user_token)
             return
 
-        # OAuth metadata must be reachable before auth — client has no token yet
-        if scope.get("path", "").endswith(_WELL_KNOWN_PATH):
+        # OAuth metadata endpoints must be reachable before auth — client has no token yet.
+        # Match any URL form: in-path (/api/v1/mcp/.well-known/oauth-*),
+        # origin-based (/.well-known/oauth-*), or RFC 8414 suffix (/.well-known/oauth-*/path).
+        path = scope.get("path", "")
+        if "/.well-known/oauth-" in path:
             await self._app(scope, receive, send)
             return
 
@@ -387,45 +336,123 @@ class _MCPAuthMiddleware:
             await self._send_401(scope, receive, send)
             return
 
-        from reporting.authnz.permissions import resolve_permissions
+        try:
+            current_user = await _build_current_user_from_jwt(payload)
+        except Exception:
+            logger.exception("Failed to resolve user from JWT claims")
+            await self._send_401(scope, receive, send)
+            return
 
-        permissions = await resolve_permissions(payload)
-
-        ctx_token = _mcp_permissions.set(permissions)
+        perm_token = _mcp_permissions.set(current_user.permissions)
+        user_token = _mcp_current_user.set(current_user)
         try:
             await self._app(scope, receive, send)
         finally:
-            _mcp_permissions.reset(ctx_token)
+            _mcp_permissions.reset(perm_token)
+            _mcp_current_user.reset(user_token)
 
     @staticmethod
     async def _send_401(scope: Scope, receive: Receive, send: Send) -> None:
         from starlette.responses import JSONResponse
 
+        www_auth = "Bearer"
+        if settings.MCP_RESOURCE_URL and (
+            settings.MCP_OAUTH_AUTHORIZATION_ENDPOINT or settings.OIDC_AUTHORITY
+        ):
+            resource_metadata_url = (
+                f"{settings.MCP_RESOURCE_URL}/.well-known/oauth-protected-resource"
+            )
+            www_auth = f'Bearer resource_metadata="{resource_metadata_url}"'
+
         response = JSONResponse(
             {"error": "Not authenticated"},
             status_code=401,
-            headers={"WWW-Authenticate": "Bearer"},
+            headers={"WWW-Authenticate": www_auth},
         )
         await response(scope, receive, send)
 
 
 # ---------------------------------------------------------------------------
-# OAuth 2.0 Authorization Server Metadata (RFC 8414)
+# OAuth 2.0 Authorization Server Metadata (RFC 8414) and
+# Protected Resource Metadata (RFC 9728)
 # ---------------------------------------------------------------------------
 
 _WELL_KNOWN_PATH = "/.well-known/oauth-authorization-server"
+_WELL_KNOWN_PROTECTED_RESOURCE_PATH = "/.well-known/oauth-protected-resource"
+_WELL_KNOWN_REGISTRATION_PATH = "/.well-known/oauth-registration"
 
 
-def _build_oauth_metadata() -> Optional[Dict[str, Any]]:
-    """Return the RFC 8414 metadata dict, or None if not configured."""
+async def _fetch_oidc_discovery(authority: str) -> Optional[Dict[str, Any]]:
+    """Fetch {authority}/.well-known/openid-configuration, return parsed JSON or None."""
+    url = f"{authority.rstrip('/')}/.well-known/openid-configuration"
+    try:
+        async with httpx.AsyncClient() as client:
+            resp = await client.get(url, timeout=5.0)
+            resp.raise_for_status()
+            return resp.json()
+    except Exception:
+        logger.warning("Failed to fetch OIDC discovery from %s", url)
+        return None
+
+
+async def _build_oauth_metadata() -> Optional[Dict[str, Any]]:
+    """Return the RFC 8414 metadata dict, or None if OAuth cannot be configured.
+
+    This document is served at {MCP_RESOURCE_URL}/.well-known/oauth-authorization-server.
+    RFC 8414 requires issuer to equal the URL from which the document is served
+    (minus the well-known suffix), so we set issuer = MCP_RESOURCE_URL.
+    MCP_OAUTH_ISSUER overrides this for setups where an RFC 8414-compliant IdP
+    serves the metadata directly.
+
+    Authorization/token endpoints are derived from OIDC discovery when not
+    explicitly set via MCP_OAUTH_AUTHORIZATION_ENDPOINT / MCP_OAUTH_TOKEN_ENDPOINT.
+    OIDC_INTERNAL_AUTHORITY is used for the server-side fetch (avoids docker
+    split-hostname issues); the returned endpoint origins are rewritten to the
+    external OIDC_AUTHORITY origin so MCP clients outside docker can reach them.
+    """
+    oidc_authority = settings.OIDC_AUTHORITY
     auth_endpoint = settings.MCP_OAUTH_AUTHORIZATION_ENDPOINT
     token_endpoint = settings.MCP_OAUTH_TOKEN_ENDPOINT
-    if not auth_endpoint or not token_endpoint:
+    jwks_uri: Optional[str] = None
+
+    if oidc_authority and (not auth_endpoint or not token_endpoint):
+        discovery_authority = settings.OIDC_INTERNAL_AUTHORITY or oidc_authority
+        discovery = await _fetch_oidc_discovery(discovery_authority)
+        if discovery:
+            raw_auth = auth_endpoint or discovery.get("authorization_endpoint", "")
+            raw_token = token_endpoint or discovery.get("token_endpoint", "")
+            raw_jwks = discovery.get("jwks_uri", "")
+            # When fetching via an internal authority, endpoints use the internal
+            # hostname. Rewrite the origin so MCP clients outside docker can reach them.
+            if (
+                settings.OIDC_INTERNAL_AUTHORITY
+                and discovery_authority != oidc_authority
+            ):
+                from urllib.parse import urlparse
+
+                int_origin = "{0.scheme}://{0.netloc}".format(
+                    urlparse(discovery_authority)
+                )
+                ext_origin = "{0.scheme}://{0.netloc}".format(urlparse(oidc_authority))
+                raw_auth = raw_auth.replace(int_origin, ext_origin, 1)
+                raw_token = raw_token.replace(int_origin, ext_origin, 1)
+                raw_jwks = raw_jwks.replace(int_origin, ext_origin, 1)
+            auth_endpoint = raw_auth
+            token_endpoint = raw_token
+            jwks_uri = raw_jwks or None
+
+    # RFC 8414: issuer must equal the URL from which this document is served.
+    # We serve it at {MCP_RESOURCE_URL}/.well-known/oauth-authorization-server,
+    # so MCP_RESOURCE_URL is the correct issuer. MCP_OAUTH_ISSUER overrides this
+    # for setups with an external RFC 8414-compliant authorization server.
+    metadata_issuer = settings.MCP_OAUTH_ISSUER or settings.MCP_RESOURCE_URL
+
+    if not metadata_issuer or not auth_endpoint or not token_endpoint:
         return None
-    issuer = settings.MCP_OAUTH_ISSUER or settings.JWT_ISSUER
+
     scopes = settings.OIDC_SCOPE.split() if settings.OIDC_SCOPE else ["openid", "email"]
     metadata: Dict[str, Any] = {
-        "issuer": issuer,
+        "issuer": metadata_issuer,
         "authorization_endpoint": auth_endpoint,
         "token_endpoint": token_endpoint,
         "scopes_supported": scopes,
@@ -435,16 +462,93 @@ def _build_oauth_metadata() -> Optional[Dict[str, Any]]:
         # "none" allows public clients (e.g. Claude Desktop) without a client secret
         "token_endpoint_auth_methods_supported": ["none"],
     }
-    if settings.JWKS_URL:
-        metadata["jwks_uri"] = settings.JWKS_URL
+    if jwks_uri:
+        metadata["jwks_uri"] = jwks_uri
+
+    # RFC 7591: advertise dynamic client registration so MCP clients (e.g.
+    # Claude Desktop) don't reject the auth server. Use the explicit override
+    # if set; otherwise derive from MCP_RESOURCE_URL when OIDC_CLIENT_ID is
+    # available (our built-in lightweight DCR endpoint).
+    registration_endpoint: Optional[str] = settings.MCP_OAUTH_REGISTRATION_ENDPOINT
+    if (
+        not registration_endpoint
+        and settings.MCP_RESOURCE_URL
+        and settings.OIDC_CLIENT_ID
+    ):
+        registration_endpoint = (
+            f"{settings.MCP_RESOURCE_URL}{_WELL_KNOWN_REGISTRATION_PATH}"
+        )
+    if registration_endpoint:
+        metadata["registration_endpoint"] = registration_endpoint
+
     return metadata
 
 
 async def _oauth_metadata_handler(request: Request) -> StarletteJSONResponse:
-    metadata = _build_oauth_metadata()
+    metadata = await _build_oauth_metadata()
     if metadata is None:
         return StarletteJSONResponse({"error": "Not found"}, status_code=404)
     return StarletteJSONResponse(metadata)
+
+
+async def _oauth_registration_handler(request: Request) -> StarletteJSONResponse:
+    """RFC 7591 dynamic client registration endpoint.
+
+    MCP clients (e.g. Claude Desktop) require a registration_endpoint in the
+    OAuth metadata. Most OIDC providers (including Authentik) don't support DCR,
+    so Seizu serves its own lightweight endpoint that returns the pre-configured
+    OIDC_CLIENT_ID. The caller gets a stable public-client registration back
+    without a real DCR-capable IdP.
+
+    The MCP SDK validates the response body and requires redirect_uris to be
+    echoed back as an array, so we read the request body and forward it.
+    """
+    if request.method != "POST":
+        return StarletteJSONResponse({"error": "method_not_allowed"}, status_code=405)
+    client_id = settings.OIDC_CLIENT_ID
+    if not client_id:
+        return StarletteJSONResponse(
+            {"error": "client_registration_not_supported"}, status_code=400
+        )
+    try:
+        body: Dict[str, Any] = await request.json()
+    except Exception:
+        body = {}
+    redirect_uris: List[str] = body.get("redirect_uris") or []
+    return StarletteJSONResponse(
+        {
+            "client_id": client_id,
+            "redirect_uris": redirect_uris,
+            "token_endpoint_auth_method": "none",
+            "grant_types": ["authorization_code", "refresh_token"],
+            "response_types": ["code"],
+        },
+        status_code=201,
+    )
+
+
+def _build_protected_resource_metadata() -> Optional[Dict[str, Any]]:
+    """Return RFC 9728 protected resource metadata, or None if OAuth not configured.
+
+    authorization_servers points to our own MCP endpoint, which serves a valid
+    RFC 8414 document at /.well-known/oauth-authorization-server. This sidesteps
+    IdPs (like Authentik) that only expose OIDC discovery and not RFC 8414.
+    MCP_OAUTH_ISSUER overrides this for setups with an RFC 8414-compliant IdP.
+    """
+    if not settings.MCP_RESOURCE_URL:
+        return None
+    # Only advertise OAuth discovery if OIDC/OAuth is actually configured
+    if (
+        not settings.OIDC_AUTHORITY
+        and not settings.MCP_OAUTH_AUTHORIZATION_ENDPOINT
+        and not settings.MCP_OAUTH_ISSUER
+    ):
+        return None
+    auth_server = settings.MCP_OAUTH_ISSUER or settings.MCP_RESOURCE_URL
+    return {
+        "resource": settings.MCP_RESOURCE_URL,
+        "authorization_servers": [auth_server],
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -460,11 +564,31 @@ class _MCPDispatcher:
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
         path = scope.get("path", "")
-        if scope["type"] == "http" and path.endswith(_WELL_KNOWN_PATH):
-            request = Request(scope, receive)
-            response = await _oauth_metadata_handler(request)
-            await response(scope, receive, send)
-            return
+        if scope["type"] == "http":
+            # Match any URL form the client may construct:
+            #   in-path:      /api/v1/mcp/.well-known/oauth-authorization-server
+            #   origin-based: /.well-known/oauth-authorization-server
+            #   RFC 8414:     /.well-known/oauth-authorization-server/api/v1/mcp
+            if _WELL_KNOWN_PATH in path:
+                request = Request(scope, receive)
+                response = await _oauth_metadata_handler(request)
+                await response(scope, receive, send)
+                return
+            if _WELL_KNOWN_PROTECTED_RESOURCE_PATH in path:
+                metadata = _build_protected_resource_metadata()
+                if metadata is None:
+                    response = StarletteJSONResponse(
+                        {"error": "Not found"}, status_code=404
+                    )
+                else:
+                    response = StarletteJSONResponse(metadata)
+                await response(scope, receive, send)
+                return
+            if _WELL_KNOWN_REGISTRATION_PATH in path:
+                request = Request(scope, receive)
+                response = await _oauth_registration_handler(request)
+                await response(scope, receive, send)
+                return
         await self._mcp_app(scope, receive, send)
 
 

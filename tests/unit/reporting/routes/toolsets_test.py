@@ -26,6 +26,9 @@ _FAKE_USER = User(
 _FAKE_CURRENT_USER = CurrentUser(
     user=_FAKE_USER, jwt_claims={}, permissions=ALL_PERMISSIONS
 )
+_UNPRIVILEGED_CURRENT_USER = CurrentUser(
+    user=_FAKE_USER, jwt_claims={}, permissions=frozenset()
+)
 
 _TS_ID = "ts-abc123"
 _TOOL_ID = "tool-xyz456"
@@ -132,12 +135,14 @@ async def test_list_toolsets_success(mocker):
         ret = await client.get("/api/v1/toolsets")
     assert ret.status_code == 200
     items = ret.json()["toolsets"]
-    assert len(items) == 1
-    assert items[0]["toolset_id"] == _TS_ID
-    assert items[0]["name"] == "My Toolset"
+    # Built-in groups are prepended by the route — find the user toolset.
+    user_items = [t for t in items if t["toolset_id"] == _TS_ID]
+    assert len(user_items) == 1
+    assert user_items[0]["name"] == "My Toolset"
 
 
-async def test_list_toolsets_empty(mocker):
+async def test_list_toolsets_includes_builtins(mocker):
+    """The MCP built-in registry is surfaced through the same endpoint."""
     mocker.patch(
         "reporting.routes.toolsets.report_store.list_toolsets",
         new=AsyncMock(return_value=[]),
@@ -148,7 +153,29 @@ async def test_list_toolsets_empty(mocker):
     ) as client:
         ret = await client.get("/api/v1/toolsets")
     assert ret.status_code == 200
-    assert ret.json()["toolsets"] == []
+    items = ret.json()["toolsets"]
+    ids = {t["toolset_id"] for t in items}
+    # Every registered built-in group should be visible.
+    assert "__builtin_graph__" in ids
+    assert "__builtin_reports__" in ids
+    assert "__builtin_toolsets__" in ids
+
+
+async def test_list_toolsets_empty_user_still_returns_builtins(mocker):
+    mocker.patch(
+        "reporting.routes.toolsets.report_store.list_toolsets",
+        new=AsyncMock(return_value=[]),
+    )
+    app = _make_app()
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        ret = await client.get("/api/v1/toolsets")
+    assert ret.status_code == 200
+    items = ret.json()["toolsets"]
+    # No user toolsets, but built-ins are always listed.
+    assert all(t["toolset_id"].startswith("__builtin_") for t in items)
+    assert len(items) >= 1
 
 
 # ---------------------------------------------------------------------------
@@ -805,3 +832,165 @@ async def test_get_tool_version_wrong_toolset(mocker):
     ) as client:
         ret = await client.get(f"/api/v1/toolsets/{_TS_ID}/tools/{_TOOL_ID}/versions/1")
     assert ret.status_code == 404
+
+
+# ---------------------------------------------------------------------------
+# Built-in (synthetic) toolset surfacing
+# ---------------------------------------------------------------------------
+# The MCP built-in registry is rendered through the same /api/v1/toolsets
+# routes so the existing frontend hooks keep working without a separate
+# endpoint.  These tests lock in that contract.
+
+
+async def test_get_builtin_toolset(mocker):
+    """A synthetic id resolves without touching report_store."""
+    get_toolset = mocker.patch(
+        "reporting.routes.toolsets.report_store.get_toolset",
+        new=AsyncMock(return_value=None),
+    )
+    app = _make_app()
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        ret = await client.get("/api/v1/toolsets/__builtin_graph__")
+    assert ret.status_code == 200
+    body = ret.json()
+    assert body["toolset_id"] == "__builtin_graph__"
+    assert body["name"] == "graph"
+    get_toolset.assert_not_awaited()
+
+
+async def test_get_builtin_toolset_unknown_group_returns_404():
+    app = _make_app()
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        ret = await client.get("/api/v1/toolsets/__builtin_nonexistent__")
+    assert ret.status_code == 404
+
+
+async def test_list_builtin_tools_returns_registry_tools(mocker):
+    """Tool listing for a built-in toolset pulls from the registry."""
+    list_tools = mocker.patch(
+        "reporting.routes.toolsets.report_store.list_tools",
+        new=AsyncMock(return_value=[]),
+    )
+    app = _make_app()
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        ret = await client.get("/api/v1/toolsets/__builtin_graph__/tools")
+    assert ret.status_code == 200
+    tools = ret.json()["tools"]
+    names = {t["name"] for t in tools}
+    # seizu group ships schema + query.
+    assert {"graph__schema", "graph__query"} <= names
+    list_tools.assert_not_awaited()
+
+
+async def test_get_builtin_tool(mocker):
+    get_tool = mocker.patch(
+        "reporting.routes.toolsets.report_store.get_tool",
+        new=AsyncMock(return_value=None),
+    )
+    app = _make_app()
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        ret = await client.get(
+            "/api/v1/toolsets/__builtin_graph__/tools/__builtin_graph__query__"
+        )
+    assert ret.status_code == 200
+    body = ret.json()
+    assert body["name"] == "graph__query"
+    # Query tool takes a single "query" string parameter.
+    assert any(p["name"] == "query" for p in body["parameters"])
+    get_tool.assert_not_awaited()
+
+
+async def test_builtin_toolset_mutation_rejected():
+    """Built-ins are read-only — update/delete return 403."""
+    app = _make_app()
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        upd = await client.put(
+            "/api/v1/toolsets/__builtin_graph__",
+            json={"name": "pwned", "description": "", "enabled": True},
+        )
+        dele = await client.delete("/api/v1/toolsets/__builtin_graph__")
+    assert upd.status_code == 403
+    assert dele.status_code == 403
+
+
+async def test_create_toolset_reserved_name_rejected():
+    """Names starting with '__builtin_' are reserved — create returns 400."""
+    app = _make_app()
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        ret = await client.post(
+            "/api/v1/toolsets",
+            json={"name": "__builtin_custom", "description": "", "enabled": True},
+        )
+    assert ret.status_code == 400
+    assert "__builtin_" in ret.json()["error"]
+
+
+async def test_builtin_tool_mutation_rejected():
+    app = _make_app()
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        create = await client.post(
+            "/api/v1/toolsets/__builtin_graph__/tools",
+            json={
+                "name": "x",
+                "description": "",
+                "cypher": "MATCH (n) RETURN n",
+                "parameters": [],
+                "enabled": True,
+            },
+        )
+    assert create.status_code == 403
+
+
+async def test_call_tool_requires_tools_call_permission():
+    app = create_app()
+    app.dependency_overrides[get_current_user] = lambda: _UNPRIVILEGED_CURRENT_USER
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        ret = await client.post(
+            f"/api/v1/toolsets/{_TS_ID}/tools/{_TOOL_ID}/call",
+            json={"arguments": {}},
+        )
+    assert ret.status_code == 403
+
+
+async def test_call_builtin_tool_returns_clear_error():
+    """Built-in tools are handler-backed — invoking them via REST is an error."""
+    app = _make_app()
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        ret = await client.post(
+            "/api/v1/toolsets/__builtin_graph__/tools/__builtin_graph__schema__/call",
+            json={"arguments": {}},
+        )
+    assert ret.status_code == 400
+    body = ret.json()
+    # FastAPI's default HTTPException shape is `{"detail": ...}`, but routes
+    # already declared response_model=CallToolResponse; either way the error
+    # message must tell clients to use the MCP endpoint.
+    assert "MCP" in str(body)
+
+
+async def test_builtin_toolset_versions_empty():
+    app = _make_app()
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        ret = await client.get("/api/v1/toolsets/__builtin_graph__/versions")
+    assert ret.status_code == 200
+    assert ret.json() == {"versions": []}

@@ -22,6 +22,9 @@ _FAKE_USER = User(
 _FAKE_CURRENT_USER = CurrentUser(
     user=_FAKE_USER, jwt_claims={}, permissions=ALL_PERMISSIONS
 )
+_UNPRIVILEGED_CURRENT_USER = CurrentUser(
+    user=_FAKE_USER, jwt_claims={}, permissions=frozenset()
+)
 
 
 def _make_app(get_user_return=_FAKE_USER):
@@ -60,3 +63,13 @@ async def test_get_user_not_found(mocker):
     ) as client:
         ret = await client.get("/api/v1/users/nonexistent")
     assert ret.status_code == 404
+
+
+async def test_get_user_requires_users_read_permission():
+    app = create_app()
+    app.dependency_overrides[get_current_user] = lambda: _UNPRIVILEGED_CURRENT_USER
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        ret = await client.get("/api/v1/users/uid1")
+    assert ret.status_code == 403
