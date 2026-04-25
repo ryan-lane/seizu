@@ -776,9 +776,10 @@ async def test_auth_middleware_401_includes_resource_metadata_when_oauth_configu
     assert start["status"] == 401
     headers = dict(start["headers"])
     www_auth = headers[b"www-authenticate"].decode()
-    assert "resource_metadata" in www_auth
-    assert "seizu.example.com" in www_auth
-    assert "oauth-protected-resource" in www_auth
+    expected_metadata_url = (
+        "https://seizu.example.com/api/v1/mcp/.well-known/oauth-protected-resource"
+    )
+    assert f'resource_metadata="{expected_metadata_url}"' in www_auth
 
 
 async def test_auth_middleware_401_plain_bearer_when_oauth_not_configured():
