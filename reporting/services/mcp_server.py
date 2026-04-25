@@ -118,7 +118,7 @@ def _build_mcp_server() -> Server:
         perms = _mcp_permissions.get()
 
         # Built-in tools registered by reporting/services/mcp_builtins
-        for builtin in list_builtin_tools(settings.MCP_ENABLED_BUILTINS):
+        for builtin in list_builtin_tools():
             # Only surface tools the caller has permission for; this keeps
             # Claude from seeing admin-only write tools when logged in as a
             # viewer.
@@ -162,7 +162,7 @@ def _build_mcp_server() -> Server:
         perms = _mcp_permissions.get()
 
         # Built-in tool dispatch
-        builtin = find_builtin(name, settings.MCP_ENABLED_BUILTINS)
+        builtin = find_builtin(name)
         if builtin is not None:
             missing = _missing_permissions(builtin.required_permissions, perms)
             if missing:

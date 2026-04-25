@@ -44,28 +44,43 @@ def all_group_names() -> List[str]:
     return list(_ALL_GROUP_NAMES)
 
 
-def list_builtin_groups(enabled: Optional[List[str]] = None) -> List[BuiltinGroup]:
-    """Return every built-in group that is enabled."""
-    allowed = _allowed_groups(enabled)
-    if allowed is None:
-        return list(_GROUPS)
-    return [g for g in _GROUPS if g.name in allowed]
+def _resolve_enabled(enabled: Optional[List[str]]) -> List[str]:
+    """Return the enabled-groups list, falling back to ``settings.MCP_ENABLED_BUILTINS``."""
+    if enabled is not None:
+        return enabled
+    from reporting import settings
+
+    return settings.MCP_ENABLED_BUILTINS
 
 
-def _allowed_groups(enabled: Optional[List[str]]) -> Optional[set]:
-    """Resolve the setting value to a set, or None if all groups are enabled.
+def _allowed_groups(enabled: List[str]) -> Optional[set]:
+    """Resolve an enabled list to a set, or None when the list is empty (= all groups).
 
-    ``None`` or empty list means "all groups" — this is the default in
-    ``settings.py``.  A non-empty list restricts to the named groups.
+    An empty list means "all groups" — this is what the settings default
+    produces when ``MCP_ENABLED_BUILTINS`` is unset.
     """
     if not enabled:
         return None
     return set(enabled)
 
 
+def list_builtin_groups(enabled: Optional[List[str]] = None) -> List[BuiltinGroup]:
+    """Return every built-in group that is enabled.
+
+    When *enabled* is omitted the value is read from ``settings.MCP_ENABLED_BUILTINS``.
+    """
+    allowed = _allowed_groups(_resolve_enabled(enabled))
+    if allowed is None:
+        return list(_GROUPS)
+    return [g for g in _GROUPS if g.name in allowed]
+
+
 def list_builtin_tools(enabled: Optional[List[str]] = None) -> List[BuiltinTool]:
-    """Return every built-in tool whose group is enabled."""
-    allowed = _allowed_groups(enabled)
+    """Return every built-in tool whose group is enabled.
+
+    When *enabled* is omitted the value is read from ``settings.MCP_ENABLED_BUILTINS``.
+    """
+    allowed = _allowed_groups(_resolve_enabled(enabled))
     tools: List[BuiltinTool] = []
     for group in _GROUPS:
         if allowed is not None and group.name not in allowed:
@@ -77,11 +92,14 @@ def list_builtin_tools(enabled: Optional[List[str]] = None) -> List[BuiltinTool]
 def find_builtin(
     name: str, enabled: Optional[List[str]] = None
 ) -> Optional[BuiltinTool]:
-    """Look up a built-in tool by name; returns None if the group is disabled."""
+    """Look up a built-in tool by name; returns None if the group is disabled.
+
+    When *enabled* is omitted the value is read from ``settings.MCP_ENABLED_BUILTINS``.
+    """
     tool = _TOOLS_BY_NAME.get(name)
     if tool is None:
         return None
-    allowed = _allowed_groups(enabled)
+    allowed = _allowed_groups(_resolve_enabled(enabled))
     if allowed is not None and tool.group not in allowed:
         return None
     return tool

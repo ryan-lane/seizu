@@ -6,7 +6,6 @@ from fastapi import Depends
 from fastapi import HTTPException
 from fastapi.responses import JSONResponse
 
-from reporting import settings
 from reporting.authnz import CurrentUser
 from reporting.authnz import require_permission
 from reporting.authnz.permissions import Permission
@@ -68,7 +67,7 @@ async def list_toolsets(
     current: CurrentUser = Depends(require_permission(Permission.TOOLSETS_READ)),
 ) -> ToolsetListResponse:
     """List all toolsets (built-ins first, then user-defined)."""
-    builtins = builtin_toolsets(settings.MCP_ENABLED_BUILTINS)
+    builtins = builtin_toolsets()
     user_toolsets = await report_store.list_toolsets()
     return ToolsetListResponse(toolsets=builtins + user_toolsets)
 
@@ -96,7 +95,7 @@ async def get_toolset(
     """Return a toolset by ID."""
     group = group_name_from_toolset_id(toolset_id)
     if group is not None:
-        synthetic = builtin_toolset(group, settings.MCP_ENABLED_BUILTINS)
+        synthetic = builtin_toolset(group)
         if synthetic is None:
             raise HTTPException(status_code=404, detail="Toolset not found")
         return synthetic
@@ -193,11 +192,9 @@ async def list_tools(
     """List all tools in a toolset."""
     group = group_name_from_toolset_id(toolset_id)
     if group is not None:
-        if builtin_toolset(group, settings.MCP_ENABLED_BUILTINS) is None:
+        if builtin_toolset(group) is None:
             raise HTTPException(status_code=404, detail="Toolset not found")
-        return ToolListResponse(
-            tools=builtin_tools_for_group(group, settings.MCP_ENABLED_BUILTINS)
-        )
+        return ToolListResponse(tools=builtin_tools_for_group(group))
     ts = await report_store.get_toolset(toolset_id)
     if not ts:
         raise HTTPException(status_code=404, detail="Toolset not found")
@@ -250,7 +247,7 @@ async def get_tool(
 ) -> ToolItem:
     """Return a tool by ID."""
     if is_builtin_toolset_id(toolset_id):
-        synthetic = builtin_tool(tool_id, settings.MCP_ENABLED_BUILTINS)
+        synthetic = builtin_tool(tool_id)
         if synthetic is None or synthetic.toolset_id != toolset_id:
             raise HTTPException(status_code=404, detail="Tool not found")
         return synthetic
@@ -373,7 +370,7 @@ async def list_tool_versions(
     """List all versions of a tool."""
     if is_builtin_toolset_id(toolset_id):
         # Confirm the tool actually exists so we still 404 typos.
-        synthetic = builtin_tool(tool_id, settings.MCP_ENABLED_BUILTINS)
+        synthetic = builtin_tool(tool_id)
         if synthetic is None or synthetic.toolset_id != toolset_id:
             raise HTTPException(status_code=404, detail="Tool not found")
         return ToolVersionListResponse(versions=[])
