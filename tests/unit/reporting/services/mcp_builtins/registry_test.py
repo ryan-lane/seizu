@@ -1,7 +1,15 @@
 """Tests for the MCP built-in registry (filtering + group resolution)."""
+import json
+
+import mcp.types as mcp_types
+import pytest
+
+from reporting.authnz.permissions import ALL_PERMISSIONS
 from reporting.services.mcp_builtins import all_group_names
 from reporting.services.mcp_builtins import find_builtin
 from reporting.services.mcp_builtins import list_builtin_tools
+from reporting.services.mcp_server import _build_mcp_server
+from reporting.services.mcp_server import _mcp_permissions
 
 
 def test_all_group_names_includes_known_groups():
@@ -46,3 +54,30 @@ def test_every_builtin_has_required_permissions():
     # guard against accidentally adding one.
     for tool in list_builtin_tools():
         assert tool.required_permissions, f"{tool.name} is missing required_permissions"
+
+
+# Parametrize over the full registry, evaluated at collection time with all
+# groups explicitly named so the test is independent of settings.
+@pytest.mark.parametrize(
+    "tool",
+    list_builtin_tools(all_group_names()),
+    ids=lambda t: t.name,
+)
+async def test_each_builtin_enforces_its_required_permission(tool):
+    """Calling a tool without its required permission returns Permission denied."""
+    insufficient = frozenset(ALL_PERMISSIONS) - frozenset(tool.required_permissions)
+    server = _build_mcp_server()
+    handler = server.request_handlers[mcp_types.CallToolRequest]
+    req = mcp_types.CallToolRequest(
+        method="tools/call",
+        params=mcp_types.CallToolRequestParams(name=tool.name, arguments={}),
+    )
+    tok = _mcp_permissions.set(insufficient)
+    try:
+        result = await handler(req)
+    finally:
+        _mcp_permissions.reset(tok)
+    data = json.loads(result.root.content[0].text)
+    assert (
+        "Permission denied" in data["error"]
+    ), f"{tool.name}: expected permission denial for {tool.required_permissions}, got: {data}"
