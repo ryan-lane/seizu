@@ -26,6 +26,9 @@ _FAKE_USER = User(
 _FAKE_CURRENT_USER = CurrentUser(
     user=_FAKE_USER, jwt_claims={}, permissions=ALL_PERMISSIONS
 )
+_UNPRIVILEGED_CURRENT_USER = CurrentUser(
+    user=_FAKE_USER, jwt_claims={}, permissions=frozenset()
+)
 
 _TS_ID = "ts-abc123"
 _TOOL_ID = "tool-xyz456"
@@ -950,6 +953,19 @@ async def test_builtin_tool_mutation_rejected():
             },
         )
     assert create.status_code == 403
+
+
+async def test_call_tool_requires_tools_call_permission():
+    app = create_app()
+    app.dependency_overrides[get_current_user] = lambda: _UNPRIVILEGED_CURRENT_USER
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        ret = await client.post(
+            f"/api/v1/toolsets/{_TS_ID}/tools/{_TOOL_ID}/call",
+            json={"arguments": {}},
+        )
+    assert ret.status_code == 403
 
 
 async def test_call_builtin_tool_returns_clear_error():
