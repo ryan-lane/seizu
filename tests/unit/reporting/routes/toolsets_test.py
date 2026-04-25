@@ -920,6 +920,20 @@ async def test_builtin_toolset_mutation_rejected():
     assert dele.status_code == 403
 
 
+async def test_create_toolset_reserved_name_rejected():
+    """Names starting with '__builtin_' are reserved — create returns 400."""
+    app = _make_app()
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        ret = await client.post(
+            "/api/v1/toolsets",
+            json={"name": "__builtin_custom", "description": "", "enabled": True},
+        )
+    assert ret.status_code == 400
+    assert "__builtin_" in ret.json()["error"]
+
+
 async def test_builtin_tool_mutation_rejected():
     app = _make_app()
     async with AsyncClient(

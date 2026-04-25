@@ -43,11 +43,18 @@ router = APIRouter()
 
 
 def _reject_builtin_mutation(toolset_id: str) -> None:
-    """Raise 403 if the caller is attempting to mutate a synthetic built-in."""
+    """Raise an error if the value refers to or reserves a synthetic built-in.
+
+    Accepts either a toolset ID (update/delete) or a proposed name (create).
+    - Existing builtin ID  → 403 (read-only)
+    - Reserved name prefix → 400 (name not allowed)
+    """
     if is_builtin_toolset_id(toolset_id):
+        raise HTTPException(status_code=403, detail="Built-in toolsets are read-only")
+    if toolset_id.startswith("__builtin_"):
         raise HTTPException(
-            status_code=403,
-            detail="Built-in toolsets are read-only",
+            status_code=400,
+            detail="Toolset names starting with '__builtin_' are reserved",
         )
 
 
@@ -72,11 +79,7 @@ async def create_toolset(
     current: CurrentUser = Depends(require_permission(Permission.TOOLSETS_WRITE)),
 ) -> ToolsetListItem:
     """Create a new toolset."""
-    if body.name.startswith("__builtin_"):
-        raise HTTPException(
-            status_code=400,
-            detail="Toolset names starting with '__builtin_' are reserved",
-        )
+    _reject_builtin_mutation(body.name)
     return await report_store.create_toolset(
         name=body.name,
         description=body.description,
