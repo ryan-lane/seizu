@@ -1,7 +1,6 @@
 """Tests for the report_store __init__ module (factory and delegators)."""
-from unittest.mock import AsyncMock
-from unittest.mock import MagicMock
-from unittest.mock import patch
+
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -105,15 +104,11 @@ async def test_list_report_versions_delegates(mock_store):
 
 async def test_create_report_delegates(mock_store):
     await report_store.create_report(name="My Report", created_by="u@x.com")
-    mock_store.create_report.assert_called_once_with(
-        name="My Report", created_by="u@x.com"
-    )
+    mock_store.create_report.assert_called_once_with(name="My Report", created_by="u@x.com")
 
 
 async def test_save_report_version_delegates(mock_store):
-    await report_store.save_report_version(
-        report_id="rid1", config={}, created_by="u@x.com", comment="v2"
-    )
+    await report_store.save_report_version(report_id="rid1", config={}, created_by="u@x.com", comment="v2")
     mock_store.save_report_version.assert_called_once_with(
         report_id="rid1", config={}, created_by="u@x.com", comment="v2"
     )

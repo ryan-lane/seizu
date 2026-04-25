@@ -1,13 +1,7 @@
 from decimal import Decimal
-from typing import Any
-from typing import Dict
-from typing import List
-from typing import Literal
-from typing import Optional
+from typing import Any, Literal
 
-from pydantic import BaseModel
-from pydantic import Field
-from pydantic import field_validator
+from pydantic import BaseModel, Field, field_validator
 
 
 def _coerce_decimal(value: Any) -> Any:
@@ -28,7 +22,7 @@ class ToolParamDef(BaseModel):
     type: Literal["string", "integer", "float", "boolean"]
     description: str = ""
     required: bool = True
-    default: Optional[Any] = None
+    default: Any | None = None
 
 
 class ToolsetListItem(BaseModel):
@@ -42,7 +36,7 @@ class ToolsetListItem(BaseModel):
     created_at: str
     updated_at: str
     created_by: str
-    updated_by: Optional[str] = None
+    updated_by: str | None = None
 
     @field_validator("current_version", mode="before")
     @classmethod
@@ -62,7 +56,7 @@ class ToolsetVersion(BaseModel):
     version: int
     created_at: str
     created_by: str
-    comment: Optional[str] = None
+    comment: str | None = None
 
     @field_validator("version", mode="before")
     @classmethod
@@ -80,13 +74,13 @@ class ToolItem(BaseModel):
     name: str
     description: str = ""
     cypher: str
-    parameters: List[ToolParamDef] = Field(default_factory=list)
+    parameters: list[ToolParamDef] = Field(default_factory=list)
     enabled: bool = True
     current_version: int = 0
     created_at: str
     updated_at: str
     created_by: str
-    updated_by: Optional[str] = None
+    updated_by: str | None = None
 
     @field_validator("current_version", mode="before")
     @classmethod
@@ -97,7 +91,7 @@ class ToolItem(BaseModel):
 
     @field_validator("parameters", mode="before")
     @classmethod
-    def coerce_parameters(cls, v: Any) -> List[Dict[str, Any]]:
+    def coerce_parameters(cls, v: Any) -> list[dict[str, Any]]:
         return _coerce_decimal(v) if v is not None else []
 
 
@@ -109,12 +103,12 @@ class ToolVersion(BaseModel):
     name: str
     description: str = ""
     cypher: str
-    parameters: List[ToolParamDef] = Field(default_factory=list)
+    parameters: list[ToolParamDef] = Field(default_factory=list)
     enabled: bool = True
     version: int
     created_at: str
     created_by: str
-    comment: Optional[str] = None
+    comment: str | None = None
 
     @field_validator("version", mode="before")
     @classmethod
@@ -125,16 +119,16 @@ class ToolVersion(BaseModel):
 
     @field_validator("parameters", mode="before")
     @classmethod
-    def coerce_parameters(cls, v: Any) -> List[Dict[str, Any]]:
+    def coerce_parameters(cls, v: Any) -> list[dict[str, Any]]:
         return _coerce_decimal(v) if v is not None else []
 
 
 class ToolsetListResponse(BaseModel):
-    toolsets: List[ToolsetListItem]
+    toolsets: list[ToolsetListItem]
 
 
 class ToolsetVersionListResponse(BaseModel):
-    versions: List[ToolsetVersion]
+    versions: list[ToolsetVersion]
 
 
 class ToolsetIdResponse(BaseModel):
@@ -142,20 +136,18 @@ class ToolsetIdResponse(BaseModel):
 
 
 class ToolListResponse(BaseModel):
-    tools: List[ToolItem]
+    tools: list[ToolItem]
 
 
 class ToolVersionListResponse(BaseModel):
-    versions: List[ToolVersion]
+    versions: list[ToolVersion]
 
 
 class ToolIdResponse(BaseModel):
     tool_id: str
 
 
-def validate_tool_arguments(
-    parameters: List["ToolParamDef"], arguments: Dict[str, Any]
-) -> List[str]:
+def validate_tool_arguments(parameters: list["ToolParamDef"], arguments: dict[str, Any]) -> list[str]:
     """Validate *arguments* against the tool's parameter definitions.
 
     Returns a list of error strings; empty means the arguments are valid.
@@ -163,8 +155,8 @@ def validate_tool_arguments(
     - All required parameters (with no default) are present.
     - Each supplied value is the correct type.
     """
-    errors: List[str] = []
-    _TYPE_CHECK: Dict[str, type] = {
+    errors: list[str] = []
+    _TYPE_CHECK: dict[str, type] = {
         "string": str,
         "boolean": bool,
     }
@@ -177,35 +169,26 @@ def validate_tool_arguments(
         if param.type in _TYPE_CHECK:
             expected = _TYPE_CHECK[param.type]
             if not isinstance(value, expected):
-                errors.append(
-                    f"Parameter '{param.name}' must be a {param.type}, "
-                    f"got {type(value).__name__}"
-                )
+                errors.append(f"Parameter '{param.name}' must be a {param.type}, got {type(value).__name__}")
         elif param.type == "integer":
             if not isinstance(value, int) or isinstance(value, bool):
-                errors.append(
-                    f"Parameter '{param.name}' must be an integer, "
-                    f"got {type(value).__name__}"
-                )
+                errors.append(f"Parameter '{param.name}' must be an integer, got {type(value).__name__}")
         elif param.type == "float":
             if not isinstance(value, (int, float)) or isinstance(value, bool):
-                errors.append(
-                    f"Parameter '{param.name}' must be a number, "
-                    f"got {type(value).__name__}"
-                )
+                errors.append(f"Parameter '{param.name}' must be a number, got {type(value).__name__}")
     return errors
 
 
 class CallToolRequest(BaseModel):
     """Request body for POST /api/v1/toolsets/<id>/tools/<id>/call."""
 
-    arguments: Dict[str, Any] = Field(default_factory=dict)
+    arguments: dict[str, Any] = Field(default_factory=dict)
 
 
 class CallToolResponse(BaseModel):
     """Response returned by a tool call."""
 
-    results: List[Any]
+    results: list[Any]
 
 
 class CreateToolsetRequest(BaseModel):
@@ -222,7 +205,7 @@ class UpdateToolsetRequest(BaseModel):
     name: str
     description: str = ""
     enabled: bool = True
-    comment: Optional[str] = None
+    comment: str | None = None
 
 
 class CreateToolRequest(BaseModel):
@@ -231,7 +214,7 @@ class CreateToolRequest(BaseModel):
     name: str
     description: str = ""
     cypher: str
-    parameters: List[ToolParamDef] = Field(default_factory=list)
+    parameters: list[ToolParamDef] = Field(default_factory=list)
     enabled: bool = True
 
 
@@ -241,6 +224,6 @@ class UpdateToolRequest(BaseModel):
     name: str
     description: str = ""
     cypher: str
-    parameters: List[ToolParamDef] = Field(default_factory=list)
+    parameters: list[ToolParamDef] = Field(default_factory=list)
     enabled: bool = True
-    comment: Optional[str] = None
+    comment: str | None = None

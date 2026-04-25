@@ -1,8 +1,8 @@
 """CLI commands for managing reports."""
+
 import json
 import sys
 from typing import Any
-from typing import Dict
 
 import typer
 from rich.console import Console
@@ -24,7 +24,7 @@ def _die(exc: Exception) -> None:
     sys.exit(1)
 
 
-def _print_report_detail(data: Dict[str, Any], as_json: bool) -> None:
+def _print_report_detail(data: dict[str, Any], as_json: bool) -> None:
     if as_json:
         console.print_json(json.dumps(data))
         return
@@ -39,9 +39,7 @@ def _print_report_detail(data: Dict[str, Any], as_json: bool) -> None:
 
 @app.command("list")
 def list_reports(
-    output: str = typer.Option(
-        "table", "--output", "-o", help="Output format: table or json."
-    ),
+    output: str = typer.Option("table", "--output", "-o", help="Output format: table or json."),
 ) -> None:
     """List all reports."""
     try:
@@ -66,9 +64,7 @@ def list_reports(
     table.add_column("Updated At")
 
     for r in reports:
-        table.add_row(
-            r["report_id"], r["name"], str(r["current_version"]), r["updated_at"]
-        )
+        table.add_row(r["report_id"], r["name"], str(r["current_version"]), r["updated_at"])
 
     console.print(table)
 
@@ -76,9 +72,7 @@ def list_reports(
 @app.command("get")
 def get_report(
     report_id: str = typer.Argument(help="Report ID."),
-    output: str = typer.Option(
-        "table", "--output", "-o", help="Output format: table or json."
-    ),
+    output: str = typer.Option("table", "--output", "-o", help="Output format: table or json."),
 ) -> None:
     """Get the latest version of a report."""
     try:
@@ -134,9 +128,7 @@ def set_dashboard(
 @app.command("versions")
 def list_versions(
     report_id: str = typer.Argument(help="Report ID."),
-    output: str = typer.Option(
-        "table", "--output", "-o", help="Output format: table or json."
-    ),
+    output: str = typer.Option("table", "--output", "-o", help="Output format: table or json."),
 ) -> None:
     """List all versions of a report."""
     try:
@@ -170,9 +162,7 @@ def list_versions(
 def get_version(
     report_id: str = typer.Argument(help="Report ID."),
     version: int = typer.Argument(help="Version number."),
-    output: str = typer.Option(
-        "table", "--output", "-o", help="Output format: table or json."
-    ),
+    output: str = typer.Option("table", "--output", "-o", help="Output format: table or json."),
 ) -> None:
     """Get a specific version of a report."""
     try:

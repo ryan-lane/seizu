@@ -1,13 +1,7 @@
 from decimal import Decimal
-from typing import Any
-from typing import Dict
-from typing import List
-from typing import Literal
-from typing import Optional
+from typing import Any, Literal
 
-from pydantic import BaseModel
-from pydantic import Field
-from pydantic import field_validator
+from pydantic import BaseModel, Field, field_validator
 
 
 def _coerce_decimal(value: Any) -> Any:
@@ -50,10 +44,10 @@ class ReportVersion(BaseModel):
     report_id: str
     name: str
     version: int
-    config: Dict[str, Any]
+    config: dict[str, Any]
     created_at: str
     created_by: str
-    comment: Optional[str] = None
+    comment: str | None = None
 
     @field_validator("version", mode="before")
     @classmethod
@@ -64,7 +58,7 @@ class ReportVersion(BaseModel):
 
     @field_validator("config", mode="before")
     @classmethod
-    def coerce_config(cls, v: Any) -> Dict[str, Any]:
+    def coerce_config(cls, v: Any) -> dict[str, Any]:
         return _coerce_decimal(v)
 
 
@@ -80,22 +74,22 @@ class PanelStat(BaseModel):
     metric: str
     panel_type: str  # "count" or "progress"
     cypher: str  # resolved Cypher string (key already looked up against report.queries)
-    static_params: Dict[str, Any] = Field(default_factory=dict)
-    input_param_name: Optional[str] = None  # param name for the single input, if any
-    input_cypher: Optional[str] = None  # Cypher that produces input values
+    static_params: dict[str, Any] = Field(default_factory=dict)
+    input_param_name: str | None = None  # param name for the single input, if any
+    input_cypher: str | None = None  # Cypher that produces input values
 
     @field_validator("static_params", mode="before")
     @classmethod
-    def coerce_static_params(cls, v: Any) -> Dict[str, Any]:
+    def coerce_static_params(cls, v: Any) -> dict[str, Any]:
         return _coerce_decimal(v)
 
 
 class ReportListResponse(BaseModel):
-    reports: List["ReportListItem"]
+    reports: list["ReportListItem"]
 
 
 class ReportVersionListResponse(BaseModel):
-    versions: List["ReportVersion"]
+    versions: list["ReportVersion"]
 
 
 class ReportIdResponse(BaseModel):
@@ -103,11 +97,11 @@ class ReportIdResponse(BaseModel):
 
 
 class ScheduledQueryListResponse(BaseModel):
-    scheduled_queries: List["ScheduledQueryItem"]
+    scheduled_queries: list["ScheduledQueryItem"]
 
 
 class ScheduledQueryVersionListResponse(BaseModel):
-    versions: List["ScheduledQueryVersion"]
+    versions: list["ScheduledQueryVersion"]
 
 
 class ScheduledQueryIdResponse(BaseModel):
@@ -129,8 +123,8 @@ class PinReportRequest(BaseModel):
 class CreateVersionRequest(BaseModel):
     """Request body for POST /api/v1/reports/<id>/versions."""
 
-    config: Dict[str, Any]
-    comment: Optional[str] = None
+    config: dict[str, Any]
+    comment: str | None = None
 
 
 class User(BaseModel):
@@ -140,10 +134,10 @@ class User(BaseModel):
     sub: str
     iss: str
     email: str
-    display_name: Optional[str] = None
+    display_name: str | None = None
     created_at: str
     last_login: str
-    archived_at: Optional[str] = None
+    archived_at: str | None = None
 
 
 class ScheduledQueryItem(BaseModel):
@@ -152,20 +146,20 @@ class ScheduledQueryItem(BaseModel):
     scheduled_query_id: str
     name: str
     cypher: str
-    params: List[Dict[str, Any]] = Field(default_factory=list)
-    frequency: Optional[int] = None
-    watch_scans: List[Dict[str, Any]] = Field(default_factory=list)
+    params: list[dict[str, Any]] = Field(default_factory=list)
+    frequency: int | None = None
+    watch_scans: list[dict[str, Any]] = Field(default_factory=list)
     enabled: bool = True
-    actions: List[Dict[str, Any]] = Field(default_factory=list)
+    actions: list[dict[str, Any]] = Field(default_factory=list)
     current_version: int = 0
     created_at: str
     updated_at: str
     created_by: str
-    updated_by: Optional[str] = None
-    last_run_status: Optional[str] = None
-    last_run_at: Optional[str] = None
-    last_errors: List[Dict[str, str]] = Field(default_factory=list)
-    last_scheduled_at: Optional[str] = None
+    updated_by: str | None = None
+    last_run_status: str | None = None
+    last_run_at: str | None = None
+    last_errors: list[dict[str, str]] = Field(default_factory=list)
+    last_scheduled_at: str | None = None
 
     @field_validator("current_version", mode="before")
     @classmethod
@@ -176,12 +170,12 @@ class ScheduledQueryItem(BaseModel):
 
     @field_validator("params", "watch_scans", "actions", mode="before")
     @classmethod
-    def coerce_json_fields(cls, v: Any) -> List[Dict[str, Any]]:
+    def coerce_json_fields(cls, v: Any) -> list[dict[str, Any]]:
         return _coerce_decimal(v) if v is not None else []
 
     @field_validator("last_errors", mode="before")
     @classmethod
-    def coerce_last_errors(cls, v: Any) -> List[Dict[str, str]]:
+    def coerce_last_errors(cls, v: Any) -> list[dict[str, str]]:
         return v if v is not None else []
 
 
@@ -192,14 +186,14 @@ class ScheduledQueryVersion(BaseModel):
     name: str
     version: int
     cypher: str
-    params: List[Dict[str, Any]] = Field(default_factory=list)
-    frequency: Optional[int] = None
-    watch_scans: List[Dict[str, Any]] = Field(default_factory=list)
+    params: list[dict[str, Any]] = Field(default_factory=list)
+    frequency: int | None = None
+    watch_scans: list[dict[str, Any]] = Field(default_factory=list)
     enabled: bool = True
-    actions: List[Dict[str, Any]] = Field(default_factory=list)
+    actions: list[dict[str, Any]] = Field(default_factory=list)
     created_at: str
     created_by: str
-    comment: Optional[str] = None
+    comment: str | None = None
 
     @field_validator("version", mode="before")
     @classmethod
@@ -210,7 +204,7 @@ class ScheduledQueryVersion(BaseModel):
 
     @field_validator("params", "watch_scans", "actions", mode="before")
     @classmethod
-    def coerce_json_fields(cls, v: Any) -> List[Dict[str, Any]]:
+    def coerce_json_fields(cls, v: Any) -> list[dict[str, Any]]:
         return _coerce_decimal(v) if v is not None else []
 
 
@@ -219,12 +213,12 @@ class CreateScheduledQueryRequest(BaseModel):
 
     name: str
     cypher: str
-    params: List[Dict[str, Any]] = Field(default_factory=list)
-    frequency: Optional[int] = None
-    watch_scans: List[Dict[str, Any]] = Field(default_factory=list)
+    params: list[dict[str, Any]] = Field(default_factory=list)
+    frequency: int | None = None
+    watch_scans: list[dict[str, Any]] = Field(default_factory=list)
     enabled: bool = True
-    actions: List[Dict[str, Any]] = Field(default_factory=list)
-    comment: Optional[str] = None
+    actions: list[dict[str, Any]] = Field(default_factory=list)
+    comment: str | None = None
 
 
 class ActionConfigFieldDef(BaseModel):
@@ -234,9 +228,9 @@ class ActionConfigFieldDef(BaseModel):
     label: str
     type: Literal["string", "text", "number", "boolean", "string_list", "select"]
     required: bool = False
-    description: Optional[str] = None
-    default: Optional[Any] = None
-    options: Optional[List[str]] = None
+    description: str | None = None
+    default: Any | None = None
+    options: list[str] | None = None
 
 
 class QueryHistoryItem(BaseModel):
@@ -251,7 +245,7 @@ class QueryHistoryItem(BaseModel):
 class QueryHistoryListResponse(BaseModel):
     """Paginated list of query history items."""
 
-    items: List[QueryHistoryItem]
+    items: list[QueryHistoryItem]
     total: int
     page: int
     per_page: int

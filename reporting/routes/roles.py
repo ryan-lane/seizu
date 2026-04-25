@@ -1,22 +1,21 @@
 """Routes for user-defined roles."""
+
 import logging
 from typing import Any
 
-from fastapi import APIRouter
-from fastapi import Depends
-from fastapi import HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 
-from reporting.authnz import CurrentUser
-from reporting.authnz import require_permission
-from reporting.authnz.permissions import BUILTIN_ROLES
-from reporting.authnz.permissions import Permission
-from reporting.schema.rbac import CreateRoleRequest
-from reporting.schema.rbac import RoleIdResponse
-from reporting.schema.rbac import RoleItem
-from reporting.schema.rbac import RoleListResponse
-from reporting.schema.rbac import RoleVersion
-from reporting.schema.rbac import RoleVersionListResponse
-from reporting.schema.rbac import UpdateRoleRequest
+from reporting.authnz import CurrentUser, require_permission
+from reporting.authnz.permissions import BUILTIN_ROLES, Permission
+from reporting.schema.rbac import (
+    CreateRoleRequest,
+    RoleIdResponse,
+    RoleItem,
+    RoleListResponse,
+    RoleVersion,
+    RoleVersionListResponse,
+    UpdateRoleRequest,
+)
 from reporting.services import report_store
 
 logger = logging.getLogger(__name__)

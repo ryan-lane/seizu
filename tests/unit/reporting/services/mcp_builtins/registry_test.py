@@ -1,4 +1,5 @@
 """Tests for the MCP built-in registry (filtering + group resolution)."""
+
 import json
 from unittest.mock import patch
 
@@ -6,11 +7,8 @@ import mcp.types as mcp_types
 import pytest
 
 from reporting.authnz.permissions import ALL_PERMISSIONS
-from reporting.services.mcp_builtins import all_group_names
-from reporting.services.mcp_builtins import find_builtin
-from reporting.services.mcp_builtins import list_builtin_tools
-from reporting.services.mcp_server import _build_mcp_server
-from reporting.services.mcp_server import _mcp_permissions
+from reporting.services.mcp_builtins import all_group_names, find_builtin, list_builtin_tools
+from reporting.services.mcp_server import _build_mcp_server, _mcp_permissions
 
 
 def test_all_group_names_includes_known_groups():
@@ -85,6 +83,6 @@ async def test_each_builtin_enforces_its_required_permission(tool):
     finally:
         _mcp_permissions.reset(tok)
     data = json.loads(result.root.content[0].text)
-    assert (
-        "Permission denied" in data["error"]
-    ), f"{tool.name}: expected permission denial for {tool.required_permissions}, got: {data}"
+    assert "Permission denied" in data["error"], (
+        f"{tool.name}: expected permission denial for {tool.required_permissions}, got: {data}"
+    )

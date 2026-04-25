@@ -1,15 +1,15 @@
 """Global CLI state shared between the callback and command handlers."""
+
 from pathlib import Path
-from typing import Optional
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional
 
 if TYPE_CHECKING:
     from seizu_cli.client import SeizuClient
 
 api_url: str = "http://localhost:8080"
-token: Optional[str] = None
-credentials_file: Optional[Path] = None
-seed_file: Optional[str] = None
+token: str | None = None
+credentials_file: Path | None = None
+seed_file: str | None = None
 _client: Optional["SeizuClient"] = None
 
 

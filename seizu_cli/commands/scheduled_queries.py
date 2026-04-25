@@ -1,8 +1,8 @@
 """CLI commands for managing scheduled queries."""
+
 import json
 import sys
 from typing import Any
-from typing import Dict
 
 import typer
 from rich.console import Console
@@ -24,7 +24,7 @@ def _die(exc: Exception) -> None:
     sys.exit(1)
 
 
-def _print_sq_detail(data: Dict[str, Any], as_json: bool) -> None:
+def _print_sq_detail(data: dict[str, Any], as_json: bool) -> None:
     if as_json:
         console.print_json(json.dumps(data))
         return
@@ -32,9 +32,7 @@ def _print_sq_detail(data: Dict[str, Any], as_json: bool) -> None:
     console.print(f"[bold]Name[/bold]: {data['name']}")
     console.print(f"[bold]Enabled[/bold]: {data.get('enabled', True)}")
     console.print(f"[bold]Frequency[/bold]: {data.get('frequency')}")
-    console.print(
-        f"[bold]Version[/bold]: {data.get('current_version', data.get('version'))}"
-    )
+    console.print(f"[bold]Version[/bold]: {data.get('current_version', data.get('version'))}")
     console.print(f"[bold]Created By[/bold]: {data['created_by']}")
     console.print(f"[bold]Updated By[/bold]: {data.get('updated_by', '')}")
     console.print(f"[bold]Cypher[/bold]\n{data['cypher']}")
@@ -42,9 +40,7 @@ def _print_sq_detail(data: Dict[str, Any], as_json: bool) -> None:
 
 @app.command("list")
 def list_scheduled_queries(
-    output: str = typer.Option(
-        "table", "--output", "-o", help="Output format: table or json."
-    ),
+    output: str = typer.Option("table", "--output", "-o", help="Output format: table or json."),
 ) -> None:
     """List all scheduled queries."""
     try:
@@ -86,9 +82,7 @@ def list_scheduled_queries(
 @app.command("get")
 def get_scheduled_query(
     sq_id: str = typer.Argument(help="Scheduled query ID."),
-    output: str = typer.Option(
-        "table", "--output", "-o", help="Output format: table or json."
-    ),
+    output: str = typer.Option("table", "--output", "-o", help="Output format: table or json."),
 ) -> None:
     """Get a scheduled query by ID."""
     try:
@@ -118,9 +112,7 @@ def delete_scheduled_query(
 @app.command("versions")
 def list_versions(
     sq_id: str = typer.Argument(help="Scheduled query ID."),
-    output: str = typer.Option(
-        "table", "--output", "-o", help="Output format: table or json."
-    ),
+    output: str = typer.Option("table", "--output", "-o", help="Output format: table or json."),
 ) -> None:
     """List all versions of a scheduled query."""
     try:
@@ -154,15 +146,11 @@ def list_versions(
 def get_version(
     sq_id: str = typer.Argument(help="Scheduled query ID."),
     version: int = typer.Argument(help="Version number."),
-    output: str = typer.Option(
-        "table", "--output", "-o", help="Output format: table or json."
-    ),
+    output: str = typer.Option("table", "--output", "-o", help="Output format: table or json."),
 ) -> None:
     """Get a specific version of a scheduled query."""
     try:
-        data = state.get_client().get(
-            f"/api/v1/scheduled-queries/{sq_id}/versions/{version}"
-        )
+        data = state.get_client().get(f"/api/v1/scheduled-queries/{sq_id}/versions/{version}")
     except Exception as exc:
         _die(exc)
         return

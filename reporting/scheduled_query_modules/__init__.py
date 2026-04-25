@@ -1,7 +1,4 @@
-from typing import Any
-from typing import cast
-from typing import Dict
-from typing import List
+from typing import Any, cast
 
 from reporting import settings
 from reporting.schema.report_config import ActionConfigFieldDef
@@ -54,7 +51,7 @@ class ModuleInterface:
         return
 
     @staticmethod
-    def action_config_schema() -> List[ActionConfigFieldDef]:
+    def action_config_schema() -> list[ActionConfigFieldDef]:
         """
         Returns a list of field definitions describing the action_config for
         this module. Used by the frontend to render a typed form instead of a
@@ -66,7 +63,7 @@ class ModuleInterface:
     def handle_results(
         scheduled_query_id: str,
         action: ScheduledQueryAction,
-        results: List[Dict[str, Any]],
+        results: list[dict[str, Any]],
     ) -> None:
         """
         Called when a schedule query configured to use this module has results.
@@ -81,18 +78,16 @@ async def load_modules() -> None:
         # fromlist is required here, or the module will not be loaded.
         # The actual valud of fromlist doesn't matter. We're using this rather
         # than importlib to be able to handle the type checking properly.
-        module: ModuleInterface = cast(
-            ModuleInterface, __import__(module_name, fromlist=["_fake"])
-        )
+        module: ModuleInterface = cast(ModuleInterface, __import__(module_name, fromlist=["_fake"]))
         await module.setup()
         _MODULES[module.action_name()] = module
 
 
-def get_module_names() -> List[str]:
+def get_module_names() -> list[str]:
     return list(_MODULES.keys())
 
 
-def get_configured_action_names() -> List[str]:
+def get_configured_action_names() -> list[str]:
     """Return the action_name() for all available modules.
 
     Includes built-in modules plus those listed in SCHEDULED_QUERY_MODULES.
@@ -105,9 +100,7 @@ def get_configured_action_names() -> List[str]:
             continue
         seen.add(module_name)
         try:
-            module: ModuleInterface = cast(
-                ModuleInterface, __import__(module_name, fromlist=["_fake"])
-            )
+            module: ModuleInterface = cast(ModuleInterface, __import__(module_name, fromlist=["_fake"]))
             names.append(module.action_name())
         except Exception:
             pass
@@ -120,22 +113,20 @@ def get_module(action_name: str) -> ModuleInterface:
     return _MODULES[action_name]
 
 
-def get_action_schemas() -> Dict[str, List[ActionConfigFieldDef]]:
+def get_action_schemas() -> dict[str, list[ActionConfigFieldDef]]:
     """Return action_config_schema() for all available modules.
 
     Includes built-in modules plus those listed in SCHEDULED_QUERY_MODULES.
     Imports without calling setup(), so this is safe to call from the web process.
     """
     seen: set = set()
-    schemas: Dict[str, List[ActionConfigFieldDef]] = {}
+    schemas: dict[str, list[ActionConfigFieldDef]] = {}
     for module_name in _BUILTIN_MODULES + list(settings.SCHEDULED_QUERY_MODULES):
         if module_name in seen:
             continue
         seen.add(module_name)
         try:
-            module: ModuleInterface = cast(
-                ModuleInterface, __import__(module_name, fromlist=["_fake"])
-            )
+            module: ModuleInterface = cast(ModuleInterface, __import__(module_name, fromlist=["_fake"]))
             schemas[module.action_name()] = module.action_config_schema()
         except Exception:
             pass

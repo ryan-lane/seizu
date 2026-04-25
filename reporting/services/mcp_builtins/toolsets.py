@@ -1,34 +1,28 @@
 """Built-in ``toolsets__*`` and ``tools__*`` tools — manage user-defined toolsets."""
+
 from typing import Any
-from typing import Dict
-from typing import Optional
 
 from reporting.authnz import CurrentUser
 from reporting.authnz.permissions import Permission
-from reporting.schema.mcp_config import CreateToolRequest
-from reporting.schema.mcp_config import CreateToolsetRequest
-from reporting.schema.mcp_config import UpdateToolRequest
-from reporting.schema.mcp_config import UpdateToolsetRequest
+from reporting.schema.mcp_config import CreateToolRequest, CreateToolsetRequest, UpdateToolRequest, UpdateToolsetRequest
 from reporting.services import report_store
-from reporting.services.mcp_builtins.base import BuiltinGroup
-from reporting.services.mcp_builtins.base import BuiltinTool
-from reporting.services.mcp_builtins.base import model_input_schema
+from reporting.services.mcp_builtins.base import BuiltinGroup, BuiltinTool, model_input_schema
 from reporting.services.query_validator import validate_query
 
 GROUP = "toolsets"
 
 
-def _require_user(current_user: Optional[CurrentUser]) -> CurrentUser:
+def _require_user(current_user: CurrentUser | None) -> CurrentUser:
     if current_user is None:
         raise RuntimeError("No current user on the request context")
     return current_user
 
 
-def _toolset_id_prop() -> Dict[str, Any]:
+def _toolset_id_prop() -> dict[str, Any]:
     return {"toolset_id": {"type": "string"}}
 
 
-def _tool_id_prop() -> Dict[str, Any]:
+def _tool_id_prop() -> dict[str, Any]:
     return {"tool_id": {"type": "string"}}
 
 
@@ -37,25 +31,19 @@ def _tool_id_prop() -> Dict[str, Any]:
 # ---------------------------------------------------------------------------
 
 
-async def _list_toolsets(
-    args: Dict[str, Any], current_user: Optional[CurrentUser]
-) -> Dict[str, Any]:
+async def _list_toolsets(args: dict[str, Any], current_user: CurrentUser | None) -> dict[str, Any]:
     items = await report_store.list_toolsets()
     return {"toolsets": [i.model_dump() for i in items]}
 
 
-async def _get_toolset(
-    args: Dict[str, Any], current_user: Optional[CurrentUser]
-) -> Dict[str, Any]:
+async def _get_toolset(args: dict[str, Any], current_user: CurrentUser | None) -> dict[str, Any]:
     item = await report_store.get_toolset(args["toolset_id"])
     if not item:
         return {"error": "Toolset not found"}
     return item.model_dump()
 
 
-async def _create_toolset(
-    args: Dict[str, Any], current_user: Optional[CurrentUser]
-) -> Dict[str, Any]:
+async def _create_toolset(args: dict[str, Any], current_user: CurrentUser | None) -> dict[str, Any]:
     user = _require_user(current_user)
     body = CreateToolsetRequest.model_validate(args)
     item = await report_store.create_toolset(
@@ -67,14 +55,10 @@ async def _create_toolset(
     return item.model_dump()
 
 
-async def _update_toolset(
-    args: Dict[str, Any], current_user: Optional[CurrentUser]
-) -> Dict[str, Any]:
+async def _update_toolset(args: dict[str, Any], current_user: CurrentUser | None) -> dict[str, Any]:
     user = _require_user(current_user)
     toolset_id = args["toolset_id"]
-    body = UpdateToolsetRequest.model_validate(
-        {k: v for k, v in args.items() if k != "toolset_id"}
-    )
+    body = UpdateToolsetRequest.model_validate({k: v for k, v in args.items() if k != "toolset_id"})
     item = await report_store.update_toolset(
         toolset_id=toolset_id,
         name=body.name,
@@ -88,18 +72,14 @@ async def _update_toolset(
     return item.model_dump()
 
 
-async def _delete_toolset(
-    args: Dict[str, Any], current_user: Optional[CurrentUser]
-) -> Dict[str, Any]:
+async def _delete_toolset(args: dict[str, Any], current_user: CurrentUser | None) -> dict[str, Any]:
     ok = await report_store.delete_toolset(args["toolset_id"])
     if not ok:
         return {"error": "Toolset not found"}
     return {"toolset_id": args["toolset_id"]}
 
 
-async def _list_toolset_versions(
-    args: Dict[str, Any], current_user: Optional[CurrentUser]
-) -> Dict[str, Any]:
+async def _list_toolset_versions(args: dict[str, Any], current_user: CurrentUser | None) -> dict[str, Any]:
     toolset_id = args["toolset_id"]
     item = await report_store.get_toolset(toolset_id)
     if not item:
@@ -108,9 +88,7 @@ async def _list_toolset_versions(
     return {"versions": [v.model_dump() for v in versions]}
 
 
-async def _get_toolset_version(
-    args: Dict[str, Any], current_user: Optional[CurrentUser]
-) -> Dict[str, Any]:
+async def _get_toolset_version(args: dict[str, Any], current_user: CurrentUser | None) -> dict[str, Any]:
     v = await report_store.get_toolset_version(args["toolset_id"], int(args["version"]))
     if not v:
         return {"error": "Toolset version not found"}
@@ -122,9 +100,7 @@ async def _get_toolset_version(
 # ---------------------------------------------------------------------------
 
 
-async def _list_tools(
-    args: Dict[str, Any], current_user: Optional[CurrentUser]
-) -> Dict[str, Any]:
+async def _list_tools(args: dict[str, Any], current_user: CurrentUser | None) -> dict[str, Any]:
     toolset_id = args["toolset_id"]
     ts = await report_store.get_toolset(toolset_id)
     if not ts:
@@ -133,23 +109,17 @@ async def _list_tools(
     return {"tools": [t.model_dump() for t in tools]}
 
 
-async def _get_tool(
-    args: Dict[str, Any], current_user: Optional[CurrentUser]
-) -> Dict[str, Any]:
+async def _get_tool(args: dict[str, Any], current_user: CurrentUser | None) -> dict[str, Any]:
     tool = await report_store.get_tool(args["tool_id"])
     if not tool or tool.toolset_id != args["toolset_id"]:
         return {"error": "Tool not found"}
     return tool.model_dump()
 
 
-async def _create_tool(
-    args: Dict[str, Any], current_user: Optional[CurrentUser]
-) -> Dict[str, Any]:
+async def _create_tool(args: dict[str, Any], current_user: CurrentUser | None) -> dict[str, Any]:
     user = _require_user(current_user)
     toolset_id = args["toolset_id"]
-    body = CreateToolRequest.model_validate(
-        {k: v for k, v in args.items() if k != "toolset_id"}
-    )
+    body = CreateToolRequest.model_validate({k: v for k, v in args.items() if k != "toolset_id"})
     validation = await validate_query(body.cypher)
     if validation.has_errors:
         return {"errors": validation.errors, "warnings": validation.warnings}
@@ -167,18 +137,14 @@ async def _create_tool(
     return tool.model_dump()
 
 
-async def _update_tool(
-    args: Dict[str, Any], current_user: Optional[CurrentUser]
-) -> Dict[str, Any]:
+async def _update_tool(args: dict[str, Any], current_user: CurrentUser | None) -> dict[str, Any]:
     user = _require_user(current_user)
     toolset_id = args["toolset_id"]
     tool_id = args["tool_id"]
     existing = await report_store.get_tool(tool_id)
     if not existing or existing.toolset_id != toolset_id:
         return {"error": "Tool not found"}
-    body = UpdateToolRequest.model_validate(
-        {k: v for k, v in args.items() if k not in ("toolset_id", "tool_id")}
-    )
+    body = UpdateToolRequest.model_validate({k: v for k, v in args.items() if k not in ("toolset_id", "tool_id")})
     validation = await validate_query(body.cypher)
     if validation.has_errors:
         return {"errors": validation.errors, "warnings": validation.warnings}
@@ -197,9 +163,7 @@ async def _update_tool(
     return tool.model_dump()
 
 
-async def _delete_tool(
-    args: Dict[str, Any], current_user: Optional[CurrentUser]
-) -> Dict[str, Any]:
+async def _delete_tool(args: dict[str, Any], current_user: CurrentUser | None) -> dict[str, Any]:
     tool_id = args["tool_id"]
     existing = await report_store.get_tool(tool_id)
     if not existing or existing.toolset_id != args["toolset_id"]:
@@ -210,9 +174,7 @@ async def _delete_tool(
     return {"tool_id": tool_id}
 
 
-async def _list_tool_versions(
-    args: Dict[str, Any], current_user: Optional[CurrentUser]
-) -> Dict[str, Any]:
+async def _list_tool_versions(args: dict[str, Any], current_user: CurrentUser | None) -> dict[str, Any]:
     tool_id = args["tool_id"]
     tool = await report_store.get_tool(tool_id)
     if not tool or tool.toolset_id != args["toolset_id"]:
@@ -221,9 +183,7 @@ async def _list_tool_versions(
     return {"versions": [v.model_dump() for v in versions]}
 
 
-async def _get_tool_version(
-    args: Dict[str, Any], current_user: Optional[CurrentUser]
-) -> Dict[str, Any]:
+async def _get_tool_version(args: dict[str, Any], current_user: CurrentUser | None) -> dict[str, Any]:
     v = await report_store.get_tool_version(args["tool_id"], int(args["version"]))
     if not v or v.toolset_id != args["toolset_id"]:
         return {"error": "Tool version not found"}
@@ -342,8 +302,7 @@ GROUP_DEF = BuiltinGroup(
             name="toolsets__create_tool",
             group=GROUP,
             description=(
-                "Create a new tool within a toolset. The Cypher body is validated "
-                "read-only at creation time."
+                "Create a new tool within a toolset. The Cypher body is validated read-only at creation time."
             ),
             input_schema=model_input_schema(
                 CreateToolRequest,

@@ -1,50 +1,41 @@
 """Built-in ``scheduled_queries__*`` tools — CRUD for scheduled queries."""
+
 from typing import Any
-from typing import Dict
-from typing import Optional
 
 from reporting.authnz import CurrentUser
 from reporting.authnz.permissions import Permission
 from reporting.schema.report_config import CreateScheduledQueryRequest
 from reporting.services import report_store
-from reporting.services.mcp_builtins.base import BuiltinGroup
-from reporting.services.mcp_builtins.base import BuiltinTool
-from reporting.services.mcp_builtins.base import model_input_schema
+from reporting.services.mcp_builtins.base import BuiltinGroup, BuiltinTool, model_input_schema
 from reporting.services.query_validator import validate_query
 from reporting.services.scheduled_query_validation import validate_action_configs
 
 GROUP = "scheduled_queries"
 
 
-def _require_user(current_user: Optional[CurrentUser]) -> CurrentUser:
+def _require_user(current_user: CurrentUser | None) -> CurrentUser:
     if current_user is None:
         raise RuntimeError("No current user on the request context")
     return current_user
 
 
-def _id_prop() -> Dict[str, Any]:
+def _id_prop() -> dict[str, Any]:
     return {"scheduled_query_id": {"type": "string"}}
 
 
-async def _list(
-    args: Dict[str, Any], current_user: Optional[CurrentUser]
-) -> Dict[str, Any]:
+async def _list(args: dict[str, Any], current_user: CurrentUser | None) -> dict[str, Any]:
     items = await report_store.list_scheduled_queries()
     return {"scheduled_queries": [i.model_dump() for i in items]}
 
 
-async def _get(
-    args: Dict[str, Any], current_user: Optional[CurrentUser]
-) -> Dict[str, Any]:
+async def _get(args: dict[str, Any], current_user: CurrentUser | None) -> dict[str, Any]:
     item = await report_store.get_scheduled_query(args["scheduled_query_id"])
     if not item:
         return {"error": "Scheduled query not found"}
     return item.model_dump()
 
 
-async def _create(
-    args: Dict[str, Any], current_user: Optional[CurrentUser]
-) -> Dict[str, Any]:
+async def _create(args: dict[str, Any], current_user: CurrentUser | None) -> dict[str, Any]:
     user = _require_user(current_user)
     body = CreateScheduledQueryRequest.model_validate(args)
     err = validate_action_configs(body.actions)
@@ -66,14 +57,10 @@ async def _create(
     return item.model_dump()
 
 
-async def _update(
-    args: Dict[str, Any], current_user: Optional[CurrentUser]
-) -> Dict[str, Any]:
+async def _update(args: dict[str, Any], current_user: CurrentUser | None) -> dict[str, Any]:
     user = _require_user(current_user)
     sq_id = args["scheduled_query_id"]
-    body = CreateScheduledQueryRequest.model_validate(
-        {k: v for k, v in args.items() if k != "scheduled_query_id"}
-    )
+    body = CreateScheduledQueryRequest.model_validate({k: v for k, v in args.items() if k != "scheduled_query_id"})
     err = validate_action_configs(body.actions)
     if err:
         return {"error": err}
@@ -97,18 +84,14 @@ async def _update(
     return item.model_dump()
 
 
-async def _delete(
-    args: Dict[str, Any], current_user: Optional[CurrentUser]
-) -> Dict[str, Any]:
+async def _delete(args: dict[str, Any], current_user: CurrentUser | None) -> dict[str, Any]:
     ok = await report_store.delete_scheduled_query(args["scheduled_query_id"])
     if not ok:
         return {"error": "Scheduled query not found"}
     return {"scheduled_query_id": args["scheduled_query_id"]}
 
 
-async def _list_versions(
-    args: Dict[str, Any], current_user: Optional[CurrentUser]
-) -> Dict[str, Any]:
+async def _list_versions(args: dict[str, Any], current_user: CurrentUser | None) -> dict[str, Any]:
     sq_id = args["scheduled_query_id"]
     item = await report_store.get_scheduled_query(sq_id)
     if not item:
@@ -117,12 +100,8 @@ async def _list_versions(
     return {"versions": [v.model_dump() for v in versions]}
 
 
-async def _get_version(
-    args: Dict[str, Any], current_user: Optional[CurrentUser]
-) -> Dict[str, Any]:
-    v = await report_store.get_scheduled_query_version(
-        args["scheduled_query_id"], int(args["version"])
-    )
+async def _get_version(args: dict[str, Any], current_user: CurrentUser | None) -> dict[str, Any]:
+    v = await report_store.get_scheduled_query_version(args["scheduled_query_id"], int(args["version"]))
     if not v:
         return {"error": "Scheduled query version not found"}
     return v.model_dump()

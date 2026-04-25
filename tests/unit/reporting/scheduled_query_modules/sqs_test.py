@@ -10,14 +10,10 @@ def test_action_name():
 
 
 async def test_setup(mocker):
-    mocker.patch(
-        "reporting.scheduled_query_modules.sqs._SQS_CREATE_SCHEDULED_QUERY_QUEUES", True
-    )
+    mocker.patch("reporting.scheduled_query_modules.sqs._SQS_CREATE_SCHEDULED_QUERY_QUEUES", True)
     client_mock = mocker.MagicMock()
     client_mock.create_queue = mocker.MagicMock()
-    mocker.patch(
-        "reporting.scheduled_query_modules.sqs._get_client", return_value=client_mock
-    )
+    mocker.patch("reporting.scheduled_query_modules.sqs._get_client", return_value=client_mock)
     items = [
         ScheduledQueryItem(
             scheduled_query_id="sq1",
@@ -53,15 +49,11 @@ async def test_setup(mocker):
 
 
 def test_handle_results(mocker):
-    action = ScheduledQueryAction(
-        action_type="sqs", action_config={"sqs_queue": "test"}
-    )
+    action = ScheduledQueryAction(action_type="sqs", action_config={"sqs_queue": "test"})
     results = [{"details": {"param1": "value1"}}, {"details": {"param2": "value2"}}]
     client_mock = mocker.MagicMock()
     client_mock.send_message = mocker.MagicMock()
-    mocker.patch(
-        "reporting.scheduled_query_modules.sqs._get_client", return_value=client_mock
-    )
+    mocker.patch("reporting.scheduled_query_modules.sqs._get_client", return_value=client_mock)
 
     sqs.handle_results("test_query", action, results)
     assert client_mock.send_message.call_count == 2

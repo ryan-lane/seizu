@@ -1,11 +1,11 @@
 """CLI commands for authentication (login / logout / whoami)."""
+
 import sys
 
 import typer
 from rich.console import Console
 
-from seizu_cli import auth
-from seizu_cli import state
+from seizu_cli import auth, state
 from seizu_cli.client import APIError
 
 app = typer.Typer(help="Authenticate with the Seizu API.", no_args_is_help=True)
@@ -53,10 +53,7 @@ def login() -> None:
         return
 
     store.save_token(api_url, token)
-    console.print(
-        f"\n[green]Logged in.[/green] "
-        f"Token saved to [dim]{store.description()}[/dim]"
-    )
+    console.print(f"\n[green]Logged in.[/green] Token saved to [dim]{store.description()}[/dim]")
 
 
 @app.command("logout")

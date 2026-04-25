@@ -2,13 +2,12 @@
 
 Defines granular permissions, built-in roles, and permission resolution logic.
 """
-from enum import Enum
+
+from enum import StrEnum
 from typing import Any
-from typing import Dict
-from typing import FrozenSet
 
 
-class Permission(str, Enum):
+class Permission(StrEnum):
     """Granular permission strings used throughout the application."""
 
     # Reports
@@ -51,7 +50,7 @@ class Permission(str, Enum):
 # Built-in role permission sets (hierarchical: Admin ⊇ Editor ⊇ Viewer)
 # ---------------------------------------------------------------------------
 
-VIEWER_PERMISSIONS: FrozenSet[Permission] = frozenset(
+VIEWER_PERMISSIONS: frozenset[Permission] = frozenset(
     {
         Permission.REPORTS_READ,
         Permission.QUERY_EXECUTE,
@@ -66,7 +65,7 @@ VIEWER_PERMISSIONS: FrozenSet[Permission] = frozenset(
     }
 )
 
-EDITOR_PERMISSIONS: FrozenSet[Permission] = frozenset(
+EDITOR_PERMISSIONS: frozenset[Permission] = frozenset(
     VIEWER_PERMISSIONS
     | {
         Permission.REPORTS_WRITE,
@@ -75,7 +74,7 @@ EDITOR_PERMISSIONS: FrozenSet[Permission] = frozenset(
     }
 )
 
-ADMIN_PERMISSIONS: FrozenSet[Permission] = frozenset(
+ADMIN_PERMISSIONS: frozenset[Permission] = frozenset(
     EDITOR_PERMISSIONS
     | {
         Permission.SCHEDULED_QUERIES_WRITE,
@@ -90,14 +89,14 @@ ADMIN_PERMISSIONS: FrozenSet[Permission] = frozenset(
 )
 
 # Maps built-in role names to their permission sets.
-BUILTIN_ROLES: Dict[str, FrozenSet[Permission]] = {
+BUILTIN_ROLES: dict[str, frozenset[Permission]] = {
     "seizu-viewer": VIEWER_PERMISSIONS,
     "seizu-editor": EDITOR_PERMISSIONS,
     "seizu-admin": ADMIN_PERMISSIONS,
 }
 
 # All permissions — used in dev mode to grant full access.
-ALL_PERMISSIONS: FrozenSet[str] = frozenset(p.value for p in Permission)
+ALL_PERMISSIONS: frozenset[str] = frozenset(p.value for p in Permission)
 
 
 # ---------------------------------------------------------------------------
@@ -105,7 +104,7 @@ ALL_PERMISSIONS: FrozenSet[str] = frozenset(p.value for p in Permission)
 # ---------------------------------------------------------------------------
 
 
-async def resolve_permissions(jwt_claims: Dict[str, Any]) -> FrozenSet[str]:
+async def resolve_permissions(jwt_claims: dict[str, Any]) -> frozenset[str]:
     """Resolve a JWT payload to a set of permission strings.
 
     Reads RBAC_ROLE_CLAIM from the JWT claims. If the claim names a built-in

@@ -1,40 +1,32 @@
 import asyncio
 import logging
-from datetime import datetime
-from datetime import timezone
+from datetime import UTC, datetime
 from decimal import Decimal
 from typing import Any
-from typing import Dict
-from typing import List
-from typing import Optional
 
 import boto3
 import botocore.exceptions
 from snowflake import SnowflakeGenerator
 
 from reporting import settings
-from reporting.schema.mcp_config import ToolItem
-from reporting.schema.mcp_config import ToolParamDef
-from reporting.schema.mcp_config import ToolsetListItem
-from reporting.schema.mcp_config import ToolsetVersion
-from reporting.schema.mcp_config import ToolVersion
-from reporting.schema.rbac import RoleItem
-from reporting.schema.rbac import RoleVersion
-from reporting.schema.report_config import PanelStat
-from reporting.schema.report_config import QueryHistoryItem
-from reporting.schema.report_config import ReportListItem
-from reporting.schema.report_config import ReportVersion
-from reporting.schema.report_config import ScheduledQueryItem
-from reporting.schema.report_config import ScheduledQueryVersion
-from reporting.schema.report_config import User
-from reporting.services.report_store.base import extract_panel_stats
-from reporting.services.report_store.base import ReportStore
+from reporting.schema.mcp_config import ToolItem, ToolParamDef, ToolsetListItem, ToolsetVersion, ToolVersion
+from reporting.schema.rbac import RoleItem, RoleVersion
+from reporting.schema.report_config import (
+    PanelStat,
+    QueryHistoryItem,
+    ReportListItem,
+    ReportVersion,
+    ScheduledQueryItem,
+    ScheduledQueryVersion,
+    User,
+)
+from reporting.services.report_store.base import ReportStore, extract_panel_stats
 
 logger = logging.getLogger(__name__)
 
 # Module-level snowflake generator; lazily initialised so the machine ID
 # setting is read after the module is imported.
-_snowflake_gen: Optional[SnowflakeGenerator] = None
+_snowflake_gen: SnowflakeGenerator | None = None
 
 # DynamoDB key constants
 _PK_REPORT_LIST = "REPORT_LIST"
@@ -124,7 +116,7 @@ def _role_list_sk(role_id: str) -> str:
     return f"ROLE#{role_id}"
 
 
-def _role_from_item(item: Dict) -> RoleItem:
+def _role_from_item(item: dict) -> RoleItem:
     return RoleItem(
         role_id=item["role_id"],
         name=item["name"],
@@ -138,7 +130,7 @@ def _role_from_item(item: Dict) -> RoleItem:
     )
 
 
-def _role_version_from_item(item: Dict) -> RoleVersion:
+def _role_version_from_item(item: dict) -> RoleVersion:
     return RoleVersion(
         role_id=item["role_id"],
         name=item["name"],
@@ -175,7 +167,7 @@ def _tool_list_sk(tool_id: str) -> str:
     return f"TOOL#{tool_id}"
 
 
-def _toolset_from_item(item: Dict) -> ToolsetListItem:
+def _toolset_from_item(item: dict) -> ToolsetListItem:
     return ToolsetListItem(
         toolset_id=item["toolset_id"],
         name=item["name"],
@@ -189,7 +181,7 @@ def _toolset_from_item(item: Dict) -> ToolsetListItem:
     )
 
 
-def _toolset_version_from_item(item: Dict) -> ToolsetVersion:
+def _toolset_version_from_item(item: dict) -> ToolsetVersion:
     return ToolsetVersion(
         toolset_id=item["toolset_id"],
         name=item["name"],
@@ -202,17 +194,14 @@ def _toolset_version_from_item(item: Dict) -> ToolsetVersion:
     )
 
 
-def _tool_from_item(item: Dict) -> ToolItem:
+def _tool_from_item(item: dict) -> ToolItem:
     return ToolItem(
         tool_id=item["tool_id"],
         toolset_id=item["toolset_id"],
         name=item["name"],
         description=item.get("description", ""),
         cypher=item["cypher"],
-        parameters=[
-            ToolParamDef(**p) if isinstance(p, dict) else p
-            for p in item.get("parameters", [])
-        ],
+        parameters=[ToolParamDef(**p) if isinstance(p, dict) else p for p in item.get("parameters", [])],
         enabled=item.get("enabled", True),
         current_version=item.get("current_version", 0),
         created_at=item["created_at"],
@@ -222,17 +211,14 @@ def _tool_from_item(item: Dict) -> ToolItem:
     )
 
 
-def _tool_version_from_item(item: Dict) -> ToolVersion:
+def _tool_version_from_item(item: dict) -> ToolVersion:
     return ToolVersion(
         tool_id=item["tool_id"],
         toolset_id=item["toolset_id"],
         name=item["name"],
         description=item.get("description", ""),
         cypher=item["cypher"],
-        parameters=[
-            ToolParamDef(**p) if isinstance(p, dict) else p
-            for p in item.get("parameters", [])
-        ],
+        parameters=[ToolParamDef(**p) if isinstance(p, dict) else p for p in item.get("parameters", [])],
         enabled=item.get("enabled", True),
         version=item["version"],
         created_at=item["created_at"],
@@ -246,7 +232,7 @@ def _sq_version_sk(version: int) -> str:
     return f"{_SK_VERSION_PREFIX}{version:010d}"  # noqa: E231
 
 
-def _sq_from_item(item: Dict) -> ScheduledQueryItem:
+def _sq_from_item(item: dict) -> ScheduledQueryItem:
     return ScheduledQueryItem(
         scheduled_query_id=item["scheduled_query_id"],
         name=item["name"],
@@ -268,7 +254,7 @@ def _sq_from_item(item: Dict) -> ScheduledQueryItem:
     )
 
 
-def _sq_version_from_item(item: Dict) -> ScheduledQueryVersion:
+def _sq_version_from_item(item: dict) -> ScheduledQueryVersion:
     return ScheduledQueryVersion(
         scheduled_query_id=item["scheduled_query_id"],
         name=item["name"],
@@ -293,7 +279,7 @@ def _user_lookup_sk(iss: str, sub: str) -> str:
     return f"{iss}#{sub}"
 
 
-def _user_from_item(item: Dict) -> User:
+def _user_from_item(item: dict) -> User:
     return User(
         user_id=item["user_id"],
         sub=item["sub"],
@@ -334,7 +320,7 @@ def _get_table() -> Any:
     return get_boto_resource().Table(settings.DYNAMODB_TABLE_NAME)
 
 
-def _transact_put_sync(table: Any, *items: Dict[str, Any]) -> None:
+def _transact_put_sync(table: Any, *items: dict[str, Any]) -> None:
     """Write one or more items atomically via TransactWriteItems."""
     table.meta.client.transact_write_items(
         TransactItems=[
@@ -353,12 +339,12 @@ def _update_user_profile_internal(
     table: Any,
     user_id: str,
     email: str,
-    display_name: Optional[str],
-    token_iat: Optional[datetime],
+    display_name: str | None,
+    token_iat: datetime | None,
 ) -> User:
     """Apply an email/display_name update and conditionally advance last_login."""
     update_exp = "SET email = :e"
-    exp_values: Dict = {":e": email}
+    exp_values: dict = {":e": email}
     if display_name is not None:
         update_exp += ", display_name = :d"
         exp_values[":d"] = display_name
@@ -429,10 +415,10 @@ class DynamoDBReportStore(ReportStore):
 
         await asyncio.to_thread(_op)
 
-    async def list_reports(self) -> List[ReportListItem]:
+    async def list_reports(self) -> list[ReportListItem]:
         """Return lightweight metadata for all reports."""
 
-        def _op() -> List[ReportListItem]:
+        def _op() -> list[ReportListItem]:
             table = _get_table()
             resp = table.query(
                 KeyConditionExpression="PK = :pk",
@@ -453,10 +439,10 @@ class DynamoDBReportStore(ReportStore):
 
         return await asyncio.to_thread(_op)
 
-    async def get_report_latest(self, report_id: str) -> Optional[ReportVersion]:
+    async def get_report_latest(self, report_id: str) -> ReportVersion | None:
         """Return the latest version of a report config, or None if not found."""
 
-        def _op() -> Optional[ReportVersion]:
+        def _op() -> ReportVersion | None:
             table = _get_table()
             resp = table.get_item(
                 Key={"PK": _report_pk(report_id), "SK": _SK_LATEST},
@@ -468,12 +454,10 @@ class DynamoDBReportStore(ReportStore):
 
         return await asyncio.to_thread(_op)
 
-    async def get_report_version(
-        self, report_id: str, version: int
-    ) -> Optional[ReportVersion]:
+    async def get_report_version(self, report_id: str, version: int) -> ReportVersion | None:
         """Return a specific version of a report config, or None if not found."""
 
-        def _op() -> Optional[ReportVersion]:
+        def _op() -> ReportVersion | None:
             table = _get_table()
             resp = table.get_item(
                 Key={"PK": _report_pk(report_id), "SK": _version_sk(version)},
@@ -485,10 +469,10 @@ class DynamoDBReportStore(ReportStore):
 
         return await asyncio.to_thread(_op)
 
-    async def list_report_versions(self, report_id: str) -> List[ReportVersion]:
+    async def list_report_versions(self, report_id: str) -> list[ReportVersion]:
         """Return all stored versions for a report, newest first."""
 
-        def _op() -> List[ReportVersion]:
+        def _op() -> list[ReportVersion]:
             table = _get_table()
             resp = table.query(
                 KeyConditionExpression="PK = :pk AND begins_with(SK, :prefix)",
@@ -509,7 +493,7 @@ class DynamoDBReportStore(ReportStore):
     ) -> ReportListItem:
         """Create a new empty report (no initial version) and return the ReportListItem."""
         report_id = generate_report_id()
-        now = datetime.now(tz=timezone.utc).isoformat()
+        now = datetime.now(tz=UTC).isoformat()
 
         metadata_item = {
             "PK": _report_pk(report_id),
@@ -549,13 +533,13 @@ class DynamoDBReportStore(ReportStore):
     async def save_report_version(
         self,
         report_id: str,
-        config: Dict[str, Any],
+        config: dict[str, Any],
         created_by: str,
-        comment: Optional[str] = None,
-    ) -> Optional[ReportVersion]:
+        comment: str | None = None,
+    ) -> ReportVersion | None:
         """Append a new version to an existing report and return it."""
 
-        def _op() -> Optional[ReportVersion]:
+        def _op() -> ReportVersion | None:
             table = _get_table()
             resp = table.get_item(Key={"PK": _report_pk(report_id), "SK": _SK_METADATA})
             meta = resp.get("Item")
@@ -565,7 +549,7 @@ class DynamoDBReportStore(ReportStore):
             version = int(meta["current_version"]) + 1
             name = meta["name"]
             pinned = bool(meta.get("pinned", False))
-            now = datetime.now(tz=timezone.utc).isoformat()
+            now = datetime.now(tz=UTC).isoformat()
 
             version_item = {
                 "PK": _report_pk(report_id),
@@ -643,21 +627,14 @@ class DynamoDBReportStore(ReportStore):
                 ExpressionAttributeValues={":pk": _report_pk(report_id)},
                 ProjectionExpression="PK, SK",
             )
-            keys_to_delete = [
-                {"PK": item["PK"], "SK": item["SK"]}
-                for item in items_resp.get("Items", [])
-            ]
+            keys_to_delete = [{"PK": item["PK"], "SK": item["SK"]} for item in items_resp.get("Items", [])]
             keys_to_delete.append({"PK": _PK_REPORT_LIST, "SK": f"REPORT#{report_id}"})
             keys_to_delete.append({"PK": _PK_PANEL_STATS, "SK": f"REPORT#{report_id}"})
 
-            dashboard_resp = table.get_item(
-                Key={"PK": _PK_DASHBOARD, "SK": _SK_DASHBOARD_POINTER}
-            )
+            dashboard_resp = table.get_item(Key={"PK": _PK_DASHBOARD, "SK": _SK_DASHBOARD_POINTER})
             dashboard_item = dashboard_resp.get("Item")
             if dashboard_item and dashboard_item.get("report_id") == report_id:
-                keys_to_delete.append(
-                    {"PK": _PK_DASHBOARD, "SK": _SK_DASHBOARD_POINTER}
-                )
+                keys_to_delete.append({"PK": _PK_DASHBOARD, "SK": _SK_DASHBOARD_POINTER})
 
             with table.batch_writer() as batch:
                 for key in keys_to_delete:
@@ -689,14 +666,12 @@ class DynamoDBReportStore(ReportStore):
 
         return await asyncio.to_thread(_op)
 
-    async def get_dashboard_report_id(self) -> Optional[str]:
+    async def get_dashboard_report_id(self) -> str | None:
         """Return the report_id of the current dashboard report, or None if not set."""
 
-        def _op() -> Optional[str]:
+        def _op() -> str | None:
             table = _get_table()
-            resp = table.get_item(
-                Key={"PK": _PK_DASHBOARD, "SK": _SK_DASHBOARD_POINTER}
-            )
+            resp = table.get_item(Key={"PK": _PK_DASHBOARD, "SK": _SK_DASHBOARD_POINTER})
             item = resp.get("Item")
             if not item:
                 return None
@@ -717,24 +692,24 @@ class DynamoDBReportStore(ReportStore):
                     "PK": _PK_DASHBOARD,
                     "SK": _SK_DASHBOARD_POINTER,
                     "report_id": report_id,
-                    "updated_at": datetime.now(tz=timezone.utc).isoformat(),
+                    "updated_at": datetime.now(tz=UTC).isoformat(),
                 }
             )
             return True
 
         return await asyncio.to_thread(_op)
 
-    async def get_dashboard_report(self) -> Optional[ReportVersion]:
+    async def get_dashboard_report(self) -> ReportVersion | None:
         """Return the latest version of the dashboard report, or None if not set."""
         report_id = await self.get_dashboard_report_id()
         if not report_id:
             return None
         return await self.get_report_latest(report_id)
 
-    async def list_panel_stats(self) -> List[PanelStat]:
+    async def list_panel_stats(self) -> list[PanelStat]:
         """Return all PanelStat records across all reports."""
 
-        def _op() -> List[PanelStat]:
+        def _op() -> list[PanelStat]:
             table = _get_table()
             resp = table.query(
                 KeyConditionExpression="PK = :pk",
@@ -759,8 +734,8 @@ class DynamoDBReportStore(ReportStore):
 
         return await asyncio.to_thread(_op)
 
-    async def list_scheduled_queries(self) -> List[ScheduledQueryItem]:
-        def _op() -> List[ScheduledQueryItem]:
+    async def list_scheduled_queries(self) -> list[ScheduledQueryItem]:
+        def _op() -> list[ScheduledQueryItem]:
             table = _get_table()
             resp = table.query(
                 KeyConditionExpression="PK = :pk",
@@ -770,8 +745,8 @@ class DynamoDBReportStore(ReportStore):
 
         return await asyncio.to_thread(_op)
 
-    async def get_scheduled_query(self, sq_id: str) -> Optional[ScheduledQueryItem]:
-        def _op() -> Optional[ScheduledQueryItem]:
+    async def get_scheduled_query(self, sq_id: str) -> ScheduledQueryItem | None:
+        def _op() -> ScheduledQueryItem | None:
             table = _get_table()
             resp = table.get_item(Key={"PK": _sq_pk(sq_id), "SK": _SK_METADATA})
             item = resp.get("Item")
@@ -785,15 +760,15 @@ class DynamoDBReportStore(ReportStore):
         self,
         name: str,
         cypher: str,
-        params: List[Dict[str, Any]],
-        frequency: Optional[int],
-        watch_scans: List[Dict[str, Any]],
+        params: list[dict[str, Any]],
+        frequency: int | None,
+        watch_scans: list[dict[str, Any]],
         enabled: bool,
-        actions: List[Dict[str, Any]],
+        actions: list[dict[str, Any]],
         created_by: str,
     ) -> ScheduledQueryItem:
         sq_id = generate_report_id()
-        now = datetime.now(tz=timezone.utc).isoformat()
+        now = datetime.now(tz=UTC).isoformat()
         version = 1
         base = _strip_none(
             {
@@ -849,15 +824,15 @@ class DynamoDBReportStore(ReportStore):
         sq_id: str,
         name: str,
         cypher: str,
-        params: List[Dict[str, Any]],
-        frequency: Optional[int],
-        watch_scans: List[Dict[str, Any]],
+        params: list[dict[str, Any]],
+        frequency: int | None,
+        watch_scans: list[dict[str, Any]],
         enabled: bool,
-        actions: List[Dict[str, Any]],
+        actions: list[dict[str, Any]],
         updated_by: str,
-        comment: Optional[str] = None,
-    ) -> Optional[ScheduledQueryItem]:
-        def _op() -> Optional[ScheduledQueryItem]:
+        comment: str | None = None,
+    ) -> ScheduledQueryItem | None:
+        def _op() -> ScheduledQueryItem | None:
             table = _get_table()
             resp = table.get_item(Key={"PK": _sq_pk(sq_id), "SK": _SK_METADATA})
             if not resp.get("Item"):
@@ -865,7 +840,7 @@ class DynamoDBReportStore(ReportStore):
             existing = resp["Item"]
             current_version = int(existing.get("current_version", 0))
             version = current_version + 1
-            now = datetime.now(tz=timezone.utc).isoformat()
+            now = datetime.now(tz=UTC).isoformat()
             base = _strip_none(
                 {
                     "scheduled_query_id": sq_id,
@@ -912,10 +887,8 @@ class DynamoDBReportStore(ReportStore):
 
         return await asyncio.to_thread(_op)
 
-    async def list_scheduled_query_versions(
-        self, sq_id: str
-    ) -> List[ScheduledQueryVersion]:
-        def _op() -> List[ScheduledQueryVersion]:
+    async def list_scheduled_query_versions(self, sq_id: str) -> list[ScheduledQueryVersion]:
+        def _op() -> list[ScheduledQueryVersion]:
             table = _get_table()
             resp = table.query(
                 KeyConditionExpression="PK = :pk AND begins_with(SK, :prefix)",
@@ -929,14 +902,10 @@ class DynamoDBReportStore(ReportStore):
 
         return await asyncio.to_thread(_op)
 
-    async def get_scheduled_query_version(
-        self, sq_id: str, version: int
-    ) -> Optional[ScheduledQueryVersion]:
-        def _op() -> Optional[ScheduledQueryVersion]:
+    async def get_scheduled_query_version(self, sq_id: str, version: int) -> ScheduledQueryVersion | None:
+        def _op() -> ScheduledQueryVersion | None:
             table = _get_table()
-            resp = table.get_item(
-                Key={"PK": _sq_pk(sq_id), "SK": _sq_version_sk(version)}
-            )
+            resp = table.get_item(Key={"PK": _sq_pk(sq_id), "SK": _sq_version_sk(version)})
             item = resp.get("Item")
             if not item:
                 return None
@@ -955,10 +924,7 @@ class DynamoDBReportStore(ReportStore):
                 ExpressionAttributeValues={":pk": _sq_pk(sq_id)},
                 ProjectionExpression="PK, SK",
             )
-            keys_to_delete = [
-                {"PK": item["PK"], "SK": item["SK"]}
-                for item in items_resp.get("Items", [])
-            ]
+            keys_to_delete = [{"PK": item["PK"], "SK": item["SK"]} for item in items_resp.get("Items", [])]
             keys_to_delete.append({"PK": _PK_SCHEDULED_QUERY_LIST, "SK": _sq_pk(sq_id)})
             with table.batch_writer() as batch:
                 for key in keys_to_delete:
@@ -967,14 +933,12 @@ class DynamoDBReportStore(ReportStore):
 
         return await asyncio.to_thread(_op)
 
-    async def acquire_scheduled_query_lock(
-        self, sq_id: str, expected_last_scheduled_at: Optional[str]
-    ) -> bool:
+    async def acquire_scheduled_query_lock(self, sq_id: str, expected_last_scheduled_at: str | None) -> bool:
         def _op() -> bool:
             table = _get_table()
-            now = datetime.now(tz=timezone.utc).isoformat()
+            now = datetime.now(tz=UTC).isoformat()
             update_expr = "SET last_scheduled_at = :new_val"
-            expr_values: Dict[str, Any] = {":new_val": now}
+            expr_values: dict[str, Any] = {":new_val": now}
 
             if expected_last_scheduled_at is None:
                 condition = "attribute_not_exists(last_scheduled_at)"
@@ -1003,12 +967,10 @@ class DynamoDBReportStore(ReportStore):
 
         return await asyncio.to_thread(_op)
 
-    async def record_scheduled_query_result(
-        self, sq_id: str, status: str, error: Optional[str] = None
-    ) -> None:
+    async def record_scheduled_query_result(self, sq_id: str, status: str, error: str | None = None) -> None:
         def _op() -> None:
             table = _get_table()
-            now = datetime.now(tz=timezone.utc).isoformat()
+            now = datetime.now(tz=UTC).isoformat()
 
             # Read current metadata to get existing last_errors
             resp = table.get_item(Key={"PK": _sq_pk(sq_id), "SK": _SK_METADATA})
@@ -1047,13 +1009,13 @@ class DynamoDBReportStore(ReportStore):
         sub: str,
         iss: str,
         email: str,
-        display_name: Optional[str] = None,
+        display_name: str | None = None,
     ) -> User:
         """Get an existing user by (iss, sub), or create one on first login."""
 
         def _op() -> User:
             table = _get_table()
-            now = datetime.now(tz=timezone.utc).isoformat()
+            now = datetime.now(tz=UTC).isoformat()
             lookup_sk = _user_lookup_sk(iss, sub)
 
             lookup_resp = table.get_item(
@@ -1122,8 +1084,8 @@ class DynamoDBReportStore(ReportStore):
         self,
         user_id: str,
         email: str,
-        display_name: Optional[str] = None,
-        token_iat: Optional[datetime] = None,
+        display_name: str | None = None,
+        token_iat: datetime | None = None,
     ) -> User:
         """Sync mutable profile fields, writing only what has changed."""
 
@@ -1138,12 +1100,8 @@ class DynamoDBReportStore(ReportStore):
             stored_user = _user_from_item(item)
 
             email_changed = stored_user.email != email
-            name_changed = (
-                display_name is not None and stored_user.display_name != display_name
-            )
-            iat_newer = token_iat is not None and token_iat > datetime.fromisoformat(
-                stored_user.last_login
-            )
+            name_changed = display_name is not None and stored_user.display_name != display_name
+            iat_newer = token_iat is not None and token_iat > datetime.fromisoformat(stored_user.last_login)
 
             if not (email_changed or name_changed or iat_newer):
                 return stored_user
@@ -1158,10 +1116,10 @@ class DynamoDBReportStore(ReportStore):
 
         return await asyncio.to_thread(_op)
 
-    async def get_user(self, user_id: str) -> Optional[User]:
+    async def get_user(self, user_id: str) -> User | None:
         """Return a user by their internal user_id, or None if not found."""
 
-        def _op() -> Optional[User]:
+        def _op() -> User | None:
             table = _get_table()
             resp = table.get_item(Key={"PK": _user_pk(user_id), "SK": _SK_METADATA})
             item = resp.get("Item")
@@ -1179,7 +1137,7 @@ class DynamoDBReportStore(ReportStore):
             resp = table.get_item(Key={"PK": _user_pk(user_id), "SK": _SK_METADATA})
             if not resp.get("Item"):
                 return False
-            now = datetime.now(tz=timezone.utc).isoformat()
+            now = datetime.now(tz=UTC).isoformat()
             table.update_item(
                 Key={"PK": _user_pk(user_id), "SK": _SK_METADATA},
                 UpdateExpression="SET archived_at = :t",
@@ -1193,8 +1151,8 @@ class DynamoDBReportStore(ReportStore):
     # Toolsets
     # ------------------------------------------------------------------
 
-    async def list_toolsets(self) -> List[ToolsetListItem]:
-        def _op() -> List[ToolsetListItem]:
+    async def list_toolsets(self) -> list[ToolsetListItem]:
+        def _op() -> list[ToolsetListItem]:
             table = _get_table()
             resp = table.query(
                 KeyConditionExpression="PK = :pk",
@@ -1204,12 +1162,10 @@ class DynamoDBReportStore(ReportStore):
 
         return await asyncio.to_thread(_op)
 
-    async def get_toolset(self, toolset_id: str) -> Optional[ToolsetListItem]:
-        def _op() -> Optional[ToolsetListItem]:
+    async def get_toolset(self, toolset_id: str) -> ToolsetListItem | None:
+        def _op() -> ToolsetListItem | None:
             table = _get_table()
-            resp = table.get_item(
-                Key={"PK": _toolset_pk(toolset_id), "SK": _SK_METADATA}
-            )
+            resp = table.get_item(Key={"PK": _toolset_pk(toolset_id), "SK": _SK_METADATA})
             item = resp.get("Item")
             if not item:
                 return None
@@ -1225,7 +1181,7 @@ class DynamoDBReportStore(ReportStore):
         created_by: str,
     ) -> ToolsetListItem:
         toolset_id = generate_report_id()
-        now = datetime.now(tz=timezone.utc).isoformat()
+        now = datetime.now(tz=UTC).isoformat()
         version = 1
         base = _strip_none(
             {
@@ -1275,19 +1231,17 @@ class DynamoDBReportStore(ReportStore):
         description: str,
         enabled: bool,
         updated_by: str,
-        comment: Optional[str] = None,
-    ) -> Optional[ToolsetListItem]:
-        def _op() -> Optional[ToolsetListItem]:
+        comment: str | None = None,
+    ) -> ToolsetListItem | None:
+        def _op() -> ToolsetListItem | None:
             table = _get_table()
-            resp = table.get_item(
-                Key={"PK": _toolset_pk(toolset_id), "SK": _SK_METADATA}
-            )
+            resp = table.get_item(Key={"PK": _toolset_pk(toolset_id), "SK": _SK_METADATA})
             if not resp.get("Item"):
                 return None
             existing = resp["Item"]
             current_version = int(existing.get("current_version", 0))
             version = current_version + 1
-            now = datetime.now(tz=timezone.utc).isoformat()
+            now = datetime.now(tz=UTC).isoformat()
             base = _strip_none(
                 {
                     "toolset_id": toolset_id,
@@ -1333,9 +1287,7 @@ class DynamoDBReportStore(ReportStore):
     async def delete_toolset(self, toolset_id: str) -> bool:
         def _op() -> bool:
             table = _get_table()
-            resp = table.get_item(
-                Key={"PK": _toolset_pk(toolset_id), "SK": _SK_METADATA}
-            )
+            resp = table.get_item(Key={"PK": _toolset_pk(toolset_id), "SK": _SK_METADATA})
             if not resp.get("Item"):
                 return False
 
@@ -1345,29 +1297,20 @@ class DynamoDBReportStore(ReportStore):
                 ExpressionAttributeValues={":pk": _tool_list_pk(toolset_id)},
                 ProjectionExpression="SK",
             )
-            tool_ids = [
-                item["SK"].replace("TOOL#", "")
-                for item in tool_list_resp.get("Items", [])
-            ]
+            tool_ids = [item["SK"].replace("TOOL#", "") for item in tool_list_resp.get("Items", [])]
             for tool_id in tool_ids:
                 tool_items_resp = table.query(
                     KeyConditionExpression="PK = :pk",
                     ExpressionAttributeValues={":pk": _tool_pk(tool_id)},
                     ProjectionExpression="PK, SK",
                 )
-                keys_to_delete = [
-                    {"PK": i["PK"], "SK": i["SK"]}
-                    for i in tool_items_resp.get("Items", [])
-                ]
+                keys_to_delete = [{"PK": i["PK"], "SK": i["SK"]} for i in tool_items_resp.get("Items", [])]
                 with table.batch_writer() as batch:
                     for key in keys_to_delete:
                         batch.delete_item(Key=key)
 
             # Delete the tool list partition for this toolset
-            tool_list_keys = [
-                {"PK": _tool_list_pk(toolset_id), "SK": _tool_list_sk(tool_id)}
-                for tool_id in tool_ids
-            ]
+            tool_list_keys = [{"PK": _tool_list_pk(toolset_id), "SK": _tool_list_sk(tool_id)} for tool_id in tool_ids]
 
             # Delete all toolset items
             items_resp = table.query(
@@ -1375,13 +1318,8 @@ class DynamoDBReportStore(ReportStore):
                 ExpressionAttributeValues={":pk": _toolset_pk(toolset_id)},
                 ProjectionExpression="PK, SK",
             )
-            keys_to_delete = [
-                {"PK": item["PK"], "SK": item["SK"]}
-                for item in items_resp.get("Items", [])
-            ]
-            keys_to_delete.append(
-                {"PK": _PK_TOOLSET_LIST, "SK": _toolset_list_sk(toolset_id)}
-            )
+            keys_to_delete = [{"PK": item["PK"], "SK": item["SK"]} for item in items_resp.get("Items", [])]
+            keys_to_delete.append({"PK": _PK_TOOLSET_LIST, "SK": _toolset_list_sk(toolset_id)})
             keys_to_delete.extend(tool_list_keys)
 
             with table.batch_writer() as batch:
@@ -1392,8 +1330,8 @@ class DynamoDBReportStore(ReportStore):
 
         return await asyncio.to_thread(_op)
 
-    async def list_toolset_versions(self, toolset_id: str) -> List[ToolsetVersion]:
-        def _op() -> List[ToolsetVersion]:
+    async def list_toolset_versions(self, toolset_id: str) -> list[ToolsetVersion]:
+        def _op() -> list[ToolsetVersion]:
             table = _get_table()
             resp = table.query(
                 KeyConditionExpression="PK = :pk AND begins_with(SK, :prefix)",
@@ -1407,14 +1345,10 @@ class DynamoDBReportStore(ReportStore):
 
         return await asyncio.to_thread(_op)
 
-    async def get_toolset_version(
-        self, toolset_id: str, version: int
-    ) -> Optional[ToolsetVersion]:
-        def _op() -> Optional[ToolsetVersion]:
+    async def get_toolset_version(self, toolset_id: str, version: int) -> ToolsetVersion | None:
+        def _op() -> ToolsetVersion | None:
             table = _get_table()
-            resp = table.get_item(
-                Key={"PK": _toolset_pk(toolset_id), "SK": _version_sk(version)}
-            )
+            resp = table.get_item(Key={"PK": _toolset_pk(toolset_id), "SK": _version_sk(version)})
             item = resp.get("Item")
             if not item:
                 return None
@@ -1426,21 +1360,17 @@ class DynamoDBReportStore(ReportStore):
     # Tools
     # ------------------------------------------------------------------
 
-    async def list_tools(self, toolset_id: str) -> List[ToolItem]:
-        def _op() -> List[ToolItem]:
+    async def list_tools(self, toolset_id: str) -> list[ToolItem]:
+        def _op() -> list[ToolItem]:
             table = _get_table()
             resp = table.query(
                 KeyConditionExpression="PK = :pk",
                 ExpressionAttributeValues={":pk": _tool_list_pk(toolset_id)},
             )
-            tool_ids = [
-                item["SK"].replace("TOOL#", "") for item in resp.get("Items", [])
-            ]
+            tool_ids = [item["SK"].replace("TOOL#", "") for item in resp.get("Items", [])]
             tools = []
             for tool_id in tool_ids:
-                tool_resp = table.get_item(
-                    Key={"PK": _tool_pk(tool_id), "SK": _SK_METADATA}
-                )
+                tool_resp = table.get_item(Key={"PK": _tool_pk(tool_id), "SK": _SK_METADATA})
                 item = tool_resp.get("Item")
                 if item:
                     tools.append(_tool_from_item(item))
@@ -1448,8 +1378,8 @@ class DynamoDBReportStore(ReportStore):
 
         return await asyncio.to_thread(_op)
 
-    async def get_tool(self, tool_id: str) -> Optional[ToolItem]:
-        def _op() -> Optional[ToolItem]:
+    async def get_tool(self, tool_id: str) -> ToolItem | None:
+        def _op() -> ToolItem | None:
             table = _get_table()
             resp = table.get_item(Key={"PK": _tool_pk(tool_id), "SK": _SK_METADATA})
             item = resp.get("Item")
@@ -1465,21 +1395,19 @@ class DynamoDBReportStore(ReportStore):
         name: str,
         description: str,
         cypher: str,
-        parameters: List[Dict[str, Any]],
+        parameters: list[dict[str, Any]],
         enabled: bool,
         created_by: str,
-    ) -> Optional[ToolItem]:
-        def _op() -> Optional[ToolItem]:
+    ) -> ToolItem | None:
+        def _op() -> ToolItem | None:
             table = _get_table()
             # Verify toolset exists
-            ts_resp = table.get_item(
-                Key={"PK": _toolset_pk(toolset_id), "SK": _SK_METADATA}
-            )
+            ts_resp = table.get_item(Key={"PK": _toolset_pk(toolset_id), "SK": _SK_METADATA})
             if not ts_resp.get("Item"):
                 return None
 
             tool_id = generate_report_id()
-            now = datetime.now(tz=timezone.utc).isoformat()
+            now = datetime.now(tz=UTC).isoformat()
             version = 1
             base = _strip_none(
                 {
@@ -1531,12 +1459,12 @@ class DynamoDBReportStore(ReportStore):
         name: str,
         description: str,
         cypher: str,
-        parameters: List[Dict[str, Any]],
+        parameters: list[dict[str, Any]],
         enabled: bool,
         updated_by: str,
-        comment: Optional[str] = None,
-    ) -> Optional[ToolItem]:
-        def _op() -> Optional[ToolItem]:
+        comment: str | None = None,
+    ) -> ToolItem | None:
+        def _op() -> ToolItem | None:
             table = _get_table()
             resp = table.get_item(Key={"PK": _tool_pk(tool_id), "SK": _SK_METADATA})
             if not resp.get("Item"):
@@ -1545,7 +1473,7 @@ class DynamoDBReportStore(ReportStore):
             toolset_id = existing["toolset_id"]
             current_version = int(existing.get("current_version", 0))
             version = current_version + 1
-            now = datetime.now(tz=timezone.utc).isoformat()
+            now = datetime.now(tz=UTC).isoformat()
             base = _strip_none(
                 {
                     "tool_id": tool_id,
@@ -1603,12 +1531,8 @@ class DynamoDBReportStore(ReportStore):
                 ExpressionAttributeValues={":pk": _tool_pk(tool_id)},
                 ProjectionExpression="PK, SK",
             )
-            keys_to_delete = [
-                {"PK": i["PK"], "SK": i["SK"]} for i in items_resp.get("Items", [])
-            ]
-            keys_to_delete.append(
-                {"PK": _tool_list_pk(toolset_id), "SK": _tool_list_sk(tool_id)}
-            )
+            keys_to_delete = [{"PK": i["PK"], "SK": i["SK"]} for i in items_resp.get("Items", [])]
+            keys_to_delete.append({"PK": _tool_list_pk(toolset_id), "SK": _tool_list_sk(tool_id)})
             with table.batch_writer() as batch:
                 for key in keys_to_delete:
                     batch.delete_item(Key=key)
@@ -1616,8 +1540,8 @@ class DynamoDBReportStore(ReportStore):
 
         return await asyncio.to_thread(_op)
 
-    async def list_tool_versions(self, tool_id: str) -> List[ToolVersion]:
-        def _op() -> List[ToolVersion]:
+    async def list_tool_versions(self, tool_id: str) -> list[ToolVersion]:
+        def _op() -> list[ToolVersion]:
             table = _get_table()
             resp = table.query(
                 KeyConditionExpression="PK = :pk AND begins_with(SK, :prefix)",
@@ -1631,14 +1555,10 @@ class DynamoDBReportStore(ReportStore):
 
         return await asyncio.to_thread(_op)
 
-    async def get_tool_version(
-        self, tool_id: str, version: int
-    ) -> Optional[ToolVersion]:
-        def _op() -> Optional[ToolVersion]:
+    async def get_tool_version(self, tool_id: str, version: int) -> ToolVersion | None:
+        def _op() -> ToolVersion | None:
             table = _get_table()
-            resp = table.get_item(
-                Key={"PK": _tool_pk(tool_id), "SK": _version_sk(version)}
-            )
+            resp = table.get_item(Key={"PK": _tool_pk(tool_id), "SK": _version_sk(version)})
             item = resp.get("Item")
             if not item:
                 return None
@@ -1646,18 +1566,14 @@ class DynamoDBReportStore(ReportStore):
 
         return await asyncio.to_thread(_op)
 
-    async def list_enabled_tools(self) -> List[ToolItem]:
-        def _op() -> List[ToolItem]:
+    async def list_enabled_tools(self) -> list[ToolItem]:
+        def _op() -> list[ToolItem]:
             table = _get_table()
             ts_resp = table.query(
                 KeyConditionExpression="PK = :pk",
                 ExpressionAttributeValues={":pk": _PK_TOOLSET_LIST},
             )
-            enabled_toolset_ids = [
-                item["toolset_id"]
-                for item in ts_resp.get("Items", [])
-                if item.get("enabled", True)
-            ]
+            enabled_toolset_ids = [item["toolset_id"] for item in ts_resp.get("Items", []) if item.get("enabled", True)]
             tools = []
             for toolset_id in enabled_toolset_ids:
                 tool_list_resp = table.query(
@@ -1683,8 +1599,8 @@ class DynamoDBReportStore(ReportStore):
     # Roles (user-defined, versioned)
     # ------------------------------------------------------------------
 
-    async def list_roles(self) -> List[RoleItem]:
-        def _op() -> List[RoleItem]:
+    async def list_roles(self) -> list[RoleItem]:
+        def _op() -> list[RoleItem]:
             table = _get_table()
             resp = table.query(
                 KeyConditionExpression="PK = :pk",
@@ -1694,8 +1610,8 @@ class DynamoDBReportStore(ReportStore):
 
         return await asyncio.to_thread(_op)
 
-    async def get_role(self, role_id: str) -> Optional[RoleItem]:
-        def _op() -> Optional[RoleItem]:
+    async def get_role(self, role_id: str) -> RoleItem | None:
+        def _op() -> RoleItem | None:
             table = _get_table()
             resp = table.get_item(Key={"PK": _role_pk(role_id), "SK": _SK_METADATA})
             item = resp.get("Item")
@@ -1705,8 +1621,8 @@ class DynamoDBReportStore(ReportStore):
 
         return await asyncio.to_thread(_op)
 
-    async def get_role_by_name(self, name: str) -> Optional[RoleItem]:
-        def _op() -> Optional[RoleItem]:
+    async def get_role_by_name(self, name: str) -> RoleItem | None:
+        def _op() -> RoleItem | None:
             table = _get_table()
             resp = table.query(
                 KeyConditionExpression="PK = :pk",
@@ -1725,11 +1641,11 @@ class DynamoDBReportStore(ReportStore):
         self,
         name: str,
         description: str,
-        permissions: List[str],
+        permissions: list[str],
         created_by: str,
     ) -> RoleItem:
         role_id = generate_report_id()
-        now = datetime.now(tz=timezone.utc).isoformat()
+        now = datetime.now(tz=UTC).isoformat()
         version = 1
         base = _strip_none(
             {
@@ -1773,11 +1689,11 @@ class DynamoDBReportStore(ReportStore):
         role_id: str,
         name: str,
         description: str,
-        permissions: List[str],
+        permissions: list[str],
         updated_by: str,
-        comment: Optional[str] = None,
-    ) -> Optional[RoleItem]:
-        def _op() -> Optional[RoleItem]:
+        comment: str | None = None,
+    ) -> RoleItem | None:
+        def _op() -> RoleItem | None:
             table = _get_table()
             resp = table.get_item(Key={"PK": _role_pk(role_id), "SK": _SK_METADATA})
             if not resp.get("Item"):
@@ -1785,7 +1701,7 @@ class DynamoDBReportStore(ReportStore):
             existing = resp["Item"]
             current_version = int(existing.get("current_version", 0))
             version = current_version + 1
-            now = datetime.now(tz=timezone.utc).isoformat()
+            now = datetime.now(tz=UTC).isoformat()
             base = _strip_none(
                 {
                     "role_id": role_id,
@@ -1831,10 +1747,7 @@ class DynamoDBReportStore(ReportStore):
                 ExpressionAttributeValues={":pk": _role_pk(role_id)},
                 ProjectionExpression="PK, SK",
             )
-            keys_to_delete = [
-                {"PK": item["PK"], "SK": item["SK"]}
-                for item in items_resp.get("Items", [])
-            ]
+            keys_to_delete = [{"PK": item["PK"], "SK": item["SK"]} for item in items_resp.get("Items", [])]
             keys_to_delete.append({"PK": _PK_ROLE_LIST, "SK": _role_list_sk(role_id)})
             with table.batch_writer() as batch:
                 for key in keys_to_delete:
@@ -1843,8 +1756,8 @@ class DynamoDBReportStore(ReportStore):
 
         return await asyncio.to_thread(_op)
 
-    async def list_role_versions(self, role_id: str) -> List[RoleVersion]:
-        def _op() -> List[RoleVersion]:
+    async def list_role_versions(self, role_id: str) -> list[RoleVersion]:
+        def _op() -> list[RoleVersion]:
             table = _get_table()
             resp = table.query(
                 KeyConditionExpression="PK = :pk AND begins_with(SK, :prefix)",
@@ -1858,14 +1771,10 @@ class DynamoDBReportStore(ReportStore):
 
         return await asyncio.to_thread(_op)
 
-    async def get_role_version(
-        self, role_id: str, version: int
-    ) -> Optional[RoleVersion]:
-        def _op() -> Optional[RoleVersion]:
+    async def get_role_version(self, role_id: str, version: int) -> RoleVersion | None:
+        def _op() -> RoleVersion | None:
             table = _get_table()
-            resp = table.get_item(
-                Key={"PK": _role_pk(role_id), "SK": _version_sk(version)}
-            )
+            resp = table.get_item(Key={"PK": _role_pk(role_id), "SK": _version_sk(version)})
             item = resp.get("Item")
             if not item:
                 return None
@@ -1880,7 +1789,7 @@ class DynamoDBReportStore(ReportStore):
     async def save_query_history(self, user_id: str, query: str) -> QueryHistoryItem:
         """Append a query execution to the user's history."""
         history_id = str(next(_get_snowflake_gen()))
-        now = datetime.now(tz=timezone.utc).isoformat()
+        now = datetime.now(tz=UTC).isoformat()
         item = {
             "PK": _query_history_pk(user_id),
             "SK": _query_history_sk(history_id),
@@ -1902,12 +1811,10 @@ class DynamoDBReportStore(ReportStore):
             executed_at=now,
         )
 
-    async def list_query_history(
-        self, user_id: str, page: int, per_page: int
-    ) -> tuple[List[QueryHistoryItem], int]:
+    async def list_query_history(self, user_id: str, page: int, per_page: int) -> tuple[list[QueryHistoryItem], int]:
         """Return a paginated page of query history (newest first) and the total count."""
 
-        def _op() -> tuple[List[QueryHistoryItem], int]:
+        def _op() -> tuple[list[QueryHistoryItem], int]:
             table = _get_table()
             pk = _query_history_pk(user_id)
 

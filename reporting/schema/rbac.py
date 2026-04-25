@@ -1,11 +1,9 @@
 """Pydantic models for RBAC roles."""
+
 from decimal import Decimal
 from typing import Any
-from typing import List
-from typing import Optional
 
-from pydantic import BaseModel
-from pydantic import field_validator
+from pydantic import BaseModel, field_validator
 
 
 def _coerce_decimal(value: Any) -> Any:
@@ -25,12 +23,12 @@ class RoleItem(BaseModel):
     role_id: str
     name: str
     description: str = ""
-    permissions: List[str] = []
+    permissions: list[str] = []
     current_version: int = 0
     created_at: str
     updated_at: str
     created_by: str
-    updated_by: Optional[str] = None
+    updated_by: str | None = None
 
     @field_validator("current_version", mode="before")
     @classmethod
@@ -46,11 +44,11 @@ class RoleVersion(BaseModel):
     role_id: str
     name: str
     description: str = ""
-    permissions: List[str] = []
+    permissions: list[str] = []
     version: int
     created_at: str
     created_by: str
-    comment: Optional[str] = None
+    comment: str | None = None
 
     @field_validator("version", mode="before")
     @classmethod
@@ -61,11 +59,11 @@ class RoleVersion(BaseModel):
 
 
 class RoleListResponse(BaseModel):
-    roles: List[RoleItem]
+    roles: list[RoleItem]
 
 
 class RoleVersionListResponse(BaseModel):
-    versions: List[RoleVersion]
+    versions: list[RoleVersion]
 
 
 class RoleIdResponse(BaseModel):
@@ -75,12 +73,12 @@ class RoleIdResponse(BaseModel):
 class CreateRoleRequest(BaseModel):
     name: str
     description: str = ""
-    permissions: List[str]
-    comment: Optional[str] = None
+    permissions: list[str]
+    comment: str | None = None
 
 
 class UpdateRoleRequest(BaseModel):
     name: str
     description: str = ""
-    permissions: List[str]
-    comment: Optional[str] = None
+    permissions: list[str]
+    comment: str | None = None

@@ -1,4 +1,5 @@
 """Tests for seizu_cli.commands.scheduled_queries."""
+
 from unittest.mock import MagicMock
 
 import pytest

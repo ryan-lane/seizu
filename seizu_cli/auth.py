@@ -7,16 +7,13 @@ storage raise a ``RuntimeError`` with an OS-specific message explaining how
 to fix the problem.  Passing ``--credentials-file PATH`` on any command
 forces file-based storage and bypasses the keyring requirement entirely.
 """
+
 import json
 import sys
 import time
-from abc import ABC
-from abc import abstractmethod
+from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import Any
-from typing import Dict
-from typing import Optional
-from typing import Union
 
 import requests
 from rich.console import Console
@@ -44,7 +41,7 @@ class TokenStore(ABC):
     """Abstract base for credential backends."""
 
     @abstractmethod
-    def load_token(self, api_url: str) -> Optional[str]:
+    def load_token(self, api_url: str) -> str | None:
         """Return the stored access token for *api_url*, or ``None``."""
 
     @abstractmethod
@@ -67,7 +64,7 @@ class KeyringStore(TokenStore):
     Linux, the SecretService/D-Bus backend (GNOME Keyring or KWallet).
     """
 
-    def load_token(self, api_url: str) -> Optional[str]:
+    def load_token(self, api_url: str) -> str | None:
         import keyring
 
         return keyring.get_password(_KEYRING_SERVICE, api_url)
@@ -99,7 +96,7 @@ class FileStore(TokenStore):
     def __init__(self, path: Path) -> None:
         self.path = path
 
-    def _load_all(self) -> Dict[str, Any]:
+    def _load_all(self) -> dict[str, Any]:
         if not self.path.exists():
             return {}
         try:
@@ -108,12 +105,12 @@ class FileStore(TokenStore):
         except (json.JSONDecodeError, OSError):
             return {}
 
-    def _save_all(self, data: Dict[str, Any]) -> None:
+    def _save_all(self, data: dict[str, Any]) -> None:
         self.path.parent.mkdir(parents=True, exist_ok=True)
         with open(self.path, "w") as f:
             json.dump(data, f, indent=2)
 
-    def load_token(self, api_url: str) -> Optional[str]:
+    def load_token(self, api_url: str) -> str | None:
         return self._load_all().get(api_url, {}).get("access_token")
 
     def save_token(self, api_url: str, token: str) -> None:
@@ -133,10 +130,7 @@ class FileStore(TokenStore):
         return f"credentials file ({self.path})"
 
 
-_NO_KEYRING_HINT = (
-    "Pass [bold]--credentials-file PATH[/bold] to store credentials in a "
-    "plain JSON file instead."
-)
+_NO_KEYRING_HINT = "Pass [bold]--credentials-file PATH[/bold] to store credentials in a plain JSON file instead."
 
 _OS_KEYRING_NAMES = {
     "darwin": "macOS Keychain",
@@ -173,8 +167,8 @@ def _os_unlock_hint() -> str:
 
 
 def get_store(
-    credentials_file: Optional[Path] = None,
-) -> Union[KeyringStore, FileStore]:
+    credentials_file: Path | None = None,
+) -> KeyringStore | FileStore:
     """Return the appropriate token store.
 
     If *credentials_file* is given, returns ``FileStore(credentials_file)``.
@@ -209,8 +203,7 @@ def get_store(
         raise
     except Exception as exc:
         raise RuntimeError(
-            f"Could not initialise {_os_keyring_name()}: {exc}\n"
-            f"{_os_unlock_hint()}\n{_NO_KEYRING_HINT}"
+            f"Could not initialise {_os_keyring_name()}: {exc}\n{_os_unlock_hint()}\n{_NO_KEYRING_HINT}"
         ) from exc
 
 
@@ -219,7 +212,7 @@ def get_store(
 # commands which don't need authentication still work without a --credentials-file.
 
 
-def load_token(api_url: str, credentials_file: Optional[Path] = None) -> Optional[str]:
+def load_token(api_url: str, credentials_file: Path | None = None) -> str | None:
     """Load the stored token for *api_url* using the auto-selected store.
 
     Returns ``None`` if the store is unavailable (no keyring and no
@@ -237,7 +230,7 @@ def load_token(api_url: str, credentials_file: Optional[Path] = None) -> Optiona
 # ---------------------------------------------------------------------------
 
 
-def _oidc_discovery(authority: str) -> Dict[str, Any]:
+def _oidc_discovery(authority: str) -> dict[str, Any]:
     resp = requests.get(
         f"{authority}/.well-known/openid-configuration",
         timeout=10,
@@ -246,7 +239,7 @@ def _oidc_discovery(authority: str) -> Dict[str, Any]:
     return resp.json()
 
 
-def _api_oidc_config(api_url: str) -> Dict[str, Any]:
+def _api_oidc_config(api_url: str) -> dict[str, Any]:
     """Return the ``oidc`` block from ``GET /api/v1/config``."""
     resp = requests.get(f"{api_url}/api/v1/config", timeout=10)
     resp.raise_for_status()
@@ -286,7 +279,7 @@ def device_authorize(api_url: str) -> str:
     scope = oidc.get("scope", "openid email profile")
 
     discovery = _oidc_discovery(authority)
-    device_endpoint: Optional[str] = discovery.get("device_authorization_endpoint")
+    device_endpoint: str | None = discovery.get("device_authorization_endpoint")
     token_endpoint: str = discovery["token_endpoint"]
 
     if not device_endpoint:
@@ -305,11 +298,11 @@ def device_authorize(api_url: str) -> str:
         timeout=10,
     )
     resp.raise_for_status()
-    device: Dict[str, Any] = resp.json()
+    device: dict[str, Any] = resp.json()
 
     user_code: str = device["user_code"]
     verification_uri: str = device["verification_uri"]
-    verification_uri_complete: Optional[str] = device.get("verification_uri_complete")
+    verification_uri_complete: str | None = device.get("verification_uri_complete")
     device_code: str = device["device_code"]
     expires_in: int = int(device.get("expires_in", 300))
     interval: int = int(device.get("interval", 5))
@@ -327,8 +320,7 @@ def device_authorize(api_url: str) -> str:
         )
     else:
         console.print(
-            f"  1. Open: [cyan]{verification_uri}[/cyan]\n"
-            f"  2. Enter code: [bold cyan]{user_code}[/bold cyan]\n"
+            f"  1. Open: [cyan]{verification_uri}[/cyan]\n  2. Enter code: [bold cyan]{user_code}[/bold cyan]\n"
         )
     console.print("Waiting for authorization", end="")
 

@@ -23,9 +23,7 @@ def test_handle_results(mocker):
     client_mock = mocker.MagicMock()
     client_mock.conversations_join = mocker.MagicMock()
     client_mock.files_upload = mocker.MagicMock()
-    mocker.patch(
-        "reporting.scheduled_query_modules.slack._get_client", return_value=client_mock
-    )
+    mocker.patch("reporting.scheduled_query_modules.slack._get_client", return_value=client_mock)
 
     slack.handle_results("test_query", action, results)
     assert client_mock.conversations_join.call_count == 2

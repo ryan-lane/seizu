@@ -1,11 +1,7 @@
-from typing import List
-
-from fastapi import APIRouter
-from fastapi import Depends
+from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 
-from reporting.authnz import CurrentUser
-from reporting.authnz import sync_user_profile
+from reporting.authnz import CurrentUser, sync_user_profile
 from reporting.schema.report_config import User
 
 router = APIRouter()
@@ -15,7 +11,7 @@ class MeResponse(BaseModel):
     """Current user profile with resolved permissions."""
 
     user: User
-    permissions: List[str]
+    permissions: list[str]
 
 
 @router.get("/api/v1/me", response_model=MeResponse)

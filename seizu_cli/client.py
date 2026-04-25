@@ -2,8 +2,8 @@
 
 Handles Bearer token auth so commands do not need to think about it.
 """
+
 from typing import Any
-from typing import Optional
 
 import requests
 
@@ -19,7 +19,7 @@ class APIError(Exception):
 class SeizuClient:
     """Thin requests wrapper that handles Bearer auth."""
 
-    def __init__(self, base_url: str, token: Optional[str] = None) -> None:
+    def __init__(self, base_url: str, token: str | None = None) -> None:
         self.base_url = base_url.rstrip("/")
         self._session = requests.Session()
         if token:
@@ -30,8 +30,7 @@ class SeizuClient:
             if resp.status_code == 401:
                 raise APIError(
                     401,
-                    "Unauthorized. Run 'seizu login' to authenticate, "
-                    "or pass --token / set SEIZU_TOKEN.",
+                    "Unauthorized. Run 'seizu login' to authenticate, or pass --token / set SEIZU_TOKEN.",
                 )
             try:
                 body = resp.json()

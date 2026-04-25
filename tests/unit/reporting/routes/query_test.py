@@ -1,12 +1,9 @@
-from unittest.mock import AsyncMock
-from unittest.mock import MagicMock
+from unittest.mock import AsyncMock, MagicMock
 
-from httpx import ASGITransport
-from httpx import AsyncClient
+from httpx import ASGITransport, AsyncClient
 
 from reporting.app import create_app
-from reporting.authnz import CurrentUser
-from reporting.authnz import get_current_user
+from reporting.authnz import CurrentUser, get_current_user
 from reporting.authnz.permissions import ALL_PERMISSIONS
 from reporting.schema.report_config import User
 from reporting.services.query_validator import ValidationResult
@@ -20,9 +17,7 @@ _FAKE_USER = User(
     last_login="2024-01-01T00:00:00+00:00",
 )
 
-_FAKE_CURRENT_USER = CurrentUser(
-    user=_FAKE_USER, jwt_claims={}, permissions=ALL_PERMISSIONS
-)
+_FAKE_CURRENT_USER = CurrentUser(user=_FAKE_USER, jwt_claims={}, permissions=ALL_PERMISSIONS)
 
 
 def _mock_validate(mocker, errors=None, warnings=None):
@@ -53,9 +48,7 @@ async def test_query_success(mocker):
     )
 
     app = _make_app()
-    async with AsyncClient(
-        transport=ASGITransport(app=app), base_url="http://test"
-    ) as client:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         ret = await client.post(
             "/api/v1/query",
             json={"query": "MATCH (n) RETURN n.name AS name, count(n) AS count"},
@@ -76,9 +69,7 @@ async def test_query_success_with_warnings(mocker):
     )
 
     app = _make_app()
-    async with AsyncClient(
-        transport=ASGITransport(app=app), base_url="http://test"
-    ) as client:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         ret = await client.post(
             "/api/v1/query",
             json={"query": "MATCH (n:Foo) RETURN n.name AS name"},
@@ -99,9 +90,7 @@ async def test_query_with_params(mocker):
     )
 
     app = _make_app()
-    async with AsyncClient(
-        transport=ASGITransport(app=app), base_url="http://test"
-    ) as client:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         ret = await client.post(
             "/api/v1/query",
             json={
@@ -130,9 +119,7 @@ async def test_query_passes_params_to_validator(mocker):
     )
 
     app = _make_app()
-    async with AsyncClient(
-        transport=ASGITransport(app=app), base_url="http://test"
-    ) as client:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         await client.post(
             "/api/v1/query",
             json={
@@ -149,9 +136,7 @@ async def test_query_passes_params_to_validator(mocker):
 async def test_query_no_json_body(mocker):
 
     app = _make_app()
-    async with AsyncClient(
-        transport=ASGITransport(app=app), base_url="http://test"
-    ) as client:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         ret = await client.post(
             "/api/v1/query",
             content=b"not json",
@@ -163,9 +148,7 @@ async def test_query_no_json_body(mocker):
 async def test_query_missing_query_field(mocker):
 
     app = _make_app()
-    async with AsyncClient(
-        transport=ASGITransport(app=app), base_url="http://test"
-    ) as client:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         ret = await client.post(
             "/api/v1/query",
             json={"params": {"name": "Alice"}},
@@ -177,9 +160,7 @@ async def test_query_validation_errors_return_400_with_errors_and_warnings(mocke
     _mock_validate(mocker, errors=["Write queries are not allowed"])
 
     app = _make_app()
-    async with AsyncClient(
-        transport=ASGITransport(app=app), base_url="http://test"
-    ) as client:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         ret = await client.post(
             "/api/v1/query",
             json={"query": "CREATE (n) RETURN n"},
@@ -197,9 +178,7 @@ async def test_query_validation_errors_do_not_execute_query(mocker):
     )
 
     app = _make_app()
-    async with AsyncClient(
-        transport=ASGITransport(app=app), base_url="http://test"
-    ) as client:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         await client.post("/api/v1/query", json={"query": "CREATE (n) RETURN n"})
 
     mock_run.assert_not_called()
@@ -213,9 +192,7 @@ async def test_query_execution_failure(mocker):
     )
 
     app = _make_app()
-    async with AsyncClient(
-        transport=ASGITransport(app=app), base_url="http://test"
-    ) as client:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         ret = await client.post(
             "/api/v1/query",
             json={"query": "MATCH (n) RETURN n"},
@@ -243,9 +220,7 @@ async def test_query_serialize_node(mocker):
     )
 
     app = _make_app()
-    async with AsyncClient(
-        transport=ASGITransport(app=app), base_url="http://test"
-    ) as client:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         ret = await client.post(
             "/api/v1/query",
             json={"query": "MATCH (n:Person) RETURN n LIMIT 1"},
@@ -260,8 +235,7 @@ async def test_query_serialize_node(mocker):
 async def test_query_serialize_relationship(mocker):
     _mock_validate(mocker)
 
-    from neo4j.graph import Node
-    from neo4j.graph import Relationship
+    from neo4j.graph import Node, Relationship
 
     mock_start = MagicMock(spec=Node)
     mock_start.id = 1
@@ -284,9 +258,7 @@ async def test_query_serialize_relationship(mocker):
     )
 
     app = _make_app()
-    async with AsyncClient(
-        transport=ASGITransport(app=app), base_url="http://test"
-    ) as client:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         ret = await client.post(
             "/api/v1/query",
             json={"query": "MATCH ()-[r:KNOWS]->() RETURN r LIMIT 1"},
@@ -303,9 +275,7 @@ async def test_query_serialize_relationship(mocker):
 async def test_query_serialize_path(mocker):
     _mock_validate(mocker)
 
-    from neo4j.graph import Node
-    from neo4j.graph import Path
-    from neo4j.graph import Relationship
+    from neo4j.graph import Node, Path, Relationship
 
     mock_node1 = MagicMock(spec=Node)
     mock_node1.id = 1
@@ -337,9 +307,7 @@ async def test_query_serialize_path(mocker):
     )
 
     app = _make_app()
-    async with AsyncClient(
-        transport=ASGITransport(app=app), base_url="http://test"
-    ) as client:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         ret = await client.post(
             "/api/v1/query",
             json={"query": "MATCH p=shortestPath((a)-[*]-(b)) RETURN p LIMIT 1"},
@@ -366,9 +334,7 @@ async def test_query_save_history_when_flag_set(mocker):
     )
 
     app = _make_app()
-    async with AsyncClient(
-        transport=ASGITransport(app=app), base_url="http://test"
-    ) as client:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         await client.post(
             "/api/v1/query",
             json={"query": "MATCH (n) RETURN n LIMIT 1", "save_history": True},
@@ -395,9 +361,7 @@ async def test_query_does_not_save_history_by_default(mocker):
     )
 
     app = _make_app()
-    async with AsyncClient(
-        transport=ASGITransport(app=app), base_url="http://test"
-    ) as client:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         await client.post(
             "/api/v1/query",
             json={"query": "MATCH (n) RETURN n LIMIT 1"},

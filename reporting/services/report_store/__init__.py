@@ -1,28 +1,23 @@
 import logging
 from datetime import datetime
 from typing import Any
-from typing import Dict
-from typing import List
-from typing import Optional
 
-from reporting.schema.mcp_config import ToolItem
-from reporting.schema.mcp_config import ToolsetListItem
-from reporting.schema.mcp_config import ToolsetVersion
-from reporting.schema.mcp_config import ToolVersion
-from reporting.schema.rbac import RoleItem
-from reporting.schema.rbac import RoleVersion
-from reporting.schema.report_config import PanelStat
-from reporting.schema.report_config import QueryHistoryItem
-from reporting.schema.report_config import ReportListItem
-from reporting.schema.report_config import ReportVersion
-from reporting.schema.report_config import ScheduledQueryItem
-from reporting.schema.report_config import ScheduledQueryVersion
-from reporting.schema.report_config import User
+from reporting.schema.mcp_config import ToolItem, ToolsetListItem, ToolsetVersion, ToolVersion
+from reporting.schema.rbac import RoleItem, RoleVersion
+from reporting.schema.report_config import (
+    PanelStat,
+    QueryHistoryItem,
+    ReportListItem,
+    ReportVersion,
+    ScheduledQueryItem,
+    ScheduledQueryVersion,
+    User,
+)
 from reporting.services.report_store.base import ReportStore
 
 logger = logging.getLogger(__name__)
 
-_store: Optional[ReportStore] = None
+_store: ReportStore | None = None
 
 
 def get_store() -> ReportStore:
@@ -58,19 +53,19 @@ async def initialize() -> None:
     await get_store().initialize()
 
 
-async def list_reports() -> List[ReportListItem]:
+async def list_reports() -> list[ReportListItem]:
     return await get_store().list_reports()
 
 
-async def get_report_latest(report_id: str) -> Optional[ReportVersion]:
+async def get_report_latest(report_id: str) -> ReportVersion | None:
     return await get_store().get_report_latest(report_id)
 
 
-async def get_report_version(report_id: str, version: int) -> Optional[ReportVersion]:
+async def get_report_version(report_id: str, version: int) -> ReportVersion | None:
     return await get_store().get_report_version(report_id, version)
 
 
-async def list_report_versions(report_id: str) -> List[ReportVersion]:
+async def list_report_versions(report_id: str) -> list[ReportVersion]:
     return await get_store().list_report_versions(report_id)
 
 
@@ -86,10 +81,10 @@ async def create_report(
 
 async def save_report_version(
     report_id: str,
-    config: Dict[str, Any],
+    config: dict[str, Any],
     created_by: str,
-    comment: Optional[str] = None,
-) -> Optional[ReportVersion]:
+    comment: str | None = None,
+) -> ReportVersion | None:
     return await get_store().save_report_version(
         report_id=report_id,
         config=config,
@@ -106,7 +101,7 @@ async def pin_report(report_id: str, pinned: bool) -> bool:
     return await get_store().pin_report(report_id, pinned)
 
 
-async def get_dashboard_report_id() -> Optional[str]:
+async def get_dashboard_report_id() -> str | None:
     return await get_store().get_dashboard_report_id()
 
 
@@ -114,7 +109,7 @@ async def set_dashboard_report(report_id: str) -> bool:
     return await get_store().set_dashboard_report(report_id)
 
 
-async def get_dashboard_report() -> Optional[ReportVersion]:
+async def get_dashboard_report() -> ReportVersion | None:
     return await get_store().get_dashboard_report()
 
 
@@ -122,7 +117,7 @@ async def get_or_create_user(
     sub: str,
     iss: str,
     email: str,
-    display_name: Optional[str] = None,
+    display_name: str | None = None,
 ) -> User:
     return await get_store().get_or_create_user(
         sub=sub,
@@ -135,8 +130,8 @@ async def get_or_create_user(
 async def update_user_profile(
     user_id: str,
     email: str,
-    display_name: Optional[str] = None,
-    token_iat: Optional[datetime] = None,
+    display_name: str | None = None,
+    token_iat: datetime | None = None,
 ) -> User:
     return await get_store().update_user_profile(
         user_id=user_id,
@@ -146,7 +141,7 @@ async def update_user_profile(
     )
 
 
-async def get_user(user_id: str) -> Optional[User]:
+async def get_user(user_id: str) -> User | None:
     return await get_store().get_user(user_id)
 
 
@@ -154,26 +149,26 @@ async def archive_user(user_id: str) -> bool:
     return await get_store().archive_user(user_id)
 
 
-async def list_panel_stats() -> List[PanelStat]:
+async def list_panel_stats() -> list[PanelStat]:
     return await get_store().list_panel_stats()
 
 
-async def list_scheduled_queries() -> List[ScheduledQueryItem]:
+async def list_scheduled_queries() -> list[ScheduledQueryItem]:
     return await get_store().list_scheduled_queries()
 
 
-async def get_scheduled_query(sq_id: str) -> Optional[ScheduledQueryItem]:
+async def get_scheduled_query(sq_id: str) -> ScheduledQueryItem | None:
     return await get_store().get_scheduled_query(sq_id)
 
 
 async def create_scheduled_query(
     name: str,
     cypher: str,
-    params: List[Dict[str, Any]],
-    frequency: Optional[int],
-    watch_scans: List[Dict[str, Any]],
+    params: list[dict[str, Any]],
+    frequency: int | None,
+    watch_scans: list[dict[str, Any]],
     enabled: bool,
-    actions: List[Dict[str, Any]],
+    actions: list[dict[str, Any]],
     created_by: str,
 ) -> ScheduledQueryItem:
     return await get_store().create_scheduled_query(
@@ -192,14 +187,14 @@ async def update_scheduled_query(
     sq_id: str,
     name: str,
     cypher: str,
-    params: List[Dict[str, Any]],
-    frequency: Optional[int],
-    watch_scans: List[Dict[str, Any]],
+    params: list[dict[str, Any]],
+    frequency: int | None,
+    watch_scans: list[dict[str, Any]],
     enabled: bool,
-    actions: List[Dict[str, Any]],
+    actions: list[dict[str, Any]],
     updated_by: str,
-    comment: Optional[str] = None,
-) -> Optional[ScheduledQueryItem]:
+    comment: str | None = None,
+) -> ScheduledQueryItem | None:
     return await get_store().update_scheduled_query(
         sq_id=sq_id,
         name=name,
@@ -214,33 +209,25 @@ async def update_scheduled_query(
     )
 
 
-async def acquire_scheduled_query_lock(
-    sq_id: str, expected_last_scheduled_at: Optional[str]
-) -> bool:
+async def acquire_scheduled_query_lock(sq_id: str, expected_last_scheduled_at: str | None) -> bool:
     return await get_store().acquire_scheduled_query_lock(
         sq_id=sq_id, expected_last_scheduled_at=expected_last_scheduled_at
     )
 
 
-async def record_scheduled_query_result(
-    sq_id: str, status: str, error: Optional[str] = None
-) -> None:
-    await get_store().record_scheduled_query_result(
-        sq_id=sq_id, status=status, error=error
-    )
+async def record_scheduled_query_result(sq_id: str, status: str, error: str | None = None) -> None:
+    await get_store().record_scheduled_query_result(sq_id=sq_id, status=status, error=error)
 
 
 async def delete_scheduled_query(sq_id: str) -> bool:
     return await get_store().delete_scheduled_query(sq_id)
 
 
-async def list_scheduled_query_versions(sq_id: str) -> List[ScheduledQueryVersion]:
+async def list_scheduled_query_versions(sq_id: str) -> list[ScheduledQueryVersion]:
     return await get_store().list_scheduled_query_versions(sq_id)
 
 
-async def get_scheduled_query_version(
-    sq_id: str, version: int
-) -> Optional[ScheduledQueryVersion]:
+async def get_scheduled_query_version(sq_id: str, version: int) -> ScheduledQueryVersion | None:
     return await get_store().get_scheduled_query_version(sq_id, version)
 
 
@@ -249,11 +236,11 @@ async def get_scheduled_query_version(
 # ---------------------------------------------------------------------------
 
 
-async def list_toolsets() -> List[ToolsetListItem]:
+async def list_toolsets() -> list[ToolsetListItem]:
     return await get_store().list_toolsets()
 
 
-async def get_toolset(toolset_id: str) -> Optional[ToolsetListItem]:
+async def get_toolset(toolset_id: str) -> ToolsetListItem | None:
     return await get_store().get_toolset(toolset_id)
 
 
@@ -277,8 +264,8 @@ async def update_toolset(
     description: str,
     enabled: bool,
     updated_by: str,
-    comment: Optional[str] = None,
-) -> Optional[ToolsetListItem]:
+    comment: str | None = None,
+) -> ToolsetListItem | None:
     return await get_store().update_toolset(
         toolset_id=toolset_id,
         name=name,
@@ -293,13 +280,11 @@ async def delete_toolset(toolset_id: str) -> bool:
     return await get_store().delete_toolset(toolset_id)
 
 
-async def list_toolset_versions(toolset_id: str) -> List[ToolsetVersion]:
+async def list_toolset_versions(toolset_id: str) -> list[ToolsetVersion]:
     return await get_store().list_toolset_versions(toolset_id)
 
 
-async def get_toolset_version(
-    toolset_id: str, version: int
-) -> Optional[ToolsetVersion]:
+async def get_toolset_version(toolset_id: str, version: int) -> ToolsetVersion | None:
     return await get_store().get_toolset_version(toolset_id, version)
 
 
@@ -308,11 +293,11 @@ async def get_toolset_version(
 # ---------------------------------------------------------------------------
 
 
-async def list_tools(toolset_id: str) -> List[ToolItem]:
+async def list_tools(toolset_id: str) -> list[ToolItem]:
     return await get_store().list_tools(toolset_id)
 
 
-async def get_tool(tool_id: str) -> Optional[ToolItem]:
+async def get_tool(tool_id: str) -> ToolItem | None:
     return await get_store().get_tool(tool_id)
 
 
@@ -321,10 +306,10 @@ async def create_tool(
     name: str,
     description: str,
     cypher: str,
-    parameters: List[Dict[str, Any]],
+    parameters: list[dict[str, Any]],
     enabled: bool,
     created_by: str,
-) -> Optional[ToolItem]:
+) -> ToolItem | None:
     return await get_store().create_tool(
         toolset_id=toolset_id,
         name=name,
@@ -341,11 +326,11 @@ async def update_tool(
     name: str,
     description: str,
     cypher: str,
-    parameters: List[Dict[str, Any]],
+    parameters: list[dict[str, Any]],
     enabled: bool,
     updated_by: str,
-    comment: Optional[str] = None,
-) -> Optional[ToolItem]:
+    comment: str | None = None,
+) -> ToolItem | None:
     return await get_store().update_tool(
         tool_id=tool_id,
         name=name,
@@ -362,15 +347,15 @@ async def delete_tool(tool_id: str) -> bool:
     return await get_store().delete_tool(tool_id)
 
 
-async def list_tool_versions(tool_id: str) -> List[ToolVersion]:
+async def list_tool_versions(tool_id: str) -> list[ToolVersion]:
     return await get_store().list_tool_versions(tool_id)
 
 
-async def get_tool_version(tool_id: str, version: int) -> Optional[ToolVersion]:
+async def get_tool_version(tool_id: str, version: int) -> ToolVersion | None:
     return await get_store().get_tool_version(tool_id, version)
 
 
-async def list_enabled_tools() -> List[ToolItem]:
+async def list_enabled_tools() -> list[ToolItem]:
     return await get_store().list_enabled_tools()
 
 
@@ -383,12 +368,8 @@ async def save_query_history(user_id: str, query: str) -> QueryHistoryItem:
     return await get_store().save_query_history(user_id=user_id, query=query)
 
 
-async def list_query_history(
-    user_id: str, page: int, per_page: int
-) -> tuple[List[QueryHistoryItem], int]:
-    return await get_store().list_query_history(
-        user_id=user_id, page=page, per_page=per_page
-    )
+async def list_query_history(user_id: str, page: int, per_page: int) -> tuple[list[QueryHistoryItem], int]:
+    return await get_store().list_query_history(user_id=user_id, page=page, per_page=per_page)
 
 
 # ---------------------------------------------------------------------------
@@ -396,22 +377,22 @@ async def list_query_history(
 # ---------------------------------------------------------------------------
 
 
-async def list_roles() -> List[RoleItem]:
+async def list_roles() -> list[RoleItem]:
     return await get_store().list_roles()
 
 
-async def get_role(role_id: str) -> Optional[RoleItem]:
+async def get_role(role_id: str) -> RoleItem | None:
     return await get_store().get_role(role_id)
 
 
-async def get_role_by_name(name: str) -> Optional[RoleItem]:
+async def get_role_by_name(name: str) -> RoleItem | None:
     return await get_store().get_role_by_name(name)
 
 
 async def create_role(
     name: str,
     description: str,
-    permissions: List[str],
+    permissions: list[str],
     created_by: str,
 ) -> RoleItem:
     return await get_store().create_role(
@@ -426,10 +407,10 @@ async def update_role(
     role_id: str,
     name: str,
     description: str,
-    permissions: List[str],
+    permissions: list[str],
     updated_by: str,
-    comment: Optional[str] = None,
-) -> Optional[RoleItem]:
+    comment: str | None = None,
+) -> RoleItem | None:
     return await get_store().update_role(
         role_id=role_id,
         name=name,
@@ -444,9 +425,9 @@ async def delete_role(role_id: str) -> bool:
     return await get_store().delete_role(role_id)
 
 
-async def list_role_versions(role_id: str) -> List[RoleVersion]:
+async def list_role_versions(role_id: str) -> list[RoleVersion]:
     return await get_store().list_role_versions(role_id)
 
 
-async def get_role_version(role_id: str, version: int) -> Optional[RoleVersion]:
+async def get_role_version(role_id: str, version: int) -> RoleVersion | None:
     return await get_store().get_role_version(role_id, version)

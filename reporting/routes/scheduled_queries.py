@@ -1,20 +1,19 @@
 import logging
 from typing import Any
 
-from fastapi import APIRouter
-from fastapi import Depends
-from fastapi import HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import JSONResponse
 
-from reporting.authnz import CurrentUser
-from reporting.authnz import require_permission
+from reporting.authnz import CurrentUser, require_permission
 from reporting.authnz.permissions import Permission
-from reporting.schema.report_config import CreateScheduledQueryRequest
-from reporting.schema.report_config import ScheduledQueryIdResponse
-from reporting.schema.report_config import ScheduledQueryItem
-from reporting.schema.report_config import ScheduledQueryListResponse
-from reporting.schema.report_config import ScheduledQueryVersion
-from reporting.schema.report_config import ScheduledQueryVersionListResponse
+from reporting.schema.report_config import (
+    CreateScheduledQueryRequest,
+    ScheduledQueryIdResponse,
+    ScheduledQueryItem,
+    ScheduledQueryListResponse,
+    ScheduledQueryVersion,
+    ScheduledQueryVersionListResponse,
+)
 from reporting.services import report_store
 from reporting.services.query_validator import validate_query
 from reporting.services.scheduled_query_validation import validate_action_configs
@@ -25,22 +24,16 @@ router = APIRouter()
 
 @router.get("/api/v1/scheduled-queries", response_model=ScheduledQueryListResponse)
 async def list_scheduled_queries(
-    current: CurrentUser = Depends(
-        require_permission(Permission.SCHEDULED_QUERIES_READ)
-    ),
+    current: CurrentUser = Depends(require_permission(Permission.SCHEDULED_QUERIES_READ)),
 ) -> ScheduledQueryListResponse:
     """List all scheduled queries."""
-    return ScheduledQueryListResponse(
-        scheduled_queries=await report_store.list_scheduled_queries()
-    )
+    return ScheduledQueryListResponse(scheduled_queries=await report_store.list_scheduled_queries())
 
 
 @router.get("/api/v1/scheduled-queries/{sq_id}", response_model=ScheduledQueryItem)
 async def get_scheduled_query(
     sq_id: str,
-    current: CurrentUser = Depends(
-        require_permission(Permission.SCHEDULED_QUERIES_READ)
-    ),
+    current: CurrentUser = Depends(require_permission(Permission.SCHEDULED_QUERIES_READ)),
 ) -> ScheduledQueryItem:
     """Return a scheduled query by ID."""
     item = await report_store.get_scheduled_query(sq_id)
@@ -56,9 +49,7 @@ async def get_scheduled_query(
 )
 async def create_scheduled_query(
     body: CreateScheduledQueryRequest,
-    current: CurrentUser = Depends(
-        require_permission(Permission.SCHEDULED_QUERIES_WRITE)
-    ),
+    current: CurrentUser = Depends(require_permission(Permission.SCHEDULED_QUERIES_WRITE)),
 ) -> Any:
     """Create a new scheduled query."""
     err = validate_action_configs(body.actions)
@@ -89,9 +80,7 @@ async def create_scheduled_query(
 async def update_scheduled_query(
     sq_id: str,
     body: CreateScheduledQueryRequest,
-    current: CurrentUser = Depends(
-        require_permission(Permission.SCHEDULED_QUERIES_WRITE)
-    ),
+    current: CurrentUser = Depends(require_permission(Permission.SCHEDULED_QUERIES_WRITE)),
 ) -> Any:
     """Update a scheduled query."""
     err = validate_action_configs(body.actions)
@@ -129,9 +118,7 @@ async def update_scheduled_query(
 )
 async def list_scheduled_query_versions(
     sq_id: str,
-    current: CurrentUser = Depends(
-        require_permission(Permission.SCHEDULED_QUERIES_READ)
-    ),
+    current: CurrentUser = Depends(require_permission(Permission.SCHEDULED_QUERIES_READ)),
 ) -> ScheduledQueryVersionListResponse:
     """List all versions of a scheduled query."""
     item = await report_store.get_scheduled_query(sq_id)
@@ -148,9 +135,7 @@ async def list_scheduled_query_versions(
 async def get_scheduled_query_version(
     sq_id: str,
     version: int,
-    current: CurrentUser = Depends(
-        require_permission(Permission.SCHEDULED_QUERIES_READ)
-    ),
+    current: CurrentUser = Depends(require_permission(Permission.SCHEDULED_QUERIES_READ)),
 ) -> ScheduledQueryVersion:
     """Return a specific version of a scheduled query."""
     v = await report_store.get_scheduled_query_version(sq_id, version)
@@ -165,9 +150,7 @@ async def get_scheduled_query_version(
 )
 async def delete_scheduled_query(
     sq_id: str,
-    current: CurrentUser = Depends(
-        require_permission(Permission.SCHEDULED_QUERIES_DELETE)
-    ),
+    current: CurrentUser = Depends(require_permission(Permission.SCHEDULED_QUERIES_DELETE)),
 ) -> ScheduledQueryIdResponse:
     """Delete a scheduled query."""
     ok = await report_store.delete_scheduled_query(sq_id)

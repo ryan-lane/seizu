@@ -1,10 +1,8 @@
 """CLI commands for managing toolsets and tools."""
+
 import json
 import sys
 from typing import Any
-from typing import Dict
-from typing import List
-from typing import Optional
 
 import typer
 from rich.console import Console
@@ -29,7 +27,7 @@ def _die(exc: Exception) -> None:
     sys.exit(1)
 
 
-def _print_toolset_detail(data: Dict[str, Any], as_json: bool) -> None:
+def _print_toolset_detail(data: dict[str, Any], as_json: bool) -> None:
     if as_json:
         console.print_json(json.dumps(data))
         return
@@ -37,14 +35,12 @@ def _print_toolset_detail(data: Dict[str, Any], as_json: bool) -> None:
     console.print(f"[bold]Name[/bold]: {data['name']}")
     console.print(f"[bold]Description[/bold]: {data.get('description', '')}")
     console.print(f"[bold]Enabled[/bold]: {data.get('enabled', True)}")
-    console.print(
-        f"[bold]Version[/bold]: {data.get('current_version', data.get('version'))}"
-    )
+    console.print(f"[bold]Version[/bold]: {data.get('current_version', data.get('version'))}")
     console.print(f"[bold]Created By[/bold]: {data['created_by']}")
     console.print(f"[bold]Updated By[/bold]: {data.get('updated_by', '')}")
 
 
-def _print_tool_detail(data: Dict[str, Any], as_json: bool) -> None:
+def _print_tool_detail(data: dict[str, Any], as_json: bool) -> None:
     if as_json:
         console.print_json(json.dumps(data))
         return
@@ -53,9 +49,7 @@ def _print_tool_detail(data: Dict[str, Any], as_json: bool) -> None:
     console.print(f"[bold]Name[/bold]: {data['name']}")
     console.print(f"[bold]Description[/bold]: {data.get('description', '')}")
     console.print(f"[bold]Enabled[/bold]: {data.get('enabled', True)}")
-    console.print(
-        f"[bold]Version[/bold]: {data.get('current_version', data.get('version'))}"
-    )
+    console.print(f"[bold]Version[/bold]: {data.get('current_version', data.get('version'))}")
     console.print(f"[bold]Created By[/bold]: {data['created_by']}")
     console.print(f"[bold]Updated By[/bold]: {data.get('updated_by', '')}")
     if data.get("parameters"):
@@ -70,9 +64,7 @@ def _print_tool_detail(data: Dict[str, Any], as_json: bool) -> None:
 
 @app.command("list")
 def list_toolsets(
-    output: str = typer.Option(
-        "table", "--output", "-o", help="Output format: table or json."
-    ),
+    output: str = typer.Option("table", "--output", "-o", help="Output format: table or json."),
 ) -> None:
     """List all toolsets."""
     try:
@@ -114,9 +106,7 @@ def list_toolsets(
 @app.command("get")
 def get_toolset(
     toolset_id: str = typer.Argument(help="Toolset ID."),
-    output: str = typer.Option(
-        "table", "--output", "-o", help="Output format: table or json."
-    ),
+    output: str = typer.Option("table", "--output", "-o", help="Output format: table or json."),
 ) -> None:
     """Get a toolset by ID."""
     try:
@@ -142,9 +132,7 @@ def create_toolset(
     except Exception as exc:
         _die(exc)
         return
-    console.print(
-        f"[green]Created[/green]: {data['toolset_id']}  name={data['name']!r}"
-    )
+    console.print(f"[green]Created[/green]: {data['toolset_id']}  name={data['name']!r}")
 
 
 @app.command("update")
@@ -152,12 +140,8 @@ def update_toolset(
     toolset_id: str = typer.Argument(help="Toolset ID."),
     name: str = typer.Option(..., "--name", "-n", help="New name."),
     description: str = typer.Option("", "--description", "-d", help="Description."),
-    enabled: bool = typer.Option(
-        True, "--enabled/--disabled", help="Enable or disable."
-    ),
-    comment: Optional[str] = typer.Option(
-        None, "--comment", "-c", help="Version comment."
-    ),
+    enabled: bool = typer.Option(True, "--enabled/--disabled", help="Enable or disable."),
+    comment: str | None = typer.Option(None, "--comment", "-c", help="Version comment."),
 ) -> None:
     """Update a toolset (creates a new version)."""
     try:
@@ -195,9 +179,7 @@ def delete_toolset(
 @app.command("versions")
 def list_toolset_versions(
     toolset_id: str = typer.Argument(help="Toolset ID."),
-    output: str = typer.Option(
-        "table", "--output", "-o", help="Output format: table or json."
-    ),
+    output: str = typer.Option("table", "--output", "-o", help="Output format: table or json."),
 ) -> None:
     """List all versions of a toolset."""
     try:
@@ -231,15 +213,11 @@ def list_toolset_versions(
 def get_toolset_version(
     toolset_id: str = typer.Argument(help="Toolset ID."),
     version: int = typer.Argument(help="Version number."),
-    output: str = typer.Option(
-        "table", "--output", "-o", help="Output format: table or json."
-    ),
+    output: str = typer.Option("table", "--output", "-o", help="Output format: table or json."),
 ) -> None:
     """Get a specific version of a toolset."""
     try:
-        data = state.get_client().get(
-            f"/api/v1/toolsets/{toolset_id}/versions/{version}"
-        )
+        data = state.get_client().get(f"/api/v1/toolsets/{toolset_id}/versions/{version}")
     except Exception as exc:
         _die(exc)
         return
@@ -254,9 +232,7 @@ def get_toolset_version(
 @tools_app.command("list")
 def list_tools(
     toolset_id: str = typer.Argument(help="Toolset ID."),
-    output: str = typer.Option(
-        "table", "--output", "-o", help="Output format: table or json."
-    ),
+    output: str = typer.Option("table", "--output", "-o", help="Output format: table or json."),
 ) -> None:
     """List all tools in a toolset."""
     try:
@@ -299,9 +275,7 @@ def list_tools(
 def get_tool(
     toolset_id: str = typer.Argument(help="Toolset ID."),
     tool_id: str = typer.Argument(help="Tool ID."),
-    output: str = typer.Option(
-        "table", "--output", "-o", help="Output format: table or json."
-    ),
+    output: str = typer.Option("table", "--output", "-o", help="Output format: table or json."),
 ) -> None:
     """Get a tool by ID."""
     try:
@@ -318,7 +292,7 @@ def create_tool(
     name: str = typer.Option(..., "--name", "-n", help="Tool name."),
     cypher: str = typer.Option(..., "--cypher", help="Cypher query."),
     description: str = typer.Option("", "--description", "-d", help="Description."),
-    parameters: Optional[str] = typer.Option(
+    parameters: str | None = typer.Option(
         None,
         "--parameters",
         help="Parameters as a JSON array of ToolParamDef objects.",
@@ -326,14 +300,12 @@ def create_tool(
     disabled: bool = typer.Option(False, "--disabled", help="Create as disabled."),
 ) -> None:
     """Create a new tool within a toolset."""
-    params: List[Dict[str, Any]] = []
+    params: list[dict[str, Any]] = []
     if parameters:
         try:
             params = json.loads(parameters)
         except json.JSONDecodeError as exc:
-            err_console.print(
-                f"[red]Error[/red]: --parameters is not valid JSON: {exc}"
-            )
+            err_console.print(f"[red]Error[/red]: --parameters is not valid JSON: {exc}")
             sys.exit(1)
     try:
         data = state.get_client().post(
@@ -359,27 +331,21 @@ def update_tool(
     name: str = typer.Option(..., "--name", "-n", help="New name."),
     cypher: str = typer.Option(..., "--cypher", help="Cypher query."),
     description: str = typer.Option("", "--description", "-d", help="Description."),
-    parameters: Optional[str] = typer.Option(
+    parameters: str | None = typer.Option(
         None,
         "--parameters",
         help="Parameters as a JSON array of ToolParamDef objects.",
     ),
-    enabled: bool = typer.Option(
-        True, "--enabled/--disabled", help="Enable or disable."
-    ),
-    comment: Optional[str] = typer.Option(
-        None, "--comment", "-c", help="Version comment."
-    ),
+    enabled: bool = typer.Option(True, "--enabled/--disabled", help="Enable or disable."),
+    comment: str | None = typer.Option(None, "--comment", "-c", help="Version comment."),
 ) -> None:
     """Update a tool (creates a new version)."""
-    params: List[Dict[str, Any]] = []
+    params: list[dict[str, Any]] = []
     if parameters:
         try:
             params = json.loads(parameters)
         except json.JSONDecodeError as exc:
-            err_console.print(
-                f"[red]Error[/red]: --parameters is not valid JSON: {exc}"
-            )
+            err_console.print(f"[red]Error[/red]: --parameters is not valid JSON: {exc}")
             sys.exit(1)
     try:
         data = state.get_client().put(
@@ -420,7 +386,7 @@ def delete_tool(
 def call_tool(
     toolset_id: str = typer.Argument(help="Toolset ID."),
     tool_id: str = typer.Argument(help="Tool ID."),
-    arg: List[str] = typer.Option(
+    arg: list[str] = typer.Option(
         [],
         "--arg",
         help=(
@@ -429,17 +395,15 @@ def call_tool(
             "Ignored if --args-json is provided."
         ),
     ),
-    args_json: Optional[str] = typer.Option(
+    args_json: str | None = typer.Option(
         None,
         "--args-json",
         help="All arguments as a JSON object (overrides --arg).",
     ),
-    output: str = typer.Option(
-        "table", "--output", "-o", help="Output format: table or json."
-    ),
+    output: str = typer.Option("table", "--output", "-o", help="Output format: table or json."),
 ) -> None:
     """Execute a tool's Cypher query with the provided arguments."""
-    arguments: Dict[str, Any] = {}
+    arguments: dict[str, Any] = {}
 
     if args_json is not None:
         try:
@@ -493,15 +457,11 @@ def call_tool(
 def list_tool_versions(
     toolset_id: str = typer.Argument(help="Toolset ID."),
     tool_id: str = typer.Argument(help="Tool ID."),
-    output: str = typer.Option(
-        "table", "--output", "-o", help="Output format: table or json."
-    ),
+    output: str = typer.Option("table", "--output", "-o", help="Output format: table or json."),
 ) -> None:
     """List all versions of a tool."""
     try:
-        data = state.get_client().get(
-            f"/api/v1/toolsets/{toolset_id}/tools/{tool_id}/versions"
-        )
+        data = state.get_client().get(f"/api/v1/toolsets/{toolset_id}/tools/{tool_id}/versions")
     except Exception as exc:
         _die(exc)
         return
@@ -532,15 +492,11 @@ def get_tool_version(
     toolset_id: str = typer.Argument(help="Toolset ID."),
     tool_id: str = typer.Argument(help="Tool ID."),
     version: int = typer.Argument(help="Version number."),
-    output: str = typer.Option(
-        "table", "--output", "-o", help="Output format: table or json."
-    ),
+    output: str = typer.Option("table", "--output", "-o", help="Output format: table or json."),
 ) -> None:
     """Get a specific version of a tool."""
     try:
-        data = state.get_client().get(
-            f"/api/v1/toolsets/{toolset_id}/tools/{tool_id}/versions/{version}"
-        )
+        data = state.get_client().get(f"/api/v1/toolsets/{toolset_id}/tools/{tool_id}/versions/{version}")
     except Exception as exc:
         _die(exc)
         return

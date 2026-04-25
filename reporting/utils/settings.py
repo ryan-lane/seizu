@@ -1,5 +1,4 @@
 from os import getenv
-from typing import List
 
 
 def bool_env(var_name: str, default: bool = False) -> bool:
@@ -50,7 +49,7 @@ def str_env(var_name: str, default: str = "") -> str:
     return getenv(var_name, default)
 
 
-def list_env(var_name: str, default: List[str] = None) -> List:
+def list_env(var_name: str, default: list[str] = None) -> list:
     """
     Get an environment variable as a string.
     This has the same arguments as bool_env.

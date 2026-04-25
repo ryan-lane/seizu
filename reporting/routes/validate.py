@@ -1,11 +1,8 @@
-from fastapi import APIRouter
-from fastapi import Depends
+from fastapi import APIRouter, Depends
 
-from reporting.authnz import CurrentUser
-from reporting.authnz import require_permission
+from reporting.authnz import CurrentUser, require_permission
 from reporting.authnz.permissions import Permission
-from reporting.schema.query import QueryRequest
-from reporting.schema.query import ValidationResponse
+from reporting.schema.query import QueryRequest, ValidationResponse
 from reporting.services.query_validator import validate_query
 
 router = APIRouter()

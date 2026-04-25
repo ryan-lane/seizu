@@ -1,34 +1,27 @@
 """Built-in ``roles__*`` tools — built-in + user-defined role management."""
+
 from typing import Any
-from typing import Dict
-from typing import Optional
 
 from reporting.authnz import CurrentUser
-from reporting.authnz.permissions import BUILTIN_ROLES
-from reporting.authnz.permissions import Permission
-from reporting.schema.rbac import CreateRoleRequest
-from reporting.schema.rbac import UpdateRoleRequest
+from reporting.authnz.permissions import BUILTIN_ROLES, Permission
+from reporting.schema.rbac import CreateRoleRequest, UpdateRoleRequest
 from reporting.services import report_store
-from reporting.services.mcp_builtins.base import BuiltinGroup
-from reporting.services.mcp_builtins.base import BuiltinTool
-from reporting.services.mcp_builtins.base import model_input_schema
+from reporting.services.mcp_builtins.base import BuiltinGroup, BuiltinTool, model_input_schema
 
 GROUP = "roles"
 
 
-def _require_user(current_user: Optional[CurrentUser]) -> CurrentUser:
+def _require_user(current_user: CurrentUser | None) -> CurrentUser:
     if current_user is None:
         raise RuntimeError("No current user on the request context")
     return current_user
 
 
-def _role_id_prop() -> Dict[str, Any]:
+def _role_id_prop() -> dict[str, Any]:
     return {"role_id": {"type": "string"}}
 
 
-async def _list_builtin(
-    args: Dict[str, Any], current_user: Optional[CurrentUser]
-) -> Dict[str, Any]:
+async def _list_builtin(args: dict[str, Any], current_user: CurrentUser | None) -> dict[str, Any]:
     return {
         "roles": [
             {
@@ -42,25 +35,19 @@ async def _list_builtin(
     }
 
 
-async def _list(
-    args: Dict[str, Any], current_user: Optional[CurrentUser]
-) -> Dict[str, Any]:
+async def _list(args: dict[str, Any], current_user: CurrentUser | None) -> dict[str, Any]:
     roles = await report_store.list_roles()
     return {"roles": [r.model_dump() for r in roles]}
 
 
-async def _get(
-    args: Dict[str, Any], current_user: Optional[CurrentUser]
-) -> Dict[str, Any]:
+async def _get(args: dict[str, Any], current_user: CurrentUser | None) -> dict[str, Any]:
     role = await report_store.get_role(args["role_id"])
     if not role:
         return {"error": "Role not found"}
     return role.model_dump()
 
 
-async def _create(
-    args: Dict[str, Any], current_user: Optional[CurrentUser]
-) -> Dict[str, Any]:
+async def _create(args: dict[str, Any], current_user: CurrentUser | None) -> dict[str, Any]:
     user = _require_user(current_user)
     body = CreateRoleRequest.model_validate(args)
     role = await report_store.create_role(
@@ -72,14 +59,10 @@ async def _create(
     return role.model_dump()
 
 
-async def _update(
-    args: Dict[str, Any], current_user: Optional[CurrentUser]
-) -> Dict[str, Any]:
+async def _update(args: dict[str, Any], current_user: CurrentUser | None) -> dict[str, Any]:
     user = _require_user(current_user)
     role_id = args["role_id"]
-    body = UpdateRoleRequest.model_validate(
-        {k: v for k, v in args.items() if k != "role_id"}
-    )
+    body = UpdateRoleRequest.model_validate({k: v for k, v in args.items() if k != "role_id"})
     role = await report_store.update_role(
         role_id=role_id,
         name=body.name,
@@ -93,18 +76,14 @@ async def _update(
     return role.model_dump()
 
 
-async def _delete(
-    args: Dict[str, Any], current_user: Optional[CurrentUser]
-) -> Dict[str, Any]:
+async def _delete(args: dict[str, Any], current_user: CurrentUser | None) -> dict[str, Any]:
     ok = await report_store.delete_role(args["role_id"])
     if not ok:
         return {"error": "Role not found"}
     return {"role_id": args["role_id"]}
 
 
-async def _list_versions(
-    args: Dict[str, Any], current_user: Optional[CurrentUser]
-) -> Dict[str, Any]:
+async def _list_versions(args: dict[str, Any], current_user: CurrentUser | None) -> dict[str, Any]:
     role_id = args["role_id"]
     role = await report_store.get_role(role_id)
     if not role:
@@ -113,9 +92,7 @@ async def _list_versions(
     return {"versions": [v.model_dump() for v in versions]}
 
 
-async def _get_version(
-    args: Dict[str, Any], current_user: Optional[CurrentUser]
-) -> Dict[str, Any]:
+async def _get_version(args: dict[str, Any], current_user: CurrentUser | None) -> dict[str, Any]:
     v = await report_store.get_role_version(args["role_id"], int(args["version"]))
     if not v:
         return {"error": "Role version not found"}

@@ -1,15 +1,12 @@
 """seed / export commands — bulk-load or dump YAML config via the Seizu API."""
+
 import re
 import sys
 from typing import Any
-from typing import Dict
-from typing import List
-from typing import Optional
 
 from rich.console import Console
 
-from seizu_cli import schema
-from seizu_cli import state
+from seizu_cli import schema, state
 from seizu_cli.client import APIError
 
 console = Console()
@@ -33,11 +30,11 @@ def _die(exc: Exception) -> None:
     sys.exit(1)
 
 
-def _list_reports() -> List[Dict[str, Any]]:
+def _list_reports() -> list[dict[str, Any]]:
     return state.get_client().get("/api/v1/reports").get("reports", [])
 
 
-def _get_report(report_id: str) -> Optional[Dict[str, Any]]:
+def _get_report(report_id: str) -> dict[str, Any] | None:
     try:
         return state.get_client().get(f"/api/v1/reports/{report_id}")
     except APIError as exc:
@@ -46,20 +43,18 @@ def _get_report(report_id: str) -> Optional[Dict[str, Any]]:
         raise
 
 
-def _list_scheduled_queries() -> List[Dict[str, Any]]:
-    return (
-        state.get_client().get("/api/v1/scheduled-queries").get("scheduled_queries", [])
-    )
+def _list_scheduled_queries() -> list[dict[str, Any]]:
+    return state.get_client().get("/api/v1/scheduled-queries").get("scheduled_queries", [])
 
 
 def _sq_content_changed(
-    existing: Dict[str, Any],
+    existing: dict[str, Any],
     resolved_cypher: str,
-    params: List[Dict[str, Any]],
-    frequency: Optional[int],
-    watch_scans: List[Dict[str, Any]],
+    params: list[dict[str, Any]],
+    frequency: int | None,
+    watch_scans: list[dict[str, Any]],
     enabled: bool,
-    actions: List[Dict[str, Any]],
+    actions: list[dict[str, Any]],
 ) -> bool:
     return (
         existing.get("cypher") != resolved_cypher
@@ -71,18 +66,16 @@ def _sq_content_changed(
     )
 
 
-def _list_toolsets() -> List[Dict[str, Any]]:
+def _list_toolsets() -> list[dict[str, Any]]:
     return state.get_client().get("/api/v1/toolsets").get("toolsets", [])
 
 
-def _list_tools(toolset_id: str) -> List[Dict[str, Any]]:
-    return (
-        state.get_client().get(f"/api/v1/toolsets/{toolset_id}/tools").get("tools", [])
-    )
+def _list_tools(toolset_id: str) -> list[dict[str, Any]]:
+    return state.get_client().get(f"/api/v1/toolsets/{toolset_id}/tools").get("tools", [])
 
 
 def _toolset_content_changed(
-    existing: Dict[str, Any],
+    existing: dict[str, Any],
     name: str,
     description: str,
     enabled: bool,
@@ -95,11 +88,11 @@ def _toolset_content_changed(
 
 
 def _tool_content_changed(
-    existing: Dict[str, Any],
+    existing: dict[str, Any],
     name: str,
     description: str,
     cypher: str,
-    parameters: List[Dict[str, Any]],
+    parameters: list[dict[str, Any]],
     enabled: bool,
 ) -> bool:
     return (
@@ -116,9 +109,7 @@ def seed_cmd(config: str, force: bool, dry_run: bool) -> None:
     loaded = schema.load_file(config)
 
     if not loaded.reports and not loaded.scheduled_queries and not loaded.toolsets:
-        console.print(
-            "No reports, scheduled queries, or toolsets found in config file. Nothing to do."
-        )
+        console.print("No reports, scheduled queries, or toolsets found in config file. Nothing to do.")
         return
 
     try:
@@ -127,10 +118,10 @@ def seed_cmd(config: str, force: bool, dry_run: bool) -> None:
         _die(exc)
         return
 
-    existing_by_name: Dict[str, Dict[str, Any]] = {r["name"]: r for r in existing_list}
+    existing_by_name: dict[str, dict[str, Any]] = {r["name"]: r for r in existing_list}
 
     created = updated = skipped = 0
-    seeded_ids: Dict[str, str] = {}
+    seeded_ids: dict[str, str] = {}
 
     for report_key, report in loaded.reports.items():
         report_config_dict = report.model_dump(exclude_none=True)
@@ -140,17 +131,13 @@ def seed_cmd(config: str, force: bool, dry_run: bool) -> None:
             if not force:
                 latest = _get_report(existing["report_id"])
                 if latest and latest.get("config") == report_config_dict:
-                    console.print(
-                        f"[dim][skip][/dim] '{report.name}' (config unchanged)"
-                    )
+                    console.print(f"[dim][skip][/dim] '{report.name}' (config unchanged)")
                     skipped += 1
                     seeded_ids[report_key] = existing["report_id"]
                     continue
 
             if dry_run:
-                console.print(
-                    f"[yellow][dry-run][/yellow] would update report '{report.name}' (key: {report_key})"
-                )
+                console.print(f"[yellow][dry-run][/yellow] would update report '{report.name}' (key: {report_key})")
                 updated += 1
                 seeded_ids[report_key] = existing["report_id"]
                 continue
@@ -171,16 +158,12 @@ def seed_cmd(config: str, force: bool, dry_run: bool) -> None:
             continue
 
         if dry_run:
-            console.print(
-                f"[yellow][dry-run][/yellow] would create report '{report.name}' (key: {report_key})"
-            )
+            console.print(f"[yellow][dry-run][/yellow] would create report '{report.name}' (key: {report_key})")
             created += 1
             continue
 
         try:
-            new_report = state.get_client().post(
-                "/api/v1/reports", json={"name": report.name}
-            )
+            new_report = state.get_client().post("/api/v1/reports", json={"name": report.name})
             state.get_client().post(
                 f"/api/v1/reports/{new_report['report_id']}/versions",
                 json={"config": report_config_dict, "comment": SEED_COMMENT},
@@ -203,9 +186,7 @@ def seed_cmd(config: str, force: bool, dry_run: bool) -> None:
             except Exception as exc:
                 _die(exc)
                 return
-            console.print(
-                f"[green][dashboard][/green] set to '{dashboard_id}' (key: {loaded.dashboard})"
-            )
+            console.print(f"[green][dashboard][/green] set to '{dashboard_id}' (key: {loaded.dashboard})")
         else:
             msg = (
                 f"[yellow][warn][/yellow] dashboard key '{loaded.dashboard}'"
@@ -234,9 +215,7 @@ def _seed_scheduled_queries(
         return
 
     try:
-        existing_items: Dict[str, Dict[str, Any]] = {
-            item["name"]: item for item in _list_scheduled_queries()
-        }
+        existing_items: dict[str, dict[str, Any]] = {item["name"]: item for item in _list_scheduled_queries()}
     except Exception as exc:
         _die(exc)
         return
@@ -249,7 +228,7 @@ def _seed_scheduled_queries(
         watch_scans = [ws.model_dump() for ws in sq.watch_scans]
         actions = [a.model_dump() for a in sq.actions]
         enabled = sq.enabled if sq.enabled is not None else True
-        frequency: Optional[int] = sq.frequency
+        frequency: int | None = sq.frequency
 
         existing = existing_items.get(sq.name)
 
@@ -264,15 +243,11 @@ def _seed_scheduled_queries(
                 actions,
             )
             if not changed:
-                console.print(
-                    f"  [dim][skip][/dim] scheduled query '{sq.name}' (unchanged)"
-                )
+                console.print(f"  [dim][skip][/dim] scheduled query '{sq.name}' (unchanged)")
                 skipped += 1
                 continue
             if dry_run:
-                console.print(
-                    f"  [yellow][dry-run][/yellow] would update scheduled query '{sq.name}'"
-                )
+                console.print(f"  [yellow][dry-run][/yellow] would update scheduled query '{sq.name}'")
                 updated += 1
                 continue
             try:
@@ -292,16 +267,12 @@ def _seed_scheduled_queries(
             except Exception as exc:
                 _die(exc)
                 return
-            console.print(
-                f"  [blue][updated][/blue] '{existing['scheduled_query_id']}'  name='{sq.name}'"
-            )
+            console.print(f"  [blue][updated][/blue] '{existing['scheduled_query_id']}'  name='{sq.name}'")
             updated += 1
             continue
 
         if dry_run:
-            console.print(
-                f"  [yellow][dry-run][/yellow] would create scheduled query '{sq.name}'"
-            )
+            console.print(f"  [yellow][dry-run][/yellow] would create scheduled query '{sq.name}'")
             created += 1
             continue
 
@@ -321,14 +292,10 @@ def _seed_scheduled_queries(
         except Exception as exc:
             _die(exc)
             return
-        console.print(
-            f"  [green][created][/green] '{result['scheduled_query_id']}'  name='{sq.name}'"
-        )
+        console.print(f"  [green][created][/green] '{result['scheduled_query_id']}'  name='{sq.name}'")
         created += 1
 
-    console.print(
-        f"  Scheduled queries: created={created} updated={updated} skipped={skipped}"
-    )
+    console.print(f"  Scheduled queries: created={created} updated={updated} skipped={skipped}")
 
 
 def _seed_toolsets(
@@ -341,9 +308,7 @@ def _seed_toolsets(
         return
 
     try:
-        existing_toolsets: Dict[str, Dict[str, Any]] = {
-            item["name"]: item for item in _list_toolsets()
-        }
+        existing_toolsets: dict[str, dict[str, Any]] = {item["name"]: item for item in _list_toolsets()}
     except Exception as exc:
         _die(exc)
         return
@@ -356,19 +321,13 @@ def _seed_toolsets(
         enabled = ts_def.enabled if ts_def.enabled is not None else True
 
         if existing_ts:
-            changed = force or _toolset_content_changed(
-                existing_ts, ts_def.name, description, enabled
-            )
+            changed = force or _toolset_content_changed(existing_ts, ts_def.name, description, enabled)
             if not changed:
-                console.print(
-                    f"  [dim][skip][/dim] toolset '{ts_def.name}' (unchanged)"
-                )
+                console.print(f"  [dim][skip][/dim] toolset '{ts_def.name}' (unchanged)")
                 ts_skipped += 1
                 toolset_id = existing_ts["toolset_id"]
             elif dry_run:
-                console.print(
-                    f"  [yellow][dry-run][/yellow] would update toolset '{ts_def.name}' (key: {ts_key})"
-                )
+                console.print(f"  [yellow][dry-run][/yellow] would update toolset '{ts_def.name}' (key: {ts_key})")
                 ts_updated += 1
                 toolset_id = existing_ts["toolset_id"]
             else:
@@ -391,9 +350,7 @@ def _seed_toolsets(
                 ts_updated += 1
                 toolset_id = existing_ts["toolset_id"]
         elif dry_run:
-            console.print(
-                f"  [yellow][dry-run][/yellow] would create toolset '{ts_def.name}' (key: {ts_key})"
-            )
+            console.print(f"  [yellow][dry-run][/yellow] would create toolset '{ts_def.name}' (key: {ts_key})")
             ts_created += 1
             toolset_id = None
         else:
@@ -419,9 +376,7 @@ def _seed_toolsets(
             continue
 
         try:
-            existing_tools: Dict[str, Dict[str, Any]] = {
-                t["name"]: t for t in _list_tools(toolset_id)
-            }
+            existing_tools: dict[str, dict[str, Any]] = {t["name"]: t for t in _list_tools(toolset_id)}
         except Exception as exc:
             _die(exc)
             return
@@ -442,9 +397,7 @@ def _seed_toolsets(
                     tool_enabled,
                 )
                 if not tool_changed:
-                    console.print(
-                        f"    [dim][skip][/dim] tool '{tool_def.name}' (unchanged)"
-                    )
+                    console.print(f"    [dim][skip][/dim] tool '{tool_def.name}' (unchanged)")
                 elif dry_run:
                     console.print(
                         f"    [yellow][dry-run][/yellow] would update tool '{tool_def.name}' (key: {tool_key})"
@@ -470,9 +423,7 @@ def _seed_toolsets(
                         f"  name='{tool_def.name}'  yaml_key='{tool_key}'"
                     )
             elif dry_run:
-                console.print(
-                    f"    [yellow][dry-run][/yellow] would create tool '{tool_def.name}' (key: {tool_key})"
-                )
+                console.print(f"    [yellow][dry-run][/yellow] would create tool '{tool_def.name}' (key: {tool_key})")
             else:
                 try:
                     result = state.get_client().post(
@@ -492,9 +443,7 @@ def _seed_toolsets(
                     f"    [green][created][/green] '{result['tool_id']}'  name='{tool_def.name}'  yaml_key='{tool_key}'"
                 )
 
-    console.print(
-        f"  Toolsets: created={ts_created} updated={ts_updated} skipped={ts_skipped}"
-    )
+    console.print(f"  Toolsets: created={ts_created} updated={ts_updated} skipped={ts_skipped}")
 
 
 def export_cmd(config: str, dry_run: bool) -> None:
@@ -502,9 +451,7 @@ def export_cmd(config: str, dry_run: bool) -> None:
     try:
         existing_cfg = schema.load_file(config)
     except FileNotFoundError:
-        err_console.print(
-            f"[yellow][warn][/yellow] Config file '{config}' not found, starting from empty config."
-        )
+        err_console.print(f"[yellow][warn][/yellow] Config file '{config}' not found, starting from empty config.")
         existing_cfg = schema.ReportingConfig()
 
     name_to_key = {r.name: k for k, r in existing_cfg.reports.items()}
@@ -515,35 +462,29 @@ def export_cmd(config: str, dry_run: bool) -> None:
         _die(exc)
         return
 
-    dashboard_id: Optional[str] = None
+    dashboard_id: str | None = None
     try:
         dashboard_data = state.get_client().get("/api/v1/reports/dashboard")
         dashboard_id = dashboard_data.get("report_id")
     except APIError as exc:
         if exc.status_code != 404:
-            err_console.print(
-                f"[yellow][warn][/yellow] Could not fetch dashboard pointer: {exc}"
-            )
+            err_console.print(f"[yellow][warn][/yellow] Could not fetch dashboard pointer: {exc}")
 
-    new_reports: Dict[str, Any] = {}
-    dashboard_key: Optional[str] = None
+    new_reports: dict[str, Any] = {}
+    dashboard_key: str | None = None
     exported = failed = 0
 
     for item in sorted(report_list, key=lambda r: r["name"]):
         latest = _get_report(item["report_id"])
         if not latest:
-            err_console.print(
-                f"[yellow][warn][/yellow] No version found for '{item['name']}', skipping."
-            )
+            err_console.print(f"[yellow][warn][/yellow] No version found for '{item['name']}', skipping.")
             failed += 1
             continue
 
         try:
             report_obj = schema.Report.model_validate(latest["config"])
         except Exception as exc:
-            err_console.print(
-                f"[yellow][warn][/yellow] Invalid config for '{item['name']}': {exc} — skipping."
-            )
+            err_console.print(f"[yellow][warn][/yellow] Invalid config for '{item['name']}': {exc} — skipping.")
             failed += 1
             continue
 
@@ -562,7 +503,7 @@ def export_cmd(config: str, dry_run: bool) -> None:
 
     # Export toolsets
     ts_name_to_key = {ts.name: k for k, ts in existing_cfg.toolsets.items()}
-    new_toolsets: Dict[str, Any] = {}
+    new_toolsets: dict[str, Any] = {}
     ts_exported = ts_failed = 0
 
     try:
@@ -579,7 +520,7 @@ def export_cmd(config: str, dry_run: bool) -> None:
             ts_key = f"{base_key}-{suffix}"
             suffix += 1
 
-        tool_key_by_name: Dict[str, str] = {}
+        tool_key_by_name: dict[str, str] = {}
         if ts_item["name"] in existing_cfg.toolsets:
             existing_ts_def = existing_cfg.toolsets[ts_name_to_key[ts_item["name"]]]
             tool_key_by_name = {td.name: tk for tk, td in existing_ts_def.tools.items()}
@@ -593,7 +534,7 @@ def export_cmd(config: str, dry_run: bool) -> None:
             ts_failed += 1
             continue
 
-        new_tools: Dict[str, Any] = {}
+        new_tools: dict[str, Any] = {}
         for tool in sorted(tools_data, key=lambda t: t["name"]):
             tool_key = tool_key_by_name.get(tool["name"]) or _slugify(tool["name"])
             base_tool_key = tool_key
@@ -601,10 +542,7 @@ def export_cmd(config: str, dry_run: bool) -> None:
             while tool_key in new_tools and new_tools[tool_key].name != tool["name"]:
                 tool_key = f"{base_tool_key}-{suffix}"
                 suffix += 1
-            params = [
-                schema.ToolParamDef.model_validate(p)
-                for p in tool.get("parameters", [])
-            ]
+            params = [schema.ToolParamDef.model_validate(p) for p in tool.get("parameters", [])]
             new_tools[tool_key] = schema.ToolDef(
                 name=tool["name"],
                 description=tool.get("description", ""),
@@ -619,16 +557,12 @@ def export_cmd(config: str, dry_run: bool) -> None:
             enabled=ts_item.get("enabled", True),
             tools=new_tools,
         )
-        console.print(
-            f"[green][export][/green] toolset '{ts_item['name']}' ({len(new_tools)} tools) → key='{ts_key}'"
-        )
+        console.print(f"[green][export][/green] toolset '{ts_item['name']}' ({len(new_tools)} tools) → key='{ts_key}'")
         ts_exported += 1
 
     updated_cfg = schema.ReportingConfig(
         queries=existing_cfg.queries,
-        dashboard=dashboard_key
-        if dashboard_key is not None
-        else existing_cfg.dashboard,
+        dashboard=dashboard_key if dashboard_key is not None else existing_cfg.dashboard,
         reports=new_reports,
         scheduled_queries=existing_cfg.scheduled_queries,
         toolsets=new_toolsets,

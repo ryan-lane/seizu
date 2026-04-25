@@ -1,15 +1,11 @@
 from unittest.mock import AsyncMock
 
-from httpx import ASGITransport
-from httpx import AsyncClient
+from httpx import ASGITransport, AsyncClient
 
 from reporting.app import create_app
-from reporting.authnz import CurrentUser
-from reporting.authnz import get_current_user
-from reporting.authnz.permissions import ALL_PERMISSIONS
-from reporting.authnz.permissions import VIEWER_PERMISSIONS
-from reporting.schema.rbac import RoleItem
-from reporting.schema.rbac import RoleVersion
+from reporting.authnz import CurrentUser, get_current_user
+from reporting.authnz.permissions import ALL_PERMISSIONS, VIEWER_PERMISSIONS
+from reporting.schema.rbac import RoleItem, RoleVersion
 from reporting.schema.report_config import User
 
 _FAKE_USER = User(
@@ -65,9 +61,7 @@ def _make_app(current_user: CurrentUser = _ADMIN_USER) -> object:
 
 async def test_list_builtin_roles(mocker):
     app = _make_app()
-    async with AsyncClient(
-        transport=ASGITransport(app=app), base_url="http://test"
-    ) as client:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         ret = await client.get("/api/v1/roles/builtin")
     assert ret.status_code == 200
     names = [r["name"] for r in ret.json()["roles"]]
@@ -78,9 +72,7 @@ async def test_list_builtin_roles(mocker):
 
 async def test_list_builtin_roles_includes_permissions(mocker):
     app = _make_app()
-    async with AsyncClient(
-        transport=ASGITransport(app=app), base_url="http://test"
-    ) as client:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         ret = await client.get("/api/v1/roles/builtin")
     roles_by_name = {r["name"]: r for r in ret.json()["roles"]}
     assert "reports:read" in roles_by_name["seizu-viewer"]["permissions"]
@@ -89,14 +81,8 @@ async def test_list_builtin_roles_includes_permissions(mocker):
 
 
 async def test_list_builtin_roles_forbidden_without_permission(mocker):
-    app = _make_app(
-        current_user=CurrentUser(
-            user=_FAKE_USER, jwt_claims={}, permissions=frozenset()
-        )
-    )
-    async with AsyncClient(
-        transport=ASGITransport(app=app), base_url="http://test"
-    ) as client:
+    app = _make_app(current_user=CurrentUser(user=_FAKE_USER, jwt_claims={}, permissions=frozenset()))
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         ret = await client.get("/api/v1/roles/builtin")
     assert ret.status_code == 403
 
@@ -112,9 +98,7 @@ async def test_list_roles(mocker):
         new=AsyncMock(return_value=[_FAKE_ROLE]),
     )
     app = _make_app()
-    async with AsyncClient(
-        transport=ASGITransport(app=app), base_url="http://test"
-    ) as client:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         ret = await client.get("/api/v1/roles")
     assert ret.status_code == 200
     assert len(ret.json()["roles"]) == 1
@@ -127,23 +111,15 @@ async def test_list_roles_empty(mocker):
         new=AsyncMock(return_value=[]),
     )
     app = _make_app()
-    async with AsyncClient(
-        transport=ASGITransport(app=app), base_url="http://test"
-    ) as client:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         ret = await client.get("/api/v1/roles")
     assert ret.status_code == 200
     assert ret.json()["roles"] == []
 
 
 async def test_list_roles_forbidden_without_permission(mocker):
-    app = _make_app(
-        current_user=CurrentUser(
-            user=_FAKE_USER, jwt_claims={}, permissions=frozenset()
-        )
-    )
-    async with AsyncClient(
-        transport=ASGITransport(app=app), base_url="http://test"
-    ) as client:
+    app = _make_app(current_user=CurrentUser(user=_FAKE_USER, jwt_claims={}, permissions=frozenset()))
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         ret = await client.get("/api/v1/roles")
     assert ret.status_code == 403
 
@@ -159,9 +135,7 @@ async def test_create_role(mocker):
         new=AsyncMock(return_value=_FAKE_ROLE),
     )
     app = _make_app()
-    async with AsyncClient(
-        transport=ASGITransport(app=app), base_url="http://test"
-    ) as client:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         ret = await client.post(
             "/api/v1/roles",
             json={"name": "Custom Role", "permissions": ["reports:read"]},
@@ -173,9 +147,7 @@ async def test_create_role(mocker):
 
 async def test_create_role_forbidden_for_viewer(mocker):
     app = _make_app(current_user=_VIEWER_USER)
-    async with AsyncClient(
-        transport=ASGITransport(app=app), base_url="http://test"
-    ) as client:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         ret = await client.post(
             "/api/v1/roles",
             json={"name": "Custom Role", "permissions": ["reports:read"]},
@@ -194,9 +166,7 @@ async def test_get_role(mocker):
         new=AsyncMock(return_value=_FAKE_ROLE),
     )
     app = _make_app()
-    async with AsyncClient(
-        transport=ASGITransport(app=app), base_url="http://test"
-    ) as client:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         ret = await client.get("/api/v1/roles/role1")
     assert ret.status_code == 200
     assert ret.json()["role_id"] == "role1"
@@ -208,9 +178,7 @@ async def test_get_role_not_found(mocker):
         new=AsyncMock(return_value=None),
     )
     app = _make_app()
-    async with AsyncClient(
-        transport=ASGITransport(app=app), base_url="http://test"
-    ) as client:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         ret = await client.get("/api/v1/roles/nonexistent")
     assert ret.status_code == 404
 
@@ -227,9 +195,7 @@ async def test_update_role(mocker):
         new=AsyncMock(return_value=updated),
     )
     app = _make_app()
-    async with AsyncClient(
-        transport=ASGITransport(app=app), base_url="http://test"
-    ) as client:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         ret = await client.put(
             "/api/v1/roles/role1",
             json={"name": "Updated Role", "permissions": ["reports:read"]},
@@ -244,9 +210,7 @@ async def test_update_role_not_found(mocker):
         new=AsyncMock(return_value=None),
     )
     app = _make_app()
-    async with AsyncClient(
-        transport=ASGITransport(app=app), base_url="http://test"
-    ) as client:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         ret = await client.put(
             "/api/v1/roles/nonexistent",
             json={"name": "X", "permissions": []},
@@ -256,9 +220,7 @@ async def test_update_role_not_found(mocker):
 
 async def test_update_role_forbidden_for_viewer(mocker):
     app = _make_app(current_user=_VIEWER_USER)
-    async with AsyncClient(
-        transport=ASGITransport(app=app), base_url="http://test"
-    ) as client:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         ret = await client.put(
             "/api/v1/roles/role1",
             json={"name": "X", "permissions": []},
@@ -277,9 +239,7 @@ async def test_delete_role(mocker):
         new=AsyncMock(return_value=True),
     )
     app = _make_app()
-    async with AsyncClient(
-        transport=ASGITransport(app=app), base_url="http://test"
-    ) as client:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         ret = await client.delete("/api/v1/roles/role1")
     assert ret.status_code == 200
     assert ret.json()["role_id"] == "role1"
@@ -291,18 +251,14 @@ async def test_delete_role_not_found(mocker):
         new=AsyncMock(return_value=False),
     )
     app = _make_app()
-    async with AsyncClient(
-        transport=ASGITransport(app=app), base_url="http://test"
-    ) as client:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         ret = await client.delete("/api/v1/roles/nonexistent")
     assert ret.status_code == 404
 
 
 async def test_delete_role_forbidden_for_viewer(mocker):
     app = _make_app(current_user=_VIEWER_USER)
-    async with AsyncClient(
-        transport=ASGITransport(app=app), base_url="http://test"
-    ) as client:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         ret = await client.delete("/api/v1/roles/role1")
     assert ret.status_code == 403
 
@@ -322,9 +278,7 @@ async def test_list_role_versions(mocker):
         new=AsyncMock(return_value=[_FAKE_ROLE_VERSION]),
     )
     app = _make_app()
-    async with AsyncClient(
-        transport=ASGITransport(app=app), base_url="http://test"
-    ) as client:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         ret = await client.get("/api/v1/roles/role1/versions")
     assert ret.status_code == 200
     assert len(ret.json()["versions"]) == 1
@@ -337,9 +291,7 @@ async def test_list_role_versions_role_not_found(mocker):
         new=AsyncMock(return_value=None),
     )
     app = _make_app()
-    async with AsyncClient(
-        transport=ASGITransport(app=app), base_url="http://test"
-    ) as client:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         ret = await client.get("/api/v1/roles/nonexistent/versions")
     assert ret.status_code == 404
 
@@ -355,9 +307,7 @@ async def test_get_role_version(mocker):
         new=AsyncMock(return_value=_FAKE_ROLE_VERSION),
     )
     app = _make_app()
-    async with AsyncClient(
-        transport=ASGITransport(app=app), base_url="http://test"
-    ) as client:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         ret = await client.get("/api/v1/roles/role1/versions/1")
     assert ret.status_code == 200
     assert ret.json()["version"] == 1
@@ -370,8 +320,6 @@ async def test_get_role_version_not_found(mocker):
         new=AsyncMock(return_value=None),
     )
     app = _make_app()
-    async with AsyncClient(
-        transport=ASGITransport(app=app), base_url="http://test"
-    ) as client:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         ret = await client.get("/api/v1/roles/role1/versions/99")
     assert ret.status_code == 404

@@ -1,16 +1,11 @@
 from unittest.mock import AsyncMock
 
-from httpx import ASGITransport
-from httpx import AsyncClient
+from httpx import ASGITransport, AsyncClient
 
 from reporting.app import create_app
-from reporting.authnz import CurrentUser
-from reporting.authnz import get_current_user
+from reporting.authnz import CurrentUser, get_current_user
 from reporting.authnz.permissions import ALL_PERMISSIONS
-from reporting.schema.mcp_config import ToolItem
-from reporting.schema.mcp_config import ToolsetListItem
-from reporting.schema.mcp_config import ToolsetVersion
-from reporting.schema.mcp_config import ToolVersion
+from reporting.schema.mcp_config import ToolItem, ToolsetListItem, ToolsetVersion, ToolVersion
 from reporting.schema.report_config import User
 from reporting.services.query_validator import ValidationResult
 
@@ -23,12 +18,8 @@ _FAKE_USER = User(
     created_at="2024-01-01T00:00:00+00:00",
     last_login="2024-01-01T00:00:00+00:00",
 )
-_FAKE_CURRENT_USER = CurrentUser(
-    user=_FAKE_USER, jwt_claims={}, permissions=ALL_PERMISSIONS
-)
-_UNPRIVILEGED_CURRENT_USER = CurrentUser(
-    user=_FAKE_USER, jwt_claims={}, permissions=frozenset()
-)
+_FAKE_CURRENT_USER = CurrentUser(user=_FAKE_USER, jwt_claims={}, permissions=ALL_PERMISSIONS)
+_UNPRIVILEGED_CURRENT_USER = CurrentUser(user=_FAKE_USER, jwt_claims={}, permissions=frozenset())
 
 _TS_ID = "ts-abc123"
 _TOOL_ID = "tool-xyz456"
@@ -40,9 +31,7 @@ def _make_app():
     return app
 
 
-def _toolset_item(
-    ts_id: str = _TS_ID, name: str = "My Toolset", version: int = 1
-) -> ToolsetListItem:
+def _toolset_item(ts_id: str = _TS_ID, name: str = "My Toolset", version: int = 1) -> ToolsetListItem:
     return ToolsetListItem(
         toolset_id=ts_id,
         name=name,
@@ -68,9 +57,7 @@ def _toolset_version(ts_id: str = _TS_ID, version: int = 1) -> ToolsetVersion:
     )
 
 
-def _tool_item(
-    tool_id: str = _TOOL_ID, ts_id: str = _TS_ID, version: int = 1
-) -> ToolItem:
+def _tool_item(tool_id: str = _TOOL_ID, ts_id: str = _TS_ID, version: int = 1) -> ToolItem:
     return ToolItem(
         tool_id=tool_id,
         toolset_id=ts_id,
@@ -86,9 +73,7 @@ def _tool_item(
     )
 
 
-def _tool_version(
-    tool_id: str = _TOOL_ID, ts_id: str = _TS_ID, version: int = 1
-) -> ToolVersion:
+def _tool_version(tool_id: str = _TOOL_ID, ts_id: str = _TS_ID, version: int = 1) -> ToolVersion:
     return ToolVersion(
         tool_id=tool_id,
         toolset_id=ts_id,
@@ -129,9 +114,7 @@ async def test_list_toolsets_success(mocker):
         new=AsyncMock(return_value=[_toolset_item()]),
     )
     app = _make_app()
-    async with AsyncClient(
-        transport=ASGITransport(app=app), base_url="http://test"
-    ) as client:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         ret = await client.get("/api/v1/toolsets")
     assert ret.status_code == 200
     items = ret.json()["toolsets"]
@@ -148,9 +131,7 @@ async def test_list_toolsets_includes_builtins(mocker):
         new=AsyncMock(return_value=[]),
     )
     app = _make_app()
-    async with AsyncClient(
-        transport=ASGITransport(app=app), base_url="http://test"
-    ) as client:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         ret = await client.get("/api/v1/toolsets")
     assert ret.status_code == 200
     items = ret.json()["toolsets"]
@@ -167,9 +148,7 @@ async def test_list_toolsets_empty_user_still_returns_builtins(mocker):
         new=AsyncMock(return_value=[]),
     )
     app = _make_app()
-    async with AsyncClient(
-        transport=ASGITransport(app=app), base_url="http://test"
-    ) as client:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         ret = await client.get("/api/v1/toolsets")
     assert ret.status_code == 200
     items = ret.json()["toolsets"]
@@ -189,9 +168,7 @@ async def test_create_toolset_success(mocker):
         new=AsyncMock(return_value=_toolset_item()),
     )
     app = _make_app()
-    async with AsyncClient(
-        transport=ASGITransport(app=app), base_url="http://test"
-    ) as client:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         ret = await client.post("/api/v1/toolsets", json=_VALID_TOOLSET_BODY)
     assert ret.status_code == 201
     assert ret.json()["toolset_id"] == _TS_ID
@@ -199,9 +176,7 @@ async def test_create_toolset_success(mocker):
 
 async def test_create_toolset_invalid_body(mocker):
     app = _make_app()
-    async with AsyncClient(
-        transport=ASGITransport(app=app), base_url="http://test"
-    ) as client:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         ret = await client.post("/api/v1/toolsets", json={"invalid": "body"})
     assert ret.status_code == 422
 
@@ -217,9 +192,7 @@ async def test_get_toolset_success(mocker):
         new=AsyncMock(return_value=_toolset_item()),
     )
     app = _make_app()
-    async with AsyncClient(
-        transport=ASGITransport(app=app), base_url="http://test"
-    ) as client:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         ret = await client.get(f"/api/v1/toolsets/{_TS_ID}")
     assert ret.status_code == 200
     assert ret.json()["toolset_id"] == _TS_ID
@@ -231,9 +204,7 @@ async def test_get_toolset_not_found(mocker):
         new=AsyncMock(return_value=None),
     )
     app = _make_app()
-    async with AsyncClient(
-        transport=ASGITransport(app=app), base_url="http://test"
-    ) as client:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         ret = await client.get(f"/api/v1/toolsets/{_TS_ID}")
     assert ret.status_code == 404
     assert "error" in ret.json()
@@ -251,9 +222,7 @@ async def test_update_toolset_success(mocker):
     )
     app = _make_app()
     body = {**_VALID_TOOLSET_BODY, "comment": "Updated"}
-    async with AsyncClient(
-        transport=ASGITransport(app=app), base_url="http://test"
-    ) as client:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         ret = await client.put(f"/api/v1/toolsets/{_TS_ID}", json=body)
     assert ret.status_code == 200
     assert ret.json()["current_version"] == 2
@@ -265,9 +234,7 @@ async def test_update_toolset_not_found(mocker):
         new=AsyncMock(return_value=None),
     )
     app = _make_app()
-    async with AsyncClient(
-        transport=ASGITransport(app=app), base_url="http://test"
-    ) as client:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         ret = await client.put(f"/api/v1/toolsets/{_TS_ID}", json=_VALID_TOOLSET_BODY)
     assert ret.status_code == 404
 
@@ -283,9 +250,7 @@ async def test_delete_toolset_success(mocker):
         new=AsyncMock(return_value=True),
     )
     app = _make_app()
-    async with AsyncClient(
-        transport=ASGITransport(app=app), base_url="http://test"
-    ) as client:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         ret = await client.delete(f"/api/v1/toolsets/{_TS_ID}")
     assert ret.status_code == 200
     assert ret.json()["toolset_id"] == _TS_ID
@@ -297,9 +262,7 @@ async def test_delete_toolset_not_found(mocker):
         new=AsyncMock(return_value=False),
     )
     app = _make_app()
-    async with AsyncClient(
-        transport=ASGITransport(app=app), base_url="http://test"
-    ) as client:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         ret = await client.delete(f"/api/v1/toolsets/{_TS_ID}")
     assert ret.status_code == 404
 
@@ -319,9 +282,7 @@ async def test_list_toolset_versions_success(mocker):
         new=AsyncMock(return_value=[_toolset_version()]),
     )
     app = _make_app()
-    async with AsyncClient(
-        transport=ASGITransport(app=app), base_url="http://test"
-    ) as client:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         ret = await client.get(f"/api/v1/toolsets/{_TS_ID}/versions")
     assert ret.status_code == 200
     assert len(ret.json()["versions"]) == 1
@@ -334,9 +295,7 @@ async def test_list_toolset_versions_toolset_not_found(mocker):
         new=AsyncMock(return_value=None),
     )
     app = _make_app()
-    async with AsyncClient(
-        transport=ASGITransport(app=app), base_url="http://test"
-    ) as client:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         ret = await client.get(f"/api/v1/toolsets/{_TS_ID}/versions")
     assert ret.status_code == 404
 
@@ -352,9 +311,7 @@ async def test_get_toolset_version_success(mocker):
         new=AsyncMock(return_value=_toolset_version()),
     )
     app = _make_app()
-    async with AsyncClient(
-        transport=ASGITransport(app=app), base_url="http://test"
-    ) as client:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         ret = await client.get(f"/api/v1/toolsets/{_TS_ID}/versions/1")
     assert ret.status_code == 200
     assert ret.json()["version"] == 1
@@ -366,9 +323,7 @@ async def test_get_toolset_version_not_found(mocker):
         new=AsyncMock(return_value=None),
     )
     app = _make_app()
-    async with AsyncClient(
-        transport=ASGITransport(app=app), base_url="http://test"
-    ) as client:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         ret = await client.get(f"/api/v1/toolsets/{_TS_ID}/versions/99")
     assert ret.status_code == 404
 
@@ -388,9 +343,7 @@ async def test_list_tools_success(mocker):
         new=AsyncMock(return_value=[_tool_item()]),
     )
     app = _make_app()
-    async with AsyncClient(
-        transport=ASGITransport(app=app), base_url="http://test"
-    ) as client:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         ret = await client.get(f"/api/v1/toolsets/{_TS_ID}/tools")
     assert ret.status_code == 200
     assert len(ret.json()["tools"]) == 1
@@ -403,9 +356,7 @@ async def test_list_tools_toolset_not_found(mocker):
         new=AsyncMock(return_value=None),
     )
     app = _make_app()
-    async with AsyncClient(
-        transport=ASGITransport(app=app), base_url="http://test"
-    ) as client:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         ret = await client.get(f"/api/v1/toolsets/{_TS_ID}/tools")
     assert ret.status_code == 404
 
@@ -425,12 +376,8 @@ async def test_create_tool_success(mocker):
         new=AsyncMock(return_value=_tool_item()),
     )
     app = _make_app()
-    async with AsyncClient(
-        transport=ASGITransport(app=app), base_url="http://test"
-    ) as client:
-        ret = await client.post(
-            f"/api/v1/toolsets/{_TS_ID}/tools", json=_VALID_TOOL_BODY
-        )
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        ret = await client.post(f"/api/v1/toolsets/{_TS_ID}/tools", json=_VALID_TOOL_BODY)
     assert ret.status_code == 201
     assert ret.json()["tool_id"] == _TOOL_ID
 
@@ -438,17 +385,11 @@ async def test_create_tool_success(mocker):
 async def test_create_tool_cypher_validation_error(mocker):
     mocker.patch(
         "reporting.routes.toolsets.validate_query",
-        new=AsyncMock(
-            return_value=ValidationResult(errors=["Write queries are not allowed"])
-        ),
+        new=AsyncMock(return_value=ValidationResult(errors=["Write queries are not allowed"])),
     )
     app = _make_app()
-    async with AsyncClient(
-        transport=ASGITransport(app=app), base_url="http://test"
-    ) as client:
-        ret = await client.post(
-            f"/api/v1/toolsets/{_TS_ID}/tools", json=_VALID_TOOL_BODY
-        )
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        ret = await client.post(f"/api/v1/toolsets/{_TS_ID}/tools", json=_VALID_TOOL_BODY)
     assert ret.status_code == 400
     assert "errors" in ret.json()
     assert ret.json()["errors"] == ["Write queries are not allowed"]
@@ -464,23 +405,15 @@ async def test_create_tool_toolset_not_found(mocker):
         new=AsyncMock(return_value=None),
     )
     app = _make_app()
-    async with AsyncClient(
-        transport=ASGITransport(app=app), base_url="http://test"
-    ) as client:
-        ret = await client.post(
-            f"/api/v1/toolsets/{_TS_ID}/tools", json=_VALID_TOOL_BODY
-        )
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        ret = await client.post(f"/api/v1/toolsets/{_TS_ID}/tools", json=_VALID_TOOL_BODY)
     assert ret.status_code == 404
 
 
 async def test_create_tool_invalid_body(mocker):
     app = _make_app()
-    async with AsyncClient(
-        transport=ASGITransport(app=app), base_url="http://test"
-    ) as client:
-        ret = await client.post(
-            f"/api/v1/toolsets/{_TS_ID}/tools", json={"invalid": "body"}
-        )
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        ret = await client.post(f"/api/v1/toolsets/{_TS_ID}/tools", json={"invalid": "body"})
     assert ret.status_code == 422
 
 
@@ -495,9 +428,7 @@ async def test_get_tool_success(mocker):
         new=AsyncMock(return_value=_tool_item()),
     )
     app = _make_app()
-    async with AsyncClient(
-        transport=ASGITransport(app=app), base_url="http://test"
-    ) as client:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         ret = await client.get(f"/api/v1/toolsets/{_TS_ID}/tools/{_TOOL_ID}")
     assert ret.status_code == 200
     assert ret.json()["tool_id"] == _TOOL_ID
@@ -509,9 +440,7 @@ async def test_get_tool_not_found(mocker):
         new=AsyncMock(return_value=None),
     )
     app = _make_app()
-    async with AsyncClient(
-        transport=ASGITransport(app=app), base_url="http://test"
-    ) as client:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         ret = await client.get(f"/api/v1/toolsets/{_TS_ID}/tools/{_TOOL_ID}")
     assert ret.status_code == 404
 
@@ -522,9 +451,7 @@ async def test_get_tool_wrong_toolset(mocker):
         new=AsyncMock(return_value=_tool_item(ts_id="other-toolset")),
     )
     app = _make_app()
-    async with AsyncClient(
-        transport=ASGITransport(app=app), base_url="http://test"
-    ) as client:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         ret = await client.get(f"/api/v1/toolsets/{_TS_ID}/tools/{_TOOL_ID}")
     assert ret.status_code == 404
 
@@ -549,9 +476,7 @@ async def test_update_tool_success(mocker):
     )
     app = _make_app()
     body = {**_VALID_TOOL_BODY, "comment": "Updated"}
-    async with AsyncClient(
-        transport=ASGITransport(app=app), base_url="http://test"
-    ) as client:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         ret = await client.put(f"/api/v1/toolsets/{_TS_ID}/tools/{_TOOL_ID}", json=body)
     assert ret.status_code == 200
     assert ret.json()["current_version"] == 2
@@ -563,12 +488,8 @@ async def test_update_tool_not_found(mocker):
         new=AsyncMock(return_value=None),
     )
     app = _make_app()
-    async with AsyncClient(
-        transport=ASGITransport(app=app), base_url="http://test"
-    ) as client:
-        ret = await client.put(
-            f"/api/v1/toolsets/{_TS_ID}/tools/{_TOOL_ID}", json=_VALID_TOOL_BODY
-        )
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        ret = await client.put(f"/api/v1/toolsets/{_TS_ID}/tools/{_TOOL_ID}", json=_VALID_TOOL_BODY)
     assert ret.status_code == 404
 
 
@@ -579,17 +500,11 @@ async def test_update_tool_cypher_validation_error(mocker):
     )
     mocker.patch(
         "reporting.routes.toolsets.validate_query",
-        new=AsyncMock(
-            return_value=ValidationResult(errors=["Write queries are not allowed"])
-        ),
+        new=AsyncMock(return_value=ValidationResult(errors=["Write queries are not allowed"])),
     )
     app = _make_app()
-    async with AsyncClient(
-        transport=ASGITransport(app=app), base_url="http://test"
-    ) as client:
-        ret = await client.put(
-            f"/api/v1/toolsets/{_TS_ID}/tools/{_TOOL_ID}", json=_VALID_TOOL_BODY
-        )
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        ret = await client.put(f"/api/v1/toolsets/{_TS_ID}/tools/{_TOOL_ID}", json=_VALID_TOOL_BODY)
     assert ret.status_code == 400
     assert "errors" in ret.json()
 
@@ -609,9 +524,7 @@ async def test_delete_tool_success(mocker):
         new=AsyncMock(return_value=True),
     )
     app = _make_app()
-    async with AsyncClient(
-        transport=ASGITransport(app=app), base_url="http://test"
-    ) as client:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         ret = await client.delete(f"/api/v1/toolsets/{_TS_ID}/tools/{_TOOL_ID}")
     assert ret.status_code == 200
     assert ret.json()["tool_id"] == _TOOL_ID
@@ -623,9 +536,7 @@ async def test_delete_tool_not_found(mocker):
         new=AsyncMock(return_value=None),
     )
     app = _make_app()
-    async with AsyncClient(
-        transport=ASGITransport(app=app), base_url="http://test"
-    ) as client:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         ret = await client.delete(f"/api/v1/toolsets/{_TS_ID}/tools/{_TOOL_ID}")
     assert ret.status_code == 404
 
@@ -645,9 +556,7 @@ async def test_list_tool_versions_success(mocker):
         new=AsyncMock(return_value=[_tool_version()]),
     )
     app = _make_app()
-    async with AsyncClient(
-        transport=ASGITransport(app=app), base_url="http://test"
-    ) as client:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         ret = await client.get(f"/api/v1/toolsets/{_TS_ID}/tools/{_TOOL_ID}/versions")
     assert ret.status_code == 200
     assert len(ret.json()["versions"]) == 1
@@ -660,9 +569,7 @@ async def test_list_tool_versions_tool_not_found(mocker):
         new=AsyncMock(return_value=None),
     )
     app = _make_app()
-    async with AsyncClient(
-        transport=ASGITransport(app=app), base_url="http://test"
-    ) as client:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         ret = await client.get(f"/api/v1/toolsets/{_TS_ID}/tools/{_TOOL_ID}/versions")
     assert ret.status_code == 404
 
@@ -678,9 +585,7 @@ async def test_get_tool_version_success(mocker):
         new=AsyncMock(return_value=_tool_version()),
     )
     app = _make_app()
-    async with AsyncClient(
-        transport=ASGITransport(app=app), base_url="http://test"
-    ) as client:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         ret = await client.get(f"/api/v1/toolsets/{_TS_ID}/tools/{_TOOL_ID}/versions/1")
     assert ret.status_code == 200
     assert ret.json()["version"] == 1
@@ -692,12 +597,8 @@ async def test_get_tool_version_not_found(mocker):
         new=AsyncMock(return_value=None),
     )
     app = _make_app()
-    async with AsyncClient(
-        transport=ASGITransport(app=app), base_url="http://test"
-    ) as client:
-        ret = await client.get(
-            f"/api/v1/toolsets/{_TS_ID}/tools/{_TOOL_ID}/versions/99"
-        )
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        ret = await client.get(f"/api/v1/toolsets/{_TS_ID}/tools/{_TOOL_ID}/versions/99")
     assert ret.status_code == 404
 
 
@@ -716,9 +617,7 @@ async def test_call_tool_success(mocker):
         new=AsyncMock(return_value=[{"n": "value1"}, {"n": "value2"}]),
     )
     app = _make_app()
-    async with AsyncClient(
-        transport=ASGITransport(app=app), base_url="http://test"
-    ) as client:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         ret = await client.post(
             f"/api/v1/toolsets/{_TS_ID}/tools/{_TOOL_ID}/call",
             json={"arguments": {}},
@@ -733,21 +632,15 @@ async def test_call_tool_with_arguments(mocker):
         new=AsyncMock(return_value=_tool_item()),
     )
     run_query_mock = AsyncMock(return_value=[])
-    mocker.patch(
-        "reporting.routes.toolsets.reporting_neo4j.run_query", new=run_query_mock
-    )
+    mocker.patch("reporting.routes.toolsets.reporting_neo4j.run_query", new=run_query_mock)
     app = _make_app()
-    async with AsyncClient(
-        transport=ASGITransport(app=app), base_url="http://test"
-    ) as client:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         ret = await client.post(
             f"/api/v1/toolsets/{_TS_ID}/tools/{_TOOL_ID}/call",
             json={"arguments": {"limit": 10}},
         )
     assert ret.status_code == 200
-    run_query_mock.assert_awaited_once_with(
-        "MATCH (n) RETURN n", parameters={"limit": 10}
-    )
+    run_query_mock.assert_awaited_once_with("MATCH (n) RETURN n", parameters={"limit": 10})
 
 
 async def test_call_tool_not_found(mocker):
@@ -756,9 +649,7 @@ async def test_call_tool_not_found(mocker):
         new=AsyncMock(return_value=None),
     )
     app = _make_app()
-    async with AsyncClient(
-        transport=ASGITransport(app=app), base_url="http://test"
-    ) as client:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         ret = await client.post(
             f"/api/v1/toolsets/{_TS_ID}/tools/{_TOOL_ID}/call",
             json={"arguments": {}},
@@ -772,9 +663,7 @@ async def test_call_tool_wrong_toolset(mocker):
         new=AsyncMock(return_value=_tool_item(ts_id="other-toolset")),
     )
     app = _make_app()
-    async with AsyncClient(
-        transport=ASGITransport(app=app), base_url="http://test"
-    ) as client:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         ret = await client.post(
             f"/api/v1/toolsets/{_TS_ID}/tools/{_TOOL_ID}/call",
             json={"arguments": {}},
@@ -790,9 +679,7 @@ async def test_call_tool_disabled(mocker):
         new=AsyncMock(return_value=disabled),
     )
     app = _make_app()
-    async with AsyncClient(
-        transport=ASGITransport(app=app), base_url="http://test"
-    ) as client:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         ret = await client.post(
             f"/api/v1/toolsets/{_TS_ID}/tools/{_TOOL_ID}/call",
             json={"arguments": {}},
@@ -811,9 +698,7 @@ async def test_call_tool_execution_error(mocker):
         new=AsyncMock(side_effect=Exception("Neo4j unavailable")),
     )
     app = _make_app()
-    async with AsyncClient(
-        transport=ASGITransport(app=app), base_url="http://test"
-    ) as client:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         ret = await client.post(
             f"/api/v1/toolsets/{_TS_ID}/tools/{_TOOL_ID}/call",
             json={"arguments": {}},
@@ -827,9 +712,7 @@ async def test_get_tool_version_wrong_toolset(mocker):
         new=AsyncMock(return_value=_tool_version(ts_id="other-toolset")),
     )
     app = _make_app()
-    async with AsyncClient(
-        transport=ASGITransport(app=app), base_url="http://test"
-    ) as client:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         ret = await client.get(f"/api/v1/toolsets/{_TS_ID}/tools/{_TOOL_ID}/versions/1")
     assert ret.status_code == 404
 
@@ -849,9 +732,7 @@ async def test_get_builtin_toolset(mocker):
         new=AsyncMock(return_value=None),
     )
     app = _make_app()
-    async with AsyncClient(
-        transport=ASGITransport(app=app), base_url="http://test"
-    ) as client:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         ret = await client.get("/api/v1/toolsets/__builtin_graph__")
     assert ret.status_code == 200
     body = ret.json()
@@ -862,9 +743,7 @@ async def test_get_builtin_toolset(mocker):
 
 async def test_get_builtin_toolset_unknown_group_returns_404():
     app = _make_app()
-    async with AsyncClient(
-        transport=ASGITransport(app=app), base_url="http://test"
-    ) as client:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         ret = await client.get("/api/v1/toolsets/__builtin_nonexistent__")
     assert ret.status_code == 404
 
@@ -876,9 +755,7 @@ async def test_list_builtin_tools_returns_registry_tools(mocker):
         new=AsyncMock(return_value=[]),
     )
     app = _make_app()
-    async with AsyncClient(
-        transport=ASGITransport(app=app), base_url="http://test"
-    ) as client:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         ret = await client.get("/api/v1/toolsets/__builtin_graph__/tools")
     assert ret.status_code == 200
     tools = ret.json()["tools"]
@@ -894,12 +771,8 @@ async def test_get_builtin_tool(mocker):
         new=AsyncMock(return_value=None),
     )
     app = _make_app()
-    async with AsyncClient(
-        transport=ASGITransport(app=app), base_url="http://test"
-    ) as client:
-        ret = await client.get(
-            "/api/v1/toolsets/__builtin_graph__/tools/__builtin_graph__query__"
-        )
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        ret = await client.get("/api/v1/toolsets/__builtin_graph__/tools/__builtin_graph__query__")
     assert ret.status_code == 200
     body = ret.json()
     assert body["name"] == "graph__query"
@@ -911,9 +784,7 @@ async def test_get_builtin_tool(mocker):
 async def test_builtin_toolset_mutation_rejected():
     """Built-ins are read-only — update/delete return 403."""
     app = _make_app()
-    async with AsyncClient(
-        transport=ASGITransport(app=app), base_url="http://test"
-    ) as client:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         upd = await client.put(
             "/api/v1/toolsets/__builtin_graph__",
             json={"name": "pwned", "description": "", "enabled": True},
@@ -926,9 +797,7 @@ async def test_builtin_toolset_mutation_rejected():
 async def test_create_toolset_reserved_name_rejected():
     """Names starting with '__builtin_' are reserved — create returns 400."""
     app = _make_app()
-    async with AsyncClient(
-        transport=ASGITransport(app=app), base_url="http://test"
-    ) as client:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         ret = await client.post(
             "/api/v1/toolsets",
             json={"name": "__builtin_custom", "description": "", "enabled": True},
@@ -939,9 +808,7 @@ async def test_create_toolset_reserved_name_rejected():
 
 async def test_builtin_tool_mutation_rejected():
     app = _make_app()
-    async with AsyncClient(
-        transport=ASGITransport(app=app), base_url="http://test"
-    ) as client:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         create = await client.post(
             "/api/v1/toolsets/__builtin_graph__/tools",
             json={
@@ -958,9 +825,7 @@ async def test_builtin_tool_mutation_rejected():
 async def test_call_tool_requires_tools_call_permission():
     app = create_app()
     app.dependency_overrides[get_current_user] = lambda: _UNPRIVILEGED_CURRENT_USER
-    async with AsyncClient(
-        transport=ASGITransport(app=app), base_url="http://test"
-    ) as client:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         ret = await client.post(
             f"/api/v1/toolsets/{_TS_ID}/tools/{_TOOL_ID}/call",
             json={"arguments": {}},
@@ -971,9 +836,7 @@ async def test_call_tool_requires_tools_call_permission():
 async def test_call_builtin_tool_returns_clear_error():
     """Built-in tools are handler-backed — invoking them via REST is an error."""
     app = _make_app()
-    async with AsyncClient(
-        transport=ASGITransport(app=app), base_url="http://test"
-    ) as client:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         ret = await client.post(
             "/api/v1/toolsets/__builtin_graph__/tools/__builtin_graph__schema__/call",
             json={"arguments": {}},
@@ -988,9 +851,7 @@ async def test_call_builtin_tool_returns_clear_error():
 
 async def test_builtin_toolset_versions_empty():
     app = _make_app()
-    async with AsyncClient(
-        transport=ASGITransport(app=app), base_url="http://test"
-    ) as client:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         ret = await client.get("/api/v1/toolsets/__builtin_graph__/versions")
     assert ret.status_code == 200
     assert ret.json() == {"versions": []}

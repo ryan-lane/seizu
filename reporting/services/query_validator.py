@@ -1,16 +1,11 @@
 import asyncio
 import re
-from dataclasses import dataclass
-from dataclasses import field
+from dataclasses import dataclass, field
 from typing import Any
-from typing import Dict
-from typing import Optional
 
-from CyVer import PropertiesValidator
-from CyVer import SchemaValidator
+from CyVer import PropertiesValidator, SchemaValidator
 
-from reporting.services.reporting_neo4j import _get_async_neo4j_client
-from reporting.services.reporting_neo4j import _get_sync_neo4j_client
+from reporting.services.reporting_neo4j import _get_async_neo4j_client, _get_sync_neo4j_client
 
 # Keyword scan for dangerous read-path operations that Neo4j classifies as
 # query_type='r' but can be used for SSRF or data exfiltration.
@@ -30,9 +25,7 @@ class ValidationResult:
         return bool(self.errors)
 
 
-async def validate_query(
-    query: str, params: Optional[Dict[str, Any]] = None
-) -> ValidationResult:
+async def validate_query(query: str, params: dict[str, Any] | None = None) -> ValidationResult:
     result = ValidationResult()
     driver = _get_async_neo4j_client()
 
@@ -85,17 +78,13 @@ async def validate_query(
     # CyVer validators are synchronous; run them in a thread pool.
     sync_driver = _get_sync_neo4j_client()
     schema_validator = SchemaValidator(sync_driver)
-    schema_is_valid, schema_metadata = await asyncio.to_thread(
-        schema_validator.validate, query
-    )
+    schema_is_valid, schema_metadata = await asyncio.to_thread(schema_validator.validate, query)
     if not schema_is_valid:
         result.warnings.extend(schema_metadata)
 
     # Property validation — warning, query still executes
     properties_validator = PropertiesValidator(sync_driver)
-    properties_is_valid, properties_metadata = await asyncio.to_thread(
-        properties_validator.validate, query
-    )
+    properties_is_valid, properties_metadata = await asyncio.to_thread(properties_validator.validate, query)
     if not properties_is_valid:
         result.warnings.extend(properties_metadata)
 

@@ -1,5 +1,4 @@
 import json
-from typing import Optional
 
 import click
 
@@ -13,7 +12,7 @@ def schema_cli() -> None:
 
 @schema_cli.command("export")
 @click.option("--output-file")
-def export_json_schema(output_file: Optional[str]) -> None:
+def export_json_schema(output_file: str | None) -> None:
     """
     Export the reporting schema and print it to stdout. If
     --output-file is provided, the schema will be written to

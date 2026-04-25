@@ -1,11 +1,9 @@
 from unittest.mock import AsyncMock
 
-from httpx import ASGITransport
-from httpx import AsyncClient
+from httpx import ASGITransport, AsyncClient
 
 from reporting.app import create_app
-from reporting.authnz import CurrentUser
-from reporting.authnz import get_current_user
+from reporting.authnz import CurrentUser, get_current_user
 from reporting.authnz.permissions import ALL_PERMISSIONS
 from reporting.schema.report_config import User
 from reporting.services.query_validator import ValidationResult
@@ -19,12 +17,8 @@ _FAKE_USER = User(
     last_login="2024-01-01T00:00:00+00:00",
 )
 
-_FAKE_CURRENT_USER = CurrentUser(
-    user=_FAKE_USER, jwt_claims={}, permissions=ALL_PERMISSIONS
-)
-_UNPRIVILEGED_CURRENT_USER = CurrentUser(
-    user=_FAKE_USER, jwt_claims={}, permissions=frozenset()
-)
+_FAKE_CURRENT_USER = CurrentUser(user=_FAKE_USER, jwt_claims={}, permissions=ALL_PERMISSIONS)
+_UNPRIVILEGED_CURRENT_USER = CurrentUser(user=_FAKE_USER, jwt_claims={}, permissions=frozenset())
 
 
 def _mock_validate(mocker, errors=None, warnings=None):
@@ -48,9 +42,7 @@ def _make_app():
 async def test_validate_success(mocker):
     _mock_validate(mocker)
     app = _make_app()
-    async with AsyncClient(
-        transport=ASGITransport(app=app), base_url="http://test"
-    ) as client:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         ret = await client.post(
             "/api/v1/validate",
             json={"query": "MATCH (n) RETURN n"},
@@ -64,9 +56,7 @@ async def test_validate_with_errors_still_returns_200(mocker):
     """Validation errors are returned in the body with 200; 400 is for bad requests."""
     _mock_validate(mocker, errors=["Write queries are not allowed"])
     app = _make_app()
-    async with AsyncClient(
-        transport=ASGITransport(app=app), base_url="http://test"
-    ) as client:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         ret = await client.post(
             "/api/v1/validate",
             json={"query": "CREATE (n) RETURN n"},
@@ -79,9 +69,7 @@ async def test_validate_with_errors_still_returns_200(mocker):
 async def test_validate_with_warnings(mocker):
     _mock_validate(mocker, warnings=["Unknown label: Foo", "Unknown property: bar"])
     app = _make_app()
-    async with AsyncClient(
-        transport=ASGITransport(app=app), base_url="http://test"
-    ) as client:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         ret = await client.post(
             "/api/v1/validate",
             json={"query": "MATCH (n:Foo) WHERE n.bar = 1 RETURN n"},
@@ -98,9 +86,7 @@ async def test_validate_with_errors_and_warnings(mocker):
         warnings=["Unknown label: Foo"],
     )
     app = _make_app()
-    async with AsyncClient(
-        transport=ASGITransport(app=app), base_url="http://test"
-    ) as client:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         ret = await client.post(
             "/api/v1/validate",
             json={"query": "CREATE (n:Foo) RETURN n"},
@@ -112,9 +98,7 @@ async def test_validate_with_errors_and_warnings(mocker):
 
 async def test_validate_no_json_body(mocker):
     app = _make_app()
-    async with AsyncClient(
-        transport=ASGITransport(app=app), base_url="http://test"
-    ) as client:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         ret = await client.post(
             "/api/v1/validate",
             content=b"not json",
@@ -125,9 +109,7 @@ async def test_validate_no_json_body(mocker):
 
 async def test_validate_missing_query_field(mocker):
     app = _make_app()
-    async with AsyncClient(
-        transport=ASGITransport(app=app), base_url="http://test"
-    ) as client:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         ret = await client.post(
             "/api/v1/validate",
             json={"params": {"name": "Alice"}},
@@ -138,9 +120,7 @@ async def test_validate_missing_query_field(mocker):
 async def test_validate_requires_query_validate_permission():
     app = create_app()
     app.dependency_overrides[get_current_user] = lambda: _UNPRIVILEGED_CURRENT_USER
-    async with AsyncClient(
-        transport=ASGITransport(app=app), base_url="http://test"
-    ) as client:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         ret = await client.post(
             "/api/v1/validate",
             json={"query": "MATCH (n) RETURN n"},

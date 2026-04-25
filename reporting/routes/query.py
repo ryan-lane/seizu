@@ -2,20 +2,14 @@ import logging
 from typing import Any
 
 import neo4j.exceptions
-from fastapi import APIRouter
-from fastapi import Depends
+from fastapi import APIRouter, Depends
 from fastapi.responses import JSONResponse
-from neo4j.graph import Node
-from neo4j.graph import Path
-from neo4j.graph import Relationship
+from neo4j.graph import Node, Path, Relationship
 
-from reporting.authnz import CurrentUser
-from reporting.authnz import require_permission
+from reporting.authnz import CurrentUser, require_permission
 from reporting.authnz.permissions import Permission
-from reporting.schema.query import QueryRequest
-from reporting.schema.query import QueryResponse
-from reporting.services import report_store
-from reporting.services import reporting_neo4j
+from reporting.schema.query import QueryRequest, QueryResponse
+from reporting.services import report_store, reporting_neo4j
 from reporting.services.query_validator import validate_query
 
 logger = logging.getLogger(__name__)
@@ -33,9 +27,7 @@ def _serialize_neo4j_value(value: Any) -> Any:
         return {
             "id": value.id,
             "type": value.type,
-            "start_node_id": value.start_node.id
-            if value.start_node is not None
-            else None,
+            "start_node_id": value.start_node.id if value.start_node is not None else None,
             "end_node_id": value.end_node.id if value.end_node is not None else None,
             "properties": {k: _serialize_neo4j_value(v) for k, v in value.items()},
         }
@@ -73,10 +65,7 @@ async def query(
 
     try:
         results = await reporting_neo4j.run_query(body.query, parameters=body.params)
-        serialized = [
-            {key: _serialize_neo4j_value(value) for key, value in record.items()}
-            for record in results
-        ]
+        serialized = [{key: _serialize_neo4j_value(value) for key, value in record.items()} for record in results]
         if body.save_history:
             try:
                 await report_store.save_query_history(

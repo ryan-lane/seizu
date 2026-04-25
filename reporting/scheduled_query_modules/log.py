@@ -1,7 +1,5 @@
 import logging
 from typing import Any
-from typing import Dict
-from typing import List
 
 from reporting.schema.report_config import ActionConfigFieldDef
 from reporting.schema.reporting_config import ScheduledQueryAction
@@ -13,7 +11,7 @@ def action_name() -> str:
     return "log"
 
 
-def action_config_schema() -> List[ActionConfigFieldDef]:
+def action_config_schema() -> list[ActionConfigFieldDef]:
     return [
         ActionConfigFieldDef(
             name="log_attrs",
@@ -52,9 +50,7 @@ async def setup() -> None:
     return
 
 
-def handle_results(
-    scheduled_query_id: str, action: ScheduledQueryAction, results: List[Dict[str, Any]]
-) -> None:
+def handle_results(scheduled_query_id: str, action: ScheduledQueryAction, results: list[dict[str, Any]]) -> None:
     if not results:
         return
 

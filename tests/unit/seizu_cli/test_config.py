@@ -1,10 +1,10 @@
 """Tests for seizu_cli.config."""
+
 from pathlib import Path
 
 import pytest
 
-from seizu_cli.config import load_config
-from seizu_cli.config import SeizuConfig
+from seizu_cli.config import SeizuConfig, load_config
 
 
 def test_load_config_returns_empty_when_file_missing(tmp_path: Path) -> None:
@@ -29,9 +29,7 @@ def test_load_config_reads_seed_file(tmp_path: Path) -> None:
 
 def test_load_config_reads_all_fields(tmp_path: Path) -> None:
     conf = tmp_path / "seizu.conf"
-    conf.write_text(
-        "api_url: https://seizu.example.com\n" "seed_file: /data/dashboard.yaml\n"
-    )
+    conf.write_text("api_url: https://seizu.example.com\nseed_file: /data/dashboard.yaml\n")
     cfg = load_config(conf)
     assert cfg.api_url == "https://seizu.example.com"
     assert cfg.seed_file == "/data/dashboard.yaml"
@@ -48,9 +46,7 @@ def test_load_config_empty_file_returns_empty_config(tmp_path: Path) -> None:
 def test_load_config_uses_default_path_when_none_given(
     mocker: pytest.MonkeyPatch,
 ) -> None:
-    mocker.patch(
-        "seizu_cli.config._DEFAULT_CONFIG_FILE", Path("/nonexistent/seizu.conf")
-    )
+    mocker.patch("seizu_cli.config._DEFAULT_CONFIG_FILE", Path("/nonexistent/seizu.conf"))
     cfg = load_config()
     assert isinstance(cfg, SeizuConfig)
     assert cfg.api_url is None

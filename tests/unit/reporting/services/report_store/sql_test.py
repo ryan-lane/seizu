@@ -3,6 +3,8 @@
 Uses an in-memory async SQLite database (aiosqlite + StaticPool) so all
 sessions within a test share the same underlying connection.
 """
+
+from datetime import UTC
 from unittest.mock import patch
 
 import pytest
@@ -10,13 +12,9 @@ from sqlalchemy.ext.asyncio import create_async_engine
 from sqlalchemy.pool import StaticPool
 from sqlmodel import SQLModel
 
-from reporting.schema.report_config import PanelStat
-from reporting.schema.report_config import ReportListItem
-from reporting.schema.report_config import ReportVersion
-from reporting.schema.report_config import User
+from reporting.schema.report_config import PanelStat, ReportListItem, ReportVersion, User
 from reporting.services.report_store import sql as sql_module
 from reporting.services.report_store.sql import SQLModelReportStore
-
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -50,9 +48,7 @@ async def test_engine():
 
 @pytest.fixture()
 async def store(test_engine):
-    with patch(
-        "reporting.services.report_store.sql._get_engine", return_value=test_engine
-    ):
+    with patch("reporting.services.report_store.sql._get_engine", return_value=test_engine):
         yield SQLModelReportStore()
 
 
@@ -149,12 +145,8 @@ async def test_get_report_latest_returns_newest_after_update(store, mocker):
         return_value="rid1",
     )
     await store.create_report(name="r", created_by="u@x.com")
-    await store.save_report_version(
-        report_id="rid1", config={"v": 1}, created_by="u@x.com"
-    )
-    await store.save_report_version(
-        report_id="rid1", config={"v": 2}, created_by="u@x.com"
-    )
+    await store.save_report_version(report_id="rid1", config={"v": 1}, created_by="u@x.com")
+    await store.save_report_version(report_id="rid1", config={"v": 2}, created_by="u@x.com")
     result = await store.get_report_latest("rid1")
     assert result.version == 2
     assert result.config == {"v": 2}
@@ -175,12 +167,8 @@ async def test_get_report_version_found(store, mocker):
         return_value="rid1",
     )
     await store.create_report(name="r", created_by="u@x.com")
-    await store.save_report_version(
-        report_id="rid1", config={"v": 1}, created_by="u@x.com"
-    )
-    await store.save_report_version(
-        report_id="rid1", config={"v": 2}, created_by="u@x.com"
-    )
+    await store.save_report_version(report_id="rid1", config={"v": 1}, created_by="u@x.com")
+    await store.save_report_version(report_id="rid1", config={"v": 2}, created_by="u@x.com")
 
     v1 = await store.get_report_version("rid1", 1)
     v2 = await store.get_report_version("rid1", 2)
@@ -215,15 +203,9 @@ async def test_list_report_versions_newest_first(store, mocker):
         return_value="rid1",
     )
     await store.create_report(name="r", created_by="u@x.com")
-    await store.save_report_version(
-        report_id="rid1", config={"v": 1}, created_by="u@x.com"
-    )
-    await store.save_report_version(
-        report_id="rid1", config={"v": 2}, created_by="u@x.com"
-    )
-    await store.save_report_version(
-        report_id="rid1", config={"v": 3}, created_by="u@x.com"
-    )
+    await store.save_report_version(report_id="rid1", config={"v": 1}, created_by="u@x.com")
+    await store.save_report_version(report_id="rid1", config={"v": 2}, created_by="u@x.com")
+    await store.save_report_version(report_id="rid1", config={"v": 3}, created_by="u@x.com")
 
     versions = await store.list_report_versions("rid1")
     assert len(versions) == 3
@@ -258,9 +240,7 @@ async def test_create_report_returns_list_item(store, mocker):
 
 
 async def test_save_report_version_returns_none_for_missing_report(store):
-    result = await store.save_report_version(
-        report_id="nonexistent", config={}, created_by="u@x.com"
-    )
+    result = await store.save_report_version(report_id="nonexistent", config={}, created_by="u@x.com")
     assert result is None
 
 
@@ -304,12 +284,8 @@ async def test_save_report_version_latest_reflects_new_version(store, mocker):
         return_value="rid1",
     )
     await store.create_report(name="r", created_by="u@x.com")
-    await store.save_report_version(
-        report_id="rid1", config={"v": 1}, created_by="u@x.com"
-    )
-    await store.save_report_version(
-        report_id="rid1", config={"v": 2}, created_by="u@x.com"
-    )
+    await store.save_report_version(report_id="rid1", config={"v": 1}, created_by="u@x.com")
+    await store.save_report_version(report_id="rid1", config={"v": 2}, created_by="u@x.com")
 
     latest = await store.get_report_latest("rid1")
     assert latest.version == 2
@@ -349,9 +325,7 @@ async def test_set_and_get_dashboard_report(store, mocker):
         return_value="rid1",
     )
     await store.create_report(name="My Report", created_by="u@x.com")
-    await store.save_report_version(
-        report_id="rid1", config={"rows": []}, created_by="u@x.com"
-    )
+    await store.save_report_version(report_id="rid1", config={"rows": []}, created_by="u@x.com")
     ok = await store.set_dashboard_report("rid1")
     assert ok is True
     assert await store.get_dashboard_report_id() == "rid1"
@@ -390,9 +364,7 @@ async def test_delete_report_removes_report(store, mocker):
         return_value="rid1",
     )
     await store.create_report(name="r", created_by="u@x.com")
-    await store.save_report_version(
-        report_id="rid1", config={"v": 1}, created_by="u@x.com"
-    )
+    await store.save_report_version(report_id="rid1", config={"v": 1}, created_by="u@x.com")
     assert await store.delete_report("rid1") is True
     assert await store.list_reports() == []
     assert await store.list_report_versions("rid1") == []
@@ -454,13 +426,9 @@ async def test_get_or_create_user_returns_existing_user(store, mocker):
         "reporting.services.report_store.sql.generate_report_id",
         side_effect=lambda: next(ids),
     )
-    await store.get_or_create_user(
-        sub="sub123", iss="https://idp.example.com", email="alice@example.com"
-    )
+    await store.get_or_create_user(sub="sub123", iss="https://idp.example.com", email="alice@example.com")
     # Second call with same (iss, sub) must not create a new user
-    user = await store.get_or_create_user(
-        sub="sub123", iss="https://idp.example.com", email="alice@example.com"
-    )
+    user = await store.get_or_create_user(sub="sub123", iss="https://idp.example.com", email="alice@example.com")
     assert user.user_id == "uid1"
 
 
@@ -471,12 +439,8 @@ async def test_get_or_create_user_returns_existing_without_update(store, mocker)
         "reporting.services.report_store.sql.generate_report_id",
         side_effect=lambda: next(ids),
     )
-    await store.get_or_create_user(
-        sub="sub123", iss="https://idp.example.com", email="old@example.com"
-    )
-    user = await store.get_or_create_user(
-        sub="sub123", iss="https://idp.example.com", email="new@example.com"
-    )
+    await store.get_or_create_user(sub="sub123", iss="https://idp.example.com", email="old@example.com")
+    user = await store.get_or_create_user(sub="sub123", iss="https://idp.example.com", email="new@example.com")
     assert user.email == "old@example.com"
 
 
@@ -490,9 +454,7 @@ async def test_update_user_profile_updates_email_when_changed(store, mocker):
         "reporting.services.report_store.sql.generate_report_id",
         return_value="uid1",
     )
-    await store.get_or_create_user(
-        sub="sub123", iss="https://idp.example.com", email="old@example.com"
-    )
+    await store.get_or_create_user(sub="sub123", iss="https://idp.example.com", email="old@example.com")
     user = await store.update_user_profile(user_id="uid1", email="new@example.com")
     assert user.email == "new@example.com"
 
@@ -502,56 +464,40 @@ async def test_update_user_profile_no_write_when_nothing_changed(store, mocker):
         "reporting.services.report_store.sql.generate_report_id",
         return_value="uid1",
     )
-    await store.get_or_create_user(
-        sub="sub123", iss="https://idp.example.com", email="alice@example.com"
-    )
+    await store.get_or_create_user(sub="sub123", iss="https://idp.example.com", email="alice@example.com")
     user = await store.update_user_profile(user_id="uid1", email="alice@example.com")
     assert user.email == "alice@example.com"
 
 
 async def test_update_user_profile_updates_last_login_when_iat_is_newer(store, mocker):
-    from datetime import datetime, timezone
+    from datetime import datetime
 
     mocker.patch(
         "reporting.services.report_store.sql.generate_report_id",
         return_value="uid1",
     )
     # Use future dates so both are guaranteed newer than the creation-time `now`
-    first_iat = datetime(2030, 1, 1, tzinfo=timezone.utc)
-    second_iat = datetime(2030, 6, 1, tzinfo=timezone.utc)
-    await store.get_or_create_user(
-        sub="sub123", iss="https://idp.example.com", email="alice@example.com"
-    )
-    await store.update_user_profile(
-        user_id="uid1", email="alice@example.com", token_iat=first_iat
-    )
-    user = await store.update_user_profile(
-        user_id="uid1", email="alice@example.com", token_iat=second_iat
-    )
+    first_iat = datetime(2030, 1, 1, tzinfo=UTC)
+    second_iat = datetime(2030, 6, 1, tzinfo=UTC)
+    await store.get_or_create_user(sub="sub123", iss="https://idp.example.com", email="alice@example.com")
+    await store.update_user_profile(user_id="uid1", email="alice@example.com", token_iat=first_iat)
+    user = await store.update_user_profile(user_id="uid1", email="alice@example.com", token_iat=second_iat)
     assert user.last_login == second_iat.isoformat()
 
 
-async def test_update_user_profile_does_not_update_last_login_when_iat_is_older(
-    store, mocker
-):
-    from datetime import datetime, timezone
+async def test_update_user_profile_does_not_update_last_login_when_iat_is_older(store, mocker):
+    from datetime import datetime
 
     mocker.patch(
         "reporting.services.report_store.sql.generate_report_id",
         return_value="uid1",
     )
     # Use future dates so both are newer than creation-time `now`
-    newer_iat = datetime(2030, 6, 1, tzinfo=timezone.utc)
-    older_iat = datetime(2030, 1, 1, tzinfo=timezone.utc)
-    await store.get_or_create_user(
-        sub="sub123", iss="https://idp.example.com", email="alice@example.com"
-    )
-    await store.update_user_profile(
-        user_id="uid1", email="alice@example.com", token_iat=newer_iat
-    )
-    user = await store.update_user_profile(
-        user_id="uid1", email="alice@example.com", token_iat=older_iat
-    )
+    newer_iat = datetime(2030, 6, 1, tzinfo=UTC)
+    older_iat = datetime(2030, 1, 1, tzinfo=UTC)
+    await store.get_or_create_user(sub="sub123", iss="https://idp.example.com", email="alice@example.com")
+    await store.update_user_profile(user_id="uid1", email="alice@example.com", token_iat=newer_iat)
+    user = await store.update_user_profile(user_id="uid1", email="alice@example.com", token_iat=older_iat)
     assert user.last_login == newer_iat.isoformat()
 
 
@@ -561,12 +507,8 @@ async def test_get_or_create_user_different_sub_creates_separate_users(store, mo
         "reporting.services.report_store.sql.generate_report_id",
         side_effect=lambda: next(ids),
     )
-    u1 = await store.get_or_create_user(
-        sub="sub-alice", iss="https://idp.example.com", email="shared@example.com"
-    )
-    u2 = await store.get_or_create_user(
-        sub="sub-bob", iss="https://idp.example.com", email="shared@example.com"
-    )
+    u1 = await store.get_or_create_user(sub="sub-alice", iss="https://idp.example.com", email="shared@example.com")
+    u2 = await store.get_or_create_user(sub="sub-bob", iss="https://idp.example.com", email="shared@example.com")
     assert u1.user_id != u2.user_id
 
 
@@ -584,9 +526,7 @@ async def test_get_user_returns_created_user(store, mocker):
         "reporting.services.report_store.sql.generate_report_id",
         return_value="uid1",
     )
-    await store.get_or_create_user(
-        sub="sub123", iss="https://idp.example.com", email="alice@example.com"
-    )
+    await store.get_or_create_user(sub="sub123", iss="https://idp.example.com", email="alice@example.com")
     user = await store.get_user("uid1")
     assert isinstance(user, User)
     assert user.user_id == "uid1"
@@ -607,9 +547,7 @@ async def test_archive_user_sets_archived_at(store, mocker):
         "reporting.services.report_store.sql.generate_report_id",
         return_value="uid1",
     )
-    await store.get_or_create_user(
-        sub="sub123", iss="https://idp.example.com", email="alice@example.com"
-    )
+    await store.get_or_create_user(sub="sub123", iss="https://idp.example.com", email="alice@example.com")
     assert await store.archive_user("uid1") is True
     user = await store.get_user("uid1")
     assert user.archived_at is not None
@@ -652,9 +590,7 @@ async def test_list_panel_stats_populated_on_save_version(store, mocker):
         return_value="rid1",
     )
     await store.create_report(name="Test", created_by="u@x.com")
-    await store.save_report_version(
-        report_id="rid1", config=_STAT_CONFIG, created_by="u@x.com"
-    )
+    await store.save_report_version(report_id="rid1", config=_STAT_CONFIG, created_by="u@x.com")
     stats = await store.list_panel_stats()
     assert len(stats) == 1
     assert isinstance(stats[0], PanelStat)
@@ -671,13 +607,9 @@ async def test_list_panel_stats_replaced_on_new_version(store, mocker):
         return_value="rid1",
     )
     await store.create_report(name="Test", created_by="u@x.com")
-    await store.save_report_version(
-        report_id="rid1", config=_STAT_CONFIG, created_by="u@x.com"
-    )
+    await store.save_report_version(report_id="rid1", config=_STAT_CONFIG, created_by="u@x.com")
     # Save a version with no stat panels — stats should be cleared
-    await store.save_report_version(
-        report_id="rid1", config={"name": "Test", "rows": []}, created_by="u@x.com"
-    )
+    await store.save_report_version(report_id="rid1", config={"name": "Test", "rows": []}, created_by="u@x.com")
     assert await store.list_panel_stats() == []
 
 
@@ -687,9 +619,7 @@ async def test_list_panel_stats_cleared_on_delete(store, mocker):
         return_value="rid1",
     )
     await store.create_report(name="Test", created_by="u@x.com")
-    await store.save_report_version(
-        report_id="rid1", config=_STAT_CONFIG, created_by="u@x.com"
-    )
+    await store.save_report_version(report_id="rid1", config=_STAT_CONFIG, created_by="u@x.com")
     assert len(await store.list_panel_stats()) == 1
     await store.delete_report("rid1")
     assert await store.list_panel_stats() == []

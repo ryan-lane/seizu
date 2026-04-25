@@ -1,23 +1,20 @@
 from typing import Any
-from typing import Dict
-from typing import List
-from typing import Optional
 
 from pydantic import BaseModel
 
 
 class QueryRequest(BaseModel):
     query: str
-    params: Optional[Dict[str, Any]] = None
+    params: dict[str, Any] | None = None
     save_history: bool = False
 
 
 class QueryResponse(BaseModel):
-    results: List[Dict[str, Any]]
-    errors: List[str] = []
-    warnings: List[str] = []
+    results: list[dict[str, Any]]
+    errors: list[str] = []
+    warnings: list[str] = []
 
 
 class ValidationResponse(BaseModel):
-    errors: List[str]
-    warnings: List[str]
+    errors: list[str]
+    warnings: list[str]
