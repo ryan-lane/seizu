@@ -218,14 +218,16 @@ Tool names are namespaced as `{toolset_name}__{tool_name}` (double underscore se
 
 ### Connecting Claude
 
-The MCP server is always available on port **8080** (the backend API port). The frontend dev server on port 3000 does *not* proxy MCP traffic — always point your MCP client directly at port 8080.
+The MCP endpoint is always at `<base-url>/api/v1/mcp`, where `<base-url>` is the scheme, host, and port on which Seizu is reachable. The backend port is controlled by the `PORT` setting (default: `8080`). If Seizu sits behind a reverse proxy or load balancer, use the public URL — set `MCP_RESOURCE_URL` to that URL so OAuth discovery headers point to the right place.
+
+The frontend dev server does *not* proxy MCP traffic; always point your MCP client at the backend directly.
 
 #### Claude Code (CLI)
 
 Add Seizu as an MCP server with the `http` transport:
 
 ```bash
-claude mcp add --transport http seizu http://localhost:8080/api/v1/mcp
+claude mcp add --transport http seizu https://your-seizu-host/api/v1/mcp
 ```
 
 Or add it directly to `.mcp.json` in your project root:
@@ -235,7 +237,7 @@ Or add it directly to `.mcp.json` in your project root:
   "mcpServers": {
     "seizu": {
       "type": "http",
-      "url": "http://localhost:8080/api/v1/mcp"
+      "url": "https://your-seizu-host/api/v1/mcp"
     }
   }
 }
@@ -244,20 +246,6 @@ Or add it directly to `.mcp.json` in your project root:
 #### Claude Desktop
 
 Add an MCP server entry to your Claude Desktop configuration file (`~/Library/Application Support/Claude/claude_desktop_config.json` on macOS, `~/.config/Claude/claude_desktop_config.json` on Linux):
-
-**Local development:**
-
-```json
-{
-  "mcpServers": {
-    "seizu": {
-      "url": "http://localhost:8080/api/v1/mcp"
-    }
-  }
-}
-```
-
-**Production:**
 
 ```json
 {
@@ -269,7 +257,7 @@ Add an MCP server entry to your Claude Desktop configuration file (`~/Library/Ap
 }
 ```
 
-If Seizu is configured with OAuth metadata (`MCP_OAUTH_AUTHORIZATION_ENDPOINT` and `MCP_OAUTH_TOKEN_ENDPOINT`), Claude will automatically discover the OIDC provider via the metadata endpoint at `/api/v1/mcp/.well-known/oauth-authorization-server` and prompt users to authenticate inside the client.
+If Seizu is configured with OAuth metadata (`MCP_OAUTH_AUTHORIZATION_ENDPOINT` and `MCP_OAUTH_TOKEN_ENDPOINT`, or auto-discovered via `OIDC_AUTHORITY`), Claude will automatically discover the OIDC provider via the metadata endpoint at `/api/v1/mcp/.well-known/oauth-authorization-server` and prompt users to authenticate inside the client.
 
 #### OAuth callback port
 
