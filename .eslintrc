@@ -15,7 +15,7 @@
     "plugin:react/recommended",
     "plugin:@typescript-eslint/recommended",
     "prettier"
-  ],
+  ],vbhghj
   "parserOptions": {
     "ecmaVersion": 12,
     "sourceType": "module"
