@@ -21,8 +21,8 @@ _FAKE_USER = User(
 _FAKE_CURRENT_USER = CurrentUser(user=_FAKE_USER, jwt_claims={}, permissions=ALL_PERMISSIONS)
 _UNPRIVILEGED_CURRENT_USER = CurrentUser(user=_FAKE_USER, jwt_claims={}, permissions=frozenset())
 
-_TS_ID = "ts-abc123"
-_TOOL_ID = "tool-xyz456"
+_TS_ID = "ts_abc123"
+_TOOL_ID = "tool_xyz456"
 
 
 def _make_app():
@@ -31,12 +31,17 @@ def _make_app():
     return app
 
 
-def _toolset_item(ts_id: str = _TS_ID, name: str = "My Toolset", version: int = 1) -> ToolsetListItem:
+def _toolset_item(
+    ts_id: str = _TS_ID,
+    name: str = "My Toolset",
+    version: int = 1,
+    enabled: bool = True,
+) -> ToolsetListItem:
     return ToolsetListItem(
         toolset_id=ts_id,
         name=name,
         description="A test toolset",
-        enabled=True,
+        enabled=enabled,
         current_version=version,
         created_at="2024-01-01T00:00:00+00:00",
         updated_at="2024-01-01T00:00:00+00:00",
@@ -90,11 +95,13 @@ def _tool_version(tool_id: str = _TOOL_ID, ts_id: str = _TS_ID, version: int = 1
 
 
 _VALID_TOOLSET_BODY = {
+    "toolset_id": _TS_ID,
     "name": "My Toolset",
     "description": "A test toolset",
     "enabled": True,
 }
 _VALID_TOOL_BODY = {
+    "tool_id": _TOOL_ID,
     "name": "My Tool",
     "description": "A test tool",
     "cypher": "MATCH (n) RETURN n",
@@ -163,6 +170,10 @@ async def test_list_toolsets_empty_user_still_returns_builtins(mocker):
 
 
 async def test_create_toolset_success(mocker):
+    mocker.patch(
+        "reporting.routes.toolsets.report_store.get_toolset",
+        new=AsyncMock(return_value=None),
+    )
     mocker.patch(
         "reporting.routes.toolsets.report_store.create_toolset",
         new=AsyncMock(return_value=_toolset_item()),
@@ -348,6 +359,27 @@ async def test_list_tools_success(mocker):
     assert ret.status_code == 200
     assert len(ret.json()["tools"]) == 1
     assert ret.json()["tools"][0]["tool_id"] == _TOOL_ID
+    assert ret.json()["tools"][0]["effective_enabled"] is True
+    assert ret.json()["tools"][0]["disabled_reason"] is None
+
+
+async def test_list_tools_marks_parent_disabled_tools_effectively_disabled(mocker):
+    mocker.patch(
+        "reporting.routes.toolsets.report_store.get_toolset",
+        new=AsyncMock(return_value=_toolset_item(enabled=False)),
+    )
+    mocker.patch(
+        "reporting.routes.toolsets.report_store.list_tools",
+        new=AsyncMock(return_value=[_tool_item()]),
+    )
+    app = _make_app()
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        ret = await client.get(f"/api/v1/toolsets/{_TS_ID}/tools")
+    assert ret.status_code == 200
+    item = ret.json()["tools"][0]
+    assert item["enabled"] is True
+    assert item["effective_enabled"] is False
+    assert item["disabled_reason"] == "toolset_disabled"
 
 
 async def test_list_tools_toolset_not_found(mocker):
@@ -368,6 +400,14 @@ async def test_list_tools_toolset_not_found(mocker):
 
 async def test_create_tool_success(mocker):
     mocker.patch(
+        "reporting.routes.toolsets.report_store.get_toolset",
+        new=AsyncMock(return_value=_toolset_item()),
+    )
+    mocker.patch(
+        "reporting.routes.toolsets.report_store.get_tool",
+        new=AsyncMock(return_value=None),
+    )
+    mocker.patch(
         "reporting.routes.toolsets.validate_query",
         new=AsyncMock(return_value=ValidationResult()),
     )
@@ -384,6 +424,10 @@ async def test_create_tool_success(mocker):
 
 async def test_create_tool_cypher_validation_error(mocker):
     mocker.patch(
+        "reporting.routes.toolsets.report_store.get_tool",
+        new=AsyncMock(return_value=None),
+    )
+    mocker.patch(
         "reporting.routes.toolsets.validate_query",
         new=AsyncMock(return_value=ValidationResult(errors=["Write queries are not allowed"])),
     )
@@ -396,6 +440,10 @@ async def test_create_tool_cypher_validation_error(mocker):
 
 
 async def test_create_tool_toolset_not_found(mocker):
+    mocker.patch(
+        "reporting.routes.toolsets.report_store.get_tool",
+        new=AsyncMock(return_value=None),
+    )
     mocker.patch(
         "reporting.routes.toolsets.validate_query",
         new=AsyncMock(return_value=ValidationResult()),
@@ -426,6 +474,10 @@ async def test_get_tool_success(mocker):
     mocker.patch(
         "reporting.routes.toolsets.report_store.get_tool",
         new=AsyncMock(return_value=_tool_item()),
+    )
+    mocker.patch(
+        "reporting.routes.toolsets.report_store.get_toolset",
+        new=AsyncMock(return_value=_toolset_item()),
     )
     app = _make_app()
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
@@ -465,6 +517,10 @@ async def test_update_tool_success(mocker):
     mocker.patch(
         "reporting.routes.toolsets.report_store.get_tool",
         new=AsyncMock(return_value=_tool_item()),
+    )
+    mocker.patch(
+        "reporting.routes.toolsets.report_store.get_toolset",
+        new=AsyncMock(return_value=_toolset_item()),
     )
     mocker.patch(
         "reporting.routes.toolsets.validate_query",
@@ -613,6 +669,10 @@ async def test_call_tool_success(mocker):
         new=AsyncMock(return_value=_tool_item()),
     )
     mocker.patch(
+        "reporting.routes.toolsets.report_store.get_toolset",
+        new=AsyncMock(return_value=_toolset_item()),
+    )
+    mocker.patch(
         "reporting.routes.toolsets.reporting_neo4j.run_query",
         new=AsyncMock(return_value=[{"n": "value1"}, {"n": "value2"}]),
     )
@@ -630,6 +690,10 @@ async def test_call_tool_with_arguments(mocker):
     mocker.patch(
         "reporting.routes.toolsets.report_store.get_tool",
         new=AsyncMock(return_value=_tool_item()),
+    )
+    mocker.patch(
+        "reporting.routes.toolsets.report_store.get_toolset",
+        new=AsyncMock(return_value=_toolset_item()),
     )
     run_query_mock = AsyncMock(return_value=[])
     mocker.patch("reporting.routes.toolsets.reporting_neo4j.run_query", new=run_query_mock)
@@ -678,6 +742,10 @@ async def test_call_tool_disabled(mocker):
         "reporting.routes.toolsets.report_store.get_tool",
         new=AsyncMock(return_value=disabled),
     )
+    mocker.patch(
+        "reporting.routes.toolsets.report_store.get_toolset",
+        new=AsyncMock(return_value=_toolset_item()),
+    )
     app = _make_app()
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         ret = await client.post(
@@ -688,10 +756,34 @@ async def test_call_tool_disabled(mocker):
     assert "disabled" in ret.json()["error"].lower()
 
 
+async def test_call_tool_rejects_disabled_toolset(mocker):
+    mocker.patch(
+        "reporting.routes.toolsets.report_store.get_tool",
+        new=AsyncMock(return_value=_tool_item()),
+    )
+    mocker.patch(
+        "reporting.routes.toolsets.report_store.get_toolset",
+        new=AsyncMock(return_value=_toolset_item(enabled=False)),
+    )
+    app = _make_app()
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        ret = await client.post(
+            f"/api/v1/toolsets/{_TS_ID}/tools/{_TOOL_ID}/call",
+            json={"arguments": {}},
+        )
+    assert ret.status_code == 400
+    assert "toolset" in ret.json()["error"].lower()
+    assert "disabled" in ret.json()["error"].lower()
+
+
 async def test_call_tool_execution_error(mocker):
     mocker.patch(
         "reporting.routes.toolsets.report_store.get_tool",
         new=AsyncMock(return_value=_tool_item()),
+    )
+    mocker.patch(
+        "reporting.routes.toolsets.report_store.get_toolset",
+        new=AsyncMock(return_value=_toolset_item()),
     )
     mocker.patch(
         "reporting.routes.toolsets.reporting_neo4j.run_query",
@@ -795,15 +887,14 @@ async def test_builtin_toolset_mutation_rejected():
 
 
 async def test_create_toolset_reserved_name_rejected():
-    """Names starting with '__builtin_' are reserved — create returns 400."""
+    """IDs must use the lower_snake_case user-defined ID format."""
     app = _make_app()
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         ret = await client.post(
             "/api/v1/toolsets",
-            json={"name": "__builtin_custom", "description": "", "enabled": True},
+            json={"toolset_id": "__builtin_custom", "name": "Builtin Custom", "description": "", "enabled": True},
         )
-    assert ret.status_code == 400
-    assert "__builtin_" in ret.json()["error"]
+    assert ret.status_code == 422
 
 
 async def test_builtin_tool_mutation_rejected():
@@ -812,6 +903,7 @@ async def test_builtin_tool_mutation_rejected():
         create = await client.post(
             "/api/v1/toolsets/__builtin_graph__/tools",
             json={
+                "tool_id": "x",
                 "name": "x",
                 "description": "",
                 "cypher": "MATCH (n) RETURN n",

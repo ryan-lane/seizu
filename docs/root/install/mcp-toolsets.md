@@ -27,7 +27,8 @@ Click **New toolset**. The form includes:
 
 | Field | Description |
 |-------|-------------|
-| name | A user-friendly name. Used to namespace MCP tool names as `{toolset_name}__{tool_name}`. |
+| id | Immutable lower_snake_case ID. Used to namespace MCP tool names as `{toolset_id}__{tool_id}`. |
+| name | A user-friendly display name. |
 | description | Optional description shown in the UI. |
 | enabled | When disabled, none of the toolset's tools are exposed via MCP. |
 
@@ -49,7 +50,8 @@ Click **New tool**. The form includes:
 
 | Field | Description |
 |-------|-------------|
-| name | Tool name. Combined with the toolset name to form the MCP tool name `{toolset_name}__{tool_name}`. |
+| id | Immutable lower_snake_case ID. Combined with the toolset ID to form the MCP tool name `{toolset_id}__{tool_id}`. |
+| name | Tool display name. |
 | description | Description shown to the LLM agent as the tool's purpose. |
 | cypher | A read-only Cypher query. Write operations (`CREATE`, `MERGE`, `DELETE`, etc.) are blocked at save time. |
 | parameters | A list of typed parameters. Each parameter has a name, type (`string`, `integer`, `float`, `boolean`), description, required flag, and optional default value. Parameters are passed to the Cypher query as named parameters (e.g. `$param_name`). |
@@ -74,7 +76,7 @@ The `seizu` CLI provides commands for managing toolsets and tools, including CRU
 ```bash
 seizu toolsets list                              # list all toolsets
 seizu toolsets get <toolset_id>                 # show a toolset
-seizu toolsets create "My Toolset" --description "desc"
+seizu toolsets create my_toolset "My Toolset" --description "desc"
 seizu toolsets update <toolset_id> --name "New Name" --enabled
 seizu toolsets delete <toolset_id>
 seizu toolsets versions <toolset_id>            # version history
@@ -86,7 +88,7 @@ seizu toolsets version-get <toolset_id> <n>     # specific version
 ```bash
 seizu toolsets tools list <toolset_id>
 seizu toolsets tools get <toolset_id> <tool_id>
-seizu toolsets tools create <toolset_id> --name "Count Nodes" \
+seizu toolsets tools create <toolset_id> count_nodes --name "Count Nodes" \
     --cypher "MATCH (n) RETURN count(n) AS total" \
     --description "Returns total node count"
 seizu toolsets tools update <toolset_id> <tool_id> --name "Count Nodes" \
@@ -214,7 +216,7 @@ The MCP server is available at `/api/v1/mcp` when `MCP_ENABLED=true` (the defaul
 
 Authentication uses the same Bearer JWT tokens as the REST API. In development, authentication can be disabled via `DEVELOPMENT_ONLY_REQUIRE_AUTH=false`.
 
-Tool names are namespaced as `{toolset_name}__{tool_name}` (double underscore separator) for user-defined tools, or `{group}__{action}` for built-ins (e.g. `graph__query`, `reports__list`). Only tools in **enabled** toolsets and built-in groups included in `MCP_ENABLED_BUILTINS` are exposed to MCP clients.
+Tool names are namespaced as `{toolset_id}__{tool_id}` (double underscore separator) for user-defined tools, or `{group}__{action}` for built-ins (e.g. `graph__query`, `reports__list`). Only tools in **enabled** toolsets and built-in groups included in `MCP_ENABLED_BUILTINS` are exposed to MCP clients.
 
 ### Connecting Claude
 

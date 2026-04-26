@@ -3,6 +3,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from reporting.schema.mcp_config import SkillItem, SkillsetListItem, SkillsetVersion, SkillVersion
 from reporting.schema.report_config import PanelStat, ReportListItem, ReportVersion
 from reporting.services.report_store import dynamodb as dynamodb_module
 from reporting.services.report_store.dynamodb import DynamoDBReportStore
@@ -82,6 +83,78 @@ def _metadata_item(report_id="123", current_version=1):
         "current_version": current_version,
         "created_at": "2024-01-01T00:00:00+00:00",
         "updated_at": "2024-01-01T00:00:00+00:00",
+    }
+
+
+def _skillset_metadata_item(skillset_id="ss1", current_version=1, enabled=True):
+    return {
+        "PK": f"SKILLSET#{skillset_id}",
+        "SK": "#METADATA",
+        "skillset_id": skillset_id,
+        "name": "Skillset",
+        "description": "desc",
+        "enabled": enabled,
+        "current_version": current_version,
+        "created_at": "2024-01-01T00:00:00+00:00",
+        "updated_at": "2024-01-01T00:00:00+00:00",
+        "created_by": "u1",
+        "updated_by": "u1",
+    }
+
+
+def _skillset_version_item(skillset_id="ss1", version=1):
+    return {
+        "PK": f"SKILLSET#{skillset_id}",
+        "SK": f"VERSION#{version:010d}",  # noqa: E231
+        "skillset_id": skillset_id,
+        "name": "Skillset",
+        "description": "desc",
+        "enabled": True,
+        "version": version,
+        "created_at": "2024-01-01T00:00:00+00:00",
+        "created_by": "u1",
+        "comment": None,
+    }
+
+
+def _skill_metadata_item(skill_id="sk1", skillset_id="ss1", current_version=1, enabled=True):
+    return {
+        "PK": f"SKILL#{skill_id}",
+        "SK": "#METADATA",
+        "skill_id": skill_id,
+        "skillset_id": skillset_id,
+        "name": "Skill",
+        "description": "desc",
+        "template": "Hello {{topic}}",
+        "parameters": [{"name": "topic", "type": "string", "required": True, "default": None}],
+        "triggers": ["say hello"],
+        "tools_required": ["toolset__tool"],
+        "enabled": enabled,
+        "current_version": current_version,
+        "created_at": "2024-01-01T00:00:00+00:00",
+        "updated_at": "2024-01-01T00:00:00+00:00",
+        "created_by": "u1",
+        "updated_by": "u1",
+    }
+
+
+def _skill_version_item(skill_id="sk1", skillset_id="ss1", version=1):
+    return {
+        "PK": f"SKILL#{skill_id}",
+        "SK": f"VERSION#{version:010d}",  # noqa: E231
+        "skill_id": skill_id,
+        "skillset_id": skillset_id,
+        "name": "Skill",
+        "description": "desc",
+        "template": "Hello {{topic}}",
+        "parameters": [{"name": "topic", "type": "string", "required": True, "default": None}],
+        "triggers": [],
+        "tools_required": [],
+        "enabled": True,
+        "version": version,
+        "created_at": "2024-01-01T00:00:00+00:00",
+        "created_by": "u1",
+        "comment": None,
     }
 
 
@@ -1181,6 +1254,7 @@ async def test_create_toolset(patch_table, store, mocker):
     )
     patch_table.meta.client.transact_write_items = MagicMock()
     result = await store.create_toolset(
+        toolset_id="ts1",
         name="My Toolset",
         description="desc",
         enabled=True,
@@ -1359,6 +1433,7 @@ async def test_create_tool_success(patch_table, store, mocker):
     patch_table.meta.client.transact_write_items = MagicMock()
     result = await store.create_tool(
         toolset_id="ts1",
+        tool_id="t1",
         name="My Tool",
         description="desc",
         cypher="MATCH (n) RETURN n",
@@ -1380,6 +1455,7 @@ async def test_create_tool_toolset_not_found(patch_table, store, mocker):
     patch_table.get_item.return_value = {}
     result = await store.create_tool(
         toolset_id="nonexistent",
+        tool_id="t1",
         name="My Tool",
         description="",
         cypher="MATCH (n) RETURN n",
@@ -1689,6 +1765,170 @@ async def test_get_role_version_success(patch_table, store):
     result = await store.get_role_version("r1", 1)
     assert result is not None
     assert result.version == 1
+
+
+# ---------------------------------------------------------------------------
+# Skillsets and skills
+# ---------------------------------------------------------------------------
+
+
+async def test_skillset_crud_and_versions(patch_table, store):
+    patch_table.query.return_value = {"Items": [_skillset_metadata_item()]}
+    skillsets = await store.list_skillsets()
+    assert isinstance(skillsets[0], SkillsetListItem)
+    assert skillsets[0].skillset_id == "ss1"
+
+    patch_table.get_item.return_value = {"Item": _skillset_metadata_item()}
+    skillset = await store.get_skillset("ss1")
+    assert skillset is not None
+    assert skillset.name == "Skillset"
+
+    patch_table.meta.client.transact_write_items = MagicMock()
+    created = await store.create_skillset(
+        skillset_id="ss1",
+        name="Skillset",
+        description="desc",
+        enabled=True,
+        created_by="u1",
+    )
+    assert created.skillset_id == "ss1"
+    assert patch_table.meta.client.transact_write_items.call_count == 1
+
+    patch_table.get_item.return_value = {"Item": _skillset_metadata_item(current_version=1)}
+    updated = await store.update_skillset(
+        skillset_id="ss1",
+        name="Updated",
+        description="new",
+        enabled=False,
+        updated_by="u2",
+        comment="v2",
+    )
+    assert updated is not None
+    assert updated.current_version == 2
+    assert updated.enabled is False
+
+    patch_table.get_item.return_value = {}
+    assert await store.update_skillset("missing", "n", "", True, "u2") is None
+
+    patch_table.query.return_value = {"Items": [_skillset_version_item(version=2), _skillset_version_item(version=1)]}
+    versions = await store.list_skillset_versions("ss1")
+    assert isinstance(versions[0], SkillsetVersion)
+    assert versions[0].version == 2
+
+    patch_table.get_item.return_value = {"Item": _skillset_version_item(version=1)}
+    assert (await store.get_skillset_version("ss1", 1)).version == 1
+    patch_table.get_item.return_value = {}
+    assert await store.get_skillset_version("ss1", 99) is None
+
+
+async def test_delete_skillset_cascades_skills(patch_table, store):
+    patch_table.get_item.return_value = {"Item": _skillset_metadata_item()}
+    patch_table.query.side_effect = [
+        {"Items": [{"SK": "SKILL#sk1"}]},
+        {"Items": [{"PK": "SKILL#sk1", "SK": "#METADATA"}, {"PK": "SKILL#sk1", "SK": "VERSION#0000000001"}]},
+        {"Items": [{"PK": "SKILLSET#ss1", "SK": "#METADATA"}, {"PK": "SKILLSET#ss1", "SK": "VERSION#0000000001"}]},
+    ]
+    batch_mock = MagicMock()
+    patch_table.batch_writer.return_value.__enter__ = MagicMock(return_value=batch_mock)
+    patch_table.batch_writer.return_value.__exit__ = MagicMock(return_value=False)
+    assert await store.delete_skillset("ss1") is True
+    assert batch_mock.delete_item.call_count >= 4
+
+    patch_table.get_item.return_value = {}
+    assert await store.delete_skillset("missing") is False
+
+
+async def test_skill_crud_versions_and_enabled_filters(patch_table, store):
+    patch_table.query.return_value = {"Items": [{"SK": "SKILL#sk1"}]}
+    patch_table.get_item.return_value = {"Item": _skill_metadata_item()}
+    skills = await store.list_skills("ss1")
+    assert isinstance(skills[0], SkillItem)
+    assert skills[0].skill_id == "sk1"
+
+    patch_table.get_item.return_value = {"Item": _skill_metadata_item()}
+    assert (await store.get_skill("sk1")).parameters[0].name == "topic"
+    patch_table.get_item.return_value = {}
+    assert await store.get_skill("missing") is None
+
+    patch_table.get_item.return_value = {"Item": _skillset_metadata_item()}
+    patch_table.meta.client.transact_write_items = MagicMock()
+    created = await store.create_skill(
+        skillset_id="ss1",
+        skill_id="sk1",
+        name="Skill",
+        description="desc",
+        template="Hello {{topic}}",
+        parameters=[{"name": "topic", "type": "string", "required": True}],
+        triggers=["say hello"],
+        tools_required=["toolset__tool"],
+        enabled=True,
+        created_by="u1",
+    )
+    assert created is not None
+    assert created.tools_required == ["toolset__tool"]
+
+    patch_table.get_item.return_value = {}
+    assert await store.create_skill("missing", "sk1", "n", "", "x", [], [], [], True, "u1") is None
+
+    patch_table.get_item.return_value = {"Item": _skill_metadata_item(current_version=1)}
+    updated = await store.update_skill(
+        skill_id="sk1",
+        name="Skill v2",
+        description="new",
+        template="Hello {{topic}} again",
+        parameters=[{"name": "topic", "type": "string", "required": True}],
+        triggers=[],
+        tools_required=[],
+        enabled=False,
+        updated_by="u2",
+        comment="v2",
+    )
+    assert updated is not None
+    assert updated.current_version == 2
+    assert updated.enabled is False
+    patch_table.get_item.return_value = {}
+    assert await store.update_skill("missing", "n", "", "x", [], [], [], True, "u2") is None
+
+    patch_table.query.return_value = {"Items": [_skill_version_item(version=2), _skill_version_item(version=1)]}
+    versions = await store.list_skill_versions("sk1")
+    assert isinstance(versions[0], SkillVersion)
+    assert versions[0].version == 2
+    patch_table.get_item.return_value = {"Item": _skill_version_item(version=1)}
+    assert (await store.get_skill_version("sk1", 1)).version == 1
+    patch_table.get_item.return_value = {}
+    assert await store.get_skill_version("sk1", 99) is None
+
+    patch_table.query.side_effect = [
+        {"Items": [_skillset_metadata_item(enabled=True), _skillset_metadata_item("disabled", enabled=False)]},
+        {"Items": [{"skill_id": "sk1", "enabled": True}]},
+    ]
+    patch_table.get_item.return_value = {"Item": _skill_metadata_item(enabled=True)}
+    enabled = await store.list_enabled_skills()
+    assert enabled[0].skill_id == "sk1"
+
+    patch_table.get_item.side_effect = [
+        {"Item": _skill_metadata_item(enabled=True)},
+        {"Item": _skillset_metadata_item(enabled=True)},
+    ]
+    assert (await store.get_enabled_skill("ss1", "sk1")).skill_id == "sk1"
+    patch_table.get_item.side_effect = None
+    patch_table.get_item.return_value = {"Item": _skill_metadata_item(enabled=False)}
+    assert await store.get_enabled_skill("ss1", "sk1") is None
+
+
+async def test_delete_skill(patch_table, store):
+    patch_table.get_item.return_value = {"Item": _skill_metadata_item()}
+    patch_table.query.return_value = {
+        "Items": [{"PK": "SKILL#sk1", "SK": "#METADATA"}, {"PK": "SKILL#sk1", "SK": "VERSION#0000000001"}]
+    }
+    batch_mock = MagicMock()
+    patch_table.batch_writer.return_value.__enter__ = MagicMock(return_value=batch_mock)
+    patch_table.batch_writer.return_value.__exit__ = MagicMock(return_value=False)
+    assert await store.delete_skill("sk1") is True
+    assert batch_mock.delete_item.call_count == 3
+
+    patch_table.get_item.return_value = {}
+    assert await store.delete_skill("missing") is False
 
 
 async def test_get_role_version_not_found(patch_table, store):

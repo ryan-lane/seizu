@@ -19,6 +19,38 @@
             "title": "BarPanelSettings",
             "type": "object"
         },
+        "GraphPanelSettings": {
+            "properties": {
+                "node_label": {
+                    "anyOf": [
+                        {
+                            "type": "string"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "description": "The node property to display as the node label. Defaults to ``label`` if unset.",
+                    "title": "Node Label"
+                },
+                "node_color_by": {
+                    "anyOf": [
+                        {
+                            "type": "string"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "description": "The node property to use for color grouping. Defaults to ``group`` if unset.",
+                    "title": "Node Color By"
+                }
+            },
+            "title": "GraphPanelSettings",
+            "type": "object"
+        },
         "Input": {
             "properties": {
                 "input_id": {
@@ -171,7 +203,7 @@
                         }
                     ],
                     "default": null,
-                    "description": "A reference to a cypher from the cypher section of the configuration. Must return ``details``. Used in the details section of the panel, as a table.",
+                    "description": "A reference to a cypher from the cypher section of the configuration. Used in the details section of the panel, as a table. The query can return rows in any of the formats supported by the ``table`` panel type.",
                     "examples": [
                         "cves-details"
                     ],
@@ -262,7 +294,7 @@
                         }
                     ],
                     "default": null,
-                    "description": "The size of the panel.",
+                    "description": "The threshold value for progress panels.",
                     "examples": [
                         "70"
                     ],
@@ -381,38 +413,6 @@
                 "name"
             ],
             "title": "PanelParam",
-            "type": "object"
-        },
-        "GraphPanelSettings": {
-            "properties": {
-                "node_label": {
-                    "anyOf": [
-                        {
-                            "type": "string"
-                        },
-                        {
-                            "type": "null"
-                        }
-                    ],
-                    "default": null,
-                    "description": "The node property to display as the node label. Defaults to ``label`` if unset.",
-                    "title": "Node Label"
-                },
-                "node_color_by": {
-                    "anyOf": [
-                        {
-                            "type": "string"
-                        },
-                        {
-                            "type": "null"
-                        }
-                    ],
-                    "default": null,
-                    "description": "The node property to use for color grouping. Defaults to ``group`` if unset.",
-                    "title": "Node Color By"
-                }
-            },
-            "title": "GraphPanelSettings",
             "type": "object"
         },
         "PiePanelSettings": {
@@ -719,6 +719,199 @@
             },
             "title": "ScheduledQueryWatchScan",
             "type": "object"
+        },
+        "SkillDef": {
+            "description": "A prompt template definition within a skillset.",
+            "properties": {
+                "name": {
+                    "title": "Name",
+                    "type": "string"
+                },
+                "description": {
+                    "default": "",
+                    "title": "Description",
+                    "type": "string"
+                },
+                "template": {
+                    "title": "Template",
+                    "type": "string"
+                },
+                "parameters": {
+                    "items": {
+                        "$ref": "#/$defs/ToolParamDef"
+                    },
+                    "title": "Parameters",
+                    "type": "array"
+                },
+                "triggers": {
+                    "items": {
+                        "type": "string"
+                    },
+                    "title": "Triggers",
+                    "type": "array"
+                },
+                "tools_required": {
+                    "items": {
+                        "type": "string"
+                    },
+                    "title": "Tools Required",
+                    "type": "array"
+                },
+                "enabled": {
+                    "default": true,
+                    "title": "Enabled",
+                    "type": "boolean"
+                }
+            },
+            "required": [
+                "name",
+                "template"
+            ],
+            "title": "SkillDef",
+            "type": "object"
+        },
+        "SkillsetDef": {
+            "description": "A skillset definition for MCP prompt exposure.",
+            "properties": {
+                "name": {
+                    "title": "Name",
+                    "type": "string"
+                },
+                "description": {
+                    "default": "",
+                    "title": "Description",
+                    "type": "string"
+                },
+                "enabled": {
+                    "default": true,
+                    "title": "Enabled",
+                    "type": "boolean"
+                },
+                "skills": {
+                    "additionalProperties": {
+                        "$ref": "#/$defs/SkillDef"
+                    },
+                    "title": "Skills",
+                    "type": "object"
+                }
+            },
+            "required": [
+                "name"
+            ],
+            "title": "SkillsetDef",
+            "type": "object"
+        },
+        "ToolDef": {
+            "description": "A tool definition within a toolset.",
+            "properties": {
+                "name": {
+                    "title": "Name",
+                    "type": "string"
+                },
+                "description": {
+                    "default": "",
+                    "title": "Description",
+                    "type": "string"
+                },
+                "cypher": {
+                    "title": "Cypher",
+                    "type": "string"
+                },
+                "parameters": {
+                    "items": {
+                        "$ref": "#/$defs/ToolParamDef"
+                    },
+                    "title": "Parameters",
+                    "type": "array"
+                },
+                "enabled": {
+                    "default": true,
+                    "title": "Enabled",
+                    "type": "boolean"
+                }
+            },
+            "required": [
+                "name",
+                "cypher"
+            ],
+            "title": "ToolDef",
+            "type": "object"
+        },
+        "ToolParamDef": {
+            "description": "Definition of a single parameter accepted by a tool.",
+            "properties": {
+                "name": {
+                    "title": "Name",
+                    "type": "string"
+                },
+                "type": {
+                    "enum": [
+                        "string",
+                        "integer",
+                        "float",
+                        "boolean"
+                    ],
+                    "title": "Type",
+                    "type": "string"
+                },
+                "description": {
+                    "default": "",
+                    "title": "Description",
+                    "type": "string"
+                },
+                "required": {
+                    "default": true,
+                    "title": "Required",
+                    "type": "boolean"
+                },
+                "default": {
+                    "anyOf": [
+                        {},
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": "Default"
+                }
+            },
+            "required": [
+                "name",
+                "type"
+            ],
+            "title": "ToolParamDef",
+            "type": "object"
+        },
+        "ToolsetDef": {
+            "description": "A toolset definition for MCP tool exposure.",
+            "properties": {
+                "name": {
+                    "title": "Name",
+                    "type": "string"
+                },
+                "description": {
+                    "default": "",
+                    "title": "Description",
+                    "type": "string"
+                },
+                "enabled": {
+                    "default": true,
+                    "title": "Enabled",
+                    "type": "boolean"
+                },
+                "tools": {
+                    "additionalProperties": {
+                        "$ref": "#/$defs/ToolDef"
+                    },
+                    "title": "Tools",
+                    "type": "object"
+                }
+            },
+            "required": [
+                "name"
+            ],
+            "title": "ToolsetDef",
+            "type": "object"
         }
     },
     "properties": {
@@ -728,7 +921,7 @@
             },
             "description": "The queries to use for the report.",
             "examples": [
-                "\n            .. code-block:: yaml\n\n              queries:\n                cves-severity-of-total: |-\n                  MATCH (c:CVE)\n                  WITH COUNT(DISTINCT c.id) AS denominator\n                  MATCH (c:CVE)\n                  WHERE c.base_severity = \"CRITICAL\"\n                  RETURN count(DISTINCT c.id) AS numerator, denominator\n                cves-by-severity: |-\n                  MATCH (c:CVE)\n                  WHERE c.base_severity = $base_severity\n                  RETURN count(c.id) AS count\n                cves: |-\n                  MATCH (c:CVE)\n                  WHERE c.base_severity =~ ($base_severity)\n                  RETURN {\n                    cve_id: c.id,\n                    base_severity: c.base_severity,\n                    severity: c.severity,\n                    description: c.description\n                  } AS details\n                  ORDER BY details.severity DESC\n                recent-cves: |-\n                  MATCH (s:SyncMetadata)\n                  WHERE s.grouptype = \"CVE\" AND s.syncedtype IN $syncedtype\n                  WITH datetime({epochSeconds: s.lastupdated}) - duration({hours: 24}) AS feedupdatetime\n                  MATCH (c:CVE)\n                  WHERE (datetime(c.published_date) > feedupdatetime AND c.base_severity IN $base_severity\n                  RETURN {\n                    id: c.id,\n                    base_severity: c.base_severity,\n                    base_score: c.base_score,\n                    description: c.description_en\n                  } AS details\n            "
+                "\n            .. code-block:: yaml\n\n              queries:\n                cves-severity-of-total: |-\n                  MATCH (c:CVE)\n                  WITH COUNT(DISTINCT c.id) AS denominator\n                  MATCH (c:CVE)\n                  WHERE c.base_severity = \"CRITICAL\"\n                  RETURN count(DISTINCT c.id) AS numerator, denominator\n            "
             ],
             "title": "Queries",
             "type": "object"
@@ -755,23 +948,46 @@
             },
             "description": "The reports to use for the report.",
             "examples": [
-                "\n            .. code-block:: yaml\n\n              reports:\n                cves:\n                  name: CVEs\n                  inputs:\n                    - input_id: cve_base_severity\n                      cypher: |-\n                        MATCH (c:CVE)\n                        RETURN c.base_severity AS base_severity\n                      default:\n                        label: (all)\n                        value: .*\n                      label: Base Severity\n                      type: autocomplete\n                      size: 2\n                  rows:\n                    - name: CVEs\n                      panels:\n                        - cypher: cves\n                          type: table\n                          params:\n                            - name: severity\n                              input_id: cve_base_severity\n                          size: 12\n            "
+                "\n            .. code-block:: yaml\n\n              reports:\n                cves:\n                  name: CVEs\n                  rows:\n                    - name: CVEs\n                      panels:\n                        - cypher: cves\n                          type: table\n                          size: 12\n            "
             ],
             "title": "Reports",
             "type": "object"
         },
         "scheduled_queries": {
-            "additionalProperties": {
+            "description": "The scheduled queries to run.",
+            "examples": [
+                "\n            .. code-block:: yaml\n\n              scheduled_queries:\n                - name: CVEs by severity\n                  cypher: recent-cves\n                  frequency: 1440\n                  actions:\n                    - action_type: slack\n                      action_config:\n                        title: Recently published HIGH/CRITICAL CVEs\n            "
+            ],
+            "items": {
                 "$ref": "#/$defs/ScheduledQuery"
             },
-            "description": "The scheduled queries to use for the report.",
-            "examples": [
-                "\n            .. code-block:: yaml\n\n              scheduled_queries:\n                cves-by-severity:\n                  name: CVEs by severity\n                  frequency: 1440\n                  watch_scans:\n                    - grouptype: CVE\n                      syncedtype: recent\n                  actions:\n                    - action_type: slack\n                      title: Recently published HIGH/CRITICAL CVEs\n                      initial_comment: |\n                        The following HIGH/CRITICAL CVEs have been published in the last 24 hours.\n                      channels:\n                        - C0000000000\n            "
-            ],
             "title": "Scheduled Queries",
+            "type": "array"
+        },
+        "toolsets": {
+            "additionalProperties": {
+                "$ref": "#/$defs/ToolsetDef"
+            },
+            "description": "Toolset definitions for MCP tool exposure.",
+            "examples": [
+                "\n            .. code-block:: yaml\n\n              toolsets:\n                my-toolset:\n                  name: My Toolset\n                  description: A collection of graph tools\n                  enabled: true\n                  tools:\n                    my-tool:\n                      name: My Tool\n                      description: Counts nodes\n                      cypher: MATCH (n) RETURN count(n) AS total\n                      enabled: true\n            "
+            ],
+            "title": "Toolsets",
+            "type": "object"
+        },
+        "skillsets": {
+            "additionalProperties": {
+                "$ref": "#/$defs/SkillsetDef"
+            },
+            "description": "Skillset definitions for MCP prompt exposure.",
+            "examples": [
+                "\n            .. code-block:: yaml\n\n              skillsets:\n                investigations:\n                  name: Investigations\n                  description: Prompt templates for graph investigations\n                  enabled: true\n                  skills:\n                    summarize_node:\n                      name: Summarize node\n                      template: Summarize {{node_id}} for a security analyst.\n                      parameters:\n                        - name: node_id\n                          type: string\n            "
+            ],
+            "title": "Skillsets",
             "type": "object"
         }
     },
     "title": "ReportingConfig",
-    "type": "object"
+    "type": "object",
+    "$schema": "https://json-schema.org/draft/2020-12/schema"
 }

@@ -20,7 +20,7 @@ import { ToolItem, ToolVersion, ToolParamDef } from 'src/hooks/useToolsetsApi';
 export type ToolViewData = Pick<
   ToolItem | ToolVersion,
   'name' | 'description' | 'cypher' | 'parameters' | 'enabled'
-> & { version?: number };
+> & { version?: number; effective_enabled?: boolean | null; disabled_reason?: string | null };
 
 interface Props {
   open: boolean;
@@ -47,6 +47,12 @@ function ParamTypeChip({ type }: { type: ToolParamDef['type'] }) {
 
 export default function ToolDetailDialog({ open, onClose, data }: Props) {
   if (!data) return null;
+  const effectiveEnabled = data.effective_enabled ?? data.enabled;
+  const statusLabel = effectiveEnabled
+    ? 'Enabled'
+    : data.disabled_reason === 'toolset_disabled'
+      ? 'Disabled by toolset'
+      : 'Disabled';
 
   return (
     <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>
@@ -74,8 +80,8 @@ export default function ToolDetailDialog({ open, onClose, data }: Props) {
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
           <Section title="Status">
             <Chip
-              label={data.enabled ? 'Enabled' : 'Disabled'}
-              color={data.enabled ? 'success' : 'default'}
+              label={statusLabel}
+              color={effectiveEnabled ? 'success' : 'default'}
               size="small"
             />
           </Section>

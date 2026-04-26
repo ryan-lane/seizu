@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import create_async_engine
 from sqlalchemy.pool import StaticPool
 from sqlmodel import SQLModel
 
+from reporting.schema.mcp_config import SkillItem, SkillsetListItem, SkillsetVersion, SkillVersion
 from reporting.schema.report_config import PanelStat, ReportListItem, ReportVersion, User
 from reporting.services.report_store import sql as sql_module
 from reporting.services.report_store.sql import SQLModelReportStore
@@ -73,6 +74,8 @@ async def test_initialize_creates_tables(mocker):
     assert "reports" in table_names
     assert "users" in table_names
     assert "panel_stats" in table_names
+    assert "skillsets" in table_names
+    assert "skills" in table_names
     await engine.dispose()
 
 
@@ -843,6 +846,7 @@ async def test_acquire_scheduled_query_lock_race(store, mocker):
 # ===========================================================================
 
 _TS_KWARGS = {
+    "toolset_id": "ts1",
     "name": "My Toolset",
     "description": "A test toolset",
     "enabled": True,
@@ -1001,6 +1005,7 @@ async def test_delete_toolset_not_found(store):
 # ===========================================================================
 
 _TOOL_KWARGS = {
+    "tool_id": "tool1",
     "name": "My Tool",
     "description": "A test tool",
     "cypher": "MATCH (n) RETURN n",
@@ -1015,7 +1020,7 @@ async def _make_toolset(store, mocker, ts_id: str = "ts1") -> None:
         "reporting.services.report_store.sql.generate_report_id",
         return_value=ts_id,
     )
-    await store.create_toolset(**_TS_KWARGS)
+    await store.create_toolset(**{**_TS_KWARGS, "toolset_id": ts_id})
 
 
 # ---------------------------------------------------------------------------
@@ -1262,6 +1267,7 @@ async def test_list_enabled_tools_excludes_disabled_tool(store, mocker):
     )
     await store.create_tool(
         toolset_id="ts1",
+        tool_id="tool1",
         name="Disabled Tool",
         description="",
         cypher="MATCH (n) RETURN n",
@@ -1415,3 +1421,144 @@ async def test_get_role_version_found(store, mocker):
 
 async def test_get_role_version_not_found(store):
     assert await store.get_role_version("missing", 1) is None
+
+
+# ---------------------------------------------------------------------------
+# Skillsets and skills
+# ---------------------------------------------------------------------------
+
+
+async def test_skillset_and_skill_crud(store):
+    assert await store.list_skillsets() == []
+    assert await store.get_skillset("ss1") is None
+    assert (
+        await store.update_skillset(
+            skillset_id="missing",
+            name="Missing",
+            description="",
+            enabled=True,
+            updated_by="u2",
+        )
+        is None
+    )
+    assert await store.delete_skillset("missing") is False
+    assert await store.list_skillset_versions("missing") == []
+    assert await store.get_skillset_version("missing", 1) is None
+
+    skillset = await store.create_skillset(
+        skillset_id="ss1",
+        name="Skillset",
+        description="desc",
+        enabled=True,
+        created_by="u1",
+    )
+    assert isinstance(skillset, SkillsetListItem)
+    assert skillset.current_version == 1
+    assert (await store.list_skillsets())[0].skillset_id == "ss1"
+    assert (await store.get_skillset("ss1")).name == "Skillset"
+
+    updated_skillset = await store.update_skillset(
+        skillset_id="ss1",
+        name="Updated",
+        description="new",
+        enabled=False,
+        updated_by="u2",
+        comment="v2",
+    )
+    assert updated_skillset is not None
+    assert updated_skillset.current_version == 2
+    versions = await store.list_skillset_versions("ss1")
+    assert len(versions) == 2
+    assert isinstance(versions[0], SkillsetVersion)
+    assert versions[0].version == 2
+    assert (await store.get_skillset_version("ss1", 1)).version == 1
+
+    assert (
+        await store.create_skill(
+            skillset_id="missing",
+            skill_id="sk_missing",
+            name="Missing",
+            description="",
+            template="x",
+            parameters=[],
+            triggers=[],
+            tools_required=[],
+            enabled=True,
+            created_by="u1",
+        )
+        is None
+    )
+    assert await store.list_skills("ss1") == []
+    assert await store.get_skill("sk1") is None
+    assert (
+        await store.update_skill(
+            skill_id="missing",
+            name="Missing",
+            description="",
+            template="x",
+            parameters=[],
+            triggers=[],
+            tools_required=[],
+            enabled=True,
+            updated_by="u2",
+        )
+        is None
+    )
+    assert await store.delete_skill("missing") is False
+    assert await store.list_skill_versions("missing") == []
+    assert await store.get_skill_version("missing", 1) is None
+    assert await store.list_enabled_skills() == []
+    assert await store.get_enabled_skill("ss1", "sk1") is None
+
+    await store.update_skillset(
+        skillset_id="ss1",
+        name="Updated",
+        description="new",
+        enabled=True,
+        updated_by="u2",
+    )
+    skill = await store.create_skill(
+        skillset_id="ss1",
+        skill_id="sk1",
+        name="Skill",
+        description="desc",
+        template="Hello {{topic}}",
+        parameters=[{"name": "topic", "type": "string", "required": True}],
+        triggers=["say hello"],
+        tools_required=["toolset__tool"],
+        enabled=True,
+        created_by="u1",
+    )
+    assert isinstance(skill, SkillItem)
+    assert skill.parameters[0].name == "topic"
+    assert skill.triggers == ["say hello"]
+    assert (await store.list_skills("ss1"))[0].skill_id == "sk1"
+    assert (await store.get_skill("sk1")).tools_required == ["toolset__tool"]
+    assert (await store.list_enabled_skills())[0].skill_id == "sk1"
+    assert (await store.get_enabled_skill("ss1", "sk1")).skill_id == "sk1"
+
+    updated_skill = await store.update_skill(
+        skill_id="sk1",
+        name="Skill v2",
+        description="new",
+        template="Hello {{topic}} again",
+        parameters=[{"name": "topic", "type": "string", "required": True}],
+        triggers=[],
+        tools_required=[],
+        enabled=False,
+        updated_by="u2",
+        comment="v2",
+    )
+    assert updated_skill is not None
+    assert updated_skill.current_version == 2
+    assert await store.list_enabled_skills() == []
+    assert await store.get_enabled_skill("ss1", "sk1") is None
+    skill_versions = await store.list_skill_versions("sk1")
+    assert len(skill_versions) == 2
+    assert isinstance(skill_versions[0], SkillVersion)
+    assert skill_versions[0].version == 2
+    assert (await store.get_skill_version("sk1", 1)).version == 1
+    assert await store.delete_skill("sk1") is True
+    assert await store.get_skill("sk1") is None
+    assert await store.delete_skillset("ss1") is True
+    assert await store.get_skillset("ss1") is None

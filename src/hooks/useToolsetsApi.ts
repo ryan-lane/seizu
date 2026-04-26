@@ -46,6 +46,8 @@ export interface ToolItem {
   updated_at: string;
   created_by: string;
   updated_by: string | null;
+  effective_enabled?: boolean | null;
+  disabled_reason?: string | null;
 }
 
 export interface ToolVersion {
@@ -63,6 +65,7 @@ export interface ToolVersion {
 }
 
 export interface CreateToolsetRequest {
+  toolset_id: string;
   name: string;
   description: string;
   enabled: boolean;
@@ -76,6 +79,7 @@ export interface UpdateToolsetRequest {
 }
 
 export interface CreateToolRequest {
+  tool_id: string;
   name: string;
   description: string;
   cypher: string;
@@ -92,12 +96,28 @@ export interface UpdateToolRequest {
   comment?: string | null;
 }
 
+export interface ToolCatalogItem {
+  mcp_name: string;
+  toolset_id: string;
+  tool_id: string;
+  toolset_name: string;
+  name: string;
+  enabled: boolean;
+}
+
 function getApiHeaders(accessToken: string | null): Record<string, string> {
   const headers: Record<string, string> = {};
   if (accessToken) {
     headers['Authorization'] = `Bearer ${accessToken}`;
   }
   return headers;
+}
+
+function mcpNameForTool(tool: ToolItem): string {
+  if (tool.tool_id.startsWith('__builtin_') && tool.tool_id.endsWith('__')) {
+    return tool.tool_id.slice('__builtin_'.length, -2);
+  }
+  return `${tool.toolset_id}__${tool.tool_id}`;
 }
 
 // ---------------------------------------------------------------------------
@@ -266,6 +286,65 @@ export function useToolsList(toolsetId: string | null): {
   }, [toolsetId, accessToken, auth_required, tick]);
 
   return { tools, loading, error, refresh };
+}
+
+export function useToolCatalog(): {
+  tools: ToolCatalogItem[];
+  loading: boolean;
+  error: Error | null;
+} {
+  const { accessToken } = useContext(AuthContext);
+  const { auth_required } = useContext(AuthConfigContext);
+  const [tools, setTools] = useState<ToolCatalogItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<Error | null>(null);
+
+  useEffect(() => {
+    if (auth_required && !accessToken) return;
+    let cancelled = false;
+
+    async function load(): Promise<void> {
+      setLoading(true);
+      setError(null);
+      try {
+        const toolsetRes = await fetch('/api/v1/toolsets', { headers: getApiHeaders(accessToken) });
+        if (!toolsetRes.ok) throw new Error(`Failed to load toolsets: ${toolsetRes.status}`);
+        const toolsetData = await toolsetRes.json() as { toolsets: ToolsetListItem[] };
+        const toolsets = toolsetData.toolsets ?? [];
+        const nested = await Promise.all(
+          toolsets.map(async (toolset) => {
+            const toolsRes = await fetch(`/api/v1/toolsets/${toolset.toolset_id}/tools`, {
+              headers: getApiHeaders(accessToken)
+            });
+            if (!toolsRes.ok) throw new Error(`Failed to load tools: ${toolsRes.status}`);
+            const toolsData = await toolsRes.json() as { tools: ToolItem[] };
+            return (toolsData.tools ?? []).map((tool) => ({
+              mcp_name: mcpNameForTool(tool),
+              toolset_id: tool.toolset_id,
+              tool_id: tool.tool_id,
+              toolset_name: toolset.name,
+              name: tool.name,
+              enabled: tool.effective_enabled ?? tool.enabled
+            }));
+          })
+        );
+        if (!cancelled) {
+          setTools(nested.flat().sort((a, b) => a.mcp_name.localeCompare(b.mcp_name)));
+          setLoading(false);
+        }
+      } catch (err) {
+        if (!cancelled) {
+          setError(err as Error);
+          setLoading(false);
+        }
+      }
+    }
+
+    void load();
+    return () => { cancelled = true; };
+  }, [accessToken, auth_required]);
+
+  return { tools, loading, error };
 }
 
 export function useToolVersionsList(toolsetId: string | null, toolId: string | null): {

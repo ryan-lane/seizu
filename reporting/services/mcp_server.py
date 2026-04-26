@@ -20,7 +20,7 @@ from jwt import PyJWKClient
 from mcp.server.fastmcp.server import StreamableHTTPASGIApp
 from mcp.server.lowlevel import Server
 from mcp.server.streamable_http_manager import StreamableHTTPSessionManager
-from mcp.types import TextContent, Tool
+from mcp.types import GetPromptResult, Prompt, PromptArgument, PromptMessage, TextContent, Tool
 from starlette.requests import Request
 from starlette.responses import JSONResponse as StarletteJSONResponse
 from starlette.types import ASGIApp, Receive, Scope, Send
@@ -28,7 +28,7 @@ from starlette.types import ASGIApp, Receive, Scope, Send
 from reporting import settings
 from reporting.authnz import CurrentUser
 from reporting.routes.query import _serialize_neo4j_value
-from reporting.schema.mcp_config import validate_tool_arguments
+from reporting.schema.mcp_config import render_skill_prompt, validate_tool_arguments
 from reporting.services import report_store, reporting_neo4j
 from reporting.services.mcp_builtins import find_builtin, list_builtin_tools
 
@@ -98,6 +98,13 @@ def _missing_permissions(required: list[str], granted: frozenset[str]) -> list[s
     return [p for p in required if p not in granted]
 
 
+def _parse_user_defined_name(name: str) -> tuple[str, str] | None:
+    parts = name.split("__", 1)
+    if len(parts) != 2 or not parts[0] or not parts[1]:
+        return None
+    return parts[0], parts[1]
+
+
 def _build_mcp_server() -> Server:
     server: Server = Server("seizu")
 
@@ -124,12 +131,8 @@ def _build_mcp_server() -> Server:
         # User-defined tools from the store
         try:
             enabled_tools = await report_store.list_enabled_tools()
-            toolsets = await report_store.list_toolsets()
-            toolset_names = {ts.toolset_id: ts.name for ts in toolsets}
-
             for tool in enabled_tools:
-                ts_name = toolset_names.get(tool.toolset_id, tool.toolset_id)
-                mcp_name = f"{ts_name}__{tool.name}"
+                mcp_name = f"{tool.toolset_id}__{tool.tool_id}"
                 description = tool.description or f"{tool.name} tool"
                 tools.append(
                     Tool(
@@ -165,18 +168,8 @@ def _build_mcp_server() -> Server:
         if "tools:call" not in perms:
             return _text({"error": "Permission denied: tools:call"})
         try:
-            enabled_tools = await report_store.list_enabled_tools()
-            toolsets = await report_store.list_toolsets()
-            toolset_names = {ts.toolset_id: ts.name for ts in toolsets}
-
-            target_tool = None
-            for tool in enabled_tools:
-                ts_name = toolset_names.get(tool.toolset_id, tool.toolset_id)
-                mcp_name = f"{ts_name}__{tool.name}"
-                if mcp_name == name:
-                    target_tool = tool
-                    break
-
+            parsed_name = _parse_user_defined_name(name)
+            target_tool = await report_store.get_enabled_tool(parsed_name[0], parsed_name[1]) if parsed_name else None
             if target_tool is None:
                 return _text({"error": f"Tool '{name}' not found"})
 
@@ -196,6 +189,84 @@ def _build_mcp_server() -> Server:
         except Exception:
             logger.exception("Failed to execute MCP tool %s", name)
             return _text({"error": f"Failed to execute tool '{name}'"})
+
+    @server.list_prompts()
+    async def list_prompts() -> list[Prompt]:
+        perms = _mcp_permissions.get()
+        if "skills:render" not in perms:
+            return []
+        prompts: list[Prompt] = []
+        try:
+            enabled_skills = await report_store.list_enabled_skills()
+            for skill in enabled_skills:
+                prompts.append(
+                    Prompt(
+                        name=f"{skill.skillset_id}__{skill.skill_id}",
+                        title=skill.name,
+                        description=skill.description or f"{skill.name} skill",
+                        arguments=[
+                            PromptArgument(
+                                name=p.name,
+                                description=p.description or None,
+                                required=p.required and p.default is None,
+                            )
+                            for p in skill.parameters
+                        ],
+                    )
+                )
+        except Exception:
+            logger.exception("Failed to load skills from store for MCP prompt listing")
+        return prompts
+
+    @server.get_prompt()
+    async def get_prompt(name: str, arguments: dict[str, str] | None) -> GetPromptResult:
+        perms = _mcp_permissions.get()
+        if "skills:render" not in perms:
+            return GetPromptResult(
+                description="Permission denied",
+                messages=[
+                    PromptMessage(
+                        role="user",
+                        content=TextContent(type="text", text="Permission denied: skills:render"),
+                    )
+                ],
+            )
+        try:
+            parsed_name = _parse_user_defined_name(name)
+            target_skill = await report_store.get_enabled_skill(parsed_name[0], parsed_name[1]) if parsed_name else None
+            if target_skill is None:
+                return GetPromptResult(
+                    description="Skill not found",
+                    messages=[
+                        PromptMessage(
+                            role="user",
+                            content=TextContent(type="text", text=f"Skill '{name}' not found"),
+                        )
+                    ],
+                )
+            rendered, errors = render_skill_prompt(
+                target_skill.parameters,
+                target_skill.template,
+                arguments or {},
+                target_skill.triggers,
+                target_skill.tools_required,
+            )
+            text = rendered if rendered is not None else json.dumps({"errors": errors}, indent=2)
+            return GetPromptResult(
+                description=target_skill.description or target_skill.name,
+                messages=[PromptMessage(role="user", content=TextContent(type="text", text=text))],
+            )
+        except Exception:
+            logger.exception("Failed to render MCP prompt %s", name)
+            return GetPromptResult(
+                description="Skill render failed",
+                messages=[
+                    PromptMessage(
+                        role="user",
+                        content=TextContent(type="text", text=f"Failed to render skill '{name}'"),
+                    )
+                ],
+            )
 
     return server
 

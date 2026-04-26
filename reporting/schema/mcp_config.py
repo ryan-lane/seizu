@@ -1,7 +1,76 @@
+import re
 from decimal import Decimal
 from typing import Any, Literal
 
 from pydantic import BaseModel, Field, field_validator
+
+LOWER_SNAKE_ID_RE = re.compile(r"^[a-z][a-z0-9]*(?:_[a-z0-9]+)*$")
+MCP_TOOL_NAME_RE = re.compile(r"^[a-z][a-z0-9]*(?:_[a-z0-9]+)*__[a-z][a-z0-9]*(?:_[a-z0-9]+)*$")
+
+
+def validate_lower_snake_id(value: str) -> str:
+    """Validate immutable user-supplied IDs used in MCP names."""
+    if not LOWER_SNAKE_ID_RE.fullmatch(value):
+        raise ValueError("must be lower_snake_case matching ^[a-z][a-z0-9]*(?:_[a-z0-9]+)*$")
+    return value
+
+
+def validate_string_list(values: list[str], field_name: str) -> list[str]:
+    seen: set[str] = set()
+    result: list[str] = []
+    for value in values:
+        stripped = value.strip()
+        if not stripped:
+            raise ValueError(f"{field_name} entries must not be empty")
+        if stripped in seen:
+            raise ValueError(f"{field_name} entries must be unique")
+        seen.add(stripped)
+        result.append(stripped)
+    return result
+
+
+def validate_mcp_tool_refs(values: list[str]) -> list[str]:
+    result = validate_string_list(values, "tools_required")
+    for value in result:
+        if not MCP_TOOL_NAME_RE.fullmatch(value):
+            raise ValueError("tools_required entries must use MCP tool names like toolset_id__tool_id")
+    return result
+
+
+def _coerce_argument(param: "ToolParamDef", value: Any) -> tuple[Any | None, str | None]:
+    if param.type == "string":
+        if isinstance(value, str):
+            return value, None
+        return None, f"Parameter '{param.name}' must be a string, got {type(value).__name__}"
+    if param.type == "boolean":
+        if isinstance(value, bool):
+            return value, None
+        if isinstance(value, str):
+            lowered = value.strip().lower()
+            if lowered in ("true", "1", "yes", "on"):
+                return True, None
+            if lowered in ("false", "0", "no", "off"):
+                return False, None
+        return None, f"Parameter '{param.name}' must be a boolean, got {type(value).__name__}"
+    if param.type == "integer":
+        if isinstance(value, int) and not isinstance(value, bool):
+            return value, None
+        if isinstance(value, str):
+            try:
+                return int(value, 10), None
+            except ValueError:
+                pass
+        return None, f"Parameter '{param.name}' must be an integer, got {type(value).__name__}"
+    if param.type == "float":
+        if isinstance(value, (int, float)) and not isinstance(value, bool):
+            return value, None
+        if isinstance(value, str):
+            try:
+                return float(value), None
+            except ValueError:
+                pass
+        return None, f"Parameter '{param.name}' must be a number, got {type(value).__name__}"
+    return value, None
 
 
 def _coerce_decimal(value: Any) -> Any:
@@ -23,6 +92,11 @@ class ToolParamDef(BaseModel):
     description: str = ""
     required: bool = True
     default: Any | None = None
+
+    @field_validator("name")
+    @classmethod
+    def validate_name(cls, v: str) -> str:
+        return validate_lower_snake_id(v)
 
 
 class ToolsetListItem(BaseModel):
@@ -81,6 +155,12 @@ class ToolItem(BaseModel):
     updated_at: str
     created_by: str
     updated_by: str | None = None
+    effective_enabled: bool | None = None
+    disabled_reason: str | None = None
+
+    def model_post_init(self, __context: Any) -> None:
+        if self.effective_enabled is None:
+            self.effective_enabled = self.enabled
 
     @field_validator("current_version", mode="before")
     @classmethod
@@ -156,26 +236,15 @@ def validate_tool_arguments(parameters: list["ToolParamDef"], arguments: dict[st
     - Each supplied value is the correct type.
     """
     errors: list[str] = []
-    _TYPE_CHECK: dict[str, type] = {
-        "string": str,
-        "boolean": bool,
-    }
     for param in parameters:
         value = arguments.get(param.name)
         if value is None:
             if param.required and param.default is None:
                 errors.append(f"Required parameter '{param.name}' is missing")
             continue
-        if param.type in _TYPE_CHECK:
-            expected = _TYPE_CHECK[param.type]
-            if not isinstance(value, expected):
-                errors.append(f"Parameter '{param.name}' must be a {param.type}, got {type(value).__name__}")
-        elif param.type == "integer":
-            if not isinstance(value, int) or isinstance(value, bool):
-                errors.append(f"Parameter '{param.name}' must be an integer, got {type(value).__name__}")
-        elif param.type == "float":
-            if not isinstance(value, (int, float)) or isinstance(value, bool):
-                errors.append(f"Parameter '{param.name}' must be a number, got {type(value).__name__}")
+        _, error = _coerce_argument(param, value)
+        if error:
+            errors.append(error)
     return errors
 
 
@@ -194,9 +263,15 @@ class CallToolResponse(BaseModel):
 class CreateToolsetRequest(BaseModel):
     """Request body for POST /api/v1/toolsets."""
 
+    toolset_id: str
     name: str
     description: str = ""
     enabled: bool = True
+
+    @field_validator("toolset_id")
+    @classmethod
+    def validate_toolset_id(cls, v: str) -> str:
+        return validate_lower_snake_id(v)
 
 
 class UpdateToolsetRequest(BaseModel):
@@ -211,11 +286,17 @@ class UpdateToolsetRequest(BaseModel):
 class CreateToolRequest(BaseModel):
     """Request body for POST /api/v1/toolsets/<id>/tools."""
 
+    tool_id: str
     name: str
     description: str = ""
     cypher: str
     parameters: list[ToolParamDef] = Field(default_factory=list)
     enabled: bool = True
+
+    @field_validator("tool_id")
+    @classmethod
+    def validate_tool_id(cls, v: str) -> str:
+        return validate_lower_snake_id(v)
 
 
 class UpdateToolRequest(BaseModel):
@@ -227,3 +308,343 @@ class UpdateToolRequest(BaseModel):
     parameters: list[ToolParamDef] = Field(default_factory=list)
     enabled: bool = True
     comment: str | None = None
+
+
+class SkillsetListItem(BaseModel):
+    """Lightweight summary of a skillset for list views."""
+
+    skillset_id: str
+    name: str
+    description: str = ""
+    enabled: bool = True
+    current_version: int = 0
+    created_at: str
+    updated_at: str
+    created_by: str
+    updated_by: str | None = None
+
+    @field_validator("current_version", mode="before")
+    @classmethod
+    def coerce_version(cls, v: Any) -> int:
+        if isinstance(v, Decimal):
+            return int(v)
+        return int(v) if v is not None else 0
+
+
+class SkillsetVersion(BaseModel):
+    """A point-in-time snapshot of a skillset's metadata."""
+
+    skillset_id: str
+    name: str
+    description: str = ""
+    enabled: bool = True
+    version: int
+    created_at: str
+    created_by: str
+    comment: str | None = None
+
+    @field_validator("version", mode="before")
+    @classmethod
+    def coerce_version(cls, v: Any) -> int:
+        if isinstance(v, Decimal):
+            return int(v)
+        return int(v)
+
+
+class SkillItem(BaseModel):
+    """A user-defined MCP prompt template stored in the database."""
+
+    skill_id: str
+    skillset_id: str
+    name: str
+    description: str = ""
+    template: str
+    parameters: list[ToolParamDef] = Field(default_factory=list)
+    triggers: list[str] = Field(default_factory=list)
+    tools_required: list[str] = Field(default_factory=list)
+    enabled: bool = True
+    current_version: int = 0
+    created_at: str
+    updated_at: str
+    created_by: str
+    updated_by: str | None = None
+    effective_enabled: bool | None = None
+    disabled_reason: str | None = None
+
+    def model_post_init(self, __context: Any) -> None:
+        if self.effective_enabled is None:
+            self.effective_enabled = self.enabled
+
+    @field_validator("current_version", mode="before")
+    @classmethod
+    def coerce_version(cls, v: Any) -> int:
+        if isinstance(v, Decimal):
+            return int(v)
+        return int(v) if v is not None else 0
+
+    @field_validator("parameters", mode="before")
+    @classmethod
+    def coerce_parameters(cls, v: Any) -> list[dict[str, Any]]:
+        return _coerce_decimal(v) if v is not None else []
+
+    @field_validator("triggers")
+    @classmethod
+    def validate_triggers(cls, v: list[str]) -> list[str]:
+        return validate_string_list(v, "triggers")
+
+    @field_validator("tools_required")
+    @classmethod
+    def validate_tools_required(cls, v: list[str]) -> list[str]:
+        return validate_mcp_tool_refs(v)
+
+
+class SkillVersion(BaseModel):
+    """A point-in-time snapshot of a skill prompt template."""
+
+    skill_id: str
+    skillset_id: str
+    name: str
+    description: str = ""
+    template: str
+    parameters: list[ToolParamDef] = Field(default_factory=list)
+    triggers: list[str] = Field(default_factory=list)
+    tools_required: list[str] = Field(default_factory=list)
+    enabled: bool = True
+    version: int
+    created_at: str
+    created_by: str
+    comment: str | None = None
+
+    @field_validator("version", mode="before")
+    @classmethod
+    def coerce_version(cls, v: Any) -> int:
+        if isinstance(v, Decimal):
+            return int(v)
+        return int(v)
+
+    @field_validator("parameters", mode="before")
+    @classmethod
+    def coerce_parameters(cls, v: Any) -> list[dict[str, Any]]:
+        return _coerce_decimal(v) if v is not None else []
+
+    @field_validator("triggers")
+    @classmethod
+    def validate_triggers(cls, v: list[str]) -> list[str]:
+        return validate_string_list(v, "triggers")
+
+    @field_validator("tools_required")
+    @classmethod
+    def validate_tools_required(cls, v: list[str]) -> list[str]:
+        return validate_mcp_tool_refs(v)
+
+
+class SkillsetListResponse(BaseModel):
+    skillsets: list[SkillsetListItem]
+
+
+class SkillsetVersionListResponse(BaseModel):
+    versions: list[SkillsetVersion]
+
+
+class SkillsetIdResponse(BaseModel):
+    skillset_id: str
+
+
+class SkillListResponse(BaseModel):
+    skills: list[SkillItem]
+
+
+class SkillVersionListResponse(BaseModel):
+    versions: list[SkillVersion]
+
+
+class SkillIdResponse(BaseModel):
+    skill_id: str
+
+
+class CreateSkillsetRequest(BaseModel):
+    """Request body for POST /api/v1/skillsets."""
+
+    skillset_id: str
+    name: str
+    description: str = ""
+    enabled: bool = True
+
+    @field_validator("skillset_id")
+    @classmethod
+    def validate_skillset_id(cls, v: str) -> str:
+        return validate_lower_snake_id(v)
+
+
+class UpdateSkillsetRequest(BaseModel):
+    """Request body for PUT /api/v1/skillsets/<id>."""
+
+    name: str
+    description: str = ""
+    enabled: bool = True
+    comment: str | None = None
+
+
+class CreateSkillRequest(BaseModel):
+    """Request body for POST /api/v1/skillsets/<id>/skills."""
+
+    skill_id: str
+    name: str
+    description: str = ""
+    template: str
+    parameters: list[ToolParamDef] = Field(default_factory=list)
+    triggers: list[str] = Field(default_factory=list)
+    tools_required: list[str] = Field(default_factory=list)
+    enabled: bool = True
+
+    @field_validator("skill_id")
+    @classmethod
+    def validate_skill_id(cls, v: str) -> str:
+        return validate_lower_snake_id(v)
+
+    @field_validator("triggers")
+    @classmethod
+    def validate_triggers(cls, v: list[str]) -> list[str]:
+        return validate_string_list(v, "triggers")
+
+    @field_validator("tools_required")
+    @classmethod
+    def validate_tools_required(cls, v: list[str]) -> list[str]:
+        return validate_mcp_tool_refs(v)
+
+
+class UpdateSkillRequest(BaseModel):
+    """Request body for PUT /api/v1/skillsets/<id>/skills/<id>."""
+
+    name: str
+    description: str = ""
+    template: str
+    parameters: list[ToolParamDef] = Field(default_factory=list)
+    triggers: list[str] = Field(default_factory=list)
+    tools_required: list[str] = Field(default_factory=list)
+    enabled: bool = True
+    comment: str | None = None
+
+    @field_validator("triggers")
+    @classmethod
+    def validate_triggers(cls, v: list[str]) -> list[str]:
+        return validate_string_list(v, "triggers")
+
+    @field_validator("tools_required")
+    @classmethod
+    def validate_tools_required(cls, v: list[str]) -> list[str]:
+        return validate_mcp_tool_refs(v)
+
+
+class RenderSkillRequest(BaseModel):
+    """Request body for rendering a skill template."""
+
+    arguments: dict[str, Any] = Field(default_factory=dict)
+
+
+class RenderSkillResponse(BaseModel):
+    text: str
+
+
+def template_placeholders(template: str) -> set[str]:
+    """Return simple ``{{param_name}}`` placeholders used by a skill template."""
+    placeholders: set[str] = set()
+    search_start = 0
+    while True:
+        open_idx = template.find("{{", search_start)
+        if open_idx == -1:
+            return placeholders
+        close_idx = template.find("}}", open_idx + 2)
+        if close_idx == -1:
+            return placeholders
+        placeholders.add(template[open_idx + 2 : close_idx].strip())
+        search_start = close_idx + 2
+
+
+def validate_skill_template(parameters: list[ToolParamDef], template: str) -> list[str]:
+    """Validate placeholder references for a skill template."""
+    param_names = {p.name for p in parameters}
+    placeholders = template_placeholders(template)
+    errors: list[str] = []
+    for placeholder in sorted(placeholders):
+        if not LOWER_SNAKE_ID_RE.fullmatch(placeholder):
+            errors.append(f"Placeholder '{placeholder}' must be lower_snake_case")
+        elif placeholder not in param_names:
+            errors.append(f"Placeholder '{placeholder}' does not match a declared parameter")
+    return errors
+
+
+def render_skill_template(
+    parameters: list[ToolParamDef],
+    template: str,
+    arguments: dict[str, Any],
+) -> tuple[str | None, list[str]]:
+    """Render a skill template after applying defaults and coercing argument types."""
+    errors = validate_skill_template(parameters, template)
+    values: dict[str, Any] = {}
+    for param in parameters:
+        raw_value = arguments.get(param.name, param.default)
+        if raw_value is None:
+            if param.required:
+                errors.append(f"Required parameter '{param.name}' is missing")
+            continue
+        coerced, error = _coerce_argument(param, raw_value)
+        if error:
+            errors.append(error)
+            continue
+        values[param.name] = coerced
+
+    if errors:
+        return None, errors
+
+    rendered: list[str] = []
+    search_start = 0
+    while True:
+        open_idx = template.find("{{", search_start)
+        if open_idx == -1:
+            rendered.append(template[search_start:])
+            break
+        close_idx = template.find("}}", open_idx + 2)
+        if close_idx == -1:
+            rendered.append(template[search_start:])
+            break
+        rendered.append(template[search_start:open_idx])
+        placeholder = template[open_idx + 2 : close_idx].strip()
+        rendered.append(str(values.get(placeholder, "")))
+        search_start = close_idx + 2
+
+    return "".join(rendered), []
+
+
+def _quote_frontmatter_value(value: str) -> str:
+    return '"' + value.replace("\\", "\\\\").replace('"', '\\"') + '"'
+
+
+def add_skill_frontmatter(text: str, triggers: list[str], tools_required: list[str]) -> str:
+    """Prefix rendered skill text with generated frontmatter when metadata exists."""
+    if not triggers and not tools_required:
+        return text
+
+    lines = ["---"]
+    if triggers:
+        lines.append("triggers:")
+        lines.extend(f"  - {_quote_frontmatter_value(trigger)}" for trigger in triggers)
+    if tools_required:
+        lines.append("tools_required:")
+        lines.extend(f"  - {_quote_frontmatter_value(tool)}" for tool in tools_required)
+    lines.append("---")
+    lines.append(text)
+    return "\n".join(lines)
+
+
+def render_skill_prompt(
+    parameters: list[ToolParamDef],
+    template: str,
+    arguments: dict[str, Any],
+    triggers: list[str],
+    tools_required: list[str],
+) -> tuple[str | None, list[str]]:
+    rendered, errors = render_skill_template(parameters, template, arguments)
+    if rendered is None:
+        return None, errors
+    return add_skill_frontmatter(rendered, triggers, tools_required), []

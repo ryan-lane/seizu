@@ -149,21 +149,29 @@ async def test_toolsets_get_returns_error_when_missing():
 
 
 async def test_toolsets_create_forwards_user_id():
-    with patch(
-        "reporting.services.mcp_builtins.toolsets.report_store.create_toolset",
-        new_callable=AsyncMock,
-        return_value=_toolset(),
-    ) as mock_create:
+    with (
+        patch(
+            "reporting.services.mcp_builtins.toolsets.report_store.get_toolset",
+            new_callable=AsyncMock,
+            return_value=None,
+        ),
+        patch(
+            "reporting.services.mcp_builtins.toolsets.report_store.create_toolset",
+            new_callable=AsyncMock,
+            return_value=_toolset(),
+        ) as mock_create,
+    ):
         server = _build_mcp_server()
         result = await _call(
             server,
             "toolsets__create",
-            {"name": "my-toolset", "description": "desc", "enabled": True},
+            {"toolset_id": "ts1", "name": "my-toolset", "description": "desc", "enabled": True},
         )
         data = json.loads(result[0].text)
 
     assert data["toolset_id"] == "ts1"
     mock_create.assert_awaited_once_with(
+        toolset_id="ts1",
         name="my-toolset",
         description="desc",
         enabled=True,
@@ -384,6 +392,7 @@ async def test_toolsets_get_tool_rejects_mismatched_toolset():
 async def test_toolsets_create_tool_success():
     args = {
         "toolset_id": "ts1",
+        "tool_id": "t1",
         "name": "my-tool",
         "description": "desc",
         "cypher": "MATCH (n) RETURN n",
@@ -391,6 +400,11 @@ async def test_toolsets_create_tool_success():
         "enabled": True,
     }
     with (
+        patch(
+            "reporting.services.mcp_builtins.toolsets.report_store.get_tool",
+            new_callable=AsyncMock,
+            return_value=None,
+        ),
         patch(
             "reporting.services.mcp_builtins.toolsets.validate_query",
             new_callable=AsyncMock,
@@ -415,16 +429,24 @@ async def test_toolsets_create_tool_success():
 async def test_toolsets_create_tool_rejects_invalid_cypher():
     args = {
         "toolset_id": "ts1",
+        "tool_id": "t1",
         "name": "my-tool",
         "description": "desc",
         "cypher": "CREATE (n) RETURN n",
         "parameters": [],
         "enabled": True,
     }
-    with patch(
-        "reporting.services.mcp_builtins.toolsets.validate_query",
-        new_callable=AsyncMock,
-        return_value=ValidationResult(errors=["write not allowed"]),
+    with (
+        patch(
+            "reporting.services.mcp_builtins.toolsets.report_store.get_tool",
+            new_callable=AsyncMock,
+            return_value=None,
+        ),
+        patch(
+            "reporting.services.mcp_builtins.toolsets.validate_query",
+            new_callable=AsyncMock,
+            return_value=ValidationResult(errors=["write not allowed"]),
+        ),
     ):
         server = _build_mcp_server()
         result = await _call(server, "toolsets__create_tool", args)
@@ -436,6 +458,7 @@ async def test_toolsets_create_tool_rejects_invalid_cypher():
 async def test_toolsets_create_tool_returns_error_when_toolset_missing():
     args = {
         "toolset_id": "nope",
+        "tool_id": "t1",
         "name": "my-tool",
         "description": "desc",
         "cypher": "MATCH (n) RETURN n",
@@ -443,6 +466,11 @@ async def test_toolsets_create_tool_returns_error_when_toolset_missing():
         "enabled": True,
     }
     with (
+        patch(
+            "reporting.services.mcp_builtins.toolsets.report_store.get_tool",
+            new_callable=AsyncMock,
+            return_value=None,
+        ),
         patch(
             "reporting.services.mcp_builtins.toolsets.validate_query",
             new_callable=AsyncMock,

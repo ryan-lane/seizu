@@ -16,6 +16,10 @@ import Toolsets from 'src/pages/Toolsets';
 import ToolsetTools from 'src/pages/ToolsetTools';
 import ToolsetHistory from 'src/pages/ToolsetHistory';
 import ToolHistory from 'src/pages/ToolHistory';
+import Skillsets from 'src/pages/Skillsets';
+import SkillsetSkills from 'src/pages/SkillsetSkills';
+import SkillsetHistory from 'src/pages/SkillsetHistory';
+import SkillHistory from 'src/pages/SkillHistory';
 
 const routes = [
   {
@@ -38,6 +42,10 @@ const routes = [
       { path: 'toolsets/:toolsetId/tools', element: <ToolsetTools /> },
       { path: 'toolsets/:toolsetId/history', element: <ToolsetHistory /> },
       { path: 'toolsets/:toolsetId/tools/:toolId/history', element: <ToolHistory /> },
+      { path: 'skillsets', element: <Skillsets /> },
+      { path: 'skillsets/:skillsetId/skills', element: <SkillsetSkills /> },
+      { path: 'skillsets/:skillsetId/history', element: <SkillsetHistory /> },
+      { path: 'skillsets/:skillsetId/skills/:skillId/history', element: <SkillHistory /> },
       { path: 'documentation', element: <Documentation /> },
       { path: '*', element: <Navigate to="/404" /> }
     ]

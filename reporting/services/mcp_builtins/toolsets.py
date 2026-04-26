@@ -46,7 +46,10 @@ async def _get_toolset(args: dict[str, Any], current_user: CurrentUser | None) -
 async def _create_toolset(args: dict[str, Any], current_user: CurrentUser | None) -> dict[str, Any]:
     user = _require_user(current_user)
     body = CreateToolsetRequest.model_validate(args)
+    if await report_store.get_toolset(body.toolset_id):
+        return {"error": "Toolset already exists"}
     item = await report_store.create_toolset(
+        toolset_id=body.toolset_id,
         name=body.name,
         description=body.description,
         enabled=body.enabled,
@@ -120,11 +123,14 @@ async def _create_tool(args: dict[str, Any], current_user: CurrentUser | None) -
     user = _require_user(current_user)
     toolset_id = args["toolset_id"]
     body = CreateToolRequest.model_validate({k: v for k, v in args.items() if k != "toolset_id"})
+    if await report_store.get_tool(body.tool_id):
+        return {"error": "Tool already exists"}
     validation = await validate_query(body.cypher)
     if validation.has_errors:
         return {"errors": validation.errors, "warnings": validation.warnings}
     tool = await report_store.create_tool(
         toolset_id=toolset_id,
+        tool_id=body.tool_id,
         name=body.name,
         description=body.description,
         cypher=body.cypher,

@@ -9,7 +9,17 @@ import botocore.exceptions
 from snowflake import SnowflakeGenerator
 
 from reporting import settings
-from reporting.schema.mcp_config import ToolItem, ToolParamDef, ToolsetListItem, ToolsetVersion, ToolVersion
+from reporting.schema.mcp_config import (
+    SkillItem,
+    SkillsetListItem,
+    SkillsetVersion,
+    SkillVersion,
+    ToolItem,
+    ToolParamDef,
+    ToolsetListItem,
+    ToolsetVersion,
+    ToolVersion,
+)
 from reporting.schema.rbac import RoleItem, RoleVersion
 from reporting.schema.report_config import (
     PanelStat,
@@ -48,6 +58,8 @@ _PK_PANEL_STATS = "PANEL_STATS"
 _PK_SCHEDULED_QUERY_LIST = "SCHEDULED_QUERY_LIST"
 # Toolsets — list index PK for listing all toolsets.
 _PK_TOOLSET_LIST = "TOOLSET_LIST"
+# Skillsets — list index PK for listing all skillsets.
+_PK_SKILLSET_LIST = "SKILLSET_LIST"
 # Roles — list index PK for listing all user-defined roles.
 _PK_ROLE_LIST = "ROLE_LIST"
 # Group mappings — list index PK for listing all group-to-role mappings.
@@ -167,6 +179,26 @@ def _tool_list_sk(tool_id: str) -> str:
     return f"TOOL#{tool_id}"
 
 
+def _skillset_pk(skillset_id: str) -> str:
+    return f"SKILLSET#{skillset_id}"
+
+
+def _skillset_list_sk(skillset_id: str) -> str:
+    return f"SKILLSET#{skillset_id}"
+
+
+def _skill_pk(skill_id: str) -> str:
+    return f"SKILL#{skill_id}"
+
+
+def _skill_list_pk(skillset_id: str) -> str:
+    return f"SKILL_LIST#{skillset_id}"
+
+
+def _skill_list_sk(skill_id: str) -> str:
+    return f"SKILL#{skill_id}"
+
+
 def _toolset_from_item(item: dict) -> ToolsetListItem:
     return ToolsetListItem(
         toolset_id=item["toolset_id"],
@@ -219,6 +251,70 @@ def _tool_version_from_item(item: dict) -> ToolVersion:
         description=item.get("description", ""),
         cypher=item["cypher"],
         parameters=[ToolParamDef(**p) if isinstance(p, dict) else p for p in item.get("parameters", [])],
+        enabled=item.get("enabled", True),
+        version=item["version"],
+        created_at=item["created_at"],
+        created_by=item["created_by"],
+        comment=item.get("comment"),
+    )
+
+
+def _skillset_from_item(item: dict) -> SkillsetListItem:
+    return SkillsetListItem(
+        skillset_id=item["skillset_id"],
+        name=item["name"],
+        description=item.get("description", ""),
+        enabled=item.get("enabled", True),
+        current_version=item.get("current_version", 0),
+        created_at=item["created_at"],
+        updated_at=item["updated_at"],
+        created_by=item["created_by"],
+        updated_by=item.get("updated_by"),
+    )
+
+
+def _skillset_version_from_item(item: dict) -> SkillsetVersion:
+    return SkillsetVersion(
+        skillset_id=item["skillset_id"],
+        name=item["name"],
+        description=item.get("description", ""),
+        enabled=item.get("enabled", True),
+        version=item["version"],
+        created_at=item["created_at"],
+        created_by=item["created_by"],
+        comment=item.get("comment"),
+    )
+
+
+def _skill_from_item(item: dict) -> SkillItem:
+    return SkillItem(
+        skill_id=item["skill_id"],
+        skillset_id=item["skillset_id"],
+        name=item["name"],
+        description=item.get("description", ""),
+        template=item["template"],
+        parameters=[ToolParamDef(**p) if isinstance(p, dict) else p for p in item.get("parameters", [])],
+        triggers=item.get("triggers", []),
+        tools_required=item.get("tools_required", []),
+        enabled=item.get("enabled", True),
+        current_version=item.get("current_version", 0),
+        created_at=item["created_at"],
+        updated_at=item["updated_at"],
+        created_by=item["created_by"],
+        updated_by=item.get("updated_by"),
+    )
+
+
+def _skill_version_from_item(item: dict) -> SkillVersion:
+    return SkillVersion(
+        skill_id=item["skill_id"],
+        skillset_id=item["skillset_id"],
+        name=item["name"],
+        description=item.get("description", ""),
+        template=item["template"],
+        parameters=[ToolParamDef(**p) if isinstance(p, dict) else p for p in item.get("parameters", [])],
+        triggers=item.get("triggers", []),
+        tools_required=item.get("tools_required", []),
         enabled=item.get("enabled", True),
         version=item["version"],
         created_at=item["created_at"],
@@ -1175,12 +1271,12 @@ class DynamoDBReportStore(ReportStore):
 
     async def create_toolset(
         self,
+        toolset_id: str,
         name: str,
         description: str,
         enabled: bool,
         created_by: str,
     ) -> ToolsetListItem:
-        toolset_id = generate_report_id()
         now = datetime.now(tz=UTC).isoformat()
         version = 1
         base = _strip_none(
@@ -1392,6 +1488,7 @@ class DynamoDBReportStore(ReportStore):
     async def create_tool(
         self,
         toolset_id: str,
+        tool_id: str,
         name: str,
         description: str,
         cypher: str,
@@ -1406,7 +1503,6 @@ class DynamoDBReportStore(ReportStore):
             if not ts_resp.get("Item"):
                 return None
 
-            tool_id = generate_report_id()
             now = datetime.now(tz=UTC).isoformat()
             version = 1
             base = _strip_none(
@@ -1592,6 +1688,481 @@ class DynamoDBReportStore(ReportStore):
                         if item and item.get("enabled", True):
                             tools.append(_tool_from_item(item))
             return tools
+
+        return await asyncio.to_thread(_op)
+
+    async def get_enabled_tool(self, toolset_id: str, tool_id: str) -> ToolItem | None:
+        def _op() -> ToolItem | None:
+            table = _get_table()
+            tool_resp = table.get_item(Key={"PK": _tool_pk(tool_id), "SK": _SK_METADATA})
+            tool_item = tool_resp.get("Item")
+            if not tool_item or tool_item.get("toolset_id") != toolset_id or not tool_item.get("enabled", True):
+                return None
+
+            toolset_resp = table.get_item(Key={"PK": _toolset_pk(toolset_id), "SK": _SK_METADATA})
+            toolset_item = toolset_resp.get("Item")
+            if not toolset_item or not toolset_item.get("enabled", True):
+                return None
+            return _tool_from_item(tool_item)
+
+        return await asyncio.to_thread(_op)
+
+    # ------------------------------------------------------------------
+    # Skillsets
+    # ------------------------------------------------------------------
+
+    async def list_skillsets(self) -> list[SkillsetListItem]:
+        def _op() -> list[SkillsetListItem]:
+            table = _get_table()
+            resp = table.query(
+                KeyConditionExpression="PK = :pk",
+                ExpressionAttributeValues={":pk": _PK_SKILLSET_LIST},
+            )
+            return [_skillset_from_item(item) for item in resp.get("Items", [])]
+
+        return await asyncio.to_thread(_op)
+
+    async def get_skillset(self, skillset_id: str) -> SkillsetListItem | None:
+        def _op() -> SkillsetListItem | None:
+            table = _get_table()
+            resp = table.get_item(Key={"PK": _skillset_pk(skillset_id), "SK": _SK_METADATA})
+            item = resp.get("Item")
+            if not item:
+                return None
+            return _skillset_from_item(item)
+
+        return await asyncio.to_thread(_op)
+
+    async def create_skillset(
+        self,
+        skillset_id: str,
+        name: str,
+        description: str,
+        enabled: bool,
+        created_by: str,
+    ) -> SkillsetListItem:
+        now = datetime.now(tz=UTC).isoformat()
+        version = 1
+        base = _strip_none(
+            {
+                "skillset_id": skillset_id,
+                "name": name,
+                "description": description,
+                "enabled": enabled,
+                "current_version": version,
+                "created_at": now,
+                "updated_at": now,
+                "created_by": created_by,
+                "updated_by": created_by,
+            }
+        )
+        metadata_item = {"PK": _skillset_pk(skillset_id), "SK": _SK_METADATA, **base}
+        list_item = {
+            "PK": _PK_SKILLSET_LIST,
+            "SK": _skillset_list_sk(skillset_id),
+            **base,
+        }
+        version_item = _strip_none(
+            {
+                "PK": _skillset_pk(skillset_id),
+                "SK": _version_sk(version),
+                "skillset_id": skillset_id,
+                "name": name,
+                "description": description,
+                "enabled": enabled,
+                "version": version,
+                "created_at": now,
+                "created_by": created_by,
+                "comment": None,
+            }
+        )
+
+        def _op() -> None:
+            table = _get_table()
+            _transact_put_sync(table, metadata_item, list_item, version_item)
+
+        await asyncio.to_thread(_op)
+        return _skillset_from_item(base)
+
+    async def update_skillset(
+        self,
+        skillset_id: str,
+        name: str,
+        description: str,
+        enabled: bool,
+        updated_by: str,
+        comment: str | None = None,
+    ) -> SkillsetListItem | None:
+        def _op() -> SkillsetListItem | None:
+            table = _get_table()
+            resp = table.get_item(Key={"PK": _skillset_pk(skillset_id), "SK": _SK_METADATA})
+            if not resp.get("Item"):
+                return None
+            existing = resp["Item"]
+            current_version = int(existing.get("current_version", 0))
+            version = current_version + 1
+            now = datetime.now(tz=UTC).isoformat()
+            base = _strip_none(
+                {
+                    "skillset_id": skillset_id,
+                    "name": name,
+                    "description": description,
+                    "enabled": enabled,
+                    "current_version": version,
+                    "created_at": existing["created_at"],
+                    "updated_at": now,
+                    "created_by": existing["created_by"],
+                    "updated_by": updated_by,
+                }
+            )
+            metadata_item = {"PK": _skillset_pk(skillset_id), "SK": _SK_METADATA, **base}
+            list_item = {"PK": _PK_SKILLSET_LIST, "SK": _skillset_list_sk(skillset_id), **base}
+            version_item = _strip_none(
+                {
+                    "PK": _skillset_pk(skillset_id),
+                    "SK": _version_sk(version),
+                    "skillset_id": skillset_id,
+                    "name": name,
+                    "description": description,
+                    "enabled": enabled,
+                    "version": version,
+                    "created_at": now,
+                    "created_by": updated_by,
+                    "comment": comment,
+                }
+            )
+            _transact_put_sync(table, metadata_item, list_item, version_item)
+            return _skillset_from_item(base)
+
+        return await asyncio.to_thread(_op)
+
+    async def delete_skillset(self, skillset_id: str) -> bool:
+        def _op() -> bool:
+            table = _get_table()
+            resp = table.get_item(Key={"PK": _skillset_pk(skillset_id), "SK": _SK_METADATA})
+            if not resp.get("Item"):
+                return False
+
+            skill_list_resp = table.query(
+                KeyConditionExpression="PK = :pk",
+                ExpressionAttributeValues={":pk": _skill_list_pk(skillset_id)},
+                ProjectionExpression="SK",
+            )
+            skill_ids = [item["SK"].replace("SKILL#", "") for item in skill_list_resp.get("Items", [])]
+            for skill_id in skill_ids:
+                skill_items_resp = table.query(
+                    KeyConditionExpression="PK = :pk",
+                    ExpressionAttributeValues={":pk": _skill_pk(skill_id)},
+                    ProjectionExpression="PK, SK",
+                )
+                keys_to_delete = [{"PK": i["PK"], "SK": i["SK"]} for i in skill_items_resp.get("Items", [])]
+                with table.batch_writer() as batch:
+                    for key in keys_to_delete:
+                        batch.delete_item(Key=key)
+
+            skill_list_keys = [
+                {"PK": _skill_list_pk(skillset_id), "SK": _skill_list_sk(skill_id)} for skill_id in skill_ids
+            ]
+            items_resp = table.query(
+                KeyConditionExpression="PK = :pk",
+                ExpressionAttributeValues={":pk": _skillset_pk(skillset_id)},
+                ProjectionExpression="PK, SK",
+            )
+            keys_to_delete = [{"PK": item["PK"], "SK": item["SK"]} for item in items_resp.get("Items", [])]
+            keys_to_delete.append({"PK": _PK_SKILLSET_LIST, "SK": _skillset_list_sk(skillset_id)})
+            keys_to_delete.extend(skill_list_keys)
+
+            with table.batch_writer() as batch:
+                for key in keys_to_delete:
+                    batch.delete_item(Key=key)
+
+            return True
+
+        return await asyncio.to_thread(_op)
+
+    async def list_skillset_versions(self, skillset_id: str) -> list[SkillsetVersion]:
+        def _op() -> list[SkillsetVersion]:
+            table = _get_table()
+            resp = table.query(
+                KeyConditionExpression="PK = :pk AND begins_with(SK, :prefix)",
+                ExpressionAttributeValues={
+                    ":pk": _skillset_pk(skillset_id),
+                    ":prefix": _SK_VERSION_PREFIX,
+                },
+                ScanIndexForward=False,
+            )
+            return [_skillset_version_from_item(item) for item in resp.get("Items", [])]
+
+        return await asyncio.to_thread(_op)
+
+    async def get_skillset_version(self, skillset_id: str, version: int) -> SkillsetVersion | None:
+        def _op() -> SkillsetVersion | None:
+            table = _get_table()
+            resp = table.get_item(Key={"PK": _skillset_pk(skillset_id), "SK": _version_sk(version)})
+            item = resp.get("Item")
+            if not item:
+                return None
+            return _skillset_version_from_item(item)
+
+        return await asyncio.to_thread(_op)
+
+    # ------------------------------------------------------------------
+    # Skills
+    # ------------------------------------------------------------------
+
+    async def list_skills(self, skillset_id: str) -> list[SkillItem]:
+        def _op() -> list[SkillItem]:
+            table = _get_table()
+            resp = table.query(
+                KeyConditionExpression="PK = :pk",
+                ExpressionAttributeValues={":pk": _skill_list_pk(skillset_id)},
+            )
+            skill_ids = [item["SK"].replace("SKILL#", "") for item in resp.get("Items", [])]
+            skills = []
+            for skill_id in skill_ids:
+                skill_resp = table.get_item(Key={"PK": _skill_pk(skill_id), "SK": _SK_METADATA})
+                item = skill_resp.get("Item")
+                if item:
+                    skills.append(_skill_from_item(item))
+            return skills
+
+        return await asyncio.to_thread(_op)
+
+    async def get_skill(self, skill_id: str) -> SkillItem | None:
+        def _op() -> SkillItem | None:
+            table = _get_table()
+            resp = table.get_item(Key={"PK": _skill_pk(skill_id), "SK": _SK_METADATA})
+            item = resp.get("Item")
+            if not item:
+                return None
+            return _skill_from_item(item)
+
+        return await asyncio.to_thread(_op)
+
+    async def create_skill(
+        self,
+        skillset_id: str,
+        skill_id: str,
+        name: str,
+        description: str,
+        template: str,
+        parameters: list[dict[str, Any]],
+        triggers: list[str],
+        tools_required: list[str],
+        enabled: bool,
+        created_by: str,
+    ) -> SkillItem | None:
+        def _op() -> SkillItem | None:
+            table = _get_table()
+            ss_resp = table.get_item(Key={"PK": _skillset_pk(skillset_id), "SK": _SK_METADATA})
+            if not ss_resp.get("Item"):
+                return None
+
+            now = datetime.now(tz=UTC).isoformat()
+            version = 1
+            base = _strip_none(
+                {
+                    "skill_id": skill_id,
+                    "skillset_id": skillset_id,
+                    "name": name,
+                    "description": description,
+                    "template": template,
+                    "parameters": _floats_to_decimal(parameters),
+                    "triggers": triggers,
+                    "tools_required": tools_required,
+                    "enabled": enabled,
+                    "current_version": version,
+                    "created_at": now,
+                    "updated_at": now,
+                    "created_by": created_by,
+                    "updated_by": created_by,
+                }
+            )
+            metadata_item = {"PK": _skill_pk(skill_id), "SK": _SK_METADATA, **base}
+            list_item = {"PK": _skill_list_pk(skillset_id), "SK": _skill_list_sk(skill_id), **base}
+            version_item = _strip_none(
+                {
+                    "PK": _skill_pk(skill_id),
+                    "SK": _version_sk(version),
+                    "skill_id": skill_id,
+                    "skillset_id": skillset_id,
+                    "name": name,
+                    "description": description,
+                    "template": template,
+                    "parameters": _floats_to_decimal(parameters),
+                    "triggers": triggers,
+                    "tools_required": tools_required,
+                    "enabled": enabled,
+                    "version": version,
+                    "created_at": now,
+                    "created_by": created_by,
+                    "comment": None,
+                }
+            )
+            _transact_put_sync(table, metadata_item, list_item, version_item)
+            return _skill_from_item(base)
+
+        return await asyncio.to_thread(_op)
+
+    async def update_skill(
+        self,
+        skill_id: str,
+        name: str,
+        description: str,
+        template: str,
+        parameters: list[dict[str, Any]],
+        triggers: list[str],
+        tools_required: list[str],
+        enabled: bool,
+        updated_by: str,
+        comment: str | None = None,
+    ) -> SkillItem | None:
+        def _op() -> SkillItem | None:
+            table = _get_table()
+            resp = table.get_item(Key={"PK": _skill_pk(skill_id), "SK": _SK_METADATA})
+            if not resp.get("Item"):
+                return None
+            existing = resp["Item"]
+            skillset_id = existing["skillset_id"]
+            current_version = int(existing.get("current_version", 0))
+            version = current_version + 1
+            now = datetime.now(tz=UTC).isoformat()
+            base = _strip_none(
+                {
+                    "skill_id": skill_id,
+                    "skillset_id": skillset_id,
+                    "name": name,
+                    "description": description,
+                    "template": template,
+                    "parameters": _floats_to_decimal(parameters),
+                    "triggers": triggers,
+                    "tools_required": tools_required,
+                    "enabled": enabled,
+                    "current_version": version,
+                    "created_at": existing["created_at"],
+                    "updated_at": now,
+                    "created_by": existing["created_by"],
+                    "updated_by": updated_by,
+                }
+            )
+            metadata_item = {"PK": _skill_pk(skill_id), "SK": _SK_METADATA, **base}
+            list_item = {"PK": _skill_list_pk(skillset_id), "SK": _skill_list_sk(skill_id), **base}
+            version_item = _strip_none(
+                {
+                    "PK": _skill_pk(skill_id),
+                    "SK": _version_sk(version),
+                    "skill_id": skill_id,
+                    "skillset_id": skillset_id,
+                    "name": name,
+                    "description": description,
+                    "template": template,
+                    "parameters": _floats_to_decimal(parameters),
+                    "triggers": triggers,
+                    "tools_required": tools_required,
+                    "enabled": enabled,
+                    "version": version,
+                    "created_at": now,
+                    "created_by": updated_by,
+                    "comment": comment,
+                }
+            )
+            _transact_put_sync(table, metadata_item, list_item, version_item)
+            return _skill_from_item(base)
+
+        return await asyncio.to_thread(_op)
+
+    async def delete_skill(self, skill_id: str) -> bool:
+        def _op() -> bool:
+            table = _get_table()
+            resp = table.get_item(Key={"PK": _skill_pk(skill_id), "SK": _SK_METADATA})
+            item = resp.get("Item")
+            if not item:
+                return False
+            skillset_id = item["skillset_id"]
+            items_resp = table.query(
+                KeyConditionExpression="PK = :pk",
+                ExpressionAttributeValues={":pk": _skill_pk(skill_id)},
+                ProjectionExpression="PK, SK",
+            )
+            keys_to_delete = [{"PK": i["PK"], "SK": i["SK"]} for i in items_resp.get("Items", [])]
+            keys_to_delete.append({"PK": _skill_list_pk(skillset_id), "SK": _skill_list_sk(skill_id)})
+            with table.batch_writer() as batch:
+                for key in keys_to_delete:
+                    batch.delete_item(Key=key)
+            return True
+
+        return await asyncio.to_thread(_op)
+
+    async def list_skill_versions(self, skill_id: str) -> list[SkillVersion]:
+        def _op() -> list[SkillVersion]:
+            table = _get_table()
+            resp = table.query(
+                KeyConditionExpression="PK = :pk AND begins_with(SK, :prefix)",
+                ExpressionAttributeValues={
+                    ":pk": _skill_pk(skill_id),
+                    ":prefix": _SK_VERSION_PREFIX,
+                },
+                ScanIndexForward=False,
+            )
+            return [_skill_version_from_item(item) for item in resp.get("Items", [])]
+
+        return await asyncio.to_thread(_op)
+
+    async def get_skill_version(self, skill_id: str, version: int) -> SkillVersion | None:
+        def _op() -> SkillVersion | None:
+            table = _get_table()
+            resp = table.get_item(Key={"PK": _skill_pk(skill_id), "SK": _version_sk(version)})
+            item = resp.get("Item")
+            if not item:
+                return None
+            return _skill_version_from_item(item)
+
+        return await asyncio.to_thread(_op)
+
+    async def list_enabled_skills(self) -> list[SkillItem]:
+        def _op() -> list[SkillItem]:
+            table = _get_table()
+            ss_resp = table.query(
+                KeyConditionExpression="PK = :pk",
+                ExpressionAttributeValues={":pk": _PK_SKILLSET_LIST},
+            )
+            enabled_skillset_ids = [
+                item["skillset_id"] for item in ss_resp.get("Items", []) if item.get("enabled", True)
+            ]
+            skills = []
+            for skillset_id in enabled_skillset_ids:
+                skill_list_resp = table.query(
+                    KeyConditionExpression="PK = :pk",
+                    ExpressionAttributeValues={":pk": _skill_list_pk(skillset_id)},
+                )
+                for list_item in skill_list_resp.get("Items", []):
+                    if list_item.get("enabled", True):
+                        skill_resp = table.get_item(
+                            Key={
+                                "PK": _skill_pk(list_item["skill_id"]),
+                                "SK": _SK_METADATA,
+                            }
+                        )
+                        item = skill_resp.get("Item")
+                        if item and item.get("enabled", True):
+                            skills.append(_skill_from_item(item))
+            return skills
+
+        return await asyncio.to_thread(_op)
+
+    async def get_enabled_skill(self, skillset_id: str, skill_id: str) -> SkillItem | None:
+        def _op() -> SkillItem | None:
+            table = _get_table()
+            skill_resp = table.get_item(Key={"PK": _skill_pk(skill_id), "SK": _SK_METADATA})
+            skill_item = skill_resp.get("Item")
+            if not skill_item or skill_item.get("skillset_id") != skillset_id or not skill_item.get("enabled", True):
+                return None
+
+            skillset_resp = table.get_item(Key={"PK": _skillset_pk(skillset_id), "SK": _SK_METADATA})
+            skillset_item = skillset_resp.get("Item")
+            if not skillset_item or not skillset_item.get("enabled", True):
+                return None
+            return _skill_from_item(skill_item)
 
         return await asyncio.to_thread(_op)
 

@@ -18,8 +18,8 @@ SEED_UPDATE_COMMENT = "Updated from YAML dashboard config"
 
 def _slugify(name: str) -> str:
     slug = name.lower()
-    slug = re.sub(r"[^a-z0-9]+", "-", slug)
-    return slug.strip("-") or "report"
+    slug = re.sub(r"[^a-z0-9]+", "_", slug)
+    return slug.strip("_") or "report"
 
 
 def _die(exc: Exception) -> None:
@@ -74,6 +74,14 @@ def _list_tools(toolset_id: str) -> list[dict[str, Any]]:
     return state.get_client().get(f"/api/v1/toolsets/{toolset_id}/tools").get("tools", [])
 
 
+def _list_skillsets() -> list[dict[str, Any]]:
+    return state.get_client().get("/api/v1/skillsets").get("skillsets", [])
+
+
+def _list_skills(skillset_id: str) -> list[dict[str, Any]]:
+    return state.get_client().get(f"/api/v1/skillsets/{skillset_id}/skills").get("skills", [])
+
+
 def _toolset_content_changed(
     existing: dict[str, Any],
     name: str,
@@ -104,12 +112,46 @@ def _tool_content_changed(
     )
 
 
+def _skillset_content_changed(
+    existing: dict[str, Any],
+    name: str,
+    description: str,
+    enabled: bool,
+) -> bool:
+    return (
+        existing.get("name") != name
+        or existing.get("description", "") != description
+        or existing.get("enabled", True) != enabled
+    )
+
+
+def _skill_content_changed(
+    existing: dict[str, Any],
+    name: str,
+    description: str,
+    template: str,
+    parameters: list[dict[str, Any]],
+    triggers: list[str],
+    tools_required: list[str],
+    enabled: bool,
+) -> bool:
+    return (
+        existing.get("name") != name
+        or existing.get("description", "") != description
+        or existing.get("template") != template
+        or existing.get("parameters", []) != parameters
+        or existing.get("triggers", []) != triggers
+        or existing.get("tools_required", []) != tools_required
+        or existing.get("enabled", True) != enabled
+    )
+
+
 def seed_cmd(config: str, force: bool, dry_run: bool) -> None:
-    """Seed reports, scheduled queries, and toolsets from *config* YAML into the store via the API."""
+    """Seed reports, scheduled queries, toolsets, and skillsets from YAML."""
     loaded = schema.load_file(config)
 
-    if not loaded.reports and not loaded.scheduled_queries and not loaded.toolsets:
-        console.print("No reports, scheduled queries, or toolsets found in config file. Nothing to do.")
+    if not loaded.reports and not loaded.scheduled_queries and not loaded.toolsets and not loaded.skillsets:
+        console.print("No reports, scheduled queries, toolsets, or skillsets found in config file. Nothing to do.")
         return
 
     try:
@@ -200,6 +242,9 @@ def seed_cmd(config: str, force: bool, dry_run: bool) -> None:
 
     console.print("\nSeeding toolsets...")
     _seed_toolsets(loaded, force=force, dry_run=dry_run)
+
+    console.print("\nSeeding skillsets...")
+    _seed_skillsets(loaded, force=force, dry_run=dry_run)
 
     if dry_run:
         console.print("\n(dry-run, no writes performed)")
@@ -308,7 +353,7 @@ def _seed_toolsets(
         return
 
     try:
-        existing_toolsets: dict[str, dict[str, Any]] = {item["name"]: item for item in _list_toolsets()}
+        existing_toolsets: dict[str, dict[str, Any]] = {item["toolset_id"]: item for item in _list_toolsets()}
     except Exception as exc:
         _die(exc)
         return
@@ -316,7 +361,7 @@ def _seed_toolsets(
     ts_created = ts_updated = ts_skipped = 0
 
     for ts_key, ts_def in config.toolsets.items():
-        existing_ts = existing_toolsets.get(ts_def.name)
+        existing_ts = existing_toolsets.get(ts_key)
         description = ts_def.description or ""
         enabled = ts_def.enabled if ts_def.enabled is not None else True
 
@@ -358,6 +403,7 @@ def _seed_toolsets(
                 result = state.get_client().post(
                     "/api/v1/toolsets",
                     json={
+                        "toolset_id": ts_key,
                         "name": ts_def.name,
                         "description": description,
                         "enabled": enabled,
@@ -370,13 +416,13 @@ def _seed_toolsets(
                 f"  [green][created][/green] '{result['toolset_id']}'  name='{ts_def.name}'  yaml_key='{ts_key}'"
             )
             ts_created += 1
-            toolset_id = result["toolset_id"]
+            toolset_id = ts_key
 
         if toolset_id is None or not ts_def.tools:
             continue
 
         try:
-            existing_tools: dict[str, dict[str, Any]] = {t["name"]: t for t in _list_tools(toolset_id)}
+            existing_tools: dict[str, dict[str, Any]] = {t["tool_id"]: t for t in _list_tools(toolset_id)}
         except Exception as exc:
             _die(exc)
             return
@@ -385,7 +431,7 @@ def _seed_toolsets(
             tool_description = tool_def.description or ""
             tool_enabled = tool_def.enabled if tool_def.enabled is not None else True
             tool_params = [p.model_dump() for p in tool_def.parameters]
-            existing_tool = existing_tools.get(tool_def.name)
+            existing_tool = existing_tools.get(tool_key)
 
             if existing_tool:
                 tool_changed = force or _tool_content_changed(
@@ -429,6 +475,7 @@ def _seed_toolsets(
                     result = state.get_client().post(
                         f"/api/v1/toolsets/{toolset_id}/tools",
                         json={
+                            "tool_id": tool_key,
                             "name": tool_def.name,
                             "description": tool_description,
                             "cypher": tool_def.cypher,
@@ -444,6 +491,166 @@ def _seed_toolsets(
                 )
 
     console.print(f"  Toolsets: created={ts_created} updated={ts_updated} skipped={ts_skipped}")
+
+
+def _seed_skillsets(
+    config: Any,
+    force: bool,
+    dry_run: bool,
+) -> None:
+    if not config.skillsets:
+        console.print("  No skillsets in config, skipping.")
+        return
+
+    try:
+        existing_skillsets: dict[str, dict[str, Any]] = {item["skillset_id"]: item for item in _list_skillsets()}
+    except Exception as exc:
+        _die(exc)
+        return
+
+    ss_created = ss_updated = ss_skipped = 0
+
+    for ss_key, ss_def in config.skillsets.items():
+        existing_ss = existing_skillsets.get(ss_key)
+        description = ss_def.description or ""
+        enabled = ss_def.enabled if ss_def.enabled is not None else True
+
+        if existing_ss:
+            changed = force or _skillset_content_changed(existing_ss, ss_def.name, description, enabled)
+            if not changed:
+                console.print(f"  [dim][skip][/dim] skillset '{ss_def.name}' (unchanged)")
+                ss_skipped += 1
+                skillset_id = existing_ss["skillset_id"]
+            elif dry_run:
+                console.print(f"  [yellow][dry-run][/yellow] would update skillset '{ss_def.name}' (key: {ss_key})")
+                ss_updated += 1
+                skillset_id = existing_ss["skillset_id"]
+            else:
+                try:
+                    state.get_client().put(
+                        f"/api/v1/skillsets/{existing_ss['skillset_id']}",
+                        json={
+                            "name": ss_def.name,
+                            "description": description,
+                            "enabled": enabled,
+                            "comment": SEED_UPDATE_COMMENT,
+                        },
+                    )
+                except Exception as exc:
+                    _die(exc)
+                    return
+                console.print(
+                    f"  [blue][updated][/blue] '{existing_ss['skillset_id']}'"
+                    f"  name='{ss_def.name}'  yaml_key='{ss_key}'"
+                )
+                ss_updated += 1
+                skillset_id = existing_ss["skillset_id"]
+        elif dry_run:
+            console.print(f"  [yellow][dry-run][/yellow] would create skillset '{ss_def.name}' (key: {ss_key})")
+            ss_created += 1
+            skillset_id = None
+        else:
+            try:
+                state.get_client().post(
+                    "/api/v1/skillsets",
+                    json={
+                        "skillset_id": ss_key,
+                        "name": ss_def.name,
+                        "description": description,
+                        "enabled": enabled,
+                    },
+                )
+            except Exception as exc:
+                _die(exc)
+                return
+            console.print(f"  [green][created][/green] '{ss_key}'  name='{ss_def.name}'  yaml_key='{ss_key}'")
+            ss_created += 1
+            skillset_id = ss_key
+
+        if skillset_id is None or not ss_def.skills:
+            continue
+
+        try:
+            existing_skills: dict[str, dict[str, Any]] = {s["skill_id"]: s for s in _list_skills(skillset_id)}
+        except Exception as exc:
+            _die(exc)
+            return
+
+        for skill_key, skill_def in ss_def.skills.items():
+            skill_description = skill_def.description or ""
+            skill_enabled = skill_def.enabled if skill_def.enabled is not None else True
+            skill_params = [p.model_dump() for p in skill_def.parameters]
+            skill_triggers = skill_def.triggers
+            skill_tools_required = skill_def.tools_required
+            existing_skill = existing_skills.get(skill_key)
+
+            if existing_skill:
+                skill_changed = force or _skill_content_changed(
+                    existing_skill,
+                    skill_def.name,
+                    skill_description,
+                    skill_def.template,
+                    skill_params,
+                    skill_triggers,
+                    skill_tools_required,
+                    skill_enabled,
+                )
+                if not skill_changed:
+                    console.print(f"    [dim][skip][/dim] skill '{skill_def.name}' (unchanged)")
+                elif dry_run:
+                    console.print(
+                        f"    [yellow][dry-run][/yellow] would update skill '{skill_def.name}' (key: {skill_key})"
+                    )
+                else:
+                    try:
+                        state.get_client().put(
+                            f"/api/v1/skillsets/{skillset_id}/skills/{existing_skill['skill_id']}",
+                            json={
+                                "name": skill_def.name,
+                                "description": skill_description,
+                                "template": skill_def.template,
+                                "parameters": skill_params,
+                                "triggers": skill_triggers,
+                                "tools_required": skill_tools_required,
+                                "enabled": skill_enabled,
+                                "comment": SEED_UPDATE_COMMENT,
+                            },
+                        )
+                    except Exception as exc:
+                        _die(exc)
+                        return
+                    console.print(
+                        f"    [blue][updated][/blue] '{existing_skill['skill_id']}'"
+                        f"  name='{skill_def.name}'  yaml_key='{skill_key}'"
+                    )
+            elif dry_run:
+                console.print(
+                    f"    [yellow][dry-run][/yellow] would create skill '{skill_def.name}' (key: {skill_key})"
+                )
+            else:
+                try:
+                    result = state.get_client().post(
+                        f"/api/v1/skillsets/{skillset_id}/skills",
+                        json={
+                            "skill_id": skill_key,
+                            "name": skill_def.name,
+                            "description": skill_description,
+                            "template": skill_def.template,
+                            "parameters": skill_params,
+                            "triggers": skill_triggers,
+                            "tools_required": skill_tools_required,
+                            "enabled": skill_enabled,
+                        },
+                    )
+                except Exception as exc:
+                    _die(exc)
+                    return
+                console.print(
+                    f"    [green][created][/green] '{result['skill_id']}'"
+                    f"  name='{skill_def.name}'  yaml_key='{skill_key}'"
+                )
+
+    console.print(f"  Skillsets: created={ss_created} updated={ss_updated} skipped={ss_skipped}")
 
 
 def export_cmd(config: str, dry_run: bool) -> None:
@@ -502,7 +709,6 @@ def export_cmd(config: str, dry_run: bool) -> None:
         exported += 1
 
     # Export toolsets
-    ts_name_to_key = {ts.name: k for k, ts in existing_cfg.toolsets.items()}
     new_toolsets: dict[str, Any] = {}
     ts_exported = ts_failed = 0
 
@@ -513,17 +719,7 @@ def export_cmd(config: str, dry_run: bool) -> None:
         return
 
     for ts_item in sorted(toolset_list, key=lambda t: t["name"]):
-        ts_key = ts_name_to_key.get(ts_item["name"]) or _slugify(ts_item["name"])
-        base_key = ts_key
-        suffix = 2
-        while ts_key in new_toolsets and new_toolsets[ts_key].name != ts_item["name"]:
-            ts_key = f"{base_key}-{suffix}"
-            suffix += 1
-
-        tool_key_by_name: dict[str, str] = {}
-        if ts_item["name"] in existing_cfg.toolsets:
-            existing_ts_def = existing_cfg.toolsets[ts_name_to_key[ts_item["name"]]]
-            tool_key_by_name = {td.name: tk for tk, td in existing_ts_def.tools.items()}
+        ts_key = ts_item["toolset_id"]
 
         try:
             tools_data = _list_tools(ts_item["toolset_id"])
@@ -536,12 +732,7 @@ def export_cmd(config: str, dry_run: bool) -> None:
 
         new_tools: dict[str, Any] = {}
         for tool in sorted(tools_data, key=lambda t: t["name"]):
-            tool_key = tool_key_by_name.get(tool["name"]) or _slugify(tool["name"])
-            base_tool_key = tool_key
-            suffix = 2
-            while tool_key in new_tools and new_tools[tool_key].name != tool["name"]:
-                tool_key = f"{base_tool_key}-{suffix}"
-                suffix += 1
+            tool_key = tool["tool_id"]
             params = [schema.ToolParamDef.model_validate(p) for p in tool.get("parameters", [])]
             new_tools[tool_key] = schema.ToolDef(
                 name=tool["name"],
@@ -560,12 +751,59 @@ def export_cmd(config: str, dry_run: bool) -> None:
         console.print(f"[green][export][/green] toolset '{ts_item['name']}' ({len(new_tools)} tools) → key='{ts_key}'")
         ts_exported += 1
 
+    # Export skillsets
+    new_skillsets: dict[str, Any] = {}
+    ss_exported = ss_failed = 0
+
+    try:
+        skillset_list = _list_skillsets()
+    except Exception as exc:
+        _die(exc)
+        return
+
+    for ss_item in sorted(skillset_list, key=lambda s: s["name"]):
+        ss_key = ss_item["skillset_id"]
+        try:
+            skills_data = _list_skills(ss_item["skillset_id"])
+        except Exception as exc:
+            err_console.print(
+                f"[yellow][warn][/yellow] Could not fetch skills for '{ss_item['name']}': {exc} — skipping skillset."
+            )
+            ss_failed += 1
+            continue
+
+        new_skills: dict[str, Any] = {}
+        for skill in sorted(skills_data, key=lambda s: s["name"]):
+            skill_key = skill["skill_id"]
+            params = [schema.ToolParamDef.model_validate(p) for p in skill.get("parameters", [])]
+            new_skills[skill_key] = schema.SkillDef(
+                name=skill["name"],
+                description=skill.get("description", ""),
+                template=skill["template"],
+                parameters=params,
+                triggers=skill.get("triggers", []),
+                tools_required=skill.get("tools_required", []),
+                enabled=skill.get("enabled", True),
+            )
+
+        new_skillsets[ss_key] = schema.SkillsetDef(
+            name=ss_item["name"],
+            description=ss_item.get("description", ""),
+            enabled=ss_item.get("enabled", True),
+            skills=new_skills,
+        )
+        console.print(
+            f"[green][export][/green] skillset '{ss_item['name']}' ({len(new_skills)} skills) → key='{ss_key}'"
+        )
+        ss_exported += 1
+
     updated_cfg = schema.ReportingConfig(
         queries=existing_cfg.queries,
         dashboard=dashboard_key if dashboard_key is not None else existing_cfg.dashboard,
         reports=new_reports,
         scheduled_queries=existing_cfg.scheduled_queries,
         toolsets=new_toolsets,
+        skillsets=new_skillsets,
     )
     yaml_content = schema.dump_yaml(updated_cfg)
 
@@ -575,6 +813,7 @@ def export_cmd(config: str, dry_run: bool) -> None:
         console.print(
             f"\nDone. reports: exported={exported} failed={failed}  "
             f"toolsets: exported={ts_exported} failed={ts_failed}  "
+            f"skillsets: exported={ss_exported} failed={ss_failed}  "
             "(dry-run, file not written)"
         )
         return
@@ -584,5 +823,6 @@ def export_cmd(config: str, dry_run: bool) -> None:
     console.print(
         f"\nDone. reports: exported={exported} failed={failed}  "
         f"toolsets: exported={ts_exported} failed={ts_failed}  "
+        f"skillsets: exported={ss_exported} failed={ss_failed}  "
         f"→ wrote '{config}'"
     )
