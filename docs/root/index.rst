@@ -26,6 +26,7 @@ Documentation
 
 * `Installation documentation <https://mappedsky.github.io/seizu/install/backend.html>`_
 * `Dashboard configuration <https://mappedsky.github.io/seizu/install/dashboard.html>`_
+* `Security guidance <https://mappedsky.github.io/seizu/install/security.html>`_
 * `Query Console <https://mappedsky.github.io/seizu/install/query-console.html>`_
 * `Scheduled query documentation <https://mappedsky.github.io/seizu/install/scheduled-queries.html>`_
 * `MCP Toolsets documentation <https://mappedsky.github.io/seizu/install/mcp-toolsets.html>`_
@@ -39,6 +40,7 @@ Documentation
     install/quickstart
     install/backend
     install/dashboard
+    install/security
     install/query-console
     install/scheduled-queries
     install/mcp-toolsets
