@@ -354,6 +354,53 @@ Setup is fully automated via `.config/dev/authentik/blueprints/seizu.yaml`. Devi
 - **Backend:** pytest + pytest-mock + pytest-asyncio (`asyncio_mode = auto` in `setup.cfg`) in `tests/unit/reporting/`. All test functions are `async def`. Use `httpx.AsyncClient(transport=ASGITransport(app=create_app()), base_url="http://test")` for route tests. Override auth via `app.dependency_overrides[get_current_user] = lambda: CurrentUser(...)`. Mock async service calls with `AsyncMock`. See `tests/unit/reporting/routes/query_test.py` for the reference pattern.
 - **Frontend:** React Testing Library + Jest (Bun) in `__tests__/` subdirs next to components
 
+### Query Validator Fuzzing
+
+The query validator (`reporting/services/query_validator.py`) enforces three layers:
+1. **EXPLAIN write check** — `query_type != 'r'` blocks all write/schema queries
+2. **SSRF regex guard** — `_DANGEROUS_RE` scanned against both the original query and the comment-stripped version (see below)
+3. **CyVer warnings** — schema and property checks; never block execution
+
+**Running the validator test suite:**
+```bash
+docker compose run --rm seizu bash -c "pipenv sync --dev && pipenv run pytest tests/unit/reporting/services/query_validator_test.py -v"
+```
+
+**Enabling APOC for deeper testing** (APOC procedures are read-classified but can make outbound HTTP requests):
+```bash
+make apoc_enable   # sets NEO4J_PLUGINS=["apoc"] in .env
+make down && make up   # Neo4j downloads APOC on first start
+# ... run tests ...
+make apoc_disable && make down && make up   # restore default
+```
+
+**Fuzzing log:** `tests/data/query-fuzzing.csv` — columns: `Technique, Cypher, Result, Blocked_By, Notes`. Append a row for every new attack vector you try (blocked or not). Useful for regression tracking and audits.
+
+**Key attack categories and their current status:**
+
+| Category | Example | Blocked by |
+|---|---|---|
+| Write queries (`CREATE`, `MERGE`, `DELETE`, etc.) | `CREATE (n:Test)` | EXPLAIN write check |
+| DDL / schema (`CREATE INDEX`, `DROP CONSTRAINT`) | `CREATE INDEX FOR (n:Test) ON (n.id)` | EXPLAIN write check (type `s`) |
+| Built-in procedures (`CALL db.clearQueryCaches`) | `CALL db.clearQueryCaches()` | EXPLAIN write check |
+| `LOAD CSV` SSRF | `LOAD CSV FROM 'http://169.254.169.254/...' AS row RETURN row` | SSRF regex (original query) |
+| `LOAD CSV` comment injection | `LOAD /* bypass */ CSV FROM '...' AS row RETURN row` | SSRF regex (comment-stripped query) |
+| APOC procedure SSRF | `CALL apoc.load.json('http://169.254.169.254/...')` | SSRF regex (original query) |
+| APOC procedure comment injection | `CALL /* x */ apoc.load.json('...')` | SSRF regex (comment-stripped query) |
+| APOC cypher functions (no `CALL`) | `RETURN apoc.cypher.runFirstColumnSingle('SHOW PROCEDURES', {})` | SSRF regex (`\bapoc\.cypher\.`) |
+| Dynamic string construction | `WITH 'apoc.load.json(...)' AS q RETURN apoc.cypher.runFirstColumnSingle(q, {})` | SSRF regex (`\bapoc\.cypher\.` matches outer call) |
+| Unicode/homoglyph bypass | Zero-width spaces in `CALL`, Cyrillic chars | Neo4j rejects unknown identifiers; still checked |
+
+**Two-sided comment check rationale:**
+- Checking the **comment-stripped** query catches `CALL /* x */ apoc.` and `LOAD /* x */ CSV` injection.
+- Checking the **original** query catches cases where `//` appears inside a string literal (e.g. a URL `http://...`). The comment stripper treats `//` as a line comment and removes everything after it on that line, which could hide a `CALL apoc.` or `apoc.cypher.` that follows — so the original must also be checked.
+
+**Adding new test cases:**
+1. Identify the bypass vector and confirm whether Neo4j executes it (check server logs for `ExternalResourceFailed` or write side effects).
+2. Add a row to `tests/data/query-fuzzing.csv`.
+3. Add a unit test to `tests/unit/reporting/services/query_validator_test.py` — mock `_get_async_neo4j_client` and `_get_sync_neo4j_client`, set `execute_query` to return a mock summary with `query_type='r'` and no notifications, then assert `result.has_errors` is `True` for blocked inputs.
+4. If the vector is not blocked, fix `reporting/services/query_validator.py` first, then write the test to prove the fix.
+
 ### Typing
 
 Strict mypy: `check_untyped_defs = true`, `disallow_untyped_defs = true`.

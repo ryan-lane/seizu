@@ -244,6 +244,96 @@ async def test_check_read_only_rejects_set(mocker):
     assert result.has_errors
 
 
+class TestAdminCommandsBlocked:
+    """Neo4j admin/catalog commands that EXPLAIN can classify as read."""
+
+    async def test_show_settings_is_blocked(self, mocker):
+        _mock_cyver(mocker)
+        result = await validate_query(
+            "SHOW SETTINGS YIELD name, value WHERE name CONTAINS 'auth' RETURN name, value LIMIT 10"
+        )
+        assert result.has_errors
+
+    async def test_show_procedures_is_blocked(self, mocker):
+        _mock_cyver(mocker)
+        result = await validate_query(
+            "SHOW PROCEDURES YIELD name, mode WHERE mode IN ['WRITE', 'DBMS', 'SCHEMA'] RETURN name, mode"
+        )
+        assert result.has_errors
+
+    async def test_show_transactions_is_blocked(self, mocker):
+        _mock_cyver(mocker)
+        result = await validate_query(
+            "SHOW TRANSACTIONS YIELD transactionId, currentQuery RETURN transactionId, currentQuery LIMIT 5"
+        )
+        assert result.has_errors
+
+    async def test_terminate_transaction_is_blocked(self, mocker):
+        _mock_cyver(mocker)
+        result = await validate_query(
+            "TERMINATE TRANSACTION 'neo4j-transaction-0' YIELD transactionId, message RETURN transactionId, message"
+        )
+        assert result.has_errors
+
+    async def test_terminate_transactions_is_blocked(self, mocker):
+        _mock_cyver(mocker)
+        result = await validate_query(
+            "TERMINATE TRANSACTIONS 'neo4j-transaction-0' YIELD transactionId, message RETURN transactionId, message"
+        )
+        assert result.has_errors
+
+    async def test_show_command_block_comment_bypass_is_blocked(self, mocker):
+        _mock_cyver(mocker)
+        result = await validate_query("SHOW /* hide */ SETTINGS YIELD name, value RETURN name, value LIMIT 1")
+        assert result.has_errors
+
+    async def test_show_command_unicode_keyword_bypass_is_blocked(self, mocker):
+        _mock_cyver(mocker)
+        result = await validate_query(r"SH\u004fW SETTINGS YIELD name, value RETURN name, value LIMIT 1")
+        assert result.has_errors
+
+    async def test_show_command_unicode_space_bypass_is_blocked(self, mocker):
+        _mock_cyver(mocker)
+        result = await validate_query(r"SHOW\u0020SETTINGS YIELD name, value RETURN name, value LIMIT 1")
+        assert result.has_errors
+
+    async def test_terminate_command_block_comment_bypass_is_blocked(self, mocker):
+        _mock_cyver(mocker)
+        result = await validate_query(
+            "TERMINATE /* hide */ TRANSACTION 'neo4j-transaction-0' "
+            "YIELD transactionId, message RETURN transactionId, message"
+        )
+        assert result.has_errors
+
+    async def test_terminate_command_unicode_keyword_bypass_is_blocked(self, mocker):
+        _mock_cyver(mocker)
+        result = await validate_query(
+            r"TERM\u0049NATE TRANSACTION 'neo4j-transaction-0' "
+            "YIELD transactionId, message RETURN transactionId, message"
+        )
+        assert result.has_errors
+
+    async def test_show_functions_is_blocked(self, mocker):
+        _mock_cyver(mocker)
+        result = await validate_query("SHOW FUNCTIONS YIELD name RETURN name LIMIT 5")
+        assert result.has_errors
+
+    async def test_show_indexes_is_blocked(self, mocker):
+        _mock_cyver(mocker)
+        result = await validate_query("SHOW INDEXES YIELD name RETURN name LIMIT 5")
+        assert result.has_errors
+
+    async def test_stop_database_is_blocked_if_explain_classifies_read(self, mocker):
+        _mock_cyver(mocker)
+        result = await validate_query("STOP DATABASE neo4j")
+        assert result.has_errors
+
+    async def test_start_database_is_blocked_if_explain_classifies_read(self, mocker):
+        _mock_cyver(mocker)
+        result = await validate_query("START DATABASE neo4j")
+        assert result.has_errors
+
+
 # --- Neo4jection attack vector tests (from Varonis research) ---
 # Reference: https://www.varonis.com/blog/neo4jection-secrets-data-and-cloud-exploits
 
@@ -374,6 +464,135 @@ class TestNeo4jectionCloudMetadata:
             '{method: "PUT",`X-aws-ec2-metadata-token-ttl-seconds`:21600},'
             '"",{header:FALSE}) yield list '
             "WITH list[0] as token RETURN token"
+        )
+        assert result.has_errors
+
+    async def test_load_csv_unicode_keyword_bypass(self, mocker):
+        _mock_cyver(mocker)
+        result = await validate_query(r"LO\u0041D CSV FROM 'http://169.254.169.254/' AS row RETURN row")
+        assert result.has_errors
+
+    async def test_load_csv_unicode_space_bypass(self, mocker):
+        _mock_cyver(mocker)
+        result = await validate_query(r"LOAD\u0020CSV FROM 'http://169.254.169.254/' AS row RETURN row")
+        assert result.has_errors
+
+    async def test_call_apoc_unicode_keyword_bypass(self, mocker):
+        _mock_cyver(mocker)
+        result = await validate_query(r"C\u0041LL apoc.load.json('http://169.254.169.254/') YIELD value RETURN value")
+        assert result.has_errors
+
+    async def test_call_apoc_unicode_space_bypass(self, mocker):
+        _mock_cyver(mocker)
+        result = await validate_query(r"CALL\u0020apoc.load.json('http://169.254.169.254/') YIELD value RETURN value")
+        assert result.has_errors
+
+    async def test_apoc_cypher_unicode_namespace_bypass(self, mocker):
+        _mock_cyver(mocker)
+        result = await validate_query(
+            r"RETURN apoc.cyph\u0065r.runFirstColumnSingle('SHOW SETTINGS YIELD name RETURN count(*)', {}) AS count"
+        )
+        assert result.has_errors
+
+    async def test_load_csv_block_comment_bypass(self, mocker):
+        # Confirmed exploitable: LOAD /* x */ CSV bypassed \bLOAD\s+CSV\b and
+        # Neo4j made the actual HTTP request before this fix was applied.
+        _mock_cyver(mocker)
+        result = await validate_query(
+            "LOAD /* bypass */ CSV FROM 'http://169.254.169.254/latest/meta-data/' AS line RETURN line"
+        )
+        assert result.has_errors
+
+    async def test_load_csv_many_block_comment_starts_is_blocked(self, mocker):
+        _mock_cyver(mocker)
+        result = await validate_query(
+            "LOAD /*" + ("a/*" * 500) + "*/ CSV FROM 'http://169.254.169.254/' AS line RETURN line"
+        )
+        assert result.has_errors
+
+    async def test_call_apoc_block_comment_bypass(self, mocker):
+        # CALL /* x */ apoc. bypassed \bCALL\s+apoc\. regex.
+        _mock_cyver(mocker)
+        result = await validate_query(
+            "CALL /* bypass */ apoc.load.json('http://169.254.169.254/latest/meta-data/') YIELD value RETURN value"
+        )
+        assert result.has_errors
+
+    async def test_load_csv_line_comment_bypass(self, mocker):
+        _mock_cyver(mocker)
+        result = await validate_query(
+            "LOAD //\nCSV FROM 'http://169.254.169.254/latest/meta-data/' AS line RETURN line"
+        )
+        assert result.has_errors
+
+    async def test_apoc_cypher_function_ssrf_via_string_concat(self, mocker):
+        # String concatenation splits 'CALL ' and 'apoc.' so \bCALL\s+apoc\.
+        # does not match, but apoc.cypher.runFirstColumnSingle executes the
+        # concatenated inner query. Caught by \bapoc\.cypher\. on the original.
+        _mock_cyver(mocker)
+        result = await validate_query(
+            "WITH 'CALL ' + 'apoc.load.json($url) YIELD value RETURN value'"
+            " AS q RETURN apoc.cypher.runFirstColumnSingle(q, {url: $url}) AS data"
+        )
+        assert result.has_errors
+
+    async def test_comment_stripper_url_slash_slash_hides_token(self, mocker):
+        # The // in http:// inside a string literal was treated as a Cypher
+        # line comment, stripping apoc.cypher.runFirstColumnSingle from the
+        # stripped query so the SSRF regex never saw it.
+        # Fixed by also checking the regex against the original (un-stripped) query.
+        _mock_cyver(mocker)
+        result = await validate_query(
+            "WITH 'CALL ' + 'apoc.load.json(\"http://169.254.169.254/\") YIELD value RETURN value'"
+            " AS q RETURN apoc.cypher.runFirstColumnSingle(q, {}) AS data"
+        )
+        assert result.has_errors
+
+    async def test_apoc_cypher_run_first_column_single(self, mocker):
+        # apoc.cypher.runFirstColumnSingle is an APOC function (no CALL keyword)
+        # that executes arbitrary inner Cypher, bypassing the validator entirely.
+        _mock_cyver(mocker)
+        result = await validate_query(
+            "RETURN apoc.cypher.runFirstColumnSingle('MATCH (n) RETURN n.id LIMIT 1', {}) AS r"
+        )
+        assert result.has_errors
+
+    async def test_apoc_cypher_run_first_column_many(self, mocker):
+        _mock_cyver(mocker)
+        result = await validate_query("RETURN apoc.cypher.runFirstColumnMany('MATCH (n) RETURN n', {}) AS r")
+        assert result.has_errors
+
+    async def test_apoc_cypher_ssrf_via_touppper_concat(self, mocker):
+        # Confirmed SSRF execution: toUpper('call') constructs 'CALL' at runtime
+        # so no literal 'CALL apoc.' appears in the query string. Caught by
+        # \bapoc\.cypher\. on the outer function name.
+        _mock_cyver(mocker)
+        result = await validate_query(
+            "RETURN apoc.cypher.runFirstColumnSingle("
+            "toUpper('call') + ' apoc.load.json(\"http://169.254.169.254/\") YIELD value RETURN value'"
+            ", {}) AS r"
+        )
+        assert result.has_errors
+
+    async def test_apoc_cypher_ssrf_via_string_split_concat(self, mocker):
+        # 'CALL apoc' + '.load.json(...)' splits CALL apoc. across two literals
+        # so \bCALL\s+apoc\. never matches. Caught by \bapoc\.cypher\.
+        _mock_cyver(mocker)
+        result = await validate_query(
+            "RETURN apoc.cypher.runFirstColumnSingle("
+            "'CALL apoc' + '.load.json(\"http://169.254.169.254/\") YIELD value RETURN value'"
+            ", {}) AS r"
+        )
+        assert result.has_errors
+
+    async def test_apoc_cypher_ssrf_via_char_array_join(self, mocker):
+        # Constructs CALL apoc.load.json(...) from a character array via
+        # apoc.text.join — no dangerous literal anywhere in the query.
+        # Caught by \bapoc\.cypher\.
+        _mock_cyver(mocker)
+        result = await validate_query(
+            "WITH ['C','A','L','L',' ','a','p','o','c','.','l','o','a','d','.','j','s','o','n'] AS c "
+            "RETURN apoc.cypher.runFirstColumnSingle(apoc.text.join(c,''), {}) AS r"
         )
         assert result.has_errors
 

@@ -89,6 +89,19 @@ services:
       - NEO4J_server_memory_pagecache_size=1G
       - NEO4J_server_memory_heap_initial__size=1G
       - NEO4J_server_memory_heap_max__size=1G
+      # APOC plugin — set via `make apoc_enable`. Empty = disabled (default).
+      - NEO4J_PLUGINS=${NEO4J_PLUGINS:-}
+      # Keep local file reads disabled even if a LOAD CSV validator bypass is found.
+      - NEO4J_dbms_security_allow__csv__import__from__file__urls=false
+      # APOC is optional in dev; when enabled, load only known-safe utility
+      # namespaces and do not grant unrestricted procedure/function access.
+      - NEO4J_dbms_security_procedures_allowlist=apoc.convert.*,apoc.text.*
+      # Use a non-empty minimal value; the Neo4j Docker APOC helper replaces
+      # an empty unrestricted setting with its broad apoc.* default.
+      - NEO4J_dbms_security_procedures_unrestricted=apoc.convert.*,apoc.text.*
+      # Defense in depth for Cypher SSRF: Seizu rejects LOAD CSV/APOC network
+      # queries, and Neo4j should also block Cypher-originated HTTP/FTP access.
+      - NEO4J_internal_dbms_cypher__ip__blocklist=0.0.0.0/0,::/0
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://localhost:7474/"]
       interval: 30s

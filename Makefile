@@ -127,6 +127,21 @@ auth_disable:
 	@perl -pi -e 's/DEVELOPMENT_ONLY_REQUIRE_AUTH=true/DEVELOPMENT_ONLY_REQUIRE_AUTH=false/' .env
 	@echo "Auth disabled in .env. Run 'make down && make up' to apply."
 
+.PHONY: apoc_enable
+apoc_enable:
+	@grep -q 'NEO4J_PLUGINS=' .env 2>/dev/null \
+		&& perl -pi -e 's/NEO4J_PLUGINS=.*/NEO4J_PLUGINS=["apoc"]/' .env \
+		|| echo 'NEO4J_PLUGINS=["apoc"]' >> .env
+	@echo "APOC enabled in .env. Run 'make down && make up' to apply (downloads on first start)."
+
+.PHONY: apoc_disable
+apoc_disable:
+	@grep -q 'NEO4J_PLUGINS=' .env 2>/dev/null \
+		&& perl -pi -e 's/NEO4J_PLUGINS=.*/NEO4J_PLUGINS=/' .env \
+		|| true
+	@rm -f .compose/neo4j/plugins/apoc-*.jar
+	@echo "APOC disabled. Run 'make down && make up' to apply."
+
 .PHONY: sqlmodel_enable
 sqlmodel_enable:
 	@grep -q 'REPORT_STORE_BACKEND=' .env 2>/dev/null \
