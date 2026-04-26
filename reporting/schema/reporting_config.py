@@ -21,6 +21,11 @@ from seizu_schema.reporting_config import (
     ScheduledQueryAction,  # noqa: F401
     ScheduledQueryParam,  # noqa: F401
     ScheduledQueryWatchScan,  # noqa: F401
+    SkillDef,  # noqa: F401
+    SkillsetDef,  # noqa: F401
+    ToolDef,  # noqa: F401
+    ToolParamDef,  # noqa: F401
+    ToolsetDef,  # noqa: F401
     dump_yaml,  # noqa: F401
     load_file,  # noqa: F401
     output_json_schema,  # noqa: F401

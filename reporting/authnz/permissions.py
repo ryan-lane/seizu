@@ -32,6 +32,17 @@ class Permission(StrEnum):
     TOOLS_DELETE = "tools:delete"
     TOOLS_CALL = "tools:call"
 
+    # Skillsets
+    SKILLSETS_READ = "skillsets:read"
+    SKILLSETS_WRITE = "skillsets:write"
+    SKILLSETS_DELETE = "skillsets:delete"
+
+    # Skills
+    SKILLS_READ = "skills:read"
+    SKILLS_WRITE = "skills:write"
+    SKILLS_DELETE = "skills:delete"
+    SKILLS_RENDER = "skills:render"
+
     # Scheduled queries
     SCHEDULED_QUERIES_READ = "scheduled_queries:read"
     SCHEDULED_QUERIES_WRITE = "scheduled_queries:write"
@@ -59,6 +70,9 @@ VIEWER_PERMISSIONS: frozenset[Permission] = frozenset(
         Permission.TOOLSETS_READ,
         Permission.TOOLS_READ,
         Permission.TOOLS_CALL,
+        Permission.SKILLSETS_READ,
+        Permission.SKILLS_READ,
+        Permission.SKILLS_RENDER,
         Permission.SCHEDULED_QUERIES_READ,
         Permission.USERS_READ,
         Permission.ROLES_READ,
@@ -83,6 +97,10 @@ ADMIN_PERMISSIONS: frozenset[Permission] = frozenset(
         Permission.TOOLSETS_DELETE,
         Permission.TOOLS_WRITE,
         Permission.TOOLS_DELETE,
+        Permission.SKILLSETS_WRITE,
+        Permission.SKILLSETS_DELETE,
+        Permission.SKILLS_WRITE,
+        Permission.SKILLS_DELETE,
         Permission.ROLES_WRITE,
         Permission.ROLES_DELETE,
     }

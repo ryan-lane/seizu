@@ -67,6 +67,15 @@ const BUILTIN_PREFIX = '__builtin_';
 const isBuiltinToolset = (id: string | undefined | null): boolean =>
   !!id && id.startsWith(BUILTIN_PREFIX) && id.endsWith('__');
 
+const LOWER_SNAKE_ID = /^[a-z][a-z0-9]*(?:_[a-z0-9]+)*$/;
+
+function toolStatus(item: ToolItem): { enabled: boolean; label: string } {
+  const effectiveEnabled = item.effective_enabled ?? item.enabled;
+  if (effectiveEnabled) return { enabled: true, label: 'Enabled' };
+  if (item.disabled_reason === 'toolset_disabled') return { enabled: false, label: 'Disabled by toolset' };
+  return { enabled: false, label: 'Disabled' };
+}
+
 // ---------------------------------------------------------------------------
 // Param form state
 // ---------------------------------------------------------------------------
@@ -131,6 +140,7 @@ interface ToolDialogProps {
 }
 
 function ToolDialog({ open, onClose, onSave, initial }: ToolDialogProps) {
+  const [toolId, setToolId] = useState(initial?.tool_id ?? '');
   const [name, setName] = useState(initial?.name ?? '');
   const [description, setDescription] = useState(initial?.description ?? '');
   const [cypher, setCypher] = useState(initial?.cypher ?? '');
@@ -157,13 +167,18 @@ function ToolDialog({ open, onClose, onSave, initial }: ToolDialogProps) {
       setError('Cypher query is required.');
       return;
     }
+    if (!initial && !LOWER_SNAKE_ID.test(toolId.trim())) {
+      setError('ID must be lower_snake_case.');
+      return;
+    }
     for (const p of params) {
-      if (!p.name.trim()) {
-        setError('All parameters must have a name.');
+      if (!LOWER_SNAKE_ID.test(p.name.trim())) {
+        setError('All parameter names must be lower_snake_case.');
         return;
       }
     }
     const req: CreateToolRequest | UpdateToolRequest = {
+      ...(initial ? {} : { tool_id: toolId.trim() }),
       name: name.trim(),
       description: description.trim(),
       cypher: cypher.trim(),
@@ -198,6 +213,16 @@ function ToolDialog({ open, onClose, onSave, initial }: ToolDialogProps) {
           </Alert>
         )}
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+          {!initial && (
+            <TextField
+              label="ID"
+              value={toolId}
+              onChange={(e) => setToolId(e.target.value)}
+              fullWidth
+              required
+              helperText="lower_snake_case"
+            />
+          )}
           <TextField
             label="Name"
             value={name}
@@ -519,6 +544,7 @@ function ToolsetTools() {
               <TableHead>
                 <TableRow>
                   <TableCell>Name</TableCell>
+                  <TableCell>Slug</TableCell>
                   <TableCell>Description</TableCell>
                   <TableCell>Status</TableCell>
                   <TableCell>Parameters</TableCell>
@@ -531,7 +557,7 @@ function ToolsetTools() {
               <TableBody>
                 {displayTools.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={8}>
+                    <TableCell colSpan={9}>
                       <Typography color="text.secondary" sx={{ py: 1 }}>
                         No tools yet. Create one above.
                       </Typography>
@@ -553,12 +579,17 @@ function ToolsetTools() {
                               description: item.description,
                               cypher: item.cypher,
                               parameters: item.parameters,
-                              enabled: item.enabled
+                              enabled: item.enabled,
+                              effective_enabled: item.effective_enabled,
+                              disabled_reason: item.disabled_reason
                             })
                           }
                         >
                           {item.name}
                         </Typography>
+                      </TableCell>
+                      <TableCell sx={{ color: 'text.secondary', fontFamily: 'monospace' }}>
+                        {item.tool_id}
                       </TableCell>
                       <TableCell sx={{ color: 'text.secondary', maxWidth: 280 }}>
                         <Typography
@@ -571,8 +602,8 @@ function ToolsetTools() {
                       </TableCell>
                       <TableCell>
                         <Chip
-                          label={item.enabled ? 'Enabled' : 'Disabled'}
-                          color={item.enabled ? 'success' : 'default'}
+                          label={toolStatus(item).label}
+                          color={toolStatus(item).enabled ? 'success' : 'default'}
                           size="small"
                         />
                       </TableCell>
@@ -603,7 +634,9 @@ function ToolsetTools() {
                               description: item.description,
                               cypher: item.cypher,
                               parameters: item.parameters,
-                              enabled: item.enabled
+                              enabled: item.enabled,
+                              effective_enabled: item.effective_enabled,
+                              disabled_reason: item.disabled_reason
                             })
                           }
                           onHistory={() =>

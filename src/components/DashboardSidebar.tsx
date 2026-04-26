@@ -6,6 +6,7 @@ import MenuBook from '@mui/icons-material/MenuBook';
 import Terminal from '@mui/icons-material/Terminal';
 import Schedule from '@mui/icons-material/Schedule';
 import Extension from '@mui/icons-material/Extension';
+import Psychology from '@mui/icons-material/Psychology';
 import NavItem from 'src/components/NavItem';
 import Hidden from 'src/components/Hidden';
 import { NavItemData } from 'src/components/NavItem';
@@ -52,6 +53,11 @@ function DashboardSidebar({ onMobileClose = () => {}, openMobile = false }: Dash
       href: '/app/toolsets',
       icon: Extension,
       title: 'MCP Toolsets'
+    },
+    {
+      href: '/app/skillsets',
+      icon: Psychology,
+      title: 'MCP Skillsets'
     }
   ];
 

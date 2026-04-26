@@ -119,6 +119,7 @@ def get_toolset(
 
 @app.command("create")
 def create_toolset(
+    toolset_id: str = typer.Argument(help="Immutable lower_snake_case toolset ID."),
     name: str = typer.Argument(help="Toolset name."),
     description: str = typer.Option("", "--description", "-d", help="Description."),
     disabled: bool = typer.Option(False, "--disabled", help="Create as disabled."),
@@ -127,7 +128,7 @@ def create_toolset(
     try:
         data = state.get_client().post(
             "/api/v1/toolsets",
-            json={"name": name, "description": description, "enabled": not disabled},
+            json={"toolset_id": toolset_id, "name": name, "description": description, "enabled": not disabled},
         )
     except Exception as exc:
         _die(exc)
@@ -289,6 +290,7 @@ def get_tool(
 @tools_app.command("create")
 def create_tool(
     toolset_id: str = typer.Argument(help="Toolset ID."),
+    tool_id: str = typer.Argument(help="Immutable lower_snake_case tool ID."),
     name: str = typer.Option(..., "--name", "-n", help="Tool name."),
     cypher: str = typer.Option(..., "--cypher", help="Cypher query."),
     description: str = typer.Option("", "--description", "-d", help="Description."),
@@ -311,6 +313,7 @@ def create_tool(
         data = state.get_client().post(
             f"/api/v1/toolsets/{toolset_id}/tools",
             json={
+                "tool_id": tool_id,
                 "name": name,
                 "description": description,
                 "cypher": cypher,

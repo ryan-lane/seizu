@@ -9,7 +9,17 @@ from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, create_async_engin
 from sqlmodel import Field, SQLModel, col, select
 
 from reporting import settings
-from reporting.schema.mcp_config import ToolItem, ToolParamDef, ToolsetListItem, ToolsetVersion, ToolVersion
+from reporting.schema.mcp_config import (
+    SkillItem,
+    SkillsetListItem,
+    SkillsetVersion,
+    SkillVersion,
+    ToolItem,
+    ToolParamDef,
+    ToolsetListItem,
+    ToolsetVersion,
+    ToolVersion,
+)
 from reporting.schema.rbac import RoleItem, RoleVersion
 from reporting.schema.report_config import (
     PanelStat,
@@ -179,6 +189,70 @@ class ToolVersionRecord(SQLModel, table=True):  # type: ignore
     description: str = ""
     cypher: str
     parameters: list[dict[str, Any]] = Field(default=[], sa_column=Column(JSON, nullable=False))
+    enabled: bool = True
+    created_at: str
+    created_by: str
+    comment: str | None = None
+
+
+class SkillsetRecord(SQLModel, table=True):  # type: ignore
+    __tablename__ = "skillsets"
+    skillset_id: str = Field(primary_key=True)
+    name: str
+    description: str = ""
+    enabled: bool = True
+    current_version: int = 0
+    created_at: str
+    updated_at: str
+    created_by: str
+    updated_by: str | None = None
+
+
+class SkillsetVersionRecord(SQLModel, table=True):  # type: ignore
+    __tablename__ = "skillset_versions"
+    __table_args__ = (UniqueConstraint("skillset_id", "version"),)
+    id: int | None = Field(default=None, primary_key=True)
+    skillset_id: str = Field(index=True)
+    version: int
+    name: str
+    description: str = ""
+    enabled: bool = True
+    created_at: str
+    created_by: str
+    comment: str | None = None
+
+
+class SkillRecord(SQLModel, table=True):  # type: ignore
+    __tablename__ = "skills"
+    skill_id: str = Field(primary_key=True)
+    skillset_id: str = Field(index=True)
+    name: str
+    description: str = ""
+    template: str
+    parameters: list[dict[str, Any]] = Field(default=[], sa_column=Column(JSON, nullable=False))
+    triggers: list[str] = Field(default=[], sa_column=Column(JSON, nullable=False))
+    tools_required: list[str] = Field(default=[], sa_column=Column(JSON, nullable=False))
+    enabled: bool = True
+    current_version: int = 0
+    created_at: str
+    updated_at: str
+    created_by: str
+    updated_by: str | None = None
+
+
+class SkillVersionRecord(SQLModel, table=True):  # type: ignore
+    __tablename__ = "skill_versions"
+    __table_args__ = (UniqueConstraint("skill_id", "version"),)
+    id: int | None = Field(default=None, primary_key=True)
+    skill_id: str = Field(index=True)
+    skillset_id: str
+    version: int
+    name: str
+    description: str = ""
+    template: str
+    parameters: list[dict[str, Any]] = Field(default=[], sa_column=Column(JSON, nullable=False))
+    triggers: list[str] = Field(default=[], sa_column=Column(JSON, nullable=False))
+    tools_required: list[str] = Field(default=[], sa_column=Column(JSON, nullable=False))
     enabled: bool = True
     created_at: str
     created_by: str
@@ -964,12 +1038,12 @@ class SQLModelReportStore(ReportStore):
 
     async def create_toolset(
         self,
+        toolset_id: str,
         name: str,
         description: str,
         enabled: bool,
         created_by: str,
     ) -> ToolsetListItem:
-        toolset_id = generate_report_id()
         now = datetime.now(tz=UTC).isoformat()
         version = 1
         async with AsyncSession(_get_engine()) as session:
@@ -1169,6 +1243,7 @@ class SQLModelReportStore(ReportStore):
     async def create_tool(
         self,
         toolset_id: str,
+        tool_id: str,
         name: str,
         description: str,
         cypher: str,
@@ -1180,7 +1255,6 @@ class SQLModelReportStore(ReportStore):
             ts = await session.get(ToolsetRecord, toolset_id)
             if not ts:
                 return None
-            tool_id = generate_report_id()
             now = datetime.now(tz=UTC).isoformat()
             version = 1
             record = ToolRecord(
@@ -1374,6 +1448,497 @@ class SQLModelReportStore(ReportStore):
             )
             tool_result = await session.execute(tool_stmt)
             return [self._tool_item_from_record(r) for r in tool_result.scalars().all()]
+
+    async def get_enabled_tool(self, toolset_id: str, tool_id: str) -> ToolItem | None:
+        async with AsyncSession(_get_engine()) as session:
+            stmt = (
+                select(ToolRecord)
+                .join(ToolsetRecord, ToolRecord.toolset_id == ToolsetRecord.toolset_id)
+                .where(ToolRecord.tool_id == tool_id)
+                .where(ToolRecord.toolset_id == toolset_id)
+                .where(ToolRecord.enabled == True)  # noqa: E712
+                .where(ToolsetRecord.enabled == True)  # noqa: E712
+            )
+            result = await session.execute(stmt)
+            record = result.scalars().first()
+            return self._tool_item_from_record(record) if record else None
+
+    # ------------------------------------------------------------------
+    # Skillsets
+    # ------------------------------------------------------------------
+
+    def _skillset_item_from_record(self, record: SkillsetRecord) -> SkillsetListItem:
+        return SkillsetListItem(
+            skillset_id=record.skillset_id,
+            name=record.name,
+            description=record.description or "",
+            enabled=record.enabled,
+            current_version=record.current_version,
+            created_at=record.created_at,
+            updated_at=record.updated_at,
+            created_by=record.created_by,
+            updated_by=record.updated_by,
+        )
+
+    async def list_skillsets(self) -> list[SkillsetListItem]:
+        async with AsyncSession(_get_engine()) as session:
+            result = await session.execute(select(SkillsetRecord))
+            rows = result.scalars().all()
+            return [self._skillset_item_from_record(r) for r in rows]
+
+    async def get_skillset(self, skillset_id: str) -> SkillsetListItem | None:
+        async with AsyncSession(_get_engine()) as session:
+            record = await session.get(SkillsetRecord, skillset_id)
+            if not record:
+                return None
+            return self._skillset_item_from_record(record)
+
+    async def create_skillset(
+        self,
+        skillset_id: str,
+        name: str,
+        description: str,
+        enabled: bool,
+        created_by: str,
+    ) -> SkillsetListItem:
+        now = datetime.now(tz=UTC).isoformat()
+        version = 1
+        async with AsyncSession(_get_engine()) as session:
+            record = SkillsetRecord(
+                skillset_id=skillset_id,
+                name=name,
+                description=description,
+                enabled=enabled,
+                current_version=version,
+                created_at=now,
+                updated_at=now,
+                created_by=created_by,
+                updated_by=created_by,
+            )
+            session.add(record)
+            session.add(
+                SkillsetVersionRecord(
+                    skillset_id=skillset_id,
+                    version=version,
+                    name=name,
+                    description=description,
+                    enabled=enabled,
+                    created_at=now,
+                    created_by=created_by,
+                    comment=None,
+                )
+            )
+            await session.commit()
+        return SkillsetListItem(
+            skillset_id=skillset_id,
+            name=name,
+            description=description,
+            enabled=enabled,
+            current_version=version,
+            created_at=now,
+            updated_at=now,
+            created_by=created_by,
+            updated_by=created_by,
+        )
+
+    async def update_skillset(
+        self,
+        skillset_id: str,
+        name: str,
+        description: str,
+        enabled: bool,
+        updated_by: str,
+        comment: str | None = None,
+    ) -> SkillsetListItem | None:
+        now = datetime.now(tz=UTC).isoformat()
+        async with AsyncSession(_get_engine()) as session:
+            record = await session.get(SkillsetRecord, skillset_id)
+            if not record:
+                return None
+            original_created_at = record.created_at
+            original_created_by = record.created_by
+            version = record.current_version + 1
+            record.name = name
+            record.description = description
+            record.enabled = enabled
+            record.current_version = version
+            record.updated_at = now
+            record.updated_by = updated_by
+            session.add(record)
+            session.add(
+                SkillsetVersionRecord(
+                    skillset_id=skillset_id,
+                    version=version,
+                    name=name,
+                    description=description,
+                    enabled=enabled,
+                    created_at=now,
+                    created_by=updated_by,
+                    comment=comment,
+                )
+            )
+            await session.commit()
+        return SkillsetListItem(
+            skillset_id=skillset_id,
+            name=name,
+            description=description,
+            enabled=enabled,
+            current_version=version,
+            created_at=original_created_at,
+            updated_at=now,
+            created_by=original_created_by,
+            updated_by=updated_by,
+        )
+
+    async def delete_skillset(self, skillset_id: str) -> bool:
+        async with AsyncSession(_get_engine()) as session:
+            record = await session.get(SkillsetRecord, skillset_id)
+            if not record:
+                return False
+
+            skills_stmt = select(SkillRecord).where(SkillRecord.skillset_id == skillset_id)
+            skills_result = await session.execute(skills_stmt)
+            for skill_record in skills_result.scalars().all():
+                versions_stmt = select(SkillVersionRecord).where(SkillVersionRecord.skill_id == skill_record.skill_id)
+                versions_result = await session.execute(versions_stmt)
+                for ver in versions_result.scalars().all():
+                    await session.delete(ver)
+                await session.delete(skill_record)
+
+            ss_versions_stmt = select(SkillsetVersionRecord).where(SkillsetVersionRecord.skillset_id == skillset_id)
+            ss_versions_result = await session.execute(ss_versions_stmt)
+            for ver in ss_versions_result.scalars().all():
+                await session.delete(ver)
+
+            await session.delete(record)
+            await session.commit()
+        return True
+
+    async def list_skillset_versions(self, skillset_id: str) -> list[SkillsetVersion]:
+        async with AsyncSession(_get_engine()) as session:
+            ss = await session.get(SkillsetRecord, skillset_id)
+            if not ss:
+                return []
+            stmt = (
+                select(SkillsetVersionRecord)
+                .where(SkillsetVersionRecord.skillset_id == skillset_id)
+                .order_by(col(SkillsetVersionRecord.version).desc())
+            )
+            result = await session.execute(stmt)
+            rows = result.scalars().all()
+            return [
+                SkillsetVersion(
+                    skillset_id=r.skillset_id,
+                    name=r.name,
+                    description=r.description or "",
+                    enabled=r.enabled,
+                    version=r.version,
+                    created_at=r.created_at,
+                    created_by=r.created_by,
+                    comment=r.comment,
+                )
+                for r in rows
+            ]
+
+    async def get_skillset_version(self, skillset_id: str, version: int) -> SkillsetVersion | None:
+        async with AsyncSession(_get_engine()) as session:
+            stmt = (
+                select(SkillsetVersionRecord)
+                .where(SkillsetVersionRecord.skillset_id == skillset_id)
+                .where(SkillsetVersionRecord.version == version)
+            )
+            result = await session.execute(stmt)
+            row = result.scalars().first()
+            if not row:
+                return None
+            return SkillsetVersion(
+                skillset_id=row.skillset_id,
+                name=row.name,
+                description=row.description or "",
+                enabled=row.enabled,
+                version=row.version,
+                created_at=row.created_at,
+                created_by=row.created_by,
+                comment=row.comment,
+            )
+
+    # ------------------------------------------------------------------
+    # Skills
+    # ------------------------------------------------------------------
+
+    def _skill_item_from_record(self, record: SkillRecord) -> SkillItem:
+        return SkillItem(
+            skill_id=record.skill_id,
+            skillset_id=record.skillset_id,
+            name=record.name,
+            description=record.description or "",
+            template=record.template,
+            parameters=[ToolParamDef(**p) if isinstance(p, dict) else p for p in (record.parameters or [])],
+            triggers=record.triggers or [],
+            tools_required=record.tools_required or [],
+            enabled=record.enabled,
+            current_version=record.current_version,
+            created_at=record.created_at,
+            updated_at=record.updated_at,
+            created_by=record.created_by,
+            updated_by=record.updated_by,
+        )
+
+    async def list_skills(self, skillset_id: str) -> list[SkillItem]:
+        async with AsyncSession(_get_engine()) as session:
+            stmt = select(SkillRecord).where(SkillRecord.skillset_id == skillset_id)
+            result = await session.execute(stmt)
+            return [self._skill_item_from_record(r) for r in result.scalars().all()]
+
+    async def get_skill(self, skill_id: str) -> SkillItem | None:
+        async with AsyncSession(_get_engine()) as session:
+            record = await session.get(SkillRecord, skill_id)
+            if not record:
+                return None
+            return self._skill_item_from_record(record)
+
+    async def create_skill(
+        self,
+        skillset_id: str,
+        skill_id: str,
+        name: str,
+        description: str,
+        template: str,
+        parameters: list[dict[str, Any]],
+        triggers: list[str],
+        tools_required: list[str],
+        enabled: bool,
+        created_by: str,
+    ) -> SkillItem | None:
+        async with AsyncSession(_get_engine()) as session:
+            ss = await session.get(SkillsetRecord, skillset_id)
+            if not ss:
+                return None
+            now = datetime.now(tz=UTC).isoformat()
+            version = 1
+            record = SkillRecord(
+                skill_id=skill_id,
+                skillset_id=skillset_id,
+                name=name,
+                description=description,
+                template=template,
+                parameters=parameters,
+                triggers=triggers,
+                tools_required=tools_required,
+                enabled=enabled,
+                current_version=version,
+                created_at=now,
+                updated_at=now,
+                created_by=created_by,
+                updated_by=created_by,
+            )
+            session.add(record)
+            session.add(
+                SkillVersionRecord(
+                    skill_id=skill_id,
+                    skillset_id=skillset_id,
+                    version=version,
+                    name=name,
+                    description=description,
+                    template=template,
+                    parameters=parameters,
+                    triggers=triggers,
+                    tools_required=tools_required,
+                    enabled=enabled,
+                    created_at=now,
+                    created_by=created_by,
+                    comment=None,
+                )
+            )
+            await session.commit()
+        return SkillItem(
+            skill_id=skill_id,
+            skillset_id=skillset_id,
+            name=name,
+            description=description,
+            template=template,
+            parameters=[ToolParamDef(**p) if isinstance(p, dict) else p for p in parameters],
+            triggers=triggers,
+            tools_required=tools_required,
+            enabled=enabled,
+            current_version=version,
+            created_at=now,
+            updated_at=now,
+            created_by=created_by,
+            updated_by=created_by,
+        )
+
+    async def update_skill(
+        self,
+        skill_id: str,
+        name: str,
+        description: str,
+        template: str,
+        parameters: list[dict[str, Any]],
+        triggers: list[str],
+        tools_required: list[str],
+        enabled: bool,
+        updated_by: str,
+        comment: str | None = None,
+    ) -> SkillItem | None:
+        now = datetime.now(tz=UTC).isoformat()
+        async with AsyncSession(_get_engine()) as session:
+            record = await session.get(SkillRecord, skill_id)
+            if not record:
+                return None
+            skillset_id = record.skillset_id
+            original_created_at = record.created_at
+            original_created_by = record.created_by
+            version = record.current_version + 1
+            record.name = name
+            record.description = description
+            record.template = template
+            record.parameters = parameters
+            record.triggers = triggers
+            record.tools_required = tools_required
+            record.enabled = enabled
+            record.current_version = version
+            record.updated_at = now
+            record.updated_by = updated_by
+            session.add(record)
+            session.add(
+                SkillVersionRecord(
+                    skill_id=skill_id,
+                    skillset_id=skillset_id,
+                    version=version,
+                    name=name,
+                    description=description,
+                    template=template,
+                    parameters=parameters,
+                    triggers=triggers,
+                    tools_required=tools_required,
+                    enabled=enabled,
+                    created_at=now,
+                    created_by=updated_by,
+                    comment=comment,
+                )
+            )
+            await session.commit()
+        return SkillItem(
+            skill_id=skill_id,
+            skillset_id=skillset_id,
+            name=name,
+            description=description,
+            template=template,
+            parameters=[ToolParamDef(**p) if isinstance(p, dict) else p for p in parameters],
+            triggers=triggers,
+            tools_required=tools_required,
+            enabled=enabled,
+            current_version=version,
+            created_at=original_created_at,
+            updated_at=now,
+            created_by=original_created_by,
+            updated_by=updated_by,
+        )
+
+    async def delete_skill(self, skill_id: str) -> bool:
+        async with AsyncSession(_get_engine()) as session:
+            record = await session.get(SkillRecord, skill_id)
+            if not record:
+                return False
+            stmt = select(SkillVersionRecord).where(SkillVersionRecord.skill_id == skill_id)
+            result = await session.execute(stmt)
+            for ver in result.scalars().all():
+                await session.delete(ver)
+            await session.delete(record)
+            await session.commit()
+        return True
+
+    async def list_skill_versions(self, skill_id: str) -> list[SkillVersion]:
+        async with AsyncSession(_get_engine()) as session:
+            skill = await session.get(SkillRecord, skill_id)
+            if not skill:
+                return []
+            stmt = (
+                select(SkillVersionRecord)
+                .where(SkillVersionRecord.skill_id == skill_id)
+                .order_by(col(SkillVersionRecord.version).desc())
+            )
+            result = await session.execute(stmt)
+            rows = result.scalars().all()
+            return [
+                SkillVersion(
+                    skill_id=r.skill_id,
+                    skillset_id=r.skillset_id,
+                    name=r.name,
+                    description=r.description or "",
+                    template=r.template,
+                    parameters=[ToolParamDef(**p) if isinstance(p, dict) else p for p in (r.parameters or [])],
+                    triggers=r.triggers or [],
+                    tools_required=r.tools_required or [],
+                    enabled=r.enabled,
+                    version=r.version,
+                    created_at=r.created_at,
+                    created_by=r.created_by,
+                    comment=r.comment,
+                )
+                for r in rows
+            ]
+
+    async def get_skill_version(self, skill_id: str, version: int) -> SkillVersion | None:
+        async with AsyncSession(_get_engine()) as session:
+            stmt = (
+                select(SkillVersionRecord)
+                .where(SkillVersionRecord.skill_id == skill_id)
+                .where(SkillVersionRecord.version == version)
+            )
+            result = await session.execute(stmt)
+            row = result.scalars().first()
+            if not row:
+                return None
+            return SkillVersion(
+                skill_id=row.skill_id,
+                skillset_id=row.skillset_id,
+                name=row.name,
+                description=row.description or "",
+                template=row.template,
+                parameters=[ToolParamDef(**p) if isinstance(p, dict) else p for p in (row.parameters or [])],
+                triggers=row.triggers or [],
+                tools_required=row.tools_required or [],
+                enabled=row.enabled,
+                version=row.version,
+                created_at=row.created_at,
+                created_by=row.created_by,
+                comment=row.comment,
+            )
+
+    async def list_enabled_skills(self) -> list[SkillItem]:
+        from sqlmodel import col
+
+        async with AsyncSession(_get_engine()) as session:
+            ss_stmt = select(SkillsetRecord).where(
+                col(SkillsetRecord.enabled) == True  # noqa: E712
+            )
+            ss_result = await session.execute(ss_stmt)
+            enabled_skillset_ids = [r.skillset_id for r in ss_result.scalars().all()]
+            if not enabled_skillset_ids:
+                return []
+            skill_stmt = (
+                select(SkillRecord)
+                .where(col(SkillRecord.skillset_id).in_(enabled_skillset_ids))
+                .where(col(SkillRecord.enabled) == True)  # noqa: E712
+            )
+            skill_result = await session.execute(skill_stmt)
+            return [self._skill_item_from_record(r) for r in skill_result.scalars().all()]
+
+    async def get_enabled_skill(self, skillset_id: str, skill_id: str) -> SkillItem | None:
+        async with AsyncSession(_get_engine()) as session:
+            stmt = (
+                select(SkillRecord)
+                .join(SkillsetRecord, SkillRecord.skillset_id == SkillsetRecord.skillset_id)
+                .where(SkillRecord.skill_id == skill_id)
+                .where(SkillRecord.skillset_id == skillset_id)
+                .where(SkillRecord.enabled == True)  # noqa: E712
+                .where(SkillsetRecord.enabled == True)  # noqa: E712
+            )
+            result = await session.execute(stmt)
+            record = result.scalars().first()
+            return self._skill_item_from_record(record) if record else None
 
     # ------------------------------------------------------------------
     # Query history

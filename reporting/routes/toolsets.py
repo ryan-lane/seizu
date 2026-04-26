@@ -57,6 +57,22 @@ def _reject_builtin_mutation(toolset_id: str) -> None:
         )
 
 
+def _with_effective_tool_state(tool: ToolItem, toolset: ToolsetListItem) -> ToolItem:
+    """Return a tool response with parent-disabled state folded in."""
+    effective_enabled = tool.enabled and toolset.enabled
+    disabled_reason = None
+    if not toolset.enabled:
+        disabled_reason = "toolset_disabled"
+    elif not tool.enabled:
+        disabled_reason = "tool_disabled"
+    return tool.model_copy(
+        update={
+            "effective_enabled": effective_enabled,
+            "disabled_reason": disabled_reason,
+        }
+    )
+
+
 # ---------------------------------------------------------------------------
 # Toolsets
 # ---------------------------------------------------------------------------
@@ -78,8 +94,11 @@ async def create_toolset(
     current: CurrentUser = Depends(require_permission(Permission.TOOLSETS_WRITE)),
 ) -> ToolsetListItem:
     """Create a new toolset."""
-    _reject_builtin_mutation(body.name)
+    _reject_builtin_mutation(body.toolset_id)
+    if await report_store.get_toolset(body.toolset_id):
+        raise HTTPException(status_code=409, detail="Toolset already exists")
     return await report_store.create_toolset(
+        toolset_id=body.toolset_id,
         name=body.name,
         description=body.description,
         enabled=body.enabled,
@@ -198,7 +217,8 @@ async def list_tools(
     ts = await report_store.get_toolset(toolset_id)
     if not ts:
         raise HTTPException(status_code=404, detail="Toolset not found")
-    return ToolListResponse(tools=await report_store.list_tools(toolset_id))
+    tools = await report_store.list_tools(toolset_id)
+    return ToolListResponse(tools=[_with_effective_tool_state(tool, ts) for tool in tools])
 
 
 @router.post(
@@ -213,6 +233,8 @@ async def create_tool(
 ) -> Any:
     """Create a new tool within a toolset."""
     _reject_builtin_mutation(toolset_id)
+    if await report_store.get_tool(body.tool_id):
+        raise HTTPException(status_code=409, detail="Tool already exists")
     validation = await validate_query(body.cypher)
     if validation.has_errors:
         return JSONResponse(
@@ -224,6 +246,7 @@ async def create_tool(
         )
     tool = await report_store.create_tool(
         toolset_id=toolset_id,
+        tool_id=body.tool_id,
         name=body.name,
         description=body.description,
         cypher=body.cypher,
@@ -233,7 +256,10 @@ async def create_tool(
     )
     if not tool:
         raise HTTPException(status_code=404, detail="Toolset not found")
-    return tool
+    toolset = await report_store.get_toolset(toolset_id)
+    if not toolset:
+        raise HTTPException(status_code=404, detail="Toolset not found")
+    return _with_effective_tool_state(tool, toolset)
 
 
 @router.get(
@@ -254,7 +280,10 @@ async def get_tool(
     tool = await report_store.get_tool(tool_id)
     if not tool or tool.toolset_id != toolset_id:
         raise HTTPException(status_code=404, detail="Tool not found")
-    return tool
+    toolset = await report_store.get_toolset(toolset_id)
+    if not toolset:
+        raise HTTPException(status_code=404, detail="Toolset not found")
+    return _with_effective_tool_state(tool, toolset)
 
 
 @router.put(
@@ -293,7 +322,10 @@ async def update_tool(
     )
     if not tool:
         raise HTTPException(status_code=404, detail="Tool not found")
-    return tool
+    toolset = await report_store.get_toolset(toolset_id)
+    if not toolset:
+        raise HTTPException(status_code=404, detail="Toolset not found")
+    return _with_effective_tool_state(tool, toolset)
 
 
 @router.delete(
@@ -339,6 +371,11 @@ async def call_tool(
     tool = await report_store.get_tool(tool_id)
     if not tool or tool.toolset_id != toolset_id:
         raise HTTPException(status_code=404, detail="Tool not found")
+    toolset = await report_store.get_toolset(toolset_id)
+    if not toolset:
+        raise HTTPException(status_code=404, detail="Toolset not found")
+    if not toolset.enabled:
+        raise HTTPException(status_code=400, detail="Toolset is disabled")
     if not tool.enabled:
         raise HTTPException(status_code=400, detail="Tool is disabled")
     errors = validate_tool_arguments(tool.parameters, body.arguments)

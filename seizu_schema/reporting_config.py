@@ -5,10 +5,19 @@ configuration schema.  It is used by both the ``reporting`` backend and the
 ``seizu_cli`` CLI; neither package defines these models independently.
 """
 
+import re
 from typing import Any, Literal
 
 import yaml
 from pydantic import BaseModel, Field, field_validator
+
+LOWER_SNAKE_ID_RE = re.compile(r"^[a-z][a-z0-9]*(?:_[a-z0-9]+)*$")
+
+
+def validate_lower_snake_id(value: str) -> str:
+    if not LOWER_SNAKE_ID_RE.fullmatch(value):
+        raise ValueError("must be lower_snake_case matching ^[a-z][a-z0-9]*(?:_[a-z0-9]+)*$")
+    return value
 
 
 class InputDefault(BaseModel):
@@ -545,6 +554,11 @@ class ToolParamDef(BaseModel):
     required: bool = True
     default: Any | None = None
 
+    @field_validator("name")
+    @classmethod
+    def validate_name(cls, v: str) -> str:
+        return validate_lower_snake_id(v)
+
 
 class ToolDef(BaseModel):
     """A tool definition within a toolset."""
@@ -563,6 +577,65 @@ class ToolsetDef(BaseModel):
     description: str = ""
     enabled: bool = True
     tools: dict[str, ToolDef] = Field(default_factory=dict)
+
+    @field_validator("tools")
+    @classmethod
+    def validate_tool_ids(cls, v: dict[str, ToolDef]) -> dict[str, ToolDef]:
+        for key in v:
+            validate_lower_snake_id(key)
+        return v
+
+
+class SkillDef(BaseModel):
+    """A prompt template definition within a skillset."""
+
+    name: str
+    description: str = ""
+    template: str
+    parameters: list[ToolParamDef] = Field(default_factory=list)
+    triggers: list[str] = Field(default_factory=list)
+    tools_required: list[str] = Field(default_factory=list)
+    enabled: bool = True
+
+    @field_validator("triggers")
+    @classmethod
+    def validate_triggers(cls, v: list[str]) -> list[str]:
+        seen: set[str] = set()
+        for value in v:
+            if not value.strip():
+                raise ValueError("triggers entries must not be empty")
+            if value in seen:
+                raise ValueError("triggers entries must be unique")
+            seen.add(value)
+        return v
+
+    @field_validator("tools_required")
+    @classmethod
+    def validate_tools_required(cls, v: list[str]) -> list[str]:
+        seen: set[str] = set()
+        for value in v:
+            if not re.fullmatch(r"^[a-z][a-z0-9]*(?:_[a-z0-9]+)*__[a-z][a-z0-9]*(?:_[a-z0-9]+)*$", value):
+                raise ValueError("tools_required entries must use MCP tool names like toolset_id__tool_id")
+            if value in seen:
+                raise ValueError("tools_required entries must be unique")
+            seen.add(value)
+        return v
+
+
+class SkillsetDef(BaseModel):
+    """A skillset definition for MCP prompt exposure."""
+
+    name: str
+    description: str = ""
+    enabled: bool = True
+    skills: dict[str, SkillDef] = Field(default_factory=dict)
+
+    @field_validator("skills")
+    @classmethod
+    def validate_skill_ids(cls, v: dict[str, SkillDef]) -> dict[str, SkillDef]:
+        for key in v:
+            validate_lower_snake_id(key)
+        return v
 
 
 class ReportingConfig(BaseModel):
@@ -653,6 +726,43 @@ class ReportingConfig(BaseModel):
             """
         ],
     )
+
+    skillsets: dict[str, SkillsetDef] = Field(
+        default_factory=dict,
+        description="Skillset definitions for MCP prompt exposure.",
+        examples=[
+            """
+            .. code-block:: yaml
+
+              skillsets:
+                investigations:
+                  name: Investigations
+                  description: Prompt templates for graph investigations
+                  enabled: true
+                  skills:
+                    summarize_node:
+                      name: Summarize node
+                      template: Summarize {{node_id}} for a security analyst.
+                      parameters:
+                        - name: node_id
+                          type: string
+            """
+        ],
+    )
+
+    @field_validator("toolsets")
+    @classmethod
+    def validate_toolset_ids(cls, v: dict[str, ToolsetDef]) -> dict[str, ToolsetDef]:
+        for key in v:
+            validate_lower_snake_id(key)
+        return v
+
+    @field_validator("skillsets")
+    @classmethod
+    def validate_skillset_ids(cls, v: dict[str, SkillsetDef]) -> dict[str, SkillsetDef]:
+        for key in v:
+            validate_lower_snake_id(key)
+        return v
 
     @field_validator("scheduled_queries", mode="before")
     @classmethod

@@ -2,7 +2,16 @@ from abc import ABC, abstractmethod
 from datetime import datetime
 from typing import Any
 
-from reporting.schema.mcp_config import ToolItem, ToolsetListItem, ToolsetVersion, ToolVersion
+from reporting.schema.mcp_config import (
+    SkillItem,
+    SkillsetListItem,
+    SkillsetVersion,
+    SkillVersion,
+    ToolItem,
+    ToolsetListItem,
+    ToolsetVersion,
+    ToolVersion,
+)
 from reporting.schema.rbac import RoleItem, RoleVersion
 from reporting.schema.report_config import (
     PanelStat,
@@ -294,6 +303,7 @@ class ReportStore(ABC):
     @abstractmethod
     async def create_toolset(
         self,
+        toolset_id: str,
         name: str,
         description: str,
         enabled: bool,
@@ -341,6 +351,7 @@ class ReportStore(ABC):
     async def create_tool(
         self,
         toolset_id: str,
+        tool_id: str,
         name: str,
         description: str,
         cypher: str,
@@ -379,6 +390,121 @@ class ReportStore(ABC):
     @abstractmethod
     async def list_enabled_tools(self) -> list[ToolItem]:
         """Return all enabled tools in all enabled toolsets."""
+
+    @abstractmethod
+    async def get_enabled_tool(self, toolset_id: str, tool_id: str) -> ToolItem | None:
+        """Return an enabled tool in an enabled toolset, or None if not found."""
+
+    # ------------------------------------------------------------------
+    # Skillsets
+    # ------------------------------------------------------------------
+
+    @abstractmethod
+    async def list_skillsets(self) -> list[SkillsetListItem]:
+        """Return all skillsets."""
+
+    @abstractmethod
+    async def get_skillset(self, skillset_id: str) -> SkillsetListItem | None:
+        """Return a skillset by ID, or None if not found."""
+
+    @abstractmethod
+    async def create_skillset(
+        self,
+        skillset_id: str,
+        name: str,
+        description: str,
+        enabled: bool,
+        created_by: str,
+    ) -> SkillsetListItem:
+        """Create a new skillset (at version 1) and return it."""
+
+    @abstractmethod
+    async def update_skillset(
+        self,
+        skillset_id: str,
+        name: str,
+        description: str,
+        enabled: bool,
+        updated_by: str,
+        comment: str | None = None,
+    ) -> SkillsetListItem | None:
+        """Save a new version of an existing skillset. Returns None if not found."""
+
+    @abstractmethod
+    async def delete_skillset(self, skillset_id: str) -> bool:
+        """Delete a skillset, all its versions, and all its skills. Returns False if not found."""
+
+    @abstractmethod
+    async def list_skillset_versions(self, skillset_id: str) -> list[SkillsetVersion]:
+        """Return all stored versions for a skillset, newest first."""
+
+    @abstractmethod
+    async def get_skillset_version(self, skillset_id: str, version: int) -> SkillsetVersion | None:
+        """Return a specific version of a skillset, or None if not found."""
+
+    # ------------------------------------------------------------------
+    # Skills
+    # ------------------------------------------------------------------
+
+    @abstractmethod
+    async def list_skills(self, skillset_id: str) -> list[SkillItem]:
+        """Return all skills within a skillset."""
+
+    @abstractmethod
+    async def get_skill(self, skill_id: str) -> SkillItem | None:
+        """Return a skill by ID, or None if not found."""
+
+    @abstractmethod
+    async def create_skill(
+        self,
+        skillset_id: str,
+        skill_id: str,
+        name: str,
+        description: str,
+        template: str,
+        parameters: list[dict[str, Any]],
+        triggers: list[str],
+        tools_required: list[str],
+        enabled: bool,
+        created_by: str,
+    ) -> SkillItem | None:
+        """Create a new skill (at version 1). Returns None if the skillset does not exist."""
+
+    @abstractmethod
+    async def update_skill(
+        self,
+        skill_id: str,
+        name: str,
+        description: str,
+        template: str,
+        parameters: list[dict[str, Any]],
+        triggers: list[str],
+        tools_required: list[str],
+        enabled: bool,
+        updated_by: str,
+        comment: str | None = None,
+    ) -> SkillItem | None:
+        """Save a new version of an existing skill. Returns None if not found."""
+
+    @abstractmethod
+    async def delete_skill(self, skill_id: str) -> bool:
+        """Delete a skill and all its versions. Returns False if not found."""
+
+    @abstractmethod
+    async def list_skill_versions(self, skill_id: str) -> list[SkillVersion]:
+        """Return all stored versions for a skill, newest first."""
+
+    @abstractmethod
+    async def get_skill_version(self, skill_id: str, version: int) -> SkillVersion | None:
+        """Return a specific version of a skill, or None if not found."""
+
+    @abstractmethod
+    async def list_enabled_skills(self) -> list[SkillItem]:
+        """Return all enabled skills in all enabled skillsets."""
+
+    @abstractmethod
+    async def get_enabled_skill(self, skillset_id: str, skill_id: str) -> SkillItem | None:
+        """Return an enabled skill in an enabled skillset, or None if not found."""
 
     # ------------------------------------------------------------------
     # Query history

@@ -14,6 +14,7 @@ from reporting.services.mcp_builtins import graph as _graph
 from reporting.services.mcp_builtins import reports as _reports
 from reporting.services.mcp_builtins import roles as _roles
 from reporting.services.mcp_builtins import scheduled_queries as _scheduled_queries
+from reporting.services.mcp_builtins import skillsets as _skillsets
 from reporting.services.mcp_builtins import toolsets as _toolsets
 from reporting.services.mcp_builtins.base import BuiltinGroup, BuiltinTool
 
@@ -25,6 +26,7 @@ _GROUPS: list[BuiltinGroup] = [
     _reports.GROUP_DEF,
     _roles.GROUP_DEF,
     _scheduled_queries.GROUP_DEF,
+    _skillsets.GROUP_DEF,
     _toolsets.GROUP_DEF,
 ]
 

@@ -7,7 +7,7 @@ import pytest
 from mcp import types as mcp_types
 
 from reporting.authnz.permissions import ALL_PERMISSIONS
-from reporting.schema.mcp_config import ToolItem, ToolParamDef, ToolsetListItem
+from reporting.schema.mcp_config import SkillItem, ToolItem, ToolParamDef, ToolsetListItem
 from reporting.services import mcp_server as mcp_module
 from reporting.services.mcp_server import (
     _build_mcp_server,
@@ -59,6 +59,29 @@ def _tool(
     )
 
 
+def _skill(
+    skill_id: str = "summarize",
+    skillset_id: str = "prompts",
+    name: str = "Summarize",
+    enabled: bool = True,
+    parameters=None,
+    template: str = "Summarize {{topic}} in {{count}} bullets.",
+):
+    return SkillItem(
+        skill_id=skill_id,
+        skillset_id=skillset_id,
+        name=name,
+        description="A test skill",
+        template=template,
+        parameters=parameters or [],
+        enabled=enabled,
+        current_version=1,
+        created_at=_NOW,
+        updated_at=_NOW,
+        created_by="user@example.com",
+    )
+
+
 async def _list_tools(server, permissions=ALL_PERMISSIONS):
     """Call the registered list_tools handler."""
     handler = server.request_handlers[mcp_types.ListToolsRequest]
@@ -84,6 +107,33 @@ async def _call_tool(server, name, arguments=None, permissions=ALL_PERMISSIONS):
     finally:
         _mcp_permissions.reset(token)
     return result.root.content
+
+
+async def _list_prompts(server, permissions=ALL_PERMISSIONS):
+    """Call the registered list_prompts handler."""
+    handler = server.request_handlers[mcp_types.ListPromptsRequest]
+    req = mcp_types.ListPromptsRequest(method="prompts/list", params=None)
+    token = _mcp_permissions.set(permissions)
+    try:
+        result = await handler(req)
+    finally:
+        _mcp_permissions.reset(token)
+    return result.root.prompts
+
+
+async def _get_prompt(server, name, arguments=None, permissions=ALL_PERMISSIONS):
+    """Call the registered get_prompt handler."""
+    handler = server.request_handlers[mcp_types.GetPromptRequest]
+    req = mcp_types.GetPromptRequest(
+        method="prompts/get",
+        params=mcp_types.GetPromptRequestParams(name=name, arguments=arguments or {}),
+    )
+    token = _mcp_permissions.set(permissions)
+    try:
+        result = await handler(req)
+    finally:
+        _mcp_permissions.reset(token)
+    return result.root
 
 
 # ---------------------------------------------------------------------------
@@ -129,7 +179,7 @@ async def test_list_tools_includes_user_defined_tool():
         server = _build_mcp_server()
         tools = await _list_tools(server)
         names = [t.name for t in tools]
-        assert "mytoolset__mytool" in names
+        assert "ts1__t1" in names
 
 
 async def test_list_tools_with_parameters_builds_schema():
@@ -158,7 +208,7 @@ async def test_list_tools_with_parameters_builds_schema():
     ):
         server = _build_mcp_server()
         tools = await _list_tools(server)
-        user_tool = next(t for t in tools if t.name == "mytoolset__mytool")
+        user_tool = next(t for t in tools if t.name == "ts1__t1")
         assert "limit" in user_tool.inputSchema["properties"]
         assert user_tool.inputSchema["required"] == ["limit"]
 
@@ -304,28 +354,21 @@ async def test_call_tool_schema_error():
 
 
 async def test_call_tool_user_defined_not_found():
-    with (
-        patch(
-            "reporting.services.mcp_server.report_store.list_enabled_tools",
-            new_callable=AsyncMock,
-            return_value=[],
-        ),
-        patch(
-            "reporting.services.mcp_server.report_store.list_toolsets",
-            new_callable=AsyncMock,
-            return_value=[],
-        ),
+    get_enabled_tool = AsyncMock(return_value=None)
+    with patch(
+        "reporting.services.mcp_server.report_store.get_enabled_tool",
+        new=get_enabled_tool,
     ):
         server = _build_mcp_server()
         result = await _call_tool(server, "unknown__tool", {})
         data = json.loads(result[0].text)
         assert "error" in data
         assert "not found" in data["error"]
+    get_enabled_tool.assert_awaited_once_with("unknown", "tool")
 
 
 async def test_call_tool_user_defined_argument_validation_error():
     # MCP validates input schema before our handler; wrong type → plain text error
-    ts = _toolset()
     tool = _tool(
         parameters=[
             ToolParamDef(
@@ -335,37 +378,25 @@ async def test_call_tool_user_defined_argument_validation_error():
             )
         ]
     )
-    with (
-        patch(
-            "reporting.services.mcp_server.report_store.list_enabled_tools",
-            new_callable=AsyncMock,
-            return_value=[tool],
-        ),
-        patch(
-            "reporting.services.mcp_server.report_store.list_toolsets",
-            new_callable=AsyncMock,
-            return_value=[ts],
-        ),
+    get_enabled_tool = AsyncMock(return_value=tool)
+    with patch(
+        "reporting.services.mcp_server.report_store.get_enabled_tool",
+        new=get_enabled_tool,
     ):
         server = _build_mcp_server()
-        result = await _call_tool(server, "mytoolset__mytool", {"limit": "not-an-int"})
+        result = await _call_tool(server, "ts1__t1", {"limit": "not-an-int"})
         assert len(result) == 1
         assert "integer" in result[0].text or "validation" in result[0].text.lower()
+    get_enabled_tool.assert_awaited_once_with("ts1", "t1")
 
 
 async def test_call_tool_user_defined_success():
-    ts = _toolset()
     tool = _tool()
+    get_enabled_tool = AsyncMock(return_value=tool)
     with (
         patch(
-            "reporting.services.mcp_server.report_store.list_enabled_tools",
-            new_callable=AsyncMock,
-            return_value=[tool],
-        ),
-        patch(
-            "reporting.services.mcp_server.report_store.list_toolsets",
-            new_callable=AsyncMock,
-            return_value=[ts],
+            "reporting.services.mcp_server.report_store.get_enabled_tool",
+            new=get_enabled_tool,
         ),
         patch(
             "reporting.services.mcp_server.reporting_neo4j.run_query",
@@ -374,24 +405,19 @@ async def test_call_tool_user_defined_success():
         ),
     ):
         server = _build_mcp_server()
-        result = await _call_tool(server, "mytoolset__mytool", {})
+        result = await _call_tool(server, "ts1__t1", {})
         data = json.loads(result[0].text)
         assert data[0]["n"] == "value"
+    get_enabled_tool.assert_awaited_once_with("ts1", "t1")
 
 
 async def test_call_tool_user_defined_execution_error():
-    ts = _toolset()
     tool = _tool()
+    get_enabled_tool = AsyncMock(return_value=tool)
     with (
         patch(
-            "reporting.services.mcp_server.report_store.list_enabled_tools",
-            new_callable=AsyncMock,
-            return_value=[tool],
-        ),
-        patch(
-            "reporting.services.mcp_server.report_store.list_toolsets",
-            new_callable=AsyncMock,
-            return_value=[ts],
+            "reporting.services.mcp_server.report_store.get_enabled_tool",
+            new=get_enabled_tool,
         ),
         patch(
             "reporting.services.mcp_server.reporting_neo4j.run_query",
@@ -400,9 +426,83 @@ async def test_call_tool_user_defined_execution_error():
         ),
     ):
         server = _build_mcp_server()
-        result = await _call_tool(server, "mytoolset__mytool", {})
+        result = await _call_tool(server, "ts1__t1", {})
         data = json.loads(result[0].text)
         assert "error" in data
+    get_enabled_tool.assert_awaited_once_with("ts1", "t1")
+
+
+# ---------------------------------------------------------------------------
+# prompts — user-defined skills
+# ---------------------------------------------------------------------------
+
+
+async def test_list_prompts_includes_user_defined_skill():
+    skill = _skill(
+        parameters=[
+            ToolParamDef(name="topic", type="string", required=True),
+            ToolParamDef(name="count", type="integer", required=False, default=3),
+        ]
+    )
+    with patch(
+        "reporting.services.mcp_server.report_store.list_enabled_skills",
+        new_callable=AsyncMock,
+        return_value=[skill],
+    ):
+        server = _build_mcp_server()
+        prompts = await _list_prompts(server)
+
+    prompt = next(p for p in prompts if p.name == "prompts__summarize")
+    assert prompt.title == "Summarize"
+    assert [arg.name for arg in prompt.arguments] == ["topic", "count"]
+    assert [arg.required for arg in prompt.arguments] == [True, False]
+
+
+async def test_list_prompts_requires_render_permission():
+    with patch(
+        "reporting.services.mcp_server.report_store.list_enabled_skills",
+        new_callable=AsyncMock,
+        return_value=[_skill()],
+    ):
+        server = _build_mcp_server()
+        prompts = await _list_prompts(server, permissions=frozenset())
+
+    assert prompts == []
+
+
+async def test_get_prompt_renders_skill_template():
+    skill = _skill(
+        parameters=[
+            ToolParamDef(name="topic", type="string", required=True),
+            ToolParamDef(name="count", type="integer", required=False, default=3),
+        ]
+    )
+    get_enabled_skill = AsyncMock(return_value=skill)
+    with patch(
+        "reporting.services.mcp_server.report_store.get_enabled_skill",
+        new=get_enabled_skill,
+    ):
+        server = _build_mcp_server()
+        result = await _get_prompt(server, "prompts__summarize", {"topic": "alerts", "count": "2"})
+
+    assert result.description == "A test skill"
+    assert result.messages[0].content.text == "Summarize alerts in 2 bullets."
+    get_enabled_skill.assert_awaited_once_with("prompts", "summarize")
+
+
+async def test_get_prompt_reports_render_errors():
+    skill = _skill(parameters=[ToolParamDef(name="topic", type="string", required=True)])
+    get_enabled_skill = AsyncMock(return_value=skill)
+    with patch(
+        "reporting.services.mcp_server.report_store.get_enabled_skill",
+        new=get_enabled_skill,
+    ):
+        server = _build_mcp_server()
+        result = await _get_prompt(server, "prompts__summarize", {})
+
+    data = json.loads(result.messages[0].content.text)
+    assert "Required parameter 'topic' is missing" in data["errors"]
+    get_enabled_skill.assert_awaited_once_with("prompts", "summarize")
 
 
 # ---------------------------------------------------------------------------

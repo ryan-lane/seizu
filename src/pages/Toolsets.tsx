@@ -59,6 +59,8 @@ const BUILTIN_PREFIX = '__builtin_';
 const isBuiltinToolset = (id: string): boolean =>
   id.startsWith(BUILTIN_PREFIX) && id.endsWith('__');
 
+const LOWER_SNAKE_ID = /^[a-z][a-z0-9]*(?:_[a-z0-9]+)*$/;
+
 // ---------------------------------------------------------------------------
 // Create/Edit dialog
 // ---------------------------------------------------------------------------
@@ -71,6 +73,7 @@ interface ToolsetDialogProps {
 }
 
 function ToolsetDialog({ open, onClose, onSave, initial }: ToolsetDialogProps) {
+  const [toolsetId, setToolsetId] = useState(initial?.toolset_id ?? '');
   const [name, setName] = useState(initial?.name ?? '');
   const [description, setDescription] = useState(initial?.description ?? '');
   const [enabled, setEnabled] = useState(initial?.enabled ?? true);
@@ -89,9 +92,13 @@ function ToolsetDialog({ open, onClose, onSave, initial }: ToolsetDialogProps) {
       setError('Name is required.');
       return;
     }
+    if (!initial && !LOWER_SNAKE_ID.test(toolsetId.trim())) {
+      setError('ID must be lower_snake_case.');
+      return;
+    }
     const req = initial
       ? ({ name: name.trim(), description: description.trim(), enabled, comment: comment.trim() || null } as UpdateToolsetRequest)
-      : ({ name: name.trim(), description: description.trim(), enabled } as CreateToolsetRequest);
+      : ({ toolset_id: toolsetId.trim(), name: name.trim(), description: description.trim(), enabled } as CreateToolsetRequest);
     setSaving(true);
     try {
       await onSave(req);
@@ -114,6 +121,16 @@ function ToolsetDialog({ open, onClose, onSave, initial }: ToolsetDialogProps) {
           </Alert>
         )}
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+          {!initial && (
+            <TextField
+              label="ID"
+              value={toolsetId}
+              onChange={(e) => setToolsetId(e.target.value)}
+              fullWidth
+              required
+              helperText="lower_snake_case"
+            />
+          )}
           <TextField
             label="Name"
             value={name}
@@ -318,6 +335,7 @@ function Toolsets() {
               <TableHead>
                 <TableRow>
                   <TableCell>Name</TableCell>
+                  <TableCell>Slug</TableCell>
                   <TableCell>Description</TableCell>
                   <TableCell>Status</TableCell>
                   <TableCell>Version</TableCell>
@@ -329,7 +347,7 @@ function Toolsets() {
               <TableBody>
                 {allRows.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={7}>
+                    <TableCell colSpan={8}>
                       <Typography color="text.secondary" sx={{ py: 1 }}>
                         No toolsets yet. Create one above.
                       </Typography>
@@ -354,6 +372,9 @@ function Toolsets() {
                             <Chip label="Built-in" size="small" variant="outlined" color="primary" />
                           )}
                         </Box>
+                      </TableCell>
+                      <TableCell sx={{ color: 'text.secondary', fontFamily: 'monospace' }}>
+                        {item.toolset_id}
                       </TableCell>
                       <TableCell sx={{ color: 'text.secondary', maxWidth: 320 }}>
                         <Typography

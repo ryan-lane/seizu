@@ -29,6 +29,7 @@ Documentation
 * `Query Console <https://mappedsky.github.io/seizu/install/query-console.html>`_
 * `Scheduled query documentation <https://mappedsky.github.io/seizu/install/scheduled-queries.html>`_
 * `MCP Toolsets documentation <https://mappedsky.github.io/seizu/install/mcp-toolsets.html>`_
+* `MCP Skillsets documentation <https://mappedsky.github.io/seizu/install/mcp-skillsets.html>`_
 * `Basic development documentation <https://mappedsky.github.io/seizu/dev/dependencies.html>`_
 
 .. toctree::
@@ -41,6 +42,7 @@ Documentation
     install/query-console
     install/scheduled-queries
     install/mcp-toolsets
+    install/mcp-skillsets
     install/stats
 
 .. toctree::

@@ -153,25 +153,25 @@ def test_get_toolset_api_error(mock_client: MagicMock) -> None:
 
 def test_create_toolset(mock_client: MagicMock) -> None:
     mock_client.post.return_value = {"toolset_id": "ts-new", "name": "New Toolset"}
-    result = runner.invoke(app, ["create", "New Toolset", "--description", "Desc"])
+    result = runner.invoke(app, ["create", "ts_new", "New Toolset", "--description", "Desc"])
     assert result.exit_code == 0
     assert "ts-new" in result.output
     mock_client.post.assert_called_once_with(
         "/api/v1/toolsets",
-        json={"name": "New Toolset", "description": "Desc", "enabled": True},
+        json={"toolset_id": "ts_new", "name": "New Toolset", "description": "Desc", "enabled": True},
     )
 
 
 def test_create_toolset_disabled(mock_client: MagicMock) -> None:
     mock_client.post.return_value = {"toolset_id": "ts-new", "name": "Disabled"}
-    runner.invoke(app, ["create", "Disabled", "--disabled"])
+    runner.invoke(app, ["create", "ts_new", "Disabled", "--disabled"])
     _, call_kwargs = mock_client.post.call_args
     assert call_kwargs["json"]["enabled"] is False
 
 
 def test_create_toolset_api_error(mock_client: MagicMock) -> None:
     mock_client.post.side_effect = APIError(422, "error")
-    result = runner.invoke(app, ["create", "Bad"])
+    result = runner.invoke(app, ["create", "bad", "Bad"])
     assert result.exit_code == 1
 
 
@@ -293,6 +293,7 @@ def test_create_tool(mock_client: MagicMock) -> None:
             "tools",
             "create",
             "ts1",
+            "t_new",
             "--name",
             "New Tool",
             "--cypher",
@@ -307,6 +308,7 @@ def test_create_tool(mock_client: MagicMock) -> None:
         "/api/v1/toolsets/ts1/tools",
         json={
             "name": "New Tool",
+            "tool_id": "t_new",
             "description": "Desc",
             "cypher": "MATCH (n) RETURN n",
             "parameters": [],
@@ -324,6 +326,7 @@ def test_create_tool_with_parameters(mock_client: MagicMock) -> None:
             "tools",
             "create",
             "ts1",
+            "t_new",
             "--name",
             "Parameterized",
             "--cypher",
@@ -343,6 +346,7 @@ def test_create_tool_invalid_parameters_json(mock_client: MagicMock) -> None:
             "tools",
             "create",
             "ts1",
+            "bad",
             "--name",
             "Bad",
             "--cypher",
@@ -359,7 +363,7 @@ def test_create_tool_api_error(mock_client: MagicMock) -> None:
     mock_client.post.side_effect = APIError(422, "validation error")
     result = runner.invoke(
         app,
-        ["tools", "create", "ts1", "--name", "x", "--cypher", "MATCH (n) RETURN n"],
+        ["tools", "create", "ts1", "x", "--name", "x", "--cypher", "MATCH (n) RETURN n"],
     )
     assert result.exit_code == 1
 

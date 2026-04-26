@@ -2,7 +2,16 @@ import logging
 from datetime import datetime
 from typing import Any
 
-from reporting.schema.mcp_config import ToolItem, ToolsetListItem, ToolsetVersion, ToolVersion
+from reporting.schema.mcp_config import (
+    SkillItem,
+    SkillsetListItem,
+    SkillsetVersion,
+    SkillVersion,
+    ToolItem,
+    ToolsetListItem,
+    ToolsetVersion,
+    ToolVersion,
+)
 from reporting.schema.rbac import RoleItem, RoleVersion
 from reporting.schema.report_config import (
     PanelStat,
@@ -245,12 +254,14 @@ async def get_toolset(toolset_id: str) -> ToolsetListItem | None:
 
 
 async def create_toolset(
+    toolset_id: str,
     name: str,
     description: str,
     enabled: bool,
     created_by: str,
 ) -> ToolsetListItem:
     return await get_store().create_toolset(
+        toolset_id=toolset_id,
         name=name,
         description=description,
         enabled=enabled,
@@ -303,6 +314,7 @@ async def get_tool(tool_id: str) -> ToolItem | None:
 
 async def create_tool(
     toolset_id: str,
+    tool_id: str,
     name: str,
     description: str,
     cypher: str,
@@ -312,6 +324,7 @@ async def create_tool(
 ) -> ToolItem | None:
     return await get_store().create_tool(
         toolset_id=toolset_id,
+        tool_id=tool_id,
         name=name,
         description=description,
         cypher=cypher,
@@ -357,6 +370,149 @@ async def get_tool_version(tool_id: str, version: int) -> ToolVersion | None:
 
 async def list_enabled_tools() -> list[ToolItem]:
     return await get_store().list_enabled_tools()
+
+
+async def get_enabled_tool(toolset_id: str, tool_id: str) -> ToolItem | None:
+    return await get_store().get_enabled_tool(toolset_id, tool_id)
+
+
+# ---------------------------------------------------------------------------
+# Skillset convenience functions
+# ---------------------------------------------------------------------------
+
+
+async def list_skillsets() -> list[SkillsetListItem]:
+    return await get_store().list_skillsets()
+
+
+async def get_skillset(skillset_id: str) -> SkillsetListItem | None:
+    return await get_store().get_skillset(skillset_id)
+
+
+async def create_skillset(
+    skillset_id: str,
+    name: str,
+    description: str,
+    enabled: bool,
+    created_by: str,
+) -> SkillsetListItem:
+    return await get_store().create_skillset(
+        skillset_id=skillset_id,
+        name=name,
+        description=description,
+        enabled=enabled,
+        created_by=created_by,
+    )
+
+
+async def update_skillset(
+    skillset_id: str,
+    name: str,
+    description: str,
+    enabled: bool,
+    updated_by: str,
+    comment: str | None = None,
+) -> SkillsetListItem | None:
+    return await get_store().update_skillset(
+        skillset_id=skillset_id,
+        name=name,
+        description=description,
+        enabled=enabled,
+        updated_by=updated_by,
+        comment=comment,
+    )
+
+
+async def delete_skillset(skillset_id: str) -> bool:
+    return await get_store().delete_skillset(skillset_id)
+
+
+async def list_skillset_versions(skillset_id: str) -> list[SkillsetVersion]:
+    return await get_store().list_skillset_versions(skillset_id)
+
+
+async def get_skillset_version(skillset_id: str, version: int) -> SkillsetVersion | None:
+    return await get_store().get_skillset_version(skillset_id, version)
+
+
+async def list_skills(skillset_id: str) -> list[SkillItem]:
+    return await get_store().list_skills(skillset_id)
+
+
+async def get_skill(skill_id: str) -> SkillItem | None:
+    return await get_store().get_skill(skill_id)
+
+
+async def create_skill(
+    skillset_id: str,
+    skill_id: str,
+    name: str,
+    description: str,
+    template: str,
+    parameters: list[dict[str, Any]],
+    triggers: list[str],
+    tools_required: list[str],
+    enabled: bool,
+    created_by: str,
+) -> SkillItem | None:
+    return await get_store().create_skill(
+        skillset_id=skillset_id,
+        skill_id=skill_id,
+        name=name,
+        description=description,
+        template=template,
+        parameters=parameters,
+        triggers=triggers,
+        tools_required=tools_required,
+        enabled=enabled,
+        created_by=created_by,
+    )
+
+
+async def update_skill(
+    skill_id: str,
+    name: str,
+    description: str,
+    template: str,
+    parameters: list[dict[str, Any]],
+    triggers: list[str],
+    tools_required: list[str],
+    enabled: bool,
+    updated_by: str,
+    comment: str | None = None,
+) -> SkillItem | None:
+    return await get_store().update_skill(
+        skill_id=skill_id,
+        name=name,
+        description=description,
+        template=template,
+        parameters=parameters,
+        triggers=triggers,
+        tools_required=tools_required,
+        enabled=enabled,
+        updated_by=updated_by,
+        comment=comment,
+    )
+
+
+async def delete_skill(skill_id: str) -> bool:
+    return await get_store().delete_skill(skill_id)
+
+
+async def list_skill_versions(skill_id: str) -> list[SkillVersion]:
+    return await get_store().list_skill_versions(skill_id)
+
+
+async def get_skill_version(skill_id: str, version: int) -> SkillVersion | None:
+    return await get_store().get_skill_version(skill_id, version)
+
+
+async def list_enabled_skills() -> list[SkillItem]:
+    return await get_store().list_enabled_skills()
+
+
+async def get_enabled_skill(skillset_id: str, skill_id: str) -> SkillItem | None:
+    return await get_store().get_enabled_skill(skillset_id, skill_id)
 
 
 # ---------------------------------------------------------------------------
