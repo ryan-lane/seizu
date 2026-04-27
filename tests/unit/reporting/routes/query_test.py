@@ -499,7 +499,9 @@ async def test_report_query_rejects_tampered_token(mocker):
         allowed_param_names=[],
         static_params={},
     )
-    tampered = token[:-1] + ("A" if token[-1] != "A" else "B")
+    encoded_payload, encoded_sig = token.split(".", 1)
+    tampered_payload = ("A" if encoded_payload[0] != "A" else "B") + encoded_payload[1:]
+    tampered = f"{tampered_payload}.{encoded_sig}"
 
     app = create_app()
     app.dependency_overrides[get_current_user] = lambda: _report_current_user()
