@@ -7,6 +7,7 @@ import Terminal from '@mui/icons-material/Terminal';
 import Schedule from '@mui/icons-material/Schedule';
 import Extension from '@mui/icons-material/Extension';
 import Psychology from '@mui/icons-material/Psychology';
+import AdminPanelSettings from '@mui/icons-material/AdminPanelSettings';
 import NavItem from 'src/components/NavItem';
 import Hidden from 'src/components/Hidden';
 import { NavItemData } from 'src/components/NavItem';
@@ -62,7 +63,14 @@ function DashboardSidebar({ onMobileClose = () => {}, openMobile = false }: Dash
       href: '/app/skillsets',
       icon: Psychology,
       title: 'MCP Skillsets'
-    }
+    },
+    ...(hasPermission('roles:read')
+      ? [{
+          href: '/app/roles',
+          icon: AdminPanelSettings,
+          title: 'Roles'
+        }]
+      : [])
   ];
 
   const adminItems: NavItemData[] = [

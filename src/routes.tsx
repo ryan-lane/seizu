@@ -20,6 +20,8 @@ import Skillsets from 'src/pages/Skillsets';
 import SkillsetSkills from 'src/pages/SkillsetSkills';
 import SkillsetHistory from 'src/pages/SkillsetHistory';
 import SkillHistory from 'src/pages/SkillHistory';
+import Roles from 'src/pages/Roles';
+import RoleHistory from 'src/pages/RoleHistory';
 
 const routes = [
   {
@@ -46,6 +48,8 @@ const routes = [
       { path: 'skillsets/:skillsetId/skills', element: <SkillsetSkills /> },
       { path: 'skillsets/:skillsetId/history', element: <SkillsetHistory /> },
       { path: 'skillsets/:skillsetId/skills/:skillId/history', element: <SkillHistory /> },
+      { path: 'roles', element: <Roles /> },
+      { path: 'roles/:roleId/history', element: <RoleHistory /> },
       { path: 'documentation', element: <Documentation /> },
       { path: '*', element: <Navigate to="/404" /> }
     ]

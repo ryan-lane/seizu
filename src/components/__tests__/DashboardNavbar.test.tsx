@@ -1,7 +1,8 @@
-import { render, screen, fireEvent, cleanup } from '@testing-library/react';
+import { render, screen, fireEvent, cleanup, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { ThemeProvider, createTheme } from '@mui/material/styles';
 import { ConfigContext } from 'src/config.context';
+import { AuthConfigContext, type AuthConfig } from 'src/authConfig.context';
 import DashboardNavbar from '../DashboardNavbar';
 
 jest.mock('src/hooks/useCurrentUser', () => ({
@@ -16,21 +17,37 @@ const mockUseCurrentUser = useCurrentUser as jest.MockedFunction<typeof useCurre
 
 function Wrapper({
   contextValue,
+  authConfig,
   children
 }: {
   contextValue: any;
+  authConfig?: AuthConfig;
   children: React.ReactNode;
 }) {
   return (
     <MemoryRouter>
       <ThemeProvider theme={theme}>
-        <ConfigContext.Provider value={contextValue}>
-          {children}
-        </ConfigContext.Provider>
+        <AuthConfigContext.Provider value={authConfig ?? { auth_required: false, oidc: null, userManager: null }}>
+          <ConfigContext.Provider value={contextValue}>
+            {children}
+          </ConfigContext.Provider>
+        </AuthConfigContext.Provider>
       </ThemeProvider>
     </MemoryRouter>
   );
 }
+
+const CURRENT_USER = {
+  user_id: 'uid1',
+  sub: 'sub123',
+  iss: 'https://idp.example.com',
+  email: 'alice@example.com',
+  display_name: 'Alice Smith',
+  created_at: '2024-01-01T00:00:00+00:00',
+  last_login: '2024-01-01T00:00:00+00:00',
+  archived_at: null,
+  permissions: [],
+};
 
 describe('DashboardNavbar', () => {
   const defaultProps = {
@@ -88,17 +105,7 @@ describe('DashboardNavbar', () => {
   });
 
   it('renders email when user is authenticated', () => {
-    mockUseCurrentUser.mockReturnValue({
-      user_id: 'uid1',
-      sub: 'sub123',
-      iss: 'https://idp.example.com',
-      email: 'alice@example.com',
-      display_name: 'Alice Smith',
-      created_at: '2024-01-01T00:00:00+00:00',
-      last_login: '2024-01-01T00:00:00+00:00',
-      archived_at: null,
-      permissions: [],
-    });
+    mockUseCurrentUser.mockReturnValue(CURRENT_USER);
     render(
       <Wrapper contextValue={{}}>
         <DashboardNavbar {...defaultProps} />
@@ -148,23 +155,55 @@ describe('DashboardNavbar', () => {
   });
 
   it('renders avatar SVG when user is authenticated', () => {
-    mockUseCurrentUser.mockReturnValue({
-      user_id: 'uid1',
-      sub: 'sub123',
-      iss: 'https://idp.example.com',
-      email: 'alice@example.com',
-      display_name: 'Alice Smith',
-      created_at: '2024-01-01T00:00:00+00:00',
-      last_login: '2024-01-01T00:00:00+00:00',
-      archived_at: null,
-      permissions: [],
-    });
+    mockUseCurrentUser.mockReturnValue(CURRENT_USER);
     const { container } = render(
       <Wrapper contextValue={{}}>
         <DashboardNavbar {...defaultProps} />
       </Wrapper>
     );
     expect(container.querySelector('svg')).not.toBeNull();
+  });
+
+  it('opens the user menu from the avatar button', () => {
+    mockUseCurrentUser.mockReturnValue(CURRENT_USER);
+    render(
+      <Wrapper contextValue={{}}>
+        <DashboardNavbar {...defaultProps} />
+      </Wrapper>
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /user menu/i }));
+
+    expect(screen.getByRole('menu')).toBeInTheDocument();
+    expect(screen.getAllByText('alice@example.com').length).toBeGreaterThan(1);
+  });
+
+  it('calls OIDC signoutRedirect when Log out is clicked', async () => {
+    mockUseCurrentUser.mockReturnValue(CURRENT_USER);
+    const signoutRedirect = jest.fn().mockResolvedValue(undefined);
+    const removeUser = jest.fn().mockResolvedValue(undefined);
+    render(
+      <Wrapper
+        contextValue={{}}
+        authConfig={{
+          auth_required: true,
+          oidc: null,
+          userManager: { signoutRedirect, removeUser } as any,
+        }}
+      >
+        <DashboardNavbar {...defaultProps} />
+      </Wrapper>
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /user menu/i }));
+    fireEvent.click(screen.getByRole('menuitem', { name: /log out/i }));
+
+    await waitFor(() => {
+      expect(signoutRedirect).toHaveBeenCalledWith({
+        post_logout_redirect_uri: window.location.origin,
+      });
+    });
+    expect(removeUser).not.toHaveBeenCalled();
   });
 
   it('renders email when auth is disabled (no display_name)', () => {
