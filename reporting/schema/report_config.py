@@ -48,6 +48,7 @@ class ReportVersion(BaseModel):
     created_at: str
     created_by: str
     comment: str | None = None
+    query_capabilities: dict[str, str] | None = None
 
     @field_validator("version", mode="before")
     @classmethod

@@ -25,10 +25,12 @@ def test_editor_is_subset_of_admin():
     assert EDITOR_PERMISSIONS.issubset(ADMIN_PERMISSIONS)
 
 
-def test_viewer_can_read_and_execute():
+def test_viewer_can_read_but_not_execute_adhoc():
     assert Permission.REPORTS_READ in VIEWER_PERMISSIONS
-    assert Permission.QUERY_EXECUTE in VIEWER_PERMISSIONS
     assert Permission.TOOLS_CALL in VIEWER_PERMISSIONS
+    assert Permission.QUERY_EXECUTE not in VIEWER_PERMISSIONS
+    assert Permission.QUERY_VALIDATE not in VIEWER_PERMISSIONS
+    assert Permission.QUERY_HISTORY_READ not in VIEWER_PERMISSIONS
 
 
 def test_viewer_cannot_write():
@@ -41,6 +43,9 @@ def test_editor_can_write_reports():
     assert Permission.REPORTS_WRITE in EDITOR_PERMISSIONS
     assert Permission.REPORTS_DELETE in EDITOR_PERMISSIONS
     assert Permission.REPORTS_SET_DASHBOARD in EDITOR_PERMISSIONS
+    assert Permission.QUERY_EXECUTE in EDITOR_PERMISSIONS
+    assert Permission.QUERY_VALIDATE in EDITOR_PERMISSIONS
+    assert Permission.QUERY_HISTORY_READ in EDITOR_PERMISSIONS
 
 
 def test_editor_cannot_manage_toolsets_or_scheduled_queries():

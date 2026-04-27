@@ -46,6 +46,7 @@ interface CypherVerticalTableProps {
   id?: string;
   details?: Record<string, unknown>;
   needInputs?: string[];
+  reportQueryToken?: string;
 }
 
 export default function CypherVerticalTable({
@@ -53,14 +54,15 @@ export default function CypherVerticalTable({
   params,
   id,
   details,
-  needInputs
+  needInputs,
+  reportQueryToken
 }: CypherVerticalTableProps) {
   const [open, setOpen] = useState(false);
   const handleClickOpen = () => {
     setOpen(true);
   };
 
-  const [runQuery, { loading, error, records, warnings, queryErrors }] = useLazyCypherQuery(cypher);
+  const [runQuery, { loading, error, records, warnings, queryErrors }] = useLazyCypherQuery(cypher, reportQueryToken);
 
   useEffect(() => {
     if (needInputs === undefined || needInputs.length === 0) {

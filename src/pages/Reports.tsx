@@ -20,14 +20,16 @@ function Reports() {
   const [editMode, setEditMode] = useState(searchParams.get('edit') === 'true');
   const [displayedReport, setDisplayedReport] = useState<Report | undefined>(undefined);
   const [displayedName, setDisplayedName] = useState<string | undefined>(undefined);
+  const [displayedQueryCapabilities, setDisplayedQueryCapabilities] = useState<Record<string, string> | undefined>(undefined);
 
-  const { report, name, loading, error } = useReport(id);
+  const { report, name, queryCapabilities, loading, error } = useReport(id);
   const { saveReportVersion } = useReportsMutations();
 
   useEffect(() => {
     if (report) setDisplayedReport(report);
     if (name) setDisplayedName(name);
-  }, [report, name]);
+    setDisplayedQueryCapabilities(queryCapabilities);
+  }, [report, name, queryCapabilities]);
 
   // Sync edit param in URL
   useEffect(() => {
@@ -51,6 +53,7 @@ function Reports() {
     const version = await saveReportVersion(id, updatedReport, comment || undefined);
     setDisplayedReport(version.config);
     setDisplayedName(version.name);
+    setDisplayedQueryCapabilities(version.query_capabilities);
     setEditMode(false);
     // Navigate back to view mode (clears ?edit param)
     navigate(`/app/reports/${id}`, { replace: true });
@@ -108,7 +111,7 @@ function Reports() {
           </Button>
         )}
       </Box>
-      <ReportView report={displayedReport} title={displayedName} />
+      <ReportView report={displayedReport} title={displayedName} queryCapabilities={displayedQueryCapabilities} />
     </Box>
   );
 }

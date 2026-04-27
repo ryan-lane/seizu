@@ -248,7 +248,7 @@ describe('ReportView param building', () => {
       </Wrapper>
     );
 
-    expect(useLazyCypherQuery).toHaveBeenCalledWith('MATCH (c:CVE) RETURN count(c.id) AS total');
+    expect(useLazyCypherQuery).toHaveBeenCalledWith('MATCH (c:CVE) RETURN count(c.id) AS total', undefined);
   });
 
   it('passes direct Cypher string to panel when not found in report.queries', () => {
@@ -270,7 +270,7 @@ describe('ReportView param building', () => {
       </Wrapper>
     );
 
-    expect(useLazyCypherQuery).toHaveBeenCalledWith(directCypher);
+    expect(useLazyCypherQuery).toHaveBeenCalledWith(directCypher, undefined);
   });
 
   it('renders markdown panel content directly without a cypher query', () => {
@@ -314,6 +314,6 @@ describe('ReportView param building', () => {
       </Wrapper>
     );
 
-    expect(useLazyCypherQuery).toHaveBeenCalledWith(directCypher);
+    expect(useLazyCypherQuery).toHaveBeenCalledWith(directCypher, undefined);
   });
 });

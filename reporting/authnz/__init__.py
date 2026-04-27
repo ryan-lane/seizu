@@ -91,7 +91,7 @@ async def get_current_user(
         )
         return CurrentUser(
             user=user,
-            jwt_claims={"email": email, "display_name": None, "token_iat": None},
+            jwt_claims={"email": email, "display_name": None, "token_iat": None, "token_exp": None},
             permissions=ALL_PERMISSIONS,
         )
 
@@ -114,10 +114,13 @@ async def get_current_user(
 
     raw_iat = payload.get("iat")
     token_iat = datetime.fromtimestamp(raw_iat, tz=UTC) if raw_iat is not None else None
+    raw_exp = payload.get("exp")
+    token_exp = datetime.fromtimestamp(raw_exp, tz=UTC) if raw_exp is not None else None
     jwt_claims = {
         "email": payload[settings.JWT_EMAIL_CLAIM],
         "display_name": payload.get("name"),
         "token_iat": token_iat,
+        "token_exp": token_exp,
     }
 
     user = await report_store.get_or_create_user(

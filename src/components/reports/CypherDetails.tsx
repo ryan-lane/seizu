@@ -56,6 +56,8 @@ interface DetailsData {
   cypher?: string;
   details_cypher?: string;
   columns?: Array<{ name: string; label: string }>;
+  reportQueryToken?: string;
+  detailsQueryToken?: string;
   [key: string]: unknown;
 }
 
@@ -263,6 +265,7 @@ export default function CypherDetails({ details, open, setOpen }: CypherDetailsP
             params={details.params}
             columns={details.columns}
             height="450px"
+            reportQueryToken={details.detailsQueryToken}
           />
         </TabPanel>
         <TabPanel value={value} index={1}>

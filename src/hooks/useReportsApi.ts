@@ -21,6 +21,7 @@ export interface ReportVersion {
   created_at: string;
   created_by: string;
   comment: string | null;
+  query_capabilities?: Record<string, string>;
 }
 
 function getApiHeaders(accessToken: string | null): Record<string, string> {
@@ -122,12 +123,14 @@ export function useDashboardReportId(): {
 
 export function useDashboardReport(): {
   report: Report | undefined;
+  queryCapabilities: Record<string, string> | undefined;
   loading: boolean;
   notConfigured: boolean;
 } {
   const { accessToken } = useContext(AuthContext);
   const { auth_required } = useContext(AuthConfigContext);
   const [report, setReport] = useState<Report | undefined>(undefined);
+  const [queryCapabilities, setQueryCapabilities] = useState<Record<string, string> | undefined>(undefined);
   const [loading, setLoading] = useState(true);
   const [notConfigured, setNotConfigured] = useState(false);
 
@@ -136,6 +139,7 @@ export function useDashboardReport(): {
 
     setLoading(true);
     setReport(undefined);
+    setQueryCapabilities(undefined);
     setNotConfigured(false);
 
     fetch('/api/v1/reports/dashboard', { headers: getApiHeaders(accessToken) })
@@ -149,7 +153,10 @@ export function useDashboardReport(): {
         return res.json();
       })
       .then((data: ReportVersion | null) => {
-        if (data) setReport(data.config);
+        if (data) {
+          setReport(data.config);
+          setQueryCapabilities(data.query_capabilities);
+        }
         setLoading(false);
       })
       .catch(() => {
@@ -158,7 +165,7 @@ export function useDashboardReport(): {
       });
   }, [accessToken, auth_required]);
 
-  return { report, loading, notConfigured };
+  return { report, queryCapabilities, loading, notConfigured };
 }
 
 export function useAllReports(): {
@@ -368,6 +375,7 @@ export function useReportVersion(
 export function useReport(reportId: string | undefined): {
   report: Report | undefined;
   name: string | undefined;
+  queryCapabilities: Record<string, string> | undefined;
   loading: boolean;
   error: Error | null;
 } {
@@ -375,6 +383,7 @@ export function useReport(reportId: string | undefined): {
   const { auth_required } = useContext(AuthConfigContext);
   const [report, setReport] = useState<Report | undefined>(undefined);
   const [name, setName] = useState<string | undefined>(undefined);
+  const [queryCapabilities, setQueryCapabilities] = useState<Record<string, string> | undefined>(undefined);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
 
@@ -385,6 +394,7 @@ export function useReport(reportId: string | undefined): {
     setLoading(true);
     setReport(undefined);
     setName(undefined);
+    setQueryCapabilities(undefined);
     setError(null);
 
     fetch(`/api/v1/reports/${reportId}`, { headers: getApiHeaders(accessToken) })
@@ -395,6 +405,7 @@ export function useReport(reportId: string | undefined): {
       .then((data: ReportVersion) => {
         setReport(data.config);
         setName(data.name);
+        setQueryCapabilities(data.query_capabilities);
         setLoading(false);
       })
       .catch((err: Error) => {
@@ -403,5 +414,5 @@ export function useReport(reportId: string | undefined): {
       });
   }, [reportId, accessToken, auth_required]);
 
-  return { report, name, loading, error };
+  return { report, name, queryCapabilities, loading, error };
 }

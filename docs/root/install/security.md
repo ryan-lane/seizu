@@ -9,6 +9,8 @@ This page covers the recommended production posture for Seizu and the Neo4j hard
 - Require authentication for every Seizu request.
 - Validate JWT issuer and audience, and use a strong signing algorithm allowlist.
 - Assign the least-privileged Seizu role that supports each user's workflow.
+- Keep ad-hoc Cypher execution limited to trusted roles that explicitly need `query:execute`.
+- Prefer report views for read-only consumers; report queries are signed by the backend and are the safer default for shared dashboards.
 - Limit MCP built-ins to the groups users actually need.
 - Keep Neo4j reachable only from Seizu, workers, and trusted sync jobs.
 - Disable Neo4j network and local-file import paths unless you explicitly need them.
@@ -46,7 +48,7 @@ Use built-in roles conservatively:
 
 | Role | Use |
 |------|-----|
-| `seizu-viewer` | Read reports, run read-only ad-hoc queries, call allowed tools. |
+| `seizu-viewer` | Read reports and dashboard. No ad-hoc query console or query history access. |
 | `seizu-editor` | Viewer plus report authoring. |
 | `seizu-admin` | Editor plus toolsets, scheduled queries, roles, and administrative objects. |
 
@@ -60,6 +62,34 @@ RBAC_DEFAULT_ROLE=
 Setting `RBAC_DEFAULT_ROLE=` denies access when the token does not contain an explicit Seizu role. This is safer than silently assigning a default role to every authenticated user.
 
 Use user-defined roles for narrower access. For example, separate report authors from users who can manage scheduled queries or toolsets.
+If a user truly needs ad-hoc Cypher, grant `query:execute` only to a tightly scoped role and keep that role out of general viewer assignments.
+
+## Report Query Signing Secret
+
+`REPORT_QUERY_SIGNING_SECRET` signs the backend-issued capability tokens used by report panels.
+Treat it like any other application signing key:
+
+- Use a cryptographically random secret.
+- Use at least 32 bytes of entropy; 64 bytes is a better default.
+- Encode it as hex or base64, then store the encoded string in your secret manager or deployment env vars.
+- If you use hex, 32 bytes becomes 64 characters and 64 bytes becomes 128 characters.
+- If you use base64, 32 bytes is typically 44 characters with padding; longer secrets will be proportionally longer.
+- Generate a fresh value per deployment environment. Do not reuse the same secret across dev, staging, and production unless you have a deliberate reason to do so.
+- Keep it stable across restarts so existing report tokens remain valid until they expire.
+- Rotate it if the secret is exposed; rotation invalidates outstanding report tokens immediately.
+
+Example generation commands:
+
+```bash
+openssl rand -hex 32
+openssl rand -base64 48
+python - <<'PY'
+import secrets
+print(secrets.token_hex(32))
+PY
+```
+
+Prefer a longer secret if your secret storage format allows it. The exact encoding does not matter as long as the full random value is preserved without truncation or normalization.
 
 ## Query Execution
 
@@ -70,6 +100,11 @@ Seizu validates Cypher before execution:
 - The validator scans original, comment-stripped, and Cypher Unicode-decoded forms to catch common obfuscation.
 
 This validation is a guardrail, not the only control. Query-capable users can still read data they are allowed to query. Do not give Query Console or MCP graph-query permissions to users who should not have broad graph read access.
+With the current split between execution paths:
+
+- `POST /api/v1/query/adhoc` is for trusted ad-hoc exploration and always records query history.
+- `POST /api/v1/query/report` is for report panels and only accepts backend-signed tokens bound to the current user and report version.
+- Report tokens are short-lived capabilities. Treat them as authorization artifacts, not as values to expose or store outside the request flow.
 
 When writing reports, scheduled queries, and tools:
 
@@ -78,7 +113,8 @@ When writing reports, scheduled queries, and tools:
 - Avoid dynamic labels, relationship types, and property names unless the value comes from a strict allowlist.
 - Add explicit `LIMIT` values to exploratory queries.
 - Keep returned columns narrow; avoid returning entire nodes if a few fields are enough.
-- Treat error messages and query history as potentially sensitive.
+- Treat error messages, query history, and signed report-query tokens as sensitive.
+- Keep report panels on signed report execution; do not route them through the ad-hoc console path.
 
 ## MCP
 

@@ -15,7 +15,7 @@ interface QueryState {
 
 export function useLazyCypherQuery(
   cypher?: string,
-  saveHistory: boolean = false
+  reportToken?: string
 ): [(params?: Record<string, unknown>) => void, QueryState] {
   const { accessToken } = useContext(AuthContext);
   const { auth_required } = useContext(AuthConfigContext);
@@ -42,10 +42,15 @@ export function useLazyCypherQuery(
         headers['Authorization'] = `Bearer ${accessToken}`;
       }
 
-      fetch('/api/v1/query', {
+      const endpoint = reportToken ? '/api/v1/query/report' : '/api/v1/query/adhoc';
+      const body = reportToken
+        ? { token: reportToken, params }
+        : { query: cypher, params };
+
+      fetch(endpoint, {
         method: 'POST',
         headers,
-        body: JSON.stringify({ query: cypher, params, save_history: saveHistory })
+        body: JSON.stringify(body)
       })
         .then((res) => res.json())
         .then((data: { error?: string; errors?: string[]; warnings?: string[]; results?: QueryRecord[] }) => {
@@ -88,7 +93,7 @@ export function useLazyCypherQuery(
           setState({ loading: false, error: err, records: undefined, first: undefined, warnings: [], queryErrors: [] });
         });
     },
-    [cypher, saveHistory, accessToken, auth_required]
+    [cypher, reportToken, accessToken, auth_required]
   );
 
   return [run, state];

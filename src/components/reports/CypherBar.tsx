@@ -30,6 +30,7 @@ interface CypherBarProps {
   barSettings?: BarSettings;
   details?: Record<string, unknown>;
   needInputs?: string[];
+  reportQueryToken?: string;
 }
 
 export default function CypherBar({
@@ -38,13 +39,14 @@ export default function CypherBar({
   caption,
   barSettings,
   details,
-  needInputs
+  needInputs,
+  reportQueryToken
 }: CypherBarProps) {
   const theme = useTheme();
   const [open, setOpen] = useState(false);
 
   const [runQuery, { loading, error, records, first, warnings, queryErrors }] =
-    useLazyCypherQuery(cypher);
+    useLazyCypherQuery(cypher, reportQueryToken);
 
   useEffect(() => {
     if (needInputs === undefined || needInputs.length === 0) {

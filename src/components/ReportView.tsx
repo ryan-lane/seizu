@@ -29,6 +29,8 @@ import CypherTable from 'src/components/reports/CypherTable';
 import CypherVerticalTable from 'src/components/reports/CypherVerticalTable';
 import FreeTextInput from 'src/components/reports/FreeTextInput';
 
+const EMPTY_QUERY_CAPABILITIES: Record<string, string> = {};
+
 function MarkdownTable({ children }: { children?: React.ReactNode }) {
   return (
     <TableContainer component={Paper} variant="outlined" sx={{ my: 1 }}>
@@ -78,13 +80,15 @@ const markdownOverrides = {
 
 interface PanelItemProps {
   item: Panel;
+  rowIndex: number;
   index: number;
   varData: Record<string, { label?: string; value?: string }>;
   allInputs: ReportInput[];
   resolveQuery: (cypher: string | undefined) => string | undefined;
+  resolveCapability: (path: string) => string | undefined;
 }
 
-const PanelItem = memo(function PanelItem({ item, index, varData, allInputs, resolveQuery }: PanelItemProps) {
+const PanelItem = memo(function PanelItem({ item, rowIndex, index, varData, allInputs, resolveQuery, resolveCapability }: PanelItemProps) {
   const needInputs: string[] = [];
   const params: Record<string, string | undefined> = {};
   if (item.params !== undefined) {
@@ -120,82 +124,91 @@ const PanelItem = memo(function PanelItem({ item, index, varData, allInputs, res
     metric: item.metric,
     columns: item.columns,
     caption: item.caption,
-    params
+    params,
+    reportQueryToken: resolveCapability(`rows.${rowIndex}.panels.${index}.cypher`),
+    detailsQueryToken: resolveCapability(`rows.${rowIndex}.panels.${index}.details_cypher`)
   };
 
   let itemComponent;
   if (item.type === 'progress') {
     itemComponent = (
-      <CypherProgress
-        cypher={resolveQuery(item.cypher)}
-        params={params}
-        caption={item.caption}
-        threshold={item.threshold}
-        details={details}
-        needInputs={needInputs}
-      />
-    );
+        <CypherProgress
+          cypher={resolveQuery(item.cypher)}
+          params={params}
+          caption={item.caption}
+          threshold={item.threshold}
+          details={details}
+          needInputs={needInputs}
+          reportQueryToken={resolveCapability(`rows.${rowIndex}.panels.${index}.cypher`)}
+        />
+      );
   } else if (item.type === 'pie') {
     itemComponent = (
-      <CypherPie
-        cypher={resolveQuery(item.cypher)}
-        params={params}
-        caption={item.caption}
-        pieSettings={item.pie_settings}
-        details={details}
-      />
-    );
+        <CypherPie
+          cypher={resolveQuery(item.cypher)}
+          params={params}
+          caption={item.caption}
+          pieSettings={item.pie_settings}
+          details={details}
+          reportQueryToken={resolveCapability(`rows.${rowIndex}.panels.${index}.cypher`)}
+        />
+      );
   } else if (item.type === 'bar') {
     itemComponent = (
-      <CypherBar
-        cypher={resolveQuery(item.cypher)}
-        params={params}
-        caption={item.caption}
-        barSettings={item.bar_settings}
-        details={details}
-      />
-    );
+        <CypherBar
+          cypher={resolveQuery(item.cypher)}
+          params={params}
+          caption={item.caption}
+          barSettings={item.bar_settings}
+          details={details}
+          reportQueryToken={resolveCapability(`rows.${rowIndex}.panels.${index}.cypher`)}
+        />
+      );
   } else if (item.type === 'graph') {
     itemComponent = (
-      <CypherGraph
-        cypher={resolveQuery(item.cypher)}
-        params={params}
-        caption={item.caption}
-        graphSettings={item.graph_settings}
-        needInputs={needInputs}
-      />
-    );
+        <CypherGraph
+          cypher={resolveQuery(item.cypher)}
+          params={params}
+          caption={item.caption}
+          graphSettings={item.graph_settings}
+          needInputs={needInputs}
+          reportQueryToken={resolveCapability(`rows.${rowIndex}.panels.${index}.cypher`)}
+        />
+      );
   } else if (item.type === 'count') {
     itemComponent = (
-      <CypherCount
-        cypher={resolveQuery(item.cypher)}
-        params={params}
-        caption={item.caption}
-        details={details}
-        needInputs={needInputs}
-      />
-    );
+        <CypherCount
+          cypher={resolveQuery(item.cypher)}
+          params={params}
+          caption={item.caption}
+          details={details}
+          needInputs={needInputs}
+          reportQueryToken={resolveCapability(`rows.${rowIndex}.panels.${index}.cypher`)}
+        />
+      );
   } else if (item.type === 'table') {
     itemComponent = (
-      <CypherTable
-        cypher={resolveQuery(item.cypher)}
-        params={params}
-        columns={item.columns}
-        caption={item.caption}
-        details={details}
-        needInputs={needInputs}
-      />
-    );
+        <CypherTable
+          cypher={resolveQuery(item.cypher)}
+          params={params}
+          columns={item.columns}
+          caption={item.caption}
+          details={details}
+          needInputs={needInputs}
+          reportQueryToken={resolveCapability(`rows.${rowIndex}.panels.${index}.cypher`)}
+        />
+      );
   } else if (item.type === 'vertical-table') {
     itemComponent = (
-      <CypherVerticalTable
-        cypher={resolveQuery(item.cypher)}
-        params={params}
-        id={item.table_id}
-        details={details}
-        needInputs={needInputs}
-      />
-    );
+        <CypherVerticalTable
+          cypher={resolveQuery(item.cypher)}
+          params={params}
+          id={item.table_id}
+          details={details}
+          needInputs={needInputs}
+          reportQueryToken={resolveCapability(`rows.${rowIndex}.panels.${index}.cypher`)}
+        />
+      );
   } else if (item.type === 'markdown') {
     itemComponent = (
       <Box sx={{
@@ -226,13 +239,16 @@ const PanelItem = memo(function PanelItem({ item, index, varData, allInputs, res
   return (
     // We allow index in keys here because the config isn't reloaded, and as such elements
     // in the config will never change.
-    // eslint-disable-next-line react/no-array-index-key
-    <Grid key={index} size={{ lg: size, md: size, xl: size, xs: xsSize }}>
-      {itemComponent}
-    </Grid>
-  );
+      // eslint-disable-next-line react/no-array-index-key
+      <Grid key={index} size={{ lg: size, md: size, xl: size, xs: xsSize }}>
+        {itemComponent}
+      </Grid>
+    );
 }, function areEqual(prevProps, nextProps) {
   if (prevProps.resolveQuery !== nextProps.resolveQuery) return false;
+  if (prevProps.resolveCapability !== nextProps.resolveCapability) return false;
+  if (prevProps.rowIndex !== nextProps.rowIndex) return false;
+  if (prevProps.index !== nextProps.index) return false;
   if (prevProps.item !== nextProps.item) return false;
 
   // Only re-render if a varData value for an input this panel uses has changed
@@ -250,14 +266,17 @@ interface ReportViewProps {
   report: Report;
   title?: string;
   boxSx?: object;
+  queryCapabilities?: Record<string, string>;
 }
 
-function ReportView({ report, title, boxSx = { height: '100%', py: 3 } }: ReportViewProps) {
+function ReportView({ report, title, boxSx = { height: '100%', py: 3 }, queryCapabilities }: ReportViewProps) {
   const reportQueries = useMemo(() => report.queries ?? {}, [report]);
+  const capabilities = queryCapabilities ?? EMPTY_QUERY_CAPABILITIES;
   const resolveQuery = useCallback((cypher: string | undefined): string | undefined => {
     if (cypher === undefined) return undefined;
     return reportQueries[cypher] ?? cypher;
   }, [reportQueries]);
+  const resolveCapability = useCallback((path: string): string | undefined => capabilities[path], [capabilities]);
   const [varData, setVarData] = useState({});
 
   useEffect(() => {
@@ -280,7 +299,7 @@ function ReportView({ report, title, boxSx = { height: '100%', py: 3 } }: Report
 
   const head = [];
   if (report.inputs) {
-    report.inputs.forEach((input) => {
+    report.inputs.forEach((input, index) => {
       if (input === undefined) {
         head.push(
           <Grid
@@ -308,6 +327,7 @@ function ReportView({ report, title, boxSx = { height: '100%', py: 3 } }: Report
             labelName={input.label}
             value={varData}
             setValue={setVarData}
+            reportQueryToken={resolveCapability(`inputs.${index}.cypher`)}
           />
         );
       } else if (input.type === 'text') {
@@ -349,18 +369,20 @@ function ReportView({ report, title, boxSx = { height: '100%', py: 3 } }: Report
   }
 
   const rows = [];
-  report.rows.forEach((row) => {
+  report.rows.forEach((row, rowIndex) => {
     const items = row.panels.map((item, index) => (
       // We allow index in keys here because the config isn't reloaded, and as such elements
       // in the config will never change.
       // eslint-disable-next-line react/no-array-index-key
       <PanelItem
         key={index}
+        rowIndex={rowIndex}
         index={index}
         item={item}
         varData={varData}
         allInputs={report.inputs ?? []}
         resolveQuery={resolveQuery}
+        resolveCapability={resolveCapability}
       />
     ));
     rows.push(
