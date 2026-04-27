@@ -484,7 +484,7 @@ async def test_report_query_rejects_token_for_other_user(mocker):
         ret = await client.post("/api/v1/query/report", json={"token": token})
 
     assert ret.status_code == 403
-    assert "current user" in ret.json()["error"].lower()
+    assert ret.json()["error"] == "Forbidden"
 
 
 async def test_report_query_rejects_tampered_token(mocker):
@@ -507,4 +507,4 @@ async def test_report_query_rejects_tampered_token(mocker):
         ret = await client.post("/api/v1/query/report", json={"token": tampered})
 
     assert ret.status_code == 400
-    assert "signature" in ret.json()["error"].lower()
+    assert ret.json()["error"] == "Invalid report query token"

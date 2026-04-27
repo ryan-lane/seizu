@@ -125,8 +125,10 @@ async def query_report(
             params=body.params,
         )
     except PermissionError as exc:
-        return JSONResponse(content={"error": str(exc)}, status_code=403)
+        logger.warning("Rejected report query token", exc_info=exc)
+        return JSONResponse(content={"error": "Forbidden"}, status_code=403)
     except ValueError as exc:
-        return JSONResponse(content={"error": str(exc)}, status_code=400)
+        logger.warning("Rejected report query token", exc_info=exc)
+        return JSONResponse(content={"error": "Invalid report query token"}, status_code=400)
 
     return await _execute_query(query=query, params=params, current=current, save_history=False)
