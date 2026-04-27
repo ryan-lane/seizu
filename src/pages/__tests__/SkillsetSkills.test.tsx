@@ -34,6 +34,8 @@ describe('SkillsetSkills', () => {
   let useSkillsList: jest.Mock;
   let useSkillMutations: jest.Mock;
   let useToolCatalog: jest.Mock;
+  let mockCreateSkill: jest.Mock;
+  let mockUpdateSkill: jest.Mock;
   let mockRenderSkill: jest.Mock;
 
   afterAll(() => {
@@ -65,10 +67,12 @@ describe('SkillsetSkills', () => {
       refresh: jest.fn(),
     });
     useSkillMutations = jest.spyOn(skillsetsApiModule, 'useSkillMutations') as unknown as jest.Mock;
+    mockCreateSkill = jest.fn();
+    mockUpdateSkill = jest.fn();
     mockRenderSkill = jest.fn().mockResolvedValue({ text: 'Rendered output' });
     useSkillMutations.mockReturnValue({
-      createSkill: jest.fn(),
-      updateSkill: jest.fn(),
+      createSkill: mockCreateSkill,
+      updateSkill: mockUpdateSkill,
       deleteSkill: jest.fn(),
       renderSkill: mockRenderSkill,
     });
@@ -133,5 +137,71 @@ describe('SkillsetSkills', () => {
       count: 3,
     }));
     expect(await within(dialog).findByText('Rendered output')).toBeInTheDocument();
+  });
+
+  it('opens the new skill dialog with the markdown editor instead of a template textbox', () => {
+    render(<SkillsetSkills />, { wrapper: Wrapper });
+
+    fireEvent.click(screen.getByRole('button', { name: /new skill/i }));
+
+    const dialog = screen.getByRole('dialog', { name: 'New Skill' });
+    expect(within(dialog).getByRole('button', { name: /WYSIWYG editor/i })).toHaveAttribute('aria-pressed', 'true');
+    expect(within(dialog).getByRole('button', { name: 'Bold' })).toBeInTheDocument();
+    expect(within(dialog).queryByLabelText('Template')).not.toBeInTheDocument();
+  });
+
+  it('switches an edited skill template to raw markdown source', () => {
+    render(<SkillsetSkills />, { wrapper: Wrapper });
+
+    fireEvent.click(screen.getByRole('button', { name: /more actions/i }));
+    fireEvent.click(screen.getByRole('menuitem', { name: /edit/i }));
+
+    const dialog = screen.getByRole('dialog', { name: 'Edit Skill' });
+    fireEvent.click(within(dialog).getByRole('button', { name: /Markdown source/i }));
+
+    expect(within(dialog).getByLabelText('Template')).toHaveValue('Summarize {{incident_id}}');
+  });
+
+  it('saves the raw markdown template string for a new skill', async () => {
+    render(<SkillsetSkills />, { wrapper: Wrapper });
+
+    fireEvent.click(screen.getByRole('button', { name: /new skill/i }));
+    const dialog = screen.getByRole('dialog', { name: 'New Skill' });
+
+    fireEvent.change(within(dialog).getByLabelText(/^ID/), { target: { value: 'respond_to_incident' } });
+    fireEvent.change(within(dialog).getByLabelText(/^Name/), { target: { value: 'Respond to incident' } });
+    fireEvent.click(within(dialog).getByRole('button', { name: /Markdown source/i }));
+    fireEvent.change(within(dialog).getByLabelText('Template'), {
+      target: { value: '## Incident\n\nSummarize {{incident_id}}.' },
+    });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Add parameter' }));
+    fireEvent.change(within(dialog).getAllByLabelText(/^Name/)[1], { target: { value: 'incident_id' } });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Save' }));
+
+    await waitFor(() => expect(mockCreateSkill).toHaveBeenCalledWith(expect.objectContaining({
+      skill_id: 'respond_to_incident',
+      name: 'Respond to incident',
+      template: '## Incident\n\nSummarize {{incident_id}}.',
+      parameters: [expect.objectContaining({ name: 'incident_id', type: 'string' })],
+    })));
+    expect(mockUpdateSkill).not.toHaveBeenCalled();
+  });
+
+  it('blocks saving when a template placeholder is not declared as a parameter', () => {
+    render(<SkillsetSkills />, { wrapper: Wrapper });
+
+    fireEvent.click(screen.getByRole('button', { name: /new skill/i }));
+    const dialog = screen.getByRole('dialog', { name: 'New Skill' });
+
+    fireEvent.change(within(dialog).getByLabelText(/^ID/), { target: { value: 'bad_placeholder' } });
+    fireEvent.change(within(dialog).getByLabelText(/^Name/), { target: { value: 'Bad placeholder' } });
+    fireEvent.click(within(dialog).getByRole('button', { name: /Markdown source/i }));
+    fireEvent.change(within(dialog).getByLabelText('Template'), {
+      target: { value: 'Summarize {{missing_param}}' },
+    });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Save' }));
+
+    expect(within(dialog).getByText('Placeholder missing_param must match a declared parameter.')).toBeInTheDocument();
+    expect(mockCreateSkill).not.toHaveBeenCalled();
   });
 });

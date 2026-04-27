@@ -21,6 +21,7 @@ import {
   useSkillsList, useSkillMutations, SkillItem, CreateSkillRequest, UpdateSkillRequest
 } from 'src/hooks/useSkillsetsApi';
 import { ToolParamDef, useToolCatalog } from 'src/hooks/useToolsetsApi';
+import MarkdownEditor from 'src/components/MarkdownEditor';
 import UserDisplay from 'src/components/UserDisplay';
 import { usePermissions } from 'src/hooks/usePermissions';
 
@@ -140,7 +141,14 @@ function SkillDialog({ open, onClose, onSave, initial }: SkillDialogProps) {
           {!initial && <TextField label="ID" value={skillId} onChange={(e) => setSkillId(e.target.value)} fullWidth required helperText="lower_snake_case" />}
           <TextField label="Name" value={name} onChange={(e) => setName(e.target.value)} fullWidth required />
           <TextField label="Description" value={description} onChange={(e) => setDescription(e.target.value)} fullWidth multiline minRows={2} />
-          <TextField label="Template" value={template} onChange={(e) => setTemplate(e.target.value)} fullWidth required multiline minRows={6} inputProps={{ style: { fontFamily: 'monospace', fontSize: 13 } }} />
+          <Box>
+            <Typography variant="subtitle2" sx={{ mb: 1 }}>Template</Typography>
+            <MarkdownEditor
+              value={template}
+              onChange={(value) => setTemplate(value ?? '')}
+              sourceLabel="Template"
+            />
+          </Box>
           <Box>
             <Typography variant="subtitle2" sx={{ mb: 1 }}>Triggers</Typography>
             <Box sx={{ display: 'flex', gap: 1, mb: 1 }}>
@@ -166,7 +174,7 @@ function SkillDialog({ open, onClose, onSave, initial }: SkillDialogProps) {
           <Box>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
               <Typography variant="subtitle2">Parameters</Typography>
-              <IconButton size="small" onClick={addParam}><AddCircleOutlineIcon fontSize="small" /></IconButton>
+              <IconButton size="small" aria-label="Add parameter" onClick={addParam}><AddCircleOutlineIcon fontSize="small" /></IconButton>
             </Box>
             {params.map((p, i) => (
               <Box key={i} sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 1, p: 1.5, mb: 1.5, display: 'flex', flexDirection: 'column', gap: 1 }}>
@@ -183,7 +191,7 @@ function SkillDialog({ open, onClose, onSave, initial }: SkillDialogProps) {
                   </FormControl>
                   <TextField label="Default" value={p.default_str} onChange={(e) => updateParam(i, 'default_str', e.target.value)} size="small" sx={{ flex: 1 }} />
                   <FormControlLabel control={<Checkbox checked={p.required} onChange={(e) => updateParam(i, 'required', e.target.checked)} size="small" />} label="Required" sx={{ flexShrink: 0 }} />
-                  <IconButton size="small" onClick={() => removeParam(i)} sx={{ mt: 0.5, flexShrink: 0 }}><RemoveCircleOutlineIcon fontSize="small" /></IconButton>
+                  <IconButton size="small" aria-label="Remove parameter" onClick={() => removeParam(i)} sx={{ mt: 0.5, flexShrink: 0 }}><RemoveCircleOutlineIcon fontSize="small" /></IconButton>
                 </Box>
                 <TextField label="Description" value={p.description} onChange={(e) => updateParam(i, 'description', e.target.value)} size="small" fullWidth />
               </Box>
