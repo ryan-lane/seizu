@@ -23,6 +23,7 @@ interface CypherCountProps {
   threshold?: number;
   details?: Record<string, unknown>;
   needInputs?: string[];
+  reportQueryToken?: string;
 }
 
 export default function CypherCount({
@@ -31,7 +32,8 @@ export default function CypherCount({
   caption,
   threshold,
   details,
-  needInputs
+  needInputs,
+  reportQueryToken
 }: CypherCountProps) {
   const [open, setOpen] = useState(false);
   const handleClickOpen = () => {
@@ -39,7 +41,7 @@ export default function CypherCount({
   };
 
   const [runQuery, { loading, error, records, first, warnings, queryErrors }] =
-    useLazyCypherQuery(cypher);
+    useLazyCypherQuery(cypher, reportQueryToken);
 
   useEffect(() => {
     if (needInputs === undefined || needInputs.length === 0) {

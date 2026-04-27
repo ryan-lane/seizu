@@ -6,7 +6,11 @@ from pydantic import BaseModel
 class QueryRequest(BaseModel):
     query: str
     params: dict[str, Any] | None = None
-    save_history: bool = False
+
+
+class ReportQueryRequest(BaseModel):
+    token: str
+    params: dict[str, Any] | None = None
 
 
 class QueryResponse(BaseModel):

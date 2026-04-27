@@ -182,7 +182,11 @@ function ReportVersionView() {
       </Box>
 
       {/* Report content */}
-      <ReportView report={reportVersion.config as Report} title={reportVersion.name} />
+      <ReportView
+        report={reportVersion.config as Report}
+        title={reportVersion.name}
+        queryCapabilities={reportVersion.query_capabilities}
+      />
     </>
   );
 }

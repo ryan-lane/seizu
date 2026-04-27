@@ -26,6 +26,7 @@ interface CypherPieProps {
   pieSettings?: { legend?: string };
   details?: Record<string, unknown>;
   needInputs?: string[];
+  reportQueryToken?: string;
 }
 
 export default function CypherPie({
@@ -34,13 +35,14 @@ export default function CypherPie({
   caption,
   pieSettings,
   details,
-  needInputs
+  needInputs,
+  reportQueryToken
 }: CypherPieProps) {
   const theme = useTheme();
   const [open, setOpen] = useState(false);
 
   const [runQuery, { loading, error, records, first, warnings, queryErrors }] =
-    useLazyCypherQuery(cypher);
+    useLazyCypherQuery(cypher, reportQueryToken);
 
   useEffect(() => {
     if (needInputs === undefined || needInputs.length === 0) {

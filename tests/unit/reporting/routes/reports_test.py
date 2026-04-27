@@ -1,11 +1,15 @@
+from datetime import UTC, datetime, timedelta
 from unittest.mock import AsyncMock
 
 from httpx import ASGITransport, AsyncClient
 
+from reporting import settings
 from reporting.app import create_app
 from reporting.authnz import CurrentUser, get_current_user
 from reporting.authnz.permissions import ALL_PERMISSIONS
 from reporting.schema.report_config import ReportListItem, ReportVersion, User
+
+settings.REPORT_QUERY_SIGNING_SECRET = "test-secret"
 
 _FAKE_USER = User(
     user_id="test-user-id",
@@ -17,7 +21,11 @@ _FAKE_USER = User(
     last_login="2024-01-01T00:00:00+00:00",
 )
 
-_FAKE_CURRENT_USER = CurrentUser(user=_FAKE_USER, jwt_claims={}, permissions=ALL_PERMISSIONS)
+_FAKE_CURRENT_USER = CurrentUser(
+    user=_FAKE_USER,
+    jwt_claims={"token_exp": datetime.now(tz=UTC) + timedelta(minutes=10)},
+    permissions=ALL_PERMISSIONS,
+)
 
 
 def _make_app():
@@ -97,6 +105,19 @@ async def test_get_dashboard_report_success(mocker):
     assert ret.status_code == 200
     assert ret.json()["report_id"] == "rid1"
     assert ret.json()["version"] == 1
+    assert "query_capabilities" not in ret.json()
+
+
+async def test_get_dashboard_report_with_query_capabilities(mocker):
+    mocker.patch(
+        "reporting.routes.reports.report_store.get_dashboard_report",
+        new=AsyncMock(return_value=_report_version()),
+    )
+    app = _make_app()
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        ret = await client.get("/api/v1/reports/dashboard?include_query_capabilities=true")
+    assert ret.status_code == 200
+    assert ret.json()["query_capabilities"] == {}
 
 
 async def test_get_dashboard_report_not_configured(mocker):
@@ -156,7 +177,20 @@ async def test_get_report_success(mocker):
     assert ret.status_code == 200
     assert ret.json()["report_id"] == "rid1"
     assert ret.json()["version"] == 1
+    assert "query_capabilities" not in ret.json()
     assert ret.json()["config"] == {"rows": []}
+
+
+async def test_get_report_with_query_capabilities(mocker):
+    mocker.patch(
+        "reporting.routes.reports.report_store.get_report_latest",
+        new=AsyncMock(return_value=_report_version()),
+    )
+    app = _make_app()
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        ret = await client.get("/api/v1/reports/rid1?include_query_capabilities=true")
+    assert ret.status_code == 200
+    assert ret.json()["query_capabilities"] == {}
 
 
 async def test_get_report_not_found(mocker):
@@ -217,6 +251,19 @@ async def test_get_version_success(mocker):
         ret = await client.get("/api/v1/reports/rid1/versions/3")
     assert ret.status_code == 200
     assert ret.json()["version"] == 3
+    assert "query_capabilities" not in ret.json()
+
+
+async def test_get_version_with_query_capabilities(mocker):
+    mocker.patch(
+        "reporting.routes.reports.report_store.get_report_version",
+        new=AsyncMock(return_value=_report_version(version=3)),
+    )
+    app = _make_app()
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        ret = await client.get("/api/v1/reports/rid1/versions/3?include_query_capabilities=true")
+    assert ret.status_code == 200
+    assert ret.json()["query_capabilities"] == {}
 
 
 async def test_get_version_not_found(mocker):
@@ -248,6 +295,21 @@ async def test_create_report_success(mocker):
     assert ret.json()["report_id"] == "rid1"
     assert ret.json()["name"] == "My Report"
     assert ret.json()["current_version"] == 1
+
+
+async def test_create_version_with_query_capabilities(mocker):
+    mocker.patch(
+        "reporting.routes.reports.report_store.save_report_version",
+        new=AsyncMock(return_value=_report_version(version=2)),
+    )
+    app = _make_app()
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        ret = await client.post(
+            "/api/v1/reports/rid1/versions?include_query_capabilities=true",
+            json={"config": {"rows": []}},
+        )
+    assert ret.status_code == 201
+    assert ret.json()["query_capabilities"] == {}
 
 
 async def test_create_report_passes_fields_to_service(mocker):

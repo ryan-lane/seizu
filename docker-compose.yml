@@ -327,6 +327,8 @@ services:
       # In dev the project is bind-mounted here; the production image copies
       # the frontend build to /build via the Dockerfile nodebuilder stage.
       - STATIC_FOLDER=/home/seizu/seizu/build
+      # Cryptographically random secret used to sign report-query capability tokens.
+      - REPORT_QUERY_SIGNING_SECRET
     healthcheck:
       test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8080/healthcheck')"]
       interval: 30s
@@ -356,6 +358,9 @@ services:
       - .:/home/seizu/seizu
     ports:
       - 3000:3000
+    depends_on:
+      seizu:
+        condition: service_healthy
     networks:
       proxy:
     command: bun run start

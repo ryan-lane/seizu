@@ -96,6 +96,17 @@ NEO4J_PASSWORD = str_env("NEO4J_PASSWORD")
 # removed from its connection pool.
 NEO4J_MAX_CONNECTION_LIFETIME = int_env("NEO4J_MAX_CONNECTION_LIFETIME", 3600)
 
+# Shared secret used to sign report-query capability tokens.
+# Required in normal authenticated deployments. Use a cryptographically random
+# value with at least 32 bytes of entropy; 64 bytes is preferred. Encode as hex
+# or base64, store it in a secret manager or env var, and keep it stable across
+# restarts so report tokens remain valid until they expire. If you use hex,
+# 32 bytes = 64 characters and 64 bytes = 128 characters. If you use base64,
+# 32 bytes is typically 44 characters with padding. Rotate if exposed.
+# In development auth-disabled mode, Seizu can fall back to an in-process
+# default so local work still runs.
+REPORT_QUERY_SIGNING_SECRET = str_env("REPORT_QUERY_SIGNING_SECRET", "")
+
 # Whether or not scheduled queries should be enabled.
 ENABLE_SCHEDULED_QUERIES = bool_env("ENABLE_SCHEDULED_QUERIES", True)
 # The frequency in seconds for how often we'll attempt to run scheduled queries

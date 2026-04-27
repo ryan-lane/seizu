@@ -39,6 +39,7 @@ Report and dashboard configurations are stored in DynamoDB; use ``seizu seed`` t
 ### Report storage configuration
 
 * ``REPORT_STORE_BACKEND``: storage backend to use for report configurations. Supported values: ``dynamodb`` (default), ``sqlmodel``
+* ``REPORT_QUERY_SIGNING_SECRET``: cryptographically random secret used to sign report-query capability tokens. Use at least 32 bytes of entropy, 64 bytes preferred. Encode it as hex or base64, store it in a secret manager or deployment env var, and keep it stable across restarts so existing report tokens remain valid until they expire. If you use hex, 32 bytes becomes 64 characters and 64 bytes becomes 128 characters; if you use base64, 32 bytes is typically 44 characters with padding. Rotate it if exposed; rotation invalidates outstanding report tokens.
 
 ### DynamoDB configuration
 
@@ -92,7 +93,7 @@ Seizu uses Role-Based Access Control (RBAC) to restrict API and MCP access. Ever
 
 | Role | Capabilities |
 |------|-------------|
-| **seizu-viewer** | Read reports and dashboard, run ad-hoc queries, view query history, call tools via API and MCP, read toolsets/scheduled queries/roles |
+| **seizu-viewer** | Read reports and dashboard. No ad-hoc query console or query history access. |
 | **seizu-editor** | All Viewer capabilities + create/edit/delete reports, set default dashboard |
 | **seizu-admin** | All Editor capabilities + manage toolsets, tools, scheduled queries, and user-defined roles |
 
@@ -102,6 +103,8 @@ Seizu reads the user's role from a single JWT claim set by the OIDC provider. Co
 
 * ``RBAC_ROLE_CLAIM``: JWT claim name that holds the user's Seizu role; default: ``seizu_role``
 * ``RBAC_DEFAULT_ROLE``: Role assigned when the JWT has no ``RBAC_ROLE_CLAIM``. Set to ``""`` to deny access to users without an explicit role claim. Valid values: ``"seizu-viewer"``, ``"seizu-editor"``, ``"seizu-admin"``, or any user-defined role name; default: ``"seizu-viewer"``
+
+If a user needs ad-hoc Cypher access, create a narrow custom role that includes `query:execute` and assign it only to trusted operators. Keep general report consumers on `seizu-viewer` so they can use signed report panels without console access.
 
 **Authentik example** — create a Property Mapping with expression:
 

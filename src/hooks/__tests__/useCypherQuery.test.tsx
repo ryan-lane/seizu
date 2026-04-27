@@ -62,7 +62,7 @@ describe('useLazyCypherQuery', () => {
       run();
     });
     expect(global.fetch).toHaveBeenCalledWith(
-      '/api/v1/query',
+      '/api/v1/query/adhoc',
       expect.objectContaining({
         headers: expect.objectContaining({ Authorization: 'Bearer mytoken' })
       })
@@ -127,19 +127,7 @@ describe('useLazyCypherQuery', () => {
     expect(global.fetch).toHaveBeenCalledTimes(1);
   });
 
-  it('sends save_history: true when saveHistory=true', () => {
-    const { result } = renderHook(() => useLazyCypherQuery(CYPHER, true), {
-      wrapper: makeWrapper(false, null)
-    });
-    const [run] = result.current;
-    act(() => {
-      run();
-    });
-    const body = JSON.parse((global.fetch as jest.Mock).mock.calls[0][1].body);
-    expect(body.save_history).toBe(true);
-  });
-
-  it('sends save_history: false by default', () => {
+  it('omits save_history for ad hoc queries', () => {
     const { result } = renderHook(() => useLazyCypherQuery(CYPHER), {
       wrapper: makeWrapper(false, null)
     });
@@ -148,6 +136,22 @@ describe('useLazyCypherQuery', () => {
       run();
     });
     const body = JSON.parse((global.fetch as jest.Mock).mock.calls[0][1].body);
-    expect(body.save_history).toBe(false);
+    expect(body.save_history).toBeUndefined();
+  });
+
+  it('uses the signed report endpoint when a report token is provided', () => {
+    const { result } = renderHook(() => useLazyCypherQuery(CYPHER, 'signed-token'), {
+      wrapper: makeWrapper(false, null)
+    });
+    const [run] = result.current;
+    act(() => {
+      run({ base_severity: 'HIGH' });
+    });
+    expect(global.fetch).toHaveBeenCalledWith(
+      '/api/v1/query/report',
+      expect.objectContaining({
+        body: JSON.stringify({ token: 'signed-token', params: { base_severity: 'HIGH' } })
+      })
+    );
   });
 });

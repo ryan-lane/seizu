@@ -92,6 +92,7 @@ interface CypherTableProps {
   needInputs?: string[];
   details?: Record<string, unknown>;
   height?: string;
+  reportQueryToken?: string;
 }
 
 export default function CypherTable({
@@ -101,13 +102,14 @@ export default function CypherTable({
   caption,
   needInputs,
   details,
-  height
+  height,
+  reportQueryToken
 }: CypherTableProps) {
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [expandOpen, setExpandOpen] = useState(false);
   const [expandSize, setExpandSize] = useState(window.innerHeight);
   const [runQuery, { loading, error, records, first, warnings, queryErrors }] =
-    useLazyCypherQuery(cypher);
+    useLazyCypherQuery(cypher, reportQueryToken);
 
   useEffect(() => {
     function handleResize() {

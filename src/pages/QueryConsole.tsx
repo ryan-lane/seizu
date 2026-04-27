@@ -10,8 +10,10 @@ import {
 import PlayArrow from '@mui/icons-material/PlayArrow';
 import CypherGraph from 'src/components/reports/CypherGraph';
 import QueryConsoleSchemaPanel from 'src/components/QueryConsoleSchemaPanel';
+import { usePermissions } from 'src/hooks/usePermissions';
 
 export default function QueryConsole() {
+  const hasPermission = usePermissions();
   const [queryText, setQueryText] = useState('');
   const [submittedQuery, setSubmittedQuery] = useState<string | undefined>(
     undefined
@@ -46,6 +48,14 @@ export default function QueryConsole() {
     setQueryText(query);
   };
 
+  if (!hasPermission('query:execute')) {
+    return (
+      <Box sx={{ p: 3 }}>
+        <Typography>You do not have access to the query console.</Typography>
+      </Box>
+    );
+  }
+
   return (
     <Box
       sx={{ display: 'flex', height: 'calc(100vh - 64px)', overflow: 'hidden' }}
@@ -78,7 +88,6 @@ export default function QueryConsole() {
             <CypherGraph
               cypher={submittedQuery}
               defaultDetailOpen
-              saveHistory
               onQueryComplete={handleQueryComplete}
             />
           ) : (

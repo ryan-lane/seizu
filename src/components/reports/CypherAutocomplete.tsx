@@ -16,6 +16,7 @@ interface CypherAutocompleteProps {
   labelName?: string;
   value?: Record<string, AutocompleteOption | undefined>;
   setValue?: (val: Record<string, AutocompleteOption | undefined>) => void;
+  reportQueryToken?: string;
 }
 
 export default function CypherAutocomplete({
@@ -25,9 +26,10 @@ export default function CypherAutocomplete({
   inputDefault,
   labelName,
   value,
-  setValue
+  setValue,
+  reportQueryToken
 }: CypherAutocompleteProps) {
-  const [run, { loading, error, records }] = useLazyCypherQuery(cypher);
+  const [run, { loading, error, records }] = useLazyCypherQuery(cypher, reportQueryToken);
 
   useEffect(() => {
     run(params);

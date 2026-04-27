@@ -4,7 +4,7 @@ import ReportView from 'src/components/ReportView';
 import { useDashboardReport } from 'src/hooks/useReportsApi';
 
 function Dashboard() {
-  const { report, loading } = useDashboardReport();
+  const { report, queryCapabilities, loading } = useDashboardReport();
 
   if (loading) {
     return (
@@ -26,6 +26,7 @@ function Dashboard() {
     <ReportView
       report={report}
       title="Dashboard"
+      queryCapabilities={queryCapabilities}
       boxSx={{ backgroundColor: 'background.default', minHeight: '100%', py: 3 }}
     />
   );

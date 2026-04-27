@@ -155,10 +155,9 @@ interface CypherGraphProps {
   caption?: string;
   graphSettings?: GraphSettings;
   needInputs?: string[];
+  reportQueryToken?: string;
   /** Whether the details panel starts open. Default false (collapsed). */
   defaultDetailOpen?: boolean;
-  /** Whether to record this query in the user's console history. Default false. */
-  saveHistory?: boolean;
   /** Called after a query completes successfully (results received). */
   onQueryComplete?: () => void;
 }
@@ -363,14 +362,14 @@ export default function CypherGraph({
   caption,
   graphSettings,
   needInputs,
+  reportQueryToken,
   defaultDetailOpen = false,
-  saveHistory = false,
   onQueryComplete,
 }: CypherGraphProps) {
   const theme = useTheme();
 
   const [runQuery, { loading, error, records, warnings, queryErrors }] =
-    useLazyCypherQuery(cypher, saveHistory);
+    useLazyCypherQuery(cypher, reportQueryToken);
 
   // Call onQueryComplete once after each successful query (loading → false with records).
   const prevLoadingRef = useRef(false);
@@ -599,7 +598,13 @@ export default function CypherGraph({
       <QueryValidationBadge errors={queryErrors} warnings={warnings} />
       {/* ── Table tab ───────────────────────────────────────────────── */}
       {activeTab === 'table' && (
-        <CypherTable cypher={cypher} params={params} needInputs={needInputs} height="400px" />
+        <CypherTable
+          cypher={cypher}
+          params={params}
+          needInputs={needInputs}
+          height="400px"
+          reportQueryToken={reportQueryToken}
+        />
       )}
 
       {/* ── Raw tab ─────────────────────────────────────────────────── */}

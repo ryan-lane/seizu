@@ -1,3 +1,4 @@
+from datetime import UTC, datetime, timedelta
 from unittest.mock import AsyncMock, MagicMock
 
 from httpx import ASGITransport, AsyncClient
@@ -7,6 +8,7 @@ from reporting.authnz import CurrentUser, get_current_user
 from reporting.authnz.permissions import ALL_PERMISSIONS
 from reporting.schema.report_config import User
 from reporting.services.query_validator import ValidationResult
+from reporting.services.report_query_tokens import issue_report_query_token
 
 _FAKE_USER = User(
     user_id="test-user-id",
@@ -18,6 +20,37 @@ _FAKE_USER = User(
 )
 
 _FAKE_CURRENT_USER = CurrentUser(user=_FAKE_USER, jwt_claims={}, permissions=ALL_PERMISSIONS)
+
+
+def _report_current_user():
+    return CurrentUser(
+        user=_FAKE_USER,
+        jwt_claims={"token_exp": datetime.now(tz=UTC) + timedelta(minutes=10)},
+        permissions=ALL_PERMISSIONS,
+    )
+
+
+def _issue_report_token(
+    mocker,
+    *,
+    current_user: CurrentUser,
+    report_id: str,
+    report_version: int,
+    path: str,
+    query: str,
+    allowed_param_names: list[str],
+    static_params: dict[str, object],
+) -> str:
+    mocker.patch("reporting.settings.REPORT_QUERY_SIGNING_SECRET", "test-secret")
+    return issue_report_query_token(
+        current_user=current_user,
+        report_id=report_id,
+        report_version=report_version,
+        path=path,
+        query=query,
+        allowed_param_names=allowed_param_names,
+        static_params=static_params,
+    )
 
 
 def _mock_validate(mocker, errors=None, warnings=None):
@@ -50,7 +83,7 @@ async def test_query_success(mocker):
     app = _make_app()
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         ret = await client.post(
-            "/api/v1/query",
+            "/api/v1/query/adhoc",
             json={"query": "MATCH (n) RETURN n.name AS name, count(n) AS count"},
         )
     assert ret.status_code == 200
@@ -71,7 +104,7 @@ async def test_query_success_with_warnings(mocker):
     app = _make_app()
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         ret = await client.post(
-            "/api/v1/query",
+            "/api/v1/query/adhoc",
             json={"query": "MATCH (n:Foo) RETURN n.name AS name"},
         )
     assert ret.status_code == 200
@@ -92,7 +125,7 @@ async def test_query_with_params(mocker):
     app = _make_app()
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         ret = await client.post(
-            "/api/v1/query",
+            "/api/v1/query/adhoc",
             json={
                 "query": "MATCH (n) WHERE n.name = $name RETURN n.name AS name",
                 "params": {"name": "Alice"},
@@ -121,7 +154,7 @@ async def test_query_passes_params_to_validator(mocker):
     app = _make_app()
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         await client.post(
-            "/api/v1/query",
+            "/api/v1/query/adhoc",
             json={
                 "query": "MATCH (n) WHERE n.name = $name RETURN n.name AS name",
                 "params": {"name": "Alice"},
@@ -138,7 +171,7 @@ async def test_query_no_json_body(mocker):
     app = _make_app()
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         ret = await client.post(
-            "/api/v1/query",
+            "/api/v1/query/adhoc",
             content=b"not json",
             headers={"Content-Type": "text/plain"},
         )
@@ -150,7 +183,7 @@ async def test_query_missing_query_field(mocker):
     app = _make_app()
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         ret = await client.post(
-            "/api/v1/query",
+            "/api/v1/query/adhoc",
             json={"params": {"name": "Alice"}},
         )
     assert ret.status_code == 422
@@ -162,7 +195,7 @@ async def test_query_validation_errors_return_400_with_errors_and_warnings(mocke
     app = _make_app()
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         ret = await client.post(
-            "/api/v1/query",
+            "/api/v1/query/adhoc",
             json={"query": "CREATE (n) RETURN n"},
         )
     assert ret.status_code == 400
@@ -179,7 +212,7 @@ async def test_query_validation_errors_do_not_execute_query(mocker):
 
     app = _make_app()
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
-        await client.post("/api/v1/query", json={"query": "CREATE (n) RETURN n"})
+        await client.post("/api/v1/query/adhoc", json={"query": "CREATE (n) RETURN n"})
 
     mock_run.assert_not_called()
 
@@ -194,7 +227,7 @@ async def test_query_execution_failure(mocker):
     app = _make_app()
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         ret = await client.post(
-            "/api/v1/query",
+            "/api/v1/query/adhoc",
             json={"query": "MATCH (n) RETURN n"},
         )
     assert ret.status_code == 500
@@ -222,7 +255,7 @@ async def test_query_serialize_node(mocker):
     app = _make_app()
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         ret = await client.post(
-            "/api/v1/query",
+            "/api/v1/query/adhoc",
             json={"query": "MATCH (n:Person) RETURN n LIMIT 1"},
         )
     assert ret.status_code == 200
@@ -260,7 +293,7 @@ async def test_query_serialize_relationship(mocker):
     app = _make_app()
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         ret = await client.post(
-            "/api/v1/query",
+            "/api/v1/query/adhoc",
             json={"query": "MATCH ()-[r:KNOWS]->() RETURN r LIMIT 1"},
         )
     assert ret.status_code == 200
@@ -309,7 +342,7 @@ async def test_query_serialize_path(mocker):
     app = _make_app()
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         ret = await client.post(
-            "/api/v1/query",
+            "/api/v1/query/adhoc",
             json={"query": "MATCH p=shortestPath((a)-[*]-(b)) RETURN p LIMIT 1"},
         )
     assert ret.status_code == 200
@@ -319,8 +352,8 @@ async def test_query_serialize_path(mocker):
     assert result["nodes"][0]["properties"]["name"] == "Alice"
 
 
-async def test_query_save_history_when_flag_set(mocker):
-    """History is saved only when save_history=True is included in the request."""
+async def test_query_saves_history_for_adhoc_requests(mocker):
+    """Ad hoc queries always save history."""
     _mock_validate(mocker)
     mock_record = MagicMock()
     mock_record.items.return_value = [("n", 1)]
@@ -336,8 +369,8 @@ async def test_query_save_history_when_flag_set(mocker):
     app = _make_app()
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         await client.post(
-            "/api/v1/query",
-            json={"query": "MATCH (n) RETURN n LIMIT 1", "save_history": True},
+            "/api/v1/query/adhoc",
+            json={"query": "MATCH (n) RETURN n LIMIT 1"},
         )
 
     mock_save.assert_awaited_once_with(
@@ -346,8 +379,8 @@ async def test_query_save_history_when_flag_set(mocker):
     )
 
 
-async def test_query_does_not_save_history_by_default(mocker):
-    """History is NOT saved when save_history is omitted (report panels)."""
+async def test_report_query_does_not_save_history(mocker):
+    """Report queries do not write console history."""
     _mock_validate(mocker)
     mock_record = MagicMock()
     mock_record.items.return_value = [("n", 1)]
@@ -360,11 +393,120 @@ async def test_query_does_not_save_history_by_default(mocker):
         new=AsyncMock(),
     )
 
-    app = _make_app()
+    current_user = _report_current_user()
+    report_token = _issue_report_token(
+        mocker,
+        current_user=current_user,
+        report_id="rid1",
+        report_version=2,
+        path="rows.0.panels.0.cypher",
+        query="MATCH (n) RETURN n LIMIT 1",
+        allowed_param_names=[],
+        static_params={},
+    )
+
+    app = create_app()
+    app.dependency_overrides[get_current_user] = lambda: current_user
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         await client.post(
-            "/api/v1/query",
-            json={"query": "MATCH (n) RETURN n LIMIT 1"},
+            "/api/v1/query/report",
+            json={"token": report_token},
         )
 
     mock_save.assert_not_called()
+
+
+async def test_report_query_success(mocker):
+    _mock_validate(mocker)
+    mock_record = MagicMock()
+    mock_record.items.return_value = [("name", "Alice")]
+    mock_run_query = mocker.patch(
+        "reporting.routes.query.reporting_neo4j.run_query",
+        new=AsyncMock(return_value=[mock_record]),
+    )
+
+    current_user = _report_current_user()
+    report_token = _issue_report_token(
+        mocker,
+        current_user=current_user,
+        report_id="rid1",
+        report_version=2,
+        path="rows.0.panels.0.cypher",
+        query="MATCH (n) RETURN n.name AS name",
+        allowed_param_names=["severity", "limit"],
+        static_params={"limit": 10},
+    )
+
+    app = create_app()
+    app.dependency_overrides[get_current_user] = lambda: current_user
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        ret = await client.post(
+            "/api/v1/query/report",
+            json={"token": report_token, "params": {"severity": "HIGH", "limit": 10}},
+        )
+
+    assert ret.status_code == 200
+    assert ret.json()["results"] == [{"name": "Alice"}]
+    mock_run_query.assert_called_once_with(
+        "MATCH (n) RETURN n.name AS name",
+        parameters={"limit": 10, "severity": "HIGH"},
+    )
+
+
+async def test_report_query_rejects_token_for_other_user(mocker):
+    _mock_validate(mocker)
+    other_user = CurrentUser(
+        user=User(
+            user_id="other-user",
+            sub="other",
+            iss="https://idp.example.com",
+            email="other@example.com",
+            created_at="2024-01-01T00:00:00+00:00",
+            last_login="2024-01-01T00:00:00+00:00",
+        ),
+        jwt_claims={"token_exp": datetime.now(tz=UTC) + timedelta(minutes=10)},
+        permissions=ALL_PERMISSIONS,
+    )
+    token = _issue_report_token(
+        mocker,
+        current_user=_report_current_user(),
+        report_id="rid1",
+        report_version=1,
+        path="rows.0.panels.0.cypher",
+        query="MATCH (n) RETURN n",
+        allowed_param_names=[],
+        static_params={},
+    )
+
+    app = create_app()
+    app.dependency_overrides[get_current_user] = lambda: other_user
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        ret = await client.post("/api/v1/query/report", json={"token": token})
+
+    assert ret.status_code == 403
+    assert ret.json()["error"] == "Forbidden"
+
+
+async def test_report_query_rejects_tampered_token(mocker):
+    _mock_validate(mocker)
+    token = _issue_report_token(
+        mocker,
+        current_user=_report_current_user(),
+        report_id="rid1",
+        report_version=1,
+        path="rows.0.panels.0.cypher",
+        query="MATCH (n) RETURN n",
+        allowed_param_names=[],
+        static_params={},
+    )
+    encoded_payload, encoded_sig = token.split(".", 1)
+    tampered_payload = ("A" if encoded_payload[0] != "A" else "B") + encoded_payload[1:]
+    tampered = f"{tampered_payload}.{encoded_sig}"
+
+    app = create_app()
+    app.dependency_overrides[get_current_user] = lambda: _report_current_user()
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        ret = await client.post("/api/v1/query/report", json={"token": tampered})
+
+    assert ret.status_code == 400
+    assert ret.json()["error"] == "Invalid report query token"

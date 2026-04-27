@@ -11,6 +11,7 @@ import NavItem from 'src/components/NavItem';
 import Hidden from 'src/components/Hidden';
 import { NavItemData } from 'src/components/NavItem';
 import { useReportsList } from 'src/hooks/useReportsApi';
+import { usePermissions } from 'src/hooks/usePermissions';
 
 interface DashboardSidebarProps {
   onMobileClose?: () => void;
@@ -19,6 +20,7 @@ interface DashboardSidebarProps {
 
 function DashboardSidebar({ onMobileClose = () => {}, openMobile = false }: DashboardSidebarProps) {
   const { reports } = useReportsList();
+  const hasPermission = usePermissions();
   const reportSubitems: NavItemData[] = reports
     .filter((report) => report.pinned)
     .map((report) => ({
@@ -39,11 +41,13 @@ function DashboardSidebar({ onMobileClose = () => {}, openMobile = false }: Dash
       title: 'Reports',
       subItems: reportSubitems.length > 0 ? reportSubitems : undefined
     },
-    {
-      href: '/app/query-console',
-      icon: Terminal,
-      title: 'Query Console'
-    },
+    ...(hasPermission('query:execute')
+      ? [{
+          href: '/app/query-console',
+          icon: Terminal,
+          title: 'Query Console'
+        }]
+      : []),
     {
       href: '/app/scheduled-queries',
       icon: Schedule,

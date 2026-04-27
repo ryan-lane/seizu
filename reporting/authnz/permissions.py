@@ -64,9 +64,6 @@ class Permission(StrEnum):
 VIEWER_PERMISSIONS: frozenset[Permission] = frozenset(
     {
         Permission.REPORTS_READ,
-        Permission.QUERY_EXECUTE,
-        Permission.QUERY_VALIDATE,
-        Permission.QUERY_HISTORY_READ,
         Permission.TOOLSETS_READ,
         Permission.TOOLS_READ,
         Permission.TOOLS_CALL,
@@ -85,6 +82,9 @@ EDITOR_PERMISSIONS: frozenset[Permission] = frozenset(
         Permission.REPORTS_WRITE,
         Permission.REPORTS_DELETE,
         Permission.REPORTS_SET_DASHBOARD,
+        Permission.QUERY_EXECUTE,
+        Permission.QUERY_VALIDATE,
+        Permission.QUERY_HISTORY_READ,
     }
 )
 

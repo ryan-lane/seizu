@@ -7,6 +7,15 @@ from reporting.schema.reporting_config import ScheduledQueryWatchScan
 from reporting.services import reporting_neo4j
 
 
+@pytest.fixture(autouse=True)
+def _clear_client_cache():
+    reporting_neo4j._ASYNC_CLIENT_CACHE = None
+    reporting_neo4j._SYNC_CLIENT_CACHE = None
+    yield
+    reporting_neo4j._ASYNC_CLIENT_CACHE = None
+    reporting_neo4j._SYNC_CLIENT_CACHE = None
+
+
 def test__get_neo4j_client(mocker):
     db_mock = mocker.MagicMock
     mocker.patch(

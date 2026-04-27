@@ -1,7 +1,9 @@
 # Query Console
 
 The Query Console is an interactive Cypher editor accessible from the sidebar at `/app/query-console`.
-It is designed for ad-hoc exploration of the Neo4j graph without requiring a saved report.
+It is designed for ad-hoc exploration of the Neo4j graph without requiring a saved report, and should be treated as a trusted-operator feature rather than a general viewer capability.
+
+Only users with `query:execute` should have access to the console. For read-only consumers, prefer report panels with backend-signed report-query tokens.
 
 ## Layout
 
@@ -35,7 +37,7 @@ Node labels are colour-coded using the same palette as the graph panel, so colou
 
 ### Query History
 
-The history tab shows the last 500 queries you have run from the Query Console (report panel queries are not recorded). Queries are shown newest first, 20 per page. Hovering over a row shows the full query in a tooltip.
+The history tab shows the last 500 ad-hoc queries you have run from the Query Console. Queries are shown newest first, 20 per page. Hovering over a row shows the full query in a tooltip.
 
 Clicking a history item **loads the query into the editor without running it**, so you can review or edit it before executing.
 
