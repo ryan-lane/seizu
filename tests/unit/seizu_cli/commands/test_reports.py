@@ -47,6 +47,7 @@ def _report_detail(
         "created_by": created_by,
         "created_at": created_at,
         "comment": comment,
+        "query_capabilities": {"rows.0.panels.0.cypher": "signed-token"},
     }
 
 
@@ -103,6 +104,7 @@ def test_get_report_json(mock_client: MagicMock) -> None:
     result = runner.invoke(app, ["get", "r1", "--output", "json"])
     assert result.exit_code == 0
     assert '"report_id"' in result.output
+    assert "query_capabilities" not in result.output
 
 
 def test_get_report_shows_comment(mock_client: MagicMock) -> None:
@@ -242,6 +244,7 @@ def test_get_version_json(mock_client: MagicMock) -> None:
     result = runner.invoke(app, ["version-get", "r1", "2", "--output", "json"])
     assert result.exit_code == 0
     assert '"report_id"' in result.output
+    assert "query_capabilities" not in result.output
 
 
 def test_get_version_api_error(mock_client: MagicMock) -> None:

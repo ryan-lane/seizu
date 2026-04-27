@@ -26,7 +26,9 @@ def _die(exc: Exception) -> None:
 
 def _print_report_detail(data: dict[str, Any], as_json: bool) -> None:
     if as_json:
-        console.print_json(json.dumps(data))
+        sanitized = dict(data)
+        sanitized.pop("query_capabilities", None)
+        console.print_json(json.dumps(sanitized))
         return
     console.print(f"[bold]ID[/bold]: {data['report_id']}")
     console.print(f"[bold]Name[/bold]: {data['name']}")
