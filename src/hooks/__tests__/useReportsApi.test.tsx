@@ -156,7 +156,7 @@ describe('useReportVersion', () => {
     expect(result.current.reportVersion).toEqual(VERSIONS[0]);
     expect(result.current.error).toBeNull();
     expect(mockFetch).toHaveBeenCalledWith(
-      '/api/v1/reports/r1/versions/1',
+      '/api/v1/reports/r1/versions/1?include_query_capabilities=true',
       expect.any(Object)
     );
   });
@@ -197,7 +197,7 @@ describe('useReportVersion', () => {
 
     await waitFor(() => expect(mockFetch).toHaveBeenCalled());
     expect(mockFetch).toHaveBeenCalledWith(
-      '/api/v1/reports/r1/versions/2',
+      '/api/v1/reports/r1/versions/2?include_query_capabilities=true',
       expect.objectContaining({
         headers: expect.objectContaining({ Authorization: 'Bearer mytoken' })
       })

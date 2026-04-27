@@ -105,6 +105,7 @@ With the current split between execution paths:
 - `POST /api/v1/query/adhoc` is for trusted ad-hoc exploration and always records query history.
 - `POST /api/v1/query/report` is for report panels and only accepts backend-signed tokens bound to the current user and report version.
 - Report tokens are short-lived capabilities. Treat them as authorization artifacts, not as values to expose or store outside the request flow.
+- Report API responses do not include `query_capabilities` unless the caller explicitly opts in with `include_query_capabilities=true`.
 
 When writing reports, scheduled queries, and tools:
 

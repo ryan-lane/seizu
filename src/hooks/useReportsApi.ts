@@ -24,6 +24,8 @@ export interface ReportVersion {
   query_capabilities?: Record<string, string>;
 }
 
+const REPORT_QUERY_CAPABILITIES_QUERY = '?include_query_capabilities=true';
+
 function getApiHeaders(accessToken: string | null): Record<string, string> {
   const headers: Record<string, string> = {};
   if (accessToken) {
@@ -142,7 +144,9 @@ export function useDashboardReport(): {
     setQueryCapabilities(undefined);
     setNotConfigured(false);
 
-    fetch('/api/v1/reports/dashboard', { headers: getApiHeaders(accessToken) })
+    fetch(`/api/v1/reports/dashboard${REPORT_QUERY_CAPABILITIES_QUERY}`, {
+      headers: getApiHeaders(accessToken)
+    })
       .then((res) => {
         if (res.status === 404) {
           setNotConfigured(true);
@@ -216,7 +220,8 @@ export function useReportsMutations(): {
   saveReportVersion: (
     reportId: string,
     config: Report,
-    comment?: string
+    comment?: string,
+    includeQueryCapabilities?: boolean
   ) => Promise<ReportVersion>;
   setDashboardReport: (reportId: string) => Promise<void>;
   pinReport: (reportId: string, pinned: boolean) => Promise<void>;
@@ -241,8 +246,13 @@ export function useReportsMutations(): {
   );
 
   const saveReportVersion = useCallback(
-    async (reportId: string, config: Report, comment?: string): Promise<ReportVersion> => {
-      const res = await fetch(`/api/v1/reports/${reportId}/versions`, {
+    async (
+      reportId: string,
+      config: Report,
+      comment?: string,
+      includeQueryCapabilities: boolean = false
+    ): Promise<ReportVersion> => {
+      const res = await fetch(`/api/v1/reports/${reportId}/versions?include_query_capabilities=${includeQueryCapabilities}`, {
         method: 'POST',
         headers: {
           ...getApiHeaders(accessToken),
@@ -352,7 +362,7 @@ export function useReportVersion(
     setReportVersion(undefined);
     setError(null);
 
-    fetch(`/api/v1/reports/${reportId}/versions/${versionNum}`, {
+    fetch(`/api/v1/reports/${reportId}/versions/${versionNum}${REPORT_QUERY_CAPABILITIES_QUERY}`, {
       headers: getApiHeaders(accessToken)
     })
       .then((res) => {
@@ -397,7 +407,9 @@ export function useReport(reportId: string | undefined): {
     setQueryCapabilities(undefined);
     setError(null);
 
-    fetch(`/api/v1/reports/${reportId}`, { headers: getApiHeaders(accessToken) })
+    fetch(`/api/v1/reports/${reportId}${REPORT_QUERY_CAPABILITIES_QUERY}`, {
+      headers: getApiHeaders(accessToken)
+    })
       .then((res) => {
         if (!res.ok) throw new Error(`Failed to load report: ${res.status}`);
         return res.json();

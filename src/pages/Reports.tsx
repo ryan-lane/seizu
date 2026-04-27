@@ -50,7 +50,7 @@ function Reports() {
 
   async function handleSave(updatedReport: Report, comment: string) {
     if (!id) return;
-    const version = await saveReportVersion(id, updatedReport, comment || undefined);
+    const version = await saveReportVersion(id, updatedReport, comment || undefined, true);
     setDisplayedReport(version.config);
     setDisplayedName(version.name);
     setDisplayedQueryCapabilities(version.query_capabilities);
