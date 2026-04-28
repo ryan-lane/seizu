@@ -512,3 +512,57 @@ async def test_pin_report_wrong_type(mocker):
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         ret = await client.put("/api/v1/reports/rid1/pin", json={})
     assert ret.status_code == 422
+
+
+# ---------------------------------------------------------------------------
+# POST /api/v1/reports/<report_id>/clone
+# ---------------------------------------------------------------------------
+
+
+async def test_clone_report_success(mocker):
+    source = _report_version(report_id="src1")
+    new_item = _report_list_item(report_id="new1", name="Copy of My Report")
+    mocker.patch(
+        "reporting.routes.reports.report_store.get_report_latest",
+        new=AsyncMock(return_value=source),
+    )
+    mock_create = mocker.patch(
+        "reporting.routes.reports.report_store.create_report",
+        new=AsyncMock(return_value=new_item),
+    )
+    mock_save = mocker.patch(
+        "reporting.routes.reports.report_store.save_report_version",
+        new=AsyncMock(return_value=_report_version(report_id="new1")),
+    )
+    app = _make_app()
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        ret = await client.post("/api/v1/reports/src1/clone", json={"name": "Copy of My Report"})
+    assert ret.status_code == 201
+    assert ret.json()["report_id"] == "new1"
+    assert ret.json()["name"] == "Copy of My Report"
+    mock_create.assert_called_once_with(name="Copy of My Report", created_by="test-user-id")
+    mock_save.assert_called_once_with(
+        report_id="new1",
+        config=source.config,
+        created_by="test-user-id",
+        comment="Cloned from My Report",
+    )
+
+
+async def test_clone_report_source_not_found(mocker):
+    mocker.patch(
+        "reporting.routes.reports.report_store.get_report_latest",
+        new=AsyncMock(return_value=None),
+    )
+    app = _make_app()
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        ret = await client.post("/api/v1/reports/missing/clone", json={"name": "Clone"})
+    assert ret.status_code == 404
+    assert "not found" in ret.json()["error"].lower()
+
+
+async def test_clone_report_missing_name(mocker):
+    app = _make_app()
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        ret = await client.post("/api/v1/reports/src1/clone", json={})
+    assert ret.status_code == 422

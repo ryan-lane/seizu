@@ -1,6 +1,17 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
-import { Box, Button, CircularProgress, Typography } from '@mui/material';
+import {
+  Box,
+  Button,
+  CircularProgress,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
+  TextField,
+  Typography,
+} from '@mui/material';
+import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import Error from '@mui/icons-material/Error';
 import EditIcon from '@mui/icons-material/Edit';
 import HistoryIcon from '@mui/icons-material/History';
@@ -23,7 +34,34 @@ function Reports() {
   const [displayedQueryCapabilities, setDisplayedQueryCapabilities] = useState<Record<string, string> | undefined>(undefined);
 
   const { report, name, queryCapabilities, loading, error } = useReport(id);
-  const { saveReportVersion } = useReportsMutations();
+  const { saveReportVersion, cloneReport } = useReportsMutations();
+
+  const [cloneOpen, setCloneOpen] = useState(false);
+  const [cloneName, setCloneName] = useState('');
+  const [cloning, setCloning] = useState(false);
+  const [cloneError, setCloneError] = useState<string | null>(null);
+
+  const handleCloneOpen = () => {
+    setCloneName(`Copy of ${displayedName ?? ''}`);
+    setCloneError(null);
+    setCloneOpen(true);
+  };
+
+  const handleCloneConfirm = async () => {
+    if (!id || !cloneName.trim()) return;
+    setCloning(true);
+    setCloneError(null);
+    try {
+      const item = await cloneReport(id, cloneName.trim());
+      setCloneOpen(false);
+      navigate(`/app/reports/${item.report_id}?edit=true`);
+    } catch (err) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      setCloneError((err as any)?.message ?? 'Failed to clone report');
+    } finally {
+      setCloning(false);
+    }
+  };
 
   useEffect(() => {
     if (report) setDisplayedReport(report);
@@ -101,17 +139,59 @@ function Reports() {
           History
         </Button>
         {hasPermission('reports:write') && (
-          <Button
-            variant="outlined"
-            size="small"
-            startIcon={<EditIcon />}
-            onClick={handleEnterEdit}
-          >
-            Edit report
-          </Button>
+          <>
+            <Button
+              variant="outlined"
+              size="small"
+              startIcon={<ContentCopyIcon />}
+              onClick={handleCloneOpen}
+            >
+              Clone
+            </Button>
+            <Button
+              variant="outlined"
+              size="small"
+              startIcon={<EditIcon />}
+              onClick={handleEnterEdit}
+            >
+              Edit report
+            </Button>
+          </>
         )}
       </Box>
       <ReportView report={displayedReport} title={displayedName} queryCapabilities={displayedQueryCapabilities} />
+
+      <Dialog open={cloneOpen} onClose={() => setCloneOpen(false)} maxWidth="sm" fullWidth>
+        <DialogTitle>Clone report</DialogTitle>
+        <DialogContent>
+          {cloneError && (
+            <Typography color="error" sx={{ mb: 1 }}>
+              {cloneError}
+            </Typography>
+          )}
+          <TextField
+            autoFocus
+            fullWidth
+            label="New report name"
+            value={cloneName}
+            onChange={(e) => setCloneName(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && handleCloneConfirm()}
+            sx={{ mt: 1 }}
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setCloneOpen(false)} disabled={cloning}>
+            Cancel
+          </Button>
+          <Button
+            variant="contained"
+            onClick={handleCloneConfirm}
+            disabled={cloning || !cloneName.trim()}
+          >
+            {cloning ? <CircularProgress size={20} /> : 'Clone'}
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 }

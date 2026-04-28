@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from reporting.authnz import CurrentUser, require_permission
 from reporting.authnz.permissions import Permission
 from reporting.schema.report_config import (
+    CloneReportRequest,
     CreateReportRequest,
     CreateVersionRequest,
     PinReportRequest,
@@ -170,3 +171,26 @@ async def create_version(
     if not version:
         raise HTTPException(status_code=404, detail="Report not found")
     return _with_query_capabilities(version, current, include_query_capabilities)
+
+
+@router.post("/api/v1/reports/{report_id}/clone", response_model=ReportListItem, status_code=201)
+async def clone_report(
+    report_id: str,
+    body: CloneReportRequest,
+    current: CurrentUser = Depends(require_permission(Permission.REPORTS_WRITE)),
+) -> Any:
+    """Clone a report into a new report with the given name."""
+    source = await report_store.get_report_latest(report_id)
+    if not source:
+        raise HTTPException(status_code=404, detail="Report not found")
+    new_item = await report_store.create_report(
+        name=body.name,
+        created_by=current.user.user_id,
+    )
+    await report_store.save_report_version(
+        report_id=new_item.report_id,
+        config=source.config,
+        created_by=current.user.user_id,
+        comment=f"Cloned from {source.name}",
+    )
+    return new_item

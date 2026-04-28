@@ -4,7 +4,7 @@ from typing import Any
 
 from reporting.authnz import CurrentUser
 from reporting.authnz.permissions import Permission
-from reporting.schema.report_config import CreateReportRequest, CreateVersionRequest, PinReportRequest
+from reporting.schema.report_config import CloneReportRequest, CreateReportRequest, CreateVersionRequest, PinReportRequest
 from reporting.services import report_store
 from reporting.services.mcp_builtins.base import BuiltinGroup, BuiltinTool, model_input_schema
 
@@ -97,6 +97,22 @@ async def _get_version(args: dict[str, Any], current_user: CurrentUser | None) -
     if not version:
         return {"error": "Version not found"}
     return version.model_dump()
+
+
+async def _clone(args: dict[str, Any], current_user: CurrentUser | None) -> dict[str, Any]:
+    user = _require_user(current_user)
+    source = await report_store.get_report_latest(args["report_id"])
+    if not source:
+        return {"error": "Report not found"}
+    body = CloneReportRequest.model_validate({k: v for k, v in args.items() if k != "report_id"})
+    new_item = await report_store.create_report(name=body.name, created_by=user.user.user_id)
+    await report_store.save_report_version(
+        report_id=new_item.report_id,
+        config=source.config,
+        created_by=user.user.user_id,
+        comment=f"Cloned from {source.name}",
+    )
+    return new_item.model_dump()
 
 
 GROUP_DEF = BuiltinGroup(
@@ -217,6 +233,19 @@ GROUP_DEF = BuiltinGroup(
             },
             required_permissions=[Permission.REPORTS_READ.value],
             handler=_get_version,
+        ),
+        BuiltinTool(
+            name="reports__clone",
+            group=GROUP,
+            description="Clone a report into a new report with the given name.",
+            input_schema=model_input_schema(
+                CloneReportRequest,
+                extra_properties=_report_id_prop(),
+                extra_required=["report_id"],
+            ),
+            required_permissions=[Permission.REPORTS_WRITE.value],
+            handler=_clone,
+            requires_user=True,
         ),
     ],
 )

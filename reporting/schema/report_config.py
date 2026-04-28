@@ -128,6 +128,12 @@ class CreateVersionRequest(BaseModel):
     comment: str | None = None
 
 
+class CloneReportRequest(BaseModel):
+    """Request body for POST /api/v1/reports/<id>/clone."""
+
+    name: str
+
+
 class User(BaseModel):
     """A user record, created on first login (JIT provisioning)."""
 
