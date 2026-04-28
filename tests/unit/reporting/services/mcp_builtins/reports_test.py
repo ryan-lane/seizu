@@ -26,14 +26,14 @@ def _report_list_item(report_id: str = "r1", name: str = "n") -> ReportListItem:
     )
 
 
-def _current_user() -> CurrentUser:
+def _current_user(user_id: str = "u1") -> CurrentUser:
     return CurrentUser(
         user=User(
-            user_id="u1",
-            sub="u1",
+            user_id=user_id,
+            sub=user_id,
             iss="dev",
-            email="u1@example.com",
-            display_name="u1",
+            email=f"{user_id}@example.com",
+            display_name=user_id,
             created_at=_NOW,
             last_login=_NOW,
         ),
@@ -42,14 +42,14 @@ def _current_user() -> CurrentUser:
     )
 
 
-async def _call(server, name, arguments):
+async def _call(server, name, arguments, current_user: CurrentUser | None = None):
     handler = server.request_handlers[mcp_types.CallToolRequest]
     req = mcp_types.CallToolRequest(
         method="tools/call",
         params=mcp_types.CallToolRequestParams(name=name, arguments=arguments),
     )
     perm_tok = _mcp_permissions.set(ALL_PERMISSIONS)
-    user_tok = _mcp_current_user.set(_current_user())
+    user_tok = _mcp_current_user.set(current_user or _current_user())
     try:
         result = await handler(req)
     finally:
@@ -165,6 +165,24 @@ async def test_reports_get_returns_error_when_missing():
     assert data == {"error": "Report not found"}
 
 
+async def test_reports_get_returns_error_for_private_report_from_non_owner():
+    async def _get_report_latest(report_id: str, user_id: str | None = None):
+        if user_id != "u1":
+            return None
+        return _report_version()
+
+    with patch(
+        "reporting.services.mcp_builtins.reports.report_store.get_report_latest",
+        new_callable=AsyncMock,
+        side_effect=_get_report_latest,
+    ):
+        server = _build_mcp_server()
+        result = await _call(server, "reports__get", {"report_id": "r1"}, current_user=_current_user("u2"))
+        data = json.loads(result[0].text)
+
+    assert data == {"error": "Report not found"}
+
+
 async def test_reports_get_dashboard_returns_report():
     with patch(
         "reporting.services.mcp_builtins.reports.report_store.get_dashboard_report",
@@ -189,6 +207,47 @@ async def test_reports_get_dashboard_returns_error_when_none():
         data = json.loads(result[0].text)
 
     assert data == {"error": "No dashboard report configured"}
+
+
+async def test_reports_list_versions_returns_error_for_private_report_from_non_owner():
+    async def _list_report_versions(report_id: str, user_id: str | None = None):
+        if user_id != "u1":
+            return []
+        return [_report_version(2), _report_version(1)]
+
+    with patch(
+        "reporting.services.mcp_builtins.reports.report_store.list_report_versions",
+        new_callable=AsyncMock,
+        side_effect=_list_report_versions,
+    ):
+        server = _build_mcp_server()
+        result = await _call(server, "reports__list_versions", {"report_id": "r1"}, current_user=_current_user("u2"))
+        data = json.loads(result[0].text)
+
+    assert data == {"error": "Report not found"}
+
+
+async def test_reports_get_version_returns_error_for_private_report_from_non_owner():
+    async def _get_report_version(report_id: str, version: int, user_id: str | None = None):
+        if user_id != "u1":
+            return None
+        return _report_version(version)
+
+    with patch(
+        "reporting.services.mcp_builtins.reports.report_store.get_report_version",
+        new_callable=AsyncMock,
+        side_effect=_get_report_version,
+    ):
+        server = _build_mcp_server()
+        result = await _call(
+            server,
+            "reports__get_version",
+            {"report_id": "r1", "version": 3},
+            current_user=_current_user("u2"),
+        )
+        data = json.loads(result[0].text)
+
+    assert data == {"error": "Version not found"}
 
 
 async def test_reports_create_version_success():
@@ -217,6 +276,35 @@ async def test_reports_create_version_success():
         comment="why",
         user_id="u1",
     )
+
+
+async def test_reports_create_version_returns_error_for_private_report_from_non_owner():
+    async def _save_report_version(
+        report_id: str,
+        config: dict[str, object],
+        created_by: str,
+        comment: str | None = None,
+        user_id: str | None = None,
+    ):
+        if user_id != "u1":
+            return None
+        return _report_version(2)
+
+    with patch(
+        "reporting.services.mcp_builtins.reports.report_store.save_report_version",
+        new_callable=AsyncMock,
+        side_effect=_save_report_version,
+    ):
+        server = _build_mcp_server()
+        result = await _call(
+            server,
+            "reports__create_version",
+            {"report_id": "r1", "config": {}},
+            current_user=_current_user("u2"),
+        )
+        data = json.loads(result[0].text)
+
+    assert data == {"error": "Report not found"}
 
 
 async def test_reports_create_version_returns_error_when_missing():

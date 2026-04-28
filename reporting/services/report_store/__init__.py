@@ -64,32 +64,22 @@ async def initialize() -> None:
 
 
 async def list_reports(user_id: str | None = None) -> list[ReportListItem]:
-    if user_id is None:
-        return await get_store().list_reports()
     return await get_store().list_reports(user_id=user_id)
 
 
 async def get_report_metadata(report_id: str, user_id: str | None = None) -> ReportListItem | None:
-    if user_id is None:
-        return await get_store().get_report_metadata(report_id)
     return await get_store().get_report_metadata(report_id, user_id=user_id)
 
 
 async def get_report_latest(report_id: str, user_id: str | None = None) -> ReportVersion | None:
-    if user_id is None:
-        return await get_store().get_report_latest(report_id)
     return await get_store().get_report_latest(report_id, user_id=user_id)
 
 
 async def get_report_version(report_id: str, version: int, user_id: str | None = None) -> ReportVersion | None:
-    if user_id is None:
-        return await get_store().get_report_version(report_id, version)
     return await get_store().get_report_version(report_id, version, user_id=user_id)
 
 
 async def list_report_versions(report_id: str, user_id: str | None = None) -> list[ReportVersion]:
-    if user_id is None:
-        return await get_store().list_report_versions(report_id)
     return await get_store().list_report_versions(report_id, user_id=user_id)
 
 
@@ -98,8 +88,6 @@ async def create_report(
     created_by: str,
     access: ReportAccess | None = None,
 ) -> ReportListItem:
-    if access is None:
-        return await get_store().create_report(name=name, created_by=created_by)
     return await get_store().create_report(name=name, created_by=created_by, access=access)
 
 
@@ -110,13 +98,6 @@ async def save_report_version(
     comment: str | None = None,
     user_id: str | None = None,
 ) -> ReportVersion | None:
-    if user_id is None:
-        return await get_store().save_report_version(
-            report_id=report_id,
-            config=config,
-            created_by=created_by,
-            comment=comment,
-        )
     return await get_store().save_report_version(
         report_id=report_id,
         config=config,
@@ -139,8 +120,6 @@ async def update_report_metadata(
 
 
 async def delete_report(report_id: str, user_id: str | None = None) -> bool:
-    if user_id is None:
-        return await get_store().delete_report(report_id)
     return await get_store().delete_report(report_id, user_id=user_id)
 
 
@@ -150,7 +129,12 @@ async def pin_report(
     updated_by: str,
     user_id: str | None = None,
 ) -> bool:
-    return await get_store().pin_report(report_id, pinned, updated_by=updated_by, user_id=user_id)
+    return await get_store().pin_report(
+        report_id,
+        pinned,
+        updated_by=updated_by,
+        user_id=user_id,
+    )
 
 
 async def get_dashboard_report_id() -> str | None:

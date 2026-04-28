@@ -829,11 +829,6 @@ class DynamoDBReportStore(ReportStore):
                 "pinned": bool(meta.get("pinned", False)),
             }
             _transact_put_sync(table, updated, list_item)
-            if new_access["scope"] != "public":
-                dashboard_resp = table.get_item(Key={"PK": _PK_DASHBOARD, "SK": _SK_DASHBOARD_POINTER})
-                dashboard_item = dashboard_resp.get("Item")
-                if dashboard_item and dashboard_item.get("report_id") == report_id:
-                    table.delete_item(Key={"PK": _PK_DASHBOARD, "SK": _SK_DASHBOARD_POINTER})
             return _report_list_item_from_item(list_item)
 
         return await asyncio.to_thread(_op)

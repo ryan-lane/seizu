@@ -87,30 +87,30 @@ async def test_list_reports_delegates(mock_store):
 async def test_get_report_latest_delegates(mock_store):
     mock_store.get_report_latest.return_value = None
     await report_store.get_report_latest("rid1")
-    mock_store.get_report_latest.assert_called_once_with("rid1")
+    mock_store.get_report_latest.assert_called_once_with("rid1", user_id=None)
 
 
 async def test_get_report_version_delegates(mock_store):
     mock_store.get_report_version.return_value = None
     await report_store.get_report_version("rid1", 2)
-    mock_store.get_report_version.assert_called_once_with("rid1", 2)
+    mock_store.get_report_version.assert_called_once_with("rid1", 2, user_id=None)
 
 
 async def test_list_report_versions_delegates(mock_store):
     mock_store.list_report_versions.return_value = []
     await report_store.list_report_versions("rid1")
-    mock_store.list_report_versions.assert_called_once_with("rid1")
+    mock_store.list_report_versions.assert_called_once_with("rid1", user_id=None)
 
 
 async def test_create_report_delegates(mock_store):
     await report_store.create_report(name="My Report", created_by="u@x.com")
-    mock_store.create_report.assert_called_once_with(name="My Report", created_by="u@x.com")
+    mock_store.create_report.assert_called_once_with(name="My Report", created_by="u@x.com", access=None)
 
 
 async def test_save_report_version_delegates(mock_store):
     await report_store.save_report_version(report_id="rid1", config={}, created_by="u@x.com", comment="v2")
     mock_store.save_report_version.assert_called_once_with(
-        report_id="rid1", config={}, created_by="u@x.com", comment="v2"
+        report_id="rid1", config={}, created_by="u@x.com", comment="v2", user_id=None
     )
 
 

@@ -579,10 +579,6 @@ class SQLModelReportStore(ReportStore):
             report.updated_by = updated_by
             if access is not None:
                 report.access = access.model_dump()
-            if report.access["scope"] != "public":
-                pointer = await session.get(DashboardPointerRecord, 1)
-                if pointer and pointer.report_id == report_id:
-                    await session.delete(pointer)
             session.add(report)
             await session.commit()
             await session.refresh(report)
