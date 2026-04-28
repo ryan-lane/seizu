@@ -4,7 +4,12 @@ from typing import Any
 
 from reporting.authnz import CurrentUser
 from reporting.authnz.permissions import Permission
-from reporting.schema.report_config import CloneReportRequest, CreateReportRequest, CreateVersionRequest, PinReportRequest
+from reporting.schema.report_config import (
+    CloneReportRequest,
+    CreateReportRequest,
+    CreateVersionRequest,
+    PinReportRequest,
+)
 from reporting.services import report_store
 from reporting.services.mcp_builtins.base import BuiltinGroup, BuiltinTool, model_input_schema
 
