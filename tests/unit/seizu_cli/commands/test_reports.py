@@ -141,6 +141,27 @@ def test_create_report_api_error(mock_client: MagicMock) -> None:
 
 
 # ---------------------------------------------------------------------------
+# clone
+# ---------------------------------------------------------------------------
+
+
+def test_clone_report(mock_client: MagicMock) -> None:
+    mock_client.post.return_value = {"report_id": "r-copy", "name": "Copy of My Report"}
+    result = runner.invoke(app, ["clone", "r1", "Copy of My Report"])
+    assert result.exit_code == 0
+    assert "r-copy" in result.output
+    assert "Copy of My Report" in result.output
+    assert "r1" in result.output
+    mock_client.post.assert_called_once_with("/api/v1/reports/r1/clone", json={"name": "Copy of My Report"})
+
+
+def test_clone_report_api_error(mock_client: MagicMock) -> None:
+    mock_client.post.side_effect = APIError(404, "not found")
+    result = runner.invoke(app, ["clone", "missing", "Copy"])
+    assert result.exit_code == 1
+
+
+# ---------------------------------------------------------------------------
 # delete
 # ---------------------------------------------------------------------------
 

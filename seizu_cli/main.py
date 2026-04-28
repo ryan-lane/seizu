@@ -62,6 +62,7 @@ def main(
     Quick start:
         seizu login                    # authenticate (opens browser URL)
         seizu reports list             # list reports
+        seizu reports clone <id> <name> # clone a report
         seizu scheduled-queries list   # list scheduled queries
         seizu toolsets list            # list toolsets
         seizu toolsets tools list <toolset_id>
