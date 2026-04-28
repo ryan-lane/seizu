@@ -98,6 +98,20 @@ def create_report(
     console.print(f"[green]Created[/green]: {data['report_id']}  name={data['name']!r}")
 
 
+@app.command("clone")
+def clone_report(
+    report_id: str = typer.Argument(help="Source report ID."),
+    name: str = typer.Argument(help="Name for the cloned report."),
+) -> None:
+    """Clone a report into a new report."""
+    try:
+        data = state.get_client().post(f"/api/v1/reports/{report_id}/clone", json={"name": name})
+    except Exception as exc:
+        _die(exc)
+        return
+    console.print(f"[green]Cloned[/green]: {data['report_id']}  name={data['name']!r}  source={report_id!r}")
+
+
 @app.command("delete")
 def delete_report(
     report_id: str = typer.Argument(help="Report ID."),

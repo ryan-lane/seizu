@@ -30,6 +30,7 @@ import {
   Typography
 } from '@mui/material';
 import Add from '@mui/icons-material/Add';
+import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import DeleteIcon from '@mui/icons-material/Delete';
 import EditIcon from '@mui/icons-material/Edit';
 import HistoryIcon from '@mui/icons-material/History';
@@ -59,10 +60,11 @@ interface RowMenuProps {
   onPin: () => void;
   onEdit: () => void;
   onHistory: () => void;
+  onClone: () => void;
   onDelete: () => void;
 }
 
-function RowMenu({ report, isDashboard, onSetDashboard, onPin, onEdit, onHistory, onDelete }: RowMenuProps) {
+function RowMenu({ report, isDashboard, onSetDashboard, onPin, onEdit, onHistory, onClone, onDelete }: RowMenuProps) {
   const [anchor, setAnchor] = useState<null | HTMLElement>(null);
   const hasPermission = usePermissions();
 
@@ -106,6 +108,18 @@ function RowMenu({ report, isDashboard, onSetDashboard, onPin, onEdit, onHistory
           <ListItemIcon><HistoryIcon fontSize="small" /></ListItemIcon>
           <ListItemText>View history</ListItemText>
         </MenuItem>
+
+        <Tooltip title={!canWrite ? 'You do not have permission to clone reports' : ''} placement="left">
+          <span>
+            <MenuItem
+              onClick={() => { onClone(); close(); }}
+              disabled={!canWrite}
+            >
+              <ListItemIcon><ContentCopyIcon fontSize="small" /></ListItemIcon>
+              <ListItemText>Clone</ListItemText>
+            </MenuItem>
+          </span>
+        </Tooltip>
 
         <Tooltip title={!canSetDashboard ? 'You do not have permission to set the dashboard' : ''} placement="left">
           <span>
@@ -161,7 +175,7 @@ function RowMenu({ report, isDashboard, onSetDashboard, onPin, onEdit, onHistory
 function ReportsList() {
   const { reports, loading, error, refresh } = useReportsList();
   const { dashboardReportId, refresh: refreshDashboard } = useDashboardReportId();
-  const { createReport, saveReportVersion, setDashboardReport, pinReport, deleteReport } =
+  const { createReport, cloneReport, saveReportVersion, setDashboardReport, pinReport, deleteReport } =
     useReportsMutations();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -171,6 +185,11 @@ function ReportsList() {
   const [newName, setNewName] = useState('');
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
+
+  const [cloneTarget, setCloneTarget] = useState<ReportListItem | null>(null);
+  const [cloneName, setCloneName] = useState('');
+  const [cloning, setCloning] = useState(false);
+  const [cloneError, setCloneError] = useState<string | null>(null);
 
   const [deleteTarget, setDeleteTarget] = useState<ReportListItem | null>(null);
   const [deleting, setDeleting] = useState(false);
@@ -212,6 +231,29 @@ function ReportsList() {
       refresh();
     } catch {
       // ignore – user can retry
+    }
+  };
+
+  const handleCloneOpen = (report: ReportListItem) => {
+    setCloneTarget(report);
+    setCloneName(`Copy of ${report.name}`);
+    setCloneError(null);
+  };
+
+  const handleCloneConfirm = async () => {
+    if (!cloneTarget || !cloneName.trim()) return;
+    setCloning(true);
+    setCloneError(null);
+    try {
+      const item = await cloneReport(cloneTarget.report_id, cloneName.trim());
+      setCloneTarget(null);
+      refresh();
+      navigate(`/app/reports/${item.report_id}?edit=true`);
+    } catch (err) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      setCloneError((err as any)?.message ?? 'Failed to clone report');
+    } finally {
+      setCloning(false);
     }
   };
 
@@ -335,6 +377,7 @@ function ReportsList() {
                           onPin={() => handlePin(report.report_id, !report.pinned)}
                           onEdit={() => navigate(`/app/reports/${report.report_id}?edit=true`)}
                           onHistory={() => navigate(`/app/reports/${report.report_id}/history`)}
+                          onClone={() => handleCloneOpen(report)}
                           onDelete={() => setDeleteTarget(report)}
                         />
                       </TableCell>
@@ -387,6 +430,44 @@ function ReportsList() {
             disabled={creating || !newName.trim()}
           >
             {creating ? <CircularProgress size={20} /> : 'Create'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Clone dialog */}
+      <Dialog
+        open={!!cloneTarget}
+        onClose={() => setCloneTarget(null)}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>Clone report</DialogTitle>
+        <DialogContent>
+          {cloneError && (
+            <Box sx={{ mb: 2 }}>
+              <Typography color="error">{cloneError}</Typography>
+            </Box>
+          )}
+          <TextField
+            autoFocus
+            fullWidth
+            label="New report name"
+            value={cloneName}
+            onChange={(e) => setCloneName(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && handleCloneConfirm()}
+            sx={{ mt: 1 }}
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setCloneTarget(null)} disabled={cloning}>
+            Cancel
+          </Button>
+          <Button
+            variant="contained"
+            onClick={handleCloneConfirm}
+            disabled={cloning || !cloneName.trim()}
+          >
+            {cloning ? <CircularProgress size={20} /> : 'Clone'}
           </Button>
         </DialogActions>
       </Dialog>

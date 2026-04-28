@@ -217,6 +217,7 @@ export function useAllReports(): {
 
 export function useReportsMutations(): {
   createReport: (name: string) => Promise<ReportListItem>;
+  cloneReport: (reportId: string, name: string) => Promise<ReportListItem>;
   saveReportVersion: (
     reportId: string,
     config: Report,
@@ -240,6 +241,22 @@ export function useReportsMutations(): {
         body: JSON.stringify({ name })
       });
       if (!res.ok) throw new Error(`Failed to create report: ${res.status}`);
+      return res.json();
+    },
+    [accessToken]
+  );
+
+  const cloneReport = useCallback(
+    async (reportId: string, name: string): Promise<ReportListItem> => {
+      const res = await fetch(`/api/v1/reports/${reportId}/clone`, {
+        method: 'POST',
+        headers: {
+          ...getApiHeaders(accessToken),
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ name })
+      });
+      if (!res.ok) throw new Error(`Failed to clone report: ${res.status}`);
       return res.json();
     },
     [accessToken]
@@ -303,7 +320,7 @@ export function useReportsMutations(): {
     [accessToken]
   );
 
-  return { createReport, saveReportVersion, setDashboardReport, pinReport, deleteReport };
+  return { createReport, cloneReport, saveReportVersion, setDashboardReport, pinReport, deleteReport };
 }
 
 export function useReportVersionsList(reportId: string | undefined): {
