@@ -236,6 +236,58 @@ async def test_reports_create_version_returns_error_when_missing():
     assert data == {"error": "Report not found"}
 
 
+async def test_reports_update_rejects_unpublish_when_pinned():
+    report = _report_list_item()
+    report.pinned = True
+    with (
+        patch(
+            "reporting.services.mcp_builtins.reports.report_store.get_report_metadata",
+            new_callable=AsyncMock,
+            return_value=report,
+        ),
+        patch(
+            "reporting.services.mcp_builtins.reports.report_store.get_dashboard_report_id",
+            new_callable=AsyncMock,
+            return_value=None,
+        ),
+        patch(
+            "reporting.services.mcp_builtins.reports.report_store.update_report_metadata",
+            new_callable=AsyncMock,
+        ) as mock_update,
+    ):
+        server = _build_mcp_server()
+        result = await _call(server, "reports__update", {"report_id": "r1", "access": {"scope": "private"}})
+        data = json.loads(result[0].text)
+
+    assert data == {"error": "Report must be unpinned and removed from the dashboard before it can be made private"}
+    mock_update.assert_not_called()
+
+
+async def test_reports_update_rejects_unpublish_when_dashboard():
+    with (
+        patch(
+            "reporting.services.mcp_builtins.reports.report_store.get_report_metadata",
+            new_callable=AsyncMock,
+            return_value=_report_list_item(),
+        ),
+        patch(
+            "reporting.services.mcp_builtins.reports.report_store.get_dashboard_report_id",
+            new_callable=AsyncMock,
+            return_value="r1",
+        ),
+        patch(
+            "reporting.services.mcp_builtins.reports.report_store.update_report_metadata",
+            new_callable=AsyncMock,
+        ) as mock_update,
+    ):
+        server = _build_mcp_server()
+        result = await _call(server, "reports__update", {"report_id": "r1", "access": {"scope": "private"}})
+        data = json.loads(result[0].text)
+
+    assert data == {"error": "Report must be unpinned and removed from the dashboard before it can be made private"}
+    mock_update.assert_not_called()
+
+
 async def test_reports_delete_success():
     with patch(
         "reporting.services.mcp_builtins.reports.report_store.delete_report",

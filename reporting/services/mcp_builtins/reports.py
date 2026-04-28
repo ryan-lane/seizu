@@ -153,6 +153,10 @@ async def _update(args: dict[str, Any], current_user: CurrentUser | None) -> dic
         return {"error": "Report not found"}
     if meta.created_by != user.user.user_id:
         return {"error": "Only the report owner can update report access"}
+    if body.access is not None and body.access.scope == "private":
+        dashboard_report_id = await report_store.get_dashboard_report_id()
+        if meta.pinned or dashboard_report_id == report_id:
+            return {"error": "Report must be unpinned and removed from the dashboard before it can be made private"}
     updated = await report_store.update_report_metadata(
         report_id=report_id,
         updated_by=user.user.user_id,

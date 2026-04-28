@@ -190,6 +190,57 @@ async def test_set_dashboard_report_rejects_private(mocker):
 
 
 # ---------------------------------------------------------------------------
+# PUT /api/v1/reports/<report_id>
+# ---------------------------------------------------------------------------
+
+
+async def test_update_report_metadata_rejects_unpublish_when_pinned(mocker):
+    report = _report_list_item()
+    report.pinned = True
+    mocker.patch(
+        "reporting.routes.reports.report_store.get_report_metadata",
+        new=AsyncMock(return_value=report),
+    )
+    mocker.patch(
+        "reporting.routes.reports.report_store.get_dashboard_report_id",
+        new=AsyncMock(return_value=None),
+    )
+    mock_update = mocker.patch(
+        "reporting.routes.reports.report_store.update_report_metadata",
+        new=AsyncMock(),
+    )
+    app = _make_app()
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        ret = await client.put("/api/v1/reports/rid1", json={"access": {"scope": "private"}})
+
+    assert ret.status_code == 400
+    assert "private" in ret.json()["error"].lower()
+    mock_update.assert_not_called()
+
+
+async def test_update_report_metadata_rejects_unpublish_when_dashboard(mocker):
+    mocker.patch(
+        "reporting.routes.reports.report_store.get_report_metadata",
+        new=AsyncMock(return_value=_report_list_item()),
+    )
+    mocker.patch(
+        "reporting.routes.reports.report_store.get_dashboard_report_id",
+        new=AsyncMock(return_value="rid1"),
+    )
+    mock_update = mocker.patch(
+        "reporting.routes.reports.report_store.update_report_metadata",
+        new=AsyncMock(),
+    )
+    app = _make_app()
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        ret = await client.put("/api/v1/reports/rid1", json={"access": {"scope": "private"}})
+
+    assert ret.status_code == 400
+    assert "private" in ret.json()["error"].lower()
+    mock_update.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
 # GET /api/v1/reports/<report_id>
 # ---------------------------------------------------------------------------
 
