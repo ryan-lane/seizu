@@ -24,6 +24,7 @@ from reporting.schema.rbac import RoleItem, RoleVersion
 from reporting.schema.report_config import (
     PanelStat,
     QueryHistoryItem,
+    ReportAccess,
     ReportListItem,
     ReportVersion,
     ScheduledQueryItem,
@@ -69,6 +70,9 @@ class ReportRecord(SQLModel, table=True):  # type: ignore
     current_version: int = 0
     created_at: str
     updated_at: str
+    created_by: str
+    updated_by: str
+    access: dict[str, Any] = Field(default={}, sa_column=Column(JSON, nullable=False))
     pinned: bool = False
 
 
@@ -311,6 +315,41 @@ def generate_report_id() -> str:
     return str(next(_get_snowflake_gen()))
 
 
+def _report_visible_to_user(report: ReportRecord, user_id: str | None) -> bool:
+    if user_id is None:
+        return True
+    return report.access["scope"] == "public" or report.created_by == user_id
+
+
+def _report_list_item_from_record(report: ReportRecord) -> ReportListItem:
+    return ReportListItem(
+        report_id=report.report_id,
+        name=report.name,
+        current_version=report.current_version,
+        created_at=report.created_at,
+        updated_at=report.updated_at,
+        created_by=report.created_by,
+        updated_by=report.updated_by,
+        access=report.access,
+        pinned=report.pinned,
+    )
+
+
+def _report_version_from_records(report: ReportRecord, version: ReportVersionRecord) -> ReportVersion:
+    return ReportVersion(
+        report_id=version.report_id,
+        name=report.name,
+        version=version.version,
+        config=version.config,
+        created_at=version.created_at,
+        created_by=version.created_by,
+        comment=version.comment,
+        report_created_by=report.created_by,
+        report_updated_by=report.updated_by,
+        access=report.access,
+    )
+
+
 def _get_engine() -> AsyncEngine:
     global _engine
     if _engine is None:
@@ -345,26 +384,31 @@ class SQLModelReportStore(ReportStore):
         except IntegrityError:
             logger.info("SQL report store tables already exist")
 
-    async def list_reports(self) -> list[ReportListItem]:
+    async def list_reports(self, user_id: str | None = None) -> list[ReportListItem]:
         async with AsyncSession(_get_engine()) as session:
             result = await session.execute(select(ReportRecord))
             rows = result.scalars().all()
-            return [
-                ReportListItem(
-                    report_id=r.report_id,
-                    name=r.name,
-                    current_version=r.current_version,
-                    created_at=r.created_at,
-                    updated_at=r.updated_at,
-                    pinned=r.pinned,
-                )
-                for r in rows
-            ]
+            return [_report_list_item_from_record(r) for r in rows if _report_visible_to_user(r, user_id)]
 
-    async def get_report_latest(self, report_id: str) -> ReportVersion | None:
+    async def get_report_metadata(
+        self,
+        report_id: str,
+        user_id: str | None = None,
+    ) -> ReportListItem | None:
         async with AsyncSession(_get_engine()) as session:
             report = await session.get(ReportRecord, report_id)
-            if not report:
+            if not report or not _report_visible_to_user(report, user_id):
+                return None
+            return _report_list_item_from_record(report)
+
+    async def get_report_latest(
+        self,
+        report_id: str,
+        user_id: str | None = None,
+    ) -> ReportVersion | None:
+        async with AsyncSession(_get_engine()) as session:
+            report = await session.get(ReportRecord, report_id)
+            if not report or not _report_visible_to_user(report, user_id):
                 return None
             stmt = (
                 select(ReportVersionRecord)
@@ -376,20 +420,17 @@ class SQLModelReportStore(ReportStore):
             row = result.scalars().first()
             if not row:
                 return None
-            return ReportVersion(
-                report_id=row.report_id,
-                name=report.name,
-                version=row.version,
-                config=row.config,
-                created_at=row.created_at,
-                created_by=row.created_by,
-                comment=row.comment,
-            )
+            return _report_version_from_records(report, row)
 
-    async def get_report_version(self, report_id: str, version: int) -> ReportVersion | None:
+    async def get_report_version(
+        self,
+        report_id: str,
+        version: int,
+        user_id: str | None = None,
+    ) -> ReportVersion | None:
         async with AsyncSession(_get_engine()) as session:
             report = await session.get(ReportRecord, report_id)
-            if not report:
+            if not report or not _report_visible_to_user(report, user_id):
                 return None
             stmt = (
                 select(ReportVersionRecord)
@@ -400,20 +441,16 @@ class SQLModelReportStore(ReportStore):
             row = result.scalars().first()
             if not row:
                 return None
-            return ReportVersion(
-                report_id=row.report_id,
-                name=report.name,
-                version=row.version,
-                config=row.config,
-                created_at=row.created_at,
-                created_by=row.created_by,
-                comment=row.comment,
-            )
+            return _report_version_from_records(report, row)
 
-    async def list_report_versions(self, report_id: str) -> list[ReportVersion]:
+    async def list_report_versions(
+        self,
+        report_id: str,
+        user_id: str | None = None,
+    ) -> list[ReportVersion]:
         async with AsyncSession(_get_engine()) as session:
             report = await session.get(ReportRecord, report_id)
-            if not report:
+            if not report or not _report_visible_to_user(report, user_id):
                 return []
             stmt = (
                 select(ReportVersionRecord)
@@ -422,27 +459,18 @@ class SQLModelReportStore(ReportStore):
             )
             result = await session.execute(stmt)
             rows = result.scalars().all()
-            return [
-                ReportVersion(
-                    report_id=r.report_id,
-                    name=report.name,
-                    version=r.version,
-                    config=r.config,
-                    created_at=r.created_at,
-                    created_by=r.created_by,
-                    comment=r.comment,
-                )
-                for r in rows
-            ]
+            return [_report_version_from_records(report, r) for r in rows]
 
     async def create_report(
         self,
         name: str,
         created_by: str,
+        access: ReportAccess | None = None,
     ) -> ReportListItem:
         """Create a new empty report (no initial version) and return the ReportListItem."""
         report_id = generate_report_id()
         now = datetime.now(tz=UTC).isoformat()
+        report_access = access or ReportAccess(scope="private")
 
         async with AsyncSession(_get_engine()) as session:
             session.add(
@@ -452,6 +480,9 @@ class SQLModelReportStore(ReportStore):
                     current_version=0,
                     created_at=now,
                     updated_at=now,
+                    created_by=created_by,
+                    updated_by=created_by,
+                    access=report_access.model_dump(),
                 )
             )
             await session.commit()
@@ -462,6 +493,9 @@ class SQLModelReportStore(ReportStore):
             current_version=0,
             created_at=now,
             updated_at=now,
+            created_by=created_by,
+            updated_by=created_by,
+            access=report_access,
         )
 
     async def save_report_version(
@@ -470,14 +504,17 @@ class SQLModelReportStore(ReportStore):
         config: dict[str, Any],
         created_by: str,
         comment: str | None = None,
+        user_id: str | None = None,
     ) -> ReportVersion | None:
         async with AsyncSession(_get_engine()) as session:
             report = await session.get(ReportRecord, report_id)
-            if not report:
+            if not report or not _report_visible_to_user(report, user_id):
                 return None
 
             version = report.current_version + 1
             name = report.name
+            report_created_by = report.created_by
+            report_access = report.access
             now = datetime.now(tz=UTC).isoformat()
 
             session.add(
@@ -492,6 +529,7 @@ class SQLModelReportStore(ReportStore):
             )
             report.current_version = version
             report.updated_at = now
+            report.updated_by = created_by
             session.add(report)
 
             # Replace panel stats for this report atomically with the version write.
@@ -522,13 +560,39 @@ class SQLModelReportStore(ReportStore):
             created_at=now,
             created_by=created_by,
             comment=comment,
+            report_created_by=report_created_by,
+            report_updated_by=created_by,
+            access=report_access,
         )
 
-    async def delete_report(self, report_id: str) -> bool:
-        """Delete a report and all its versions."""
+    async def update_report_metadata(
+        self,
+        report_id: str,
+        updated_by: str,
+        access: ReportAccess | None = None,
+    ) -> ReportListItem | None:
         async with AsyncSession(_get_engine()) as session:
             report = await session.get(ReportRecord, report_id)
             if not report:
+                return None
+            report.updated_at = datetime.now(tz=UTC).isoformat()
+            report.updated_by = updated_by
+            if access is not None:
+                report.access = access.model_dump()
+            if report.access["scope"] != "public":
+                pointer = await session.get(DashboardPointerRecord, 1)
+                if pointer and pointer.report_id == report_id:
+                    await session.delete(pointer)
+            session.add(report)
+            await session.commit()
+            await session.refresh(report)
+            return _report_list_item_from_record(report)
+
+    async def delete_report(self, report_id: str, user_id: str | None = None) -> bool:
+        """Delete a report and all its versions."""
+        async with AsyncSession(_get_engine()) as session:
+            report = await session.get(ReportRecord, report_id)
+            if not report or not _report_visible_to_user(report, user_id):
                 return False
 
             pointer = await session.get(DashboardPointerRecord, 1)
@@ -549,12 +613,20 @@ class SQLModelReportStore(ReportStore):
             await session.commit()
         return True
 
-    async def pin_report(self, report_id: str, pinned: bool) -> bool:
+    async def pin_report(
+        self,
+        report_id: str,
+        pinned: bool,
+        updated_by: str,
+        user_id: str | None = None,
+    ) -> bool:
         async with AsyncSession(_get_engine()) as session:
             report = await session.get(ReportRecord, report_id)
-            if not report:
+            if not report or not _report_visible_to_user(report, user_id):
                 return False
             report.pinned = pinned
+            report.updated_at = datetime.now(tz=UTC).isoformat()
+            report.updated_by = updated_by
             await session.commit()
         return True
 
@@ -569,6 +641,8 @@ class SQLModelReportStore(ReportStore):
         async with AsyncSession(_get_engine()) as session:
             exists = await session.get(ReportRecord, report_id)
             if not exists:
+                return False
+            if exists.access["scope"] != "public":
                 return False
             now = datetime.now(tz=UTC).isoformat()
             existing = await session.get(DashboardPointerRecord, 1)
@@ -585,12 +659,23 @@ class SQLModelReportStore(ReportStore):
         report_id = await self.get_dashboard_report_id()
         if not report_id:
             return None
-        return await self.get_report_latest(report_id)
+        report = await self.get_report_latest(report_id)
+        if report and report.access.scope == "public":
+            return report
+        return None
 
     async def list_panel_stats(self) -> list[PanelStat]:
         """Return all PanelStat records across all reports."""
         async with AsyncSession(_get_engine()) as session:
-            result = await session.execute(select(PanelStatRecord))
+            report_result = await session.execute(select(ReportRecord))
+            public_report_ids = {
+                report.report_id for report in report_result.scalars().all() if report.access["scope"] == "public"
+            }
+            if not public_report_ids:
+                return []
+            result = await session.execute(
+                select(PanelStatRecord).where(col(PanelStatRecord.report_id).in_(public_report_ids))
+            )
             rows = result.scalars().all()
             return [
                 PanelStat(

@@ -58,14 +58,15 @@ curl -X PUT /api/v1/reports/<report_id>/dashboard
 
 Reports can be created, edited, and deleted at runtime through the Seizu UI without modifying the YAML file or restarting the service.
 
-> **Permissions:** Creating and editing reports requires the `reports:write` permission (`seizu-editor` or `seizu-admin`). Deleting reports requires `reports:delete`. Setting the default dashboard requires `reports:set_dashboard`. Pinning reports requires `reports:write`. Restoring a historical version also requires `reports:write`. Users with only the `seizu-viewer` role can view reports and history but will not see the **New report** button, and write/delete/restore actions in the **⋮** menu and version view will be disabled.
+> **Permissions:** Creating and editing reports requires the `reports:write` permission (`seizu-editor` or `seizu-admin`). New reports and clones start as private drafts visible only to their owner. Owners with `reports:write` can publish or unpublish their own reports; publishing updates report metadata and does not create a new version. Deleting reports requires `reports:delete`. Setting the default dashboard requires `reports:set_dashboard` and the selected report must be public. Pinning reports requires `reports:write`. Restoring a historical version also requires `reports:write`. Users with only the `seizu-viewer` role can view public reports and history but will not see the **New report** button, and write/delete/restore actions in the **⋮** menu and version view will be disabled.
 
 ### Reports list
 
 Navigate to **Reports** in the sidebar to view all reports. From the list you can:
 
 - Click a report name to view it.
-- Open the **⋮** menu on any row to **Edit**, **View history**, **Set as dashboard**, **Pin to sidebar** / **Unpin from sidebar**, or **Delete** a report.
+- Open the **⋮** menu on any row to **Edit**, **View history**, **Publish** / **Unpublish**, **Set as dashboard**, **Pin to sidebar** / **Unpin from sidebar**, or **Delete** a report.
+- A **Draft** or **Public** badge shows the report visibility.
 - A **Pinned** badge is shown inline on reports that are pinned to the sidebar.
 - A **Dashboard** badge is shown inline on whichever report is currently set as the dashboard.
 

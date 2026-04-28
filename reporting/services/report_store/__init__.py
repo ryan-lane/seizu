@@ -16,6 +16,7 @@ from reporting.schema.rbac import RoleItem, RoleVersion
 from reporting.schema.report_config import (
     PanelStat,
     QueryHistoryItem,
+    ReportAccess,
     ReportListItem,
     ReportVersion,
     ScheduledQueryItem,
@@ -62,30 +63,44 @@ async def initialize() -> None:
     await get_store().initialize()
 
 
-async def list_reports() -> list[ReportListItem]:
-    return await get_store().list_reports()
+async def list_reports(user_id: str | None = None) -> list[ReportListItem]:
+    if user_id is None:
+        return await get_store().list_reports()
+    return await get_store().list_reports(user_id=user_id)
 
 
-async def get_report_latest(report_id: str) -> ReportVersion | None:
-    return await get_store().get_report_latest(report_id)
+async def get_report_metadata(report_id: str, user_id: str | None = None) -> ReportListItem | None:
+    if user_id is None:
+        return await get_store().get_report_metadata(report_id)
+    return await get_store().get_report_metadata(report_id, user_id=user_id)
 
 
-async def get_report_version(report_id: str, version: int) -> ReportVersion | None:
-    return await get_store().get_report_version(report_id, version)
+async def get_report_latest(report_id: str, user_id: str | None = None) -> ReportVersion | None:
+    if user_id is None:
+        return await get_store().get_report_latest(report_id)
+    return await get_store().get_report_latest(report_id, user_id=user_id)
 
 
-async def list_report_versions(report_id: str) -> list[ReportVersion]:
-    return await get_store().list_report_versions(report_id)
+async def get_report_version(report_id: str, version: int, user_id: str | None = None) -> ReportVersion | None:
+    if user_id is None:
+        return await get_store().get_report_version(report_id, version)
+    return await get_store().get_report_version(report_id, version, user_id=user_id)
+
+
+async def list_report_versions(report_id: str, user_id: str | None = None) -> list[ReportVersion]:
+    if user_id is None:
+        return await get_store().list_report_versions(report_id)
+    return await get_store().list_report_versions(report_id, user_id=user_id)
 
 
 async def create_report(
     name: str,
     created_by: str,
+    access: ReportAccess | None = None,
 ) -> ReportListItem:
-    return await get_store().create_report(
-        name=name,
-        created_by=created_by,
-    )
+    if access is None:
+        return await get_store().create_report(name=name, created_by=created_by)
+    return await get_store().create_report(name=name, created_by=created_by, access=access)
 
 
 async def save_report_version(
@@ -93,21 +108,49 @@ async def save_report_version(
     config: dict[str, Any],
     created_by: str,
     comment: str | None = None,
+    user_id: str | None = None,
 ) -> ReportVersion | None:
+    if user_id is None:
+        return await get_store().save_report_version(
+            report_id=report_id,
+            config=config,
+            created_by=created_by,
+            comment=comment,
+        )
     return await get_store().save_report_version(
         report_id=report_id,
         config=config,
         created_by=created_by,
         comment=comment,
+        user_id=user_id,
     )
 
 
-async def delete_report(report_id: str) -> bool:
-    return await get_store().delete_report(report_id)
+async def update_report_metadata(
+    report_id: str,
+    updated_by: str,
+    access: ReportAccess | None = None,
+) -> ReportListItem | None:
+    return await get_store().update_report_metadata(
+        report_id=report_id,
+        updated_by=updated_by,
+        access=access,
+    )
 
 
-async def pin_report(report_id: str, pinned: bool) -> bool:
-    return await get_store().pin_report(report_id, pinned)
+async def delete_report(report_id: str, user_id: str | None = None) -> bool:
+    if user_id is None:
+        return await get_store().delete_report(report_id)
+    return await get_store().delete_report(report_id, user_id=user_id)
+
+
+async def pin_report(
+    report_id: str,
+    pinned: bool,
+    updated_by: str,
+    user_id: str | None = None,
+) -> bool:
+    return await get_store().pin_report(report_id, pinned, updated_by=updated_by, user_id=user_id)
 
 
 async def get_dashboard_report_id() -> str | None:

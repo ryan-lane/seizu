@@ -372,12 +372,12 @@ reports:
             size: 12
 
 toolsets:
-  cve-analysis:
+  cve_analysis:
     name: CVE Analysis
     description: Tools for investigating CVE vulnerability data in the graph database.
     enabled: true
     tools:
-      get-cve:
+      get_cve:
         name: get_cve
         description: >-
           Return full details for a single CVE by its ID (e.g. CVE-2024-12345).
@@ -395,7 +395,7 @@ toolsets:
             description: The CVE identifier, e.g. CVE-2024-12345.
             required: true
         enabled: true
-      list-cves-by-severity:
+      list_cves_by_severity:
         name: list_cves_by_severity
         description: >-
           List CVEs filtered by base severity (CRITICAL, HIGH, MEDIUM, or LOW),
@@ -421,7 +421,7 @@ toolsets:
             required: false
             default: 25
         enabled: true
-      count-cves-by-severity:
+      count_cves_by_severity:
         name: count_cves_by_severity
         description: >-
           Return a breakdown of CVE counts grouped by base severity.
@@ -432,7 +432,7 @@ toolsets:
           RETURN c.base_severity AS severity, count(c.id) AS total
           ORDER BY total DESC
         enabled: true
-      get-recent-cves:
+      get_recent_cves:
         name: get_recent_cves
         description: >-
           Return CVEs published within the last `hours` hours, optionally
@@ -466,14 +466,14 @@ toolsets:
             required: false
             default: 50
         enabled: true
-  graph-exploration:
+  graph_exploration:
     name: Graph Exploration
     description: >-
       General-purpose tools for exploring the shape and contents of the Neo4j
       graph. Useful for discovery before writing more targeted queries.
     enabled: true
     tools:
-      count-nodes-with-label:
+      count_nodes_with_label:
         name: count_nodes_with_label
         description: >-
           Return the total number of nodes that have a specific label.
@@ -488,7 +488,7 @@ toolsets:
             description: The node label to count, e.g. CVE.
             required: true
         enabled: true
-      get-sync-status:
+      get_sync_status:
         name: get_sync_status
         description: >-
           Return the last sync timestamp and type for each cartography data

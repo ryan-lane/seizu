@@ -20,6 +20,12 @@ def _coerce_decimal(value: Any) -> Any:
     return value
 
 
+class ReportAccess(BaseModel):
+    """Report-level visibility metadata."""
+
+    scope: Literal["private", "public"]
+
+
 class ReportListItem(BaseModel):
     """Lightweight summary of a report for list views."""
 
@@ -28,6 +34,9 @@ class ReportListItem(BaseModel):
     current_version: int
     created_at: str
     updated_at: str
+    created_by: str
+    updated_by: str
+    access: ReportAccess
     pinned: bool = False
 
     @field_validator("current_version", mode="before")
@@ -48,6 +57,9 @@ class ReportVersion(BaseModel):
     created_at: str
     created_by: str
     comment: str | None = None
+    report_created_by: str
+    report_updated_by: str
+    access: ReportAccess
     query_capabilities: dict[str, str] | None = None
 
     @field_validator("version", mode="before")
@@ -119,6 +131,12 @@ class PinReportRequest(BaseModel):
     """Request body for PUT /api/v1/reports/<id>/pin."""
 
     pinned: bool
+
+
+class UpdateReportMetadataRequest(BaseModel):
+    """Request body for PUT /api/v1/reports/<id>."""
+
+    access: ReportAccess | None = None
 
 
 class CreateVersionRequest(BaseModel):

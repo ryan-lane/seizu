@@ -13,6 +13,19 @@ from reporting.services.mcp_server import _build_mcp_server, _mcp_current_user, 
 _NOW = "2024-01-01T00:00:00+00:00"
 
 
+def _report_list_item(report_id: str = "r1", name: str = "n") -> ReportListItem:
+    return ReportListItem(
+        report_id=report_id,
+        name=name,
+        current_version=1,
+        created_at=_NOW,
+        updated_at=_NOW,
+        created_by="u1",
+        updated_by="u1",
+        access={"scope": "public"},
+    )
+
+
 def _current_user() -> CurrentUser:
     return CurrentUser(
         user=User(
@@ -46,13 +59,7 @@ async def _call(server, name, arguments):
 
 
 async def test_reports_create_uses_current_user():
-    created = ReportListItem(
-        report_id="r1",
-        name="my report",
-        current_version=1,
-        created_at=_NOW,
-        updated_at=_NOW,
-    )
+    created = _report_list_item(name="my report")
     with patch(
         "reporting.services.mcp_builtins.reports.report_store.create_report",
         new_callable=AsyncMock,
@@ -72,15 +79,7 @@ async def test_reports_list_returns_reports():
     with patch(
         "reporting.services.mcp_builtins.reports.report_store.list_reports",
         new_callable=AsyncMock,
-        return_value=[
-            ReportListItem(
-                report_id="r1",
-                name="n",
-                current_version=1,
-                created_at=_NOW,
-                updated_at=_NOW,
-            )
-        ],
+        return_value=[_report_list_item()],
     ):
         server = _build_mcp_server()
         result = await _call(server, "reports__list", {})
@@ -101,7 +100,7 @@ async def test_reports_pin_calls_store():
         data = json.loads(result[0].text)
 
     assert data == {"report_id": "r1", "pinned": True}
-    mock_pin.assert_awaited_once_with("r1", True)
+    mock_pin.assert_awaited_once_with("r1", True, updated_by="u1", user_id="u1")
 
 
 async def test_reports_create_requires_write_permission():
@@ -133,6 +132,10 @@ def _report_version(version: int = 1) -> ReportVersion:
         config={"rows": []},
         created_at=_NOW,
         created_by="u1",
+        comment=None,
+        report_created_by="u1",
+        report_updated_by="u1",
+        access={"scope": "public"},
     )
 
 
@@ -212,6 +215,7 @@ async def test_reports_create_version_success():
         config={"rows": []},
         created_by="u1",
         comment="why",
+        user_id="u1",
     )
 
 
@@ -272,10 +276,17 @@ async def test_reports_pin_returns_error_when_missing():
 
 
 async def test_reports_set_dashboard_success():
-    with patch(
-        "reporting.services.mcp_builtins.reports.report_store.set_dashboard_report",
-        new_callable=AsyncMock,
-        return_value=True,
+    with (
+        patch(
+            "reporting.services.mcp_builtins.reports.report_store.get_report_metadata",
+            new_callable=AsyncMock,
+            return_value=_report_list_item(),
+        ),
+        patch(
+            "reporting.services.mcp_builtins.reports.report_store.set_dashboard_report",
+            new_callable=AsyncMock,
+            return_value=True,
+        ),
     ):
         server = _build_mcp_server()
         result = await _call(server, "reports__set_dashboard", {"report_id": "r1"})
@@ -285,10 +296,17 @@ async def test_reports_set_dashboard_success():
 
 
 async def test_reports_set_dashboard_returns_error_when_missing():
-    with patch(
-        "reporting.services.mcp_builtins.reports.report_store.set_dashboard_report",
-        new_callable=AsyncMock,
-        return_value=False,
+    with (
+        patch(
+            "reporting.services.mcp_builtins.reports.report_store.get_report_metadata",
+            new_callable=AsyncMock,
+            return_value=None,
+        ),
+        patch(
+            "reporting.services.mcp_builtins.reports.report_store.set_dashboard_report",
+            new_callable=AsyncMock,
+            return_value=False,
+        ),
     ):
         server = _build_mcp_server()
         result = await _call(server, "reports__set_dashboard", {"report_id": "nope"})

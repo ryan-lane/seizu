@@ -33,6 +33,7 @@ def _print_report_detail(data: dict[str, Any], as_json: bool) -> None:
     console.print(f"[bold]ID[/bold]: {data['report_id']}")
     console.print(f"[bold]Name[/bold]: {data['name']}")
     console.print(f"[bold]Version[/bold]: {data['version']}")
+    console.print(f"[bold]Access[/bold]: {data.get('access', {}).get('scope', 'unknown')}")
     console.print(f"[bold]Created By[/bold]: {data['created_by']}")
     console.print(f"[bold]Created At[/bold]: {data['created_at']}")
     if data.get("comment"):
@@ -62,11 +63,18 @@ def list_reports(
     table = Table(show_header=True, header_style="bold")
     table.add_column("ID")
     table.add_column("Name")
+    table.add_column("Access")
     table.add_column("Version", justify="right")
     table.add_column("Updated At")
 
     for r in reports:
-        table.add_row(r["report_id"], r["name"], str(r["current_version"]), r["updated_at"])
+        table.add_row(
+            r["report_id"],
+            r["name"],
+            r.get("access", {}).get("scope", "unknown"),
+            str(r["current_version"]),
+            r["updated_at"],
+        )
 
     console.print(table)
 
@@ -110,6 +118,32 @@ def clone_report(
         _die(exc)
         return
     console.print(f"[green]Cloned[/green]: {data['report_id']}  name={data['name']!r}  source={report_id!r}")
+
+
+@app.command("publish")
+def publish_report(
+    report_id: str = typer.Argument(help="Report ID."),
+) -> None:
+    """Make a report public."""
+    try:
+        state.get_client().put(f"/api/v1/reports/{report_id}", json={"access": {"scope": "public"}})
+    except Exception as exc:
+        _die(exc)
+        return
+    console.print(f"[green]Published[/green]: {report_id}")
+
+
+@app.command("unpublish")
+def unpublish_report(
+    report_id: str = typer.Argument(help="Report ID."),
+) -> None:
+    """Make a report private."""
+    try:
+        state.get_client().put(f"/api/v1/reports/{report_id}", json={"access": {"scope": "private"}})
+    except Exception as exc:
+        _die(exc)
+        return
+    console.print(f"[green]Unpublished[/green]: {report_id}")
 
 
 @app.command("delete")

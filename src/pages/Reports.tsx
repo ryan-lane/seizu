@@ -3,6 +3,7 @@ import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import {
   Box,
   Button,
+  Chip,
   CircularProgress,
   Dialog,
   DialogActions,
@@ -15,11 +16,14 @@ import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import Error from '@mui/icons-material/Error';
 import EditIcon from '@mui/icons-material/Edit';
 import HistoryIcon from '@mui/icons-material/History';
+import LockIcon from '@mui/icons-material/Lock';
+import PublicIcon from '@mui/icons-material/Public';
 
 import ReportView from 'src/components/ReportView';
 import EditableReportView from 'src/components/EditableReportView';
 import { useReport, useReportsMutations } from 'src/hooks/useReportsApi';
 import { Report } from 'src/config.context';
+import { useCurrentUser } from 'src/hooks/useCurrentUser';
 import { usePermissions } from 'src/hooks/usePermissions';
 
 function Reports() {
@@ -27,19 +31,23 @@ function Reports() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const hasPermission = usePermissions();
+  const currentUser = useCurrentUser();
 
   const [editMode, setEditMode] = useState(searchParams.get('edit') === 'true');
   const [displayedReport, setDisplayedReport] = useState<Report | undefined>(undefined);
   const [displayedName, setDisplayedName] = useState<string | undefined>(undefined);
+  const [displayedAccessScope, setDisplayedAccessScope] = useState<'private' | 'public' | undefined>(undefined);
+  const [displayedOwnerId, setDisplayedOwnerId] = useState<string | undefined>(undefined);
   const [displayedQueryCapabilities, setDisplayedQueryCapabilities] = useState<Record<string, string> | undefined>(undefined);
 
-  const { report, name, queryCapabilities, loading, error } = useReport(id);
-  const { saveReportVersion, cloneReport } = useReportsMutations();
+  const { report, name, reportVersion, queryCapabilities, loading, error } = useReport(id);
+  const { saveReportVersion, cloneReport, updateReportAccess } = useReportsMutations();
 
   const [cloneOpen, setCloneOpen] = useState(false);
   const [cloneName, setCloneName] = useState('');
   const [cloning, setCloning] = useState(false);
   const [cloneError, setCloneError] = useState<string | null>(null);
+  const [updatingAccess, setUpdatingAccess] = useState(false);
 
   const handleCloneOpen = () => {
     setCloneName(`Copy of ${displayedName ?? ''}`);
@@ -66,8 +74,12 @@ function Reports() {
   useEffect(() => {
     if (report) setDisplayedReport(report);
     if (name) setDisplayedName(name);
+    if (reportVersion) {
+      setDisplayedAccessScope(reportVersion.access.scope);
+      setDisplayedOwnerId(reportVersion.report_created_by);
+    }
     setDisplayedQueryCapabilities(queryCapabilities);
-  }, [report, name, queryCapabilities]);
+  }, [report, name, reportVersion, queryCapabilities]);
 
   // Sync edit param in URL
   useEffect(() => {
@@ -97,6 +109,17 @@ function Reports() {
     navigate(`/app/reports/${id}`, { replace: true });
   }
 
+  async function handleToggleAccess() {
+    if (!id || !displayedAccessScope) return;
+    setUpdatingAccess(true);
+    try {
+      const updated = await updateReportAccess(id, displayedAccessScope === 'public' ? 'private' : 'public');
+      setDisplayedAccessScope(updated.access.scope);
+    } finally {
+      setUpdatingAccess(false);
+    }
+  }
+
   if (loading && !displayedReport) {
     return (
       <Box sx={{ display: 'flex', justifyContent: 'center', p: 4 }}>
@@ -116,6 +139,9 @@ function Reports() {
 
   if (!displayedReport) return null;
 
+  const isOwner = currentUser?.user_id === displayedOwnerId;
+  const canUpdateAccess = hasPermission('reports:write') && isOwner;
+
   if (editMode) {
     return (
       <EditableReportView
@@ -130,6 +156,16 @@ function Reports() {
   return (
     <Box>
       <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1, px: 3, pt: 2 }}>
+        {displayedAccessScope && (
+          <Chip
+            icon={displayedAccessScope === 'public' ? <PublicIcon /> : <LockIcon />}
+            label={displayedAccessScope === 'public' ? 'Public' : 'Draft'}
+            size="small"
+            color={displayedAccessScope === 'public' ? 'success' : 'default'}
+            variant="outlined"
+            sx={{ alignSelf: 'center' }}
+          />
+        )}
         <Button
           variant="outlined"
           size="small"
@@ -140,6 +176,21 @@ function Reports() {
         </Button>
         {hasPermission('reports:write') && (
           <>
+            <Button
+              variant="outlined"
+              size="small"
+              startIcon={
+                updatingAccess
+                  ? <CircularProgress size={16} />
+                  : displayedAccessScope === 'public'
+                    ? <LockIcon />
+                    : <PublicIcon />
+              }
+              onClick={handleToggleAccess}
+              disabled={!canUpdateAccess || updatingAccess}
+            >
+              {displayedAccessScope === 'public' ? 'Unpublish' : 'Publish'}
+            </Button>
             <Button
               variant="outlined"
               size="small"
