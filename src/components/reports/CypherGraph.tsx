@@ -18,19 +18,25 @@ import { useTheme } from '@mui/material/styles';
 import InfoOutlined from '@mui/icons-material/InfoOutlined';
 import Info from '@mui/icons-material/Info';
 import Error from '@mui/icons-material/Error';
+import Add from '@mui/icons-material/Add';
+import Remove from '@mui/icons-material/Remove';
+import Adjust from '@mui/icons-material/Adjust';
+import ZoomInMap from '@mui/icons-material/ZoomInMap';
+import ZoomOutMap from '@mui/icons-material/ZoomOutMap';
 import {
   ReactFlow,
   Background,
   BackgroundVariant,
-  Controls,
   Edge,
   Handle,
   MarkerType,
   Node,
   NodeProps,
+  Panel,
   Position,
   useEdgesState,
   useNodesState,
+  useReactFlow,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import { useLazyCypherQuery } from 'src/hooks/useCypherQuery';
@@ -160,6 +166,8 @@ interface CypherGraphProps {
   defaultDetailOpen?: boolean;
   /** Called after a query completes successfully (results received). */
   onQueryComplete?: () => void;
+  /** When true, the card fills 100% of its parent height instead of using a fixed 450px canvas. */
+  fillHeight?: boolean;
 }
 
 // ─── Colours ─────────────────────────────────────────────────────────────────
@@ -188,12 +196,15 @@ function computeLayout(
   links: GraphLink[],
   width: number,
   height: number,
+  repulsion: number = 1,
 ): Map<string, { x: number; y: number }> {
   if (nodes.length === 0) return new Map();
 
-  const SPRING_LEN = 140;
+  // SPRING_LEN scales linearly with repulsion; the many-body force scales
+  // quadratically so that equilibrium pairwise distances scale roughly linearly.
+  const SPRING_LEN = 140 * repulsion;
   const SPRING_K = 0.06;
-  const REPULSION = 3000;
+  const REPULSION = 3000 * repulsion * repulsion;
   const DAMPING = 0.82;
 
   const positions = new Map<string, { x: number; y: number; vx: number; vy: number }>();
@@ -352,6 +363,123 @@ function buildXyEdges(graphLinks: GraphLink[], edgeColor: string): Edge[] {
   });
 }
 
+// ─── Auto-fit helper ─────────────────────────────────────────────────────────
+// Rendered inside <ReactFlow> so useReactFlow() is in context. Calls fitView
+// with a smooth transition whenever `trigger` increments (skipping initial mount).
+
+function AutoFitEffect({ trigger }: { trigger: number }) {
+  const { fitView } = useReactFlow();
+  const isFirstRun = useRef(true);
+  useEffect(() => {
+    if (isFirstRun.current) {
+      isFirstRun.current = false;
+      return;
+    }
+    fitView({ padding: 0.2, duration: 200 });
+  }, [trigger, fitView]);
+  return null;
+}
+
+// ─── Graph controls panel ────────────────────────────────────────────────────
+// Single panel at bottom-left: zoom/fit buttons, then a divider, then
+// repulsion +/- buttons — all in one unified box.
+// Uses a plain custom button (CtrlBtn) instead of ReactFlow's ControlButton so
+// we fully own the icon sizing without fighting ReactFlow's stylesheet.
+
+const REPULSION_MIN = 0.5;
+const REPULSION_MAX = 4;
+const REPULSION_STEP = 0.25;
+const ICON_SIZE = 20;
+
+function CtrlBtn({
+  title,
+  onClick,
+  disabled = false,
+  children,
+}: {
+  title: string;
+  onClick: () => void;
+  disabled?: boolean;
+  children: React.ReactNode;
+}) {
+  return (
+    <Box
+      component="button"
+      type="button"
+      title={title}
+      onClick={!disabled ? onClick : undefined}
+      sx={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        width: 36,
+        height: 36,
+        border: 'none',
+        borderBottom: '1px solid',
+        borderColor: 'divider',
+        bgcolor: 'background.paper',
+        color: 'text.primary',
+        cursor: disabled ? 'default' : 'pointer',
+        opacity: disabled ? 0.4 : 1,
+        p: 0,
+        '&:hover': { bgcolor: disabled ? 'background.paper' : 'action.hover' },
+        '&:last-child': { borderBottom: 'none' },
+      }}
+    >
+      {children}
+    </Box>
+  );
+}
+
+interface GraphControlsProps {
+  repulsion: number;
+  onRepulsionChange: (v: number) => void;
+}
+
+function GraphControls({ repulsion, onRepulsionChange }: GraphControlsProps) {
+  const { zoomIn, zoomOut, fitView } = useReactFlow();
+
+  return (
+    <Panel position="bottom-left">
+      <Box
+        sx={{
+          display: 'flex',
+          flexDirection: 'column',
+          borderRadius: '2px',
+          overflow: 'hidden',
+          bgcolor: 'background.paper',
+          boxShadow: 2,
+        }}
+      >
+        <CtrlBtn title="Zoom in" onClick={() => zoomIn()}>
+          <Add style={{ width: ICON_SIZE, height: ICON_SIZE }} />
+        </CtrlBtn>
+        <CtrlBtn title="Zoom out" onClick={() => zoomOut()}>
+          <Remove style={{ width: ICON_SIZE, height: ICON_SIZE }} />
+        </CtrlBtn>
+        <CtrlBtn title="Fit view" onClick={() => fitView({ padding: 0.2 })}>
+          <Adjust style={{ width: ICON_SIZE, height: ICON_SIZE }} />
+        </CtrlBtn>
+        <Box sx={{ height: '2px', bgcolor: 'divider' }} />
+        <CtrlBtn
+          title="Increase repulsion"
+          onClick={() => onRepulsionChange(Math.min(REPULSION_MAX, repulsion + REPULSION_STEP))}
+          disabled={repulsion >= REPULSION_MAX}
+        >
+          <ZoomOutMap style={{ width: ICON_SIZE, height: ICON_SIZE }} />
+        </CtrlBtn>
+        <CtrlBtn
+          title="Decrease repulsion"
+          onClick={() => onRepulsionChange(Math.max(REPULSION_MIN, repulsion - REPULSION_STEP))}
+          disabled={repulsion <= REPULSION_MIN}
+        >
+          <ZoomInMap style={{ width: ICON_SIZE, height: ICON_SIZE }} />
+        </CtrlBtn>
+      </Box>
+    </Panel>
+  );
+}
+
 // ─── Main component ───────────────────────────────────────────────────────────
 
 const DETAIL_PANEL_WIDTH = 280;
@@ -365,6 +493,7 @@ export default function CypherGraph({
   reportQueryToken,
   defaultDetailOpen = false,
   onQueryComplete,
+  fillHeight = false,
 }: CypherGraphProps) {
   const theme = useTheme();
 
@@ -386,6 +515,8 @@ export default function CypherGraph({
 
   const [detailOpen, setDetailOpen] = useState(defaultDetailOpen);
   const [preferredTab, setPreferredTab] = useState<'graph' | 'table' | 'raw' | null>(null);
+  const [repulsion, setRepulsion] = useState(1);
+  const [fitViewTrigger, setFitViewTrigger] = useState(0);
 
   const [nodes, setNodes, onNodesChange] = useNodesState<Node>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
@@ -427,17 +558,18 @@ export default function CypherGraph({
     setPreferredTab(null);
   }, [cypher]);
 
-  // Rebuild XyFlow graph whenever extracted graph data changes.
+  // Rebuild XyFlow graph whenever extracted graph data or spread changes.
   useEffect(() => {
     if (!graphData?.nodes?.length) {
       setNodes([]);
       setEdges([]);
       return;
     }
-    const positions = computeLayout(graphData.nodes, graphData.links, 800, 450);
+    const positions = computeLayout(graphData.nodes, graphData.links, 800, 450, repulsion);
     setNodes(buildXyNodes(graphData.nodes, positions, nodeLabelKey, nodeColorByKey));
     setEdges(buildXyEdges(graphData.links, edgeColor));
-  }, [graphData, nodeLabelKey, nodeColorByKey, edgeColor, setNodes, setEdges]);
+    setFitViewTrigger(n => n + 1);
+  }, [graphData, nodeLabelKey, nodeColorByKey, edgeColor, setNodes, setEdges, repulsion]);
 
   const handleNodeClick = (_: React.MouseEvent, node: Node) => {
     const original = node.data?.['original'] as GraphNode ?? node.data as unknown as GraphNode;
@@ -573,10 +705,13 @@ export default function CypherGraph({
     );
   }
 
+  const canvasHeight = fillHeight ? '100%' : 450;
+  const contentFlex = fillHeight ? { flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' as const } : {};
+
   return (
-    <Card>
-      {/* Header row: tabs left, caption right */}
-      <Box sx={{ display: 'flex', alignItems: 'center', pl: 2 }}>
+    <Card sx={fillHeight ? { height: '100%', display: 'flex', flexDirection: 'column' } : {}}>
+      {/* Header row: tabs left, optional spread control, caption right */}
+      <Box sx={{ display: 'flex', alignItems: 'center', pl: 2, flexShrink: 0 }}>
         <Tabs
           value={activeTab}
           onChange={(_, v: 'graph' | 'table' | 'raw') => setPreferredTab(v)}
@@ -594,129 +729,124 @@ export default function CypherGraph({
           </Typography>
         )}
       </Box>
-      <Divider />
+      <Divider sx={{ flexShrink: 0 }} />
       <QueryValidationBadge errors={queryErrors} warnings={warnings} />
-      {/* ── Table tab ───────────────────────────────────────────────── */}
-      {activeTab === 'table' && (
-        <CypherTable
-          cypher={cypher}
-          params={params}
-          needInputs={needInputs}
-          height="400px"
-          reportQueryToken={reportQueryToken}
-        />
-      )}
 
-      {/* ── Raw tab ─────────────────────────────────────────────────── */}
-      {activeTab === 'raw' && (
-        <Box
-          sx={{
-            height: 450,
-            overflow: 'auto',
-            p: 2,
-            fontFamily: 'monospace',
-            fontSize: 12,
-            bgcolor: 'action.hover',
-            whiteSpace: 'pre',
-          }}
-        >
-          {JSON.stringify(records, null, 2)}
-        </Box>
-      )}
+      {/* Content area — flex-fills parent when fillHeight */}
+      <Box sx={contentFlex}>
+        {/* ── Table tab ─────────────────────────────────────────────── */}
+        {activeTab === 'table' && (
+          <CypherTable
+            cypher={cypher}
+            params={params}
+            needInputs={needInputs}
+            height={fillHeight ? '100%' : '400px'}
+            reportQueryToken={reportQueryToken}
+          />
+        )}
 
-      {/* ── Graph tab ───────────────────────────────────────────────── */}
-      {activeTab === 'graph' && graphData && <Box sx={{ display: 'flex', height: 450 }}>
-        {/* Graph canvas */}
-        <Box
-          sx={{
-            flex: 1,
-            height: 450,
-            '--xy-controls-button-background-color': theme.palette.background.paper,
-            '--xy-controls-button-background-color-hover': theme.palette.action.hover,
-            '--xy-controls-button-color': theme.palette.text.primary,
-            '--xy-controls-button-color-hover': theme.palette.text.primary,
-            '--xy-controls-button-border-color': theme.palette.divider,
-            '--xy-controls-box-shadow': theme.shadows[2],
-            '& .react-flow__controls-button svg': {
-              fill: theme.palette.text.primary,
-            },
-          }}
-        >
-          <ReactFlow
-            nodes={nodes}
-            edges={edges}
-            onNodesChange={onNodesChange}
-            onEdgesChange={onEdgesChange}
-            onNodeClick={handleNodeClick}
-            onEdgeClick={handleEdgeClick}
-            onPaneClick={handlePaneClick}
-            nodeTypes={nodeTypes}
-            fitView
-            fitViewOptions={{ padding: 0.2 }}
-            minZoom={0.1}
-            maxZoom={4}
-            style={{ background: theme.palette.background.paper }}
-          >
-            <Background
-              variant={BackgroundVariant.Dots}
-              color={theme.palette.divider}
-              gap={20}
-              size={1}
-            />
-            <Controls showInteractive={false} />
-          </ReactFlow>
-        </Box>
-
-        {/* Toggle handle — always visible, attached to left edge of detail area */}
-        <Box
-          sx={{
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            justifyContent: 'flex-start',
-            pt: 1,
-            borderLeft: 1,
-            borderColor: 'divider',
-            width: 28,
-            flexShrink: 0,
-          }}
-        >
-          <Tooltip title="Details" placement="left">
-            <IconButton
-              size="small"
-              onClick={() => setDetailOpen(v => !v)}
-              sx={{ color: detailOpen ? 'primary.main' : 'text.secondary' }}
-            >
-              {detailOpen ? <Info fontSize="small" /> : <InfoOutlined fontSize="small" />}
-            </IconButton>
-          </Tooltip>
-        </Box>
-
-        {/* Detail panel content — summary when nothing selected, item details when selected */}
-        {detailOpen && (
+        {/* ── Raw tab ───────────────────────────────────────────────── */}
+        {activeTab === 'raw' && (
           <Box
             sx={{
-              width: DETAIL_PANEL_WIDTH,
-              flexShrink: 0,
-              borderLeft: 1,
-              borderColor: 'divider',
+              ...(fillHeight ? { flex: 1, minHeight: 0 } : { height: 450 }),
               overflow: 'auto',
               p: 2,
+              fontFamily: 'monospace',
+              fontSize: 12,
+              bgcolor: 'action.hover',
+              whiteSpace: 'pre',
             }}
           >
-            {selectedItem ? (
-              <GraphDetailPanel type={selectedItem.type} data={selectedItem.data} />
-            ) : (
-              <GraphSummaryPanel
-                nodes={graphData.nodes}
-                links={graphData.links}
-                nodeGroupKey={nodeColorByKey}
-                getColor={(g) => colorForGroup(g, theme.palette.mode === 'dark' ? chartPalette.dark : chartPalette.light)}
-              />
+            {JSON.stringify(records, null, 2)}
+          </Box>
+        )}
+
+        {/* ── Graph tab ─────────────────────────────────────────────── */}
+        {activeTab === 'graph' && graphData && (
+          <Box sx={{ display: 'flex', ...(fillHeight ? { flex: 1, minHeight: 0 } : { height: 450 }) }}>
+            {/* Graph canvas */}
+            <Box
+              sx={{ flex: 1, height: canvasHeight }}
+            >
+              <ReactFlow
+                nodes={nodes}
+                edges={edges}
+                onNodesChange={onNodesChange}
+                onEdgesChange={onEdgesChange}
+                onNodeClick={handleNodeClick}
+                onEdgeClick={handleEdgeClick}
+                onPaneClick={handlePaneClick}
+                nodeTypes={nodeTypes}
+                fitView
+                fitViewOptions={{ padding: 0.2 }}
+                minZoom={0.1}
+                maxZoom={4}
+                style={{ background: theme.palette.background.paper }}
+              >
+                <AutoFitEffect trigger={fitViewTrigger} />
+                <GraphControls repulsion={repulsion} onRepulsionChange={setRepulsion} />
+                <Background
+                  variant={BackgroundVariant.Dots}
+                  color={theme.palette.divider}
+                  gap={20}
+                  size={1}
+                />
+              </ReactFlow>
+            </Box>
+
+            {/* Toggle handle — always visible, attached to left edge of detail area */}
+            <Box
+              sx={{
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                justifyContent: 'flex-start',
+                pt: 1,
+                borderLeft: 1,
+                borderColor: 'divider',
+                width: 28,
+                flexShrink: 0,
+              }}
+            >
+              <Tooltip title="Details" placement="left">
+                <IconButton
+                  size="small"
+                  onClick={() => setDetailOpen(v => !v)}
+                  sx={{ color: detailOpen ? 'primary.main' : 'text.secondary' }}
+                >
+                  {detailOpen ? <Info fontSize="small" /> : <InfoOutlined fontSize="small" />}
+                </IconButton>
+              </Tooltip>
+            </Box>
+
+            {/* Detail panel — summary when nothing selected, item details when selected */}
+            {detailOpen && (
+              <Box
+                sx={{
+                  width: DETAIL_PANEL_WIDTH,
+                  flexShrink: 0,
+                  borderLeft: 1,
+                  borderColor: 'divider',
+                  overflow: 'auto',
+                  p: 2,
+                }}
+              >
+                {selectedItem ? (
+                  <GraphDetailPanel type={selectedItem.type} data={selectedItem.data} />
+                ) : (
+                  <GraphSummaryPanel
+                    nodes={graphData.nodes}
+                    links={graphData.links}
+                    nodeGroupKey={nodeColorByKey}
+                    getColor={(g) => colorForGroup(g, theme.palette.mode === 'dark' ? chartPalette.dark : chartPalette.light)}
+                  />
+                )}
+              </Box>
             )}
           </Box>
         )}
-      </Box>}
+      </Box>
     </Card>
   );
 }

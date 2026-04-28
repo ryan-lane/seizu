@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import {
   Box,
   Button,
@@ -20,6 +20,9 @@ export default function QueryConsole() {
   );
   const [schemaPanelOpen, setSchemaPanelOpen] = useState(true);
   const [historyRefreshTrigger, setHistoryRefreshTrigger] = useState(0);
+  const [queryHeight, setQueryHeight] = useState(220);
+  const dragStartY = useRef(0);
+  const dragStartHeight = useRef(0);
 
   const handleQueryComplete = useCallback(() => {
     setHistoryRefreshTrigger((n) => n + 1);
@@ -47,6 +50,34 @@ export default function QueryConsole() {
   const handleHistorySelect = (query: string) => {
     setQueryText(query);
   };
+
+  const handleDragStart = useCallback(
+    (e: React.MouseEvent) => {
+      e.preventDefault();
+      dragStartY.current = e.clientY;
+      dragStartHeight.current = queryHeight;
+      document.body.style.cursor = 'ns-resize';
+      document.body.style.userSelect = 'none';
+
+      const handleMouseMove = (ev: MouseEvent) => {
+        const delta = dragStartY.current - ev.clientY;
+        setQueryHeight(
+          Math.max(100, Math.min(600, dragStartHeight.current + delta))
+        );
+      };
+
+      const handleMouseUp = () => {
+        document.body.style.cursor = '';
+        document.body.style.userSelect = '';
+        document.removeEventListener('mousemove', handleMouseMove);
+        document.removeEventListener('mouseup', handleMouseUp);
+      };
+
+      document.addEventListener('mousemove', handleMouseMove);
+      document.addEventListener('mouseup', handleMouseUp);
+    },
+    [queryHeight]
+  );
 
   if (!hasPermission('query:execute')) {
     return (
@@ -76,7 +107,6 @@ export default function QueryConsole() {
           display: 'flex',
           flexDirection: 'column',
           p: 3,
-          gap: 2,
           boxSizing: 'border-box',
           minWidth: 0,
           overflow: 'hidden'
@@ -88,6 +118,7 @@ export default function QueryConsole() {
             <CypherGraph
               cypher={submittedQuery}
               defaultDetailOpen
+              fillHeight
               onQueryComplete={handleQueryComplete}
             />
           ) : (
@@ -112,24 +143,75 @@ export default function QueryConsole() {
           )}
         </Box>
 
+        {/* Resize handle */}
+        <Box
+          onMouseDown={handleDragStart}
+          sx={{
+            height: 8,
+            flexShrink: 0,
+            cursor: 'ns-resize',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            my: 0.5,
+            '&::after': {
+              content: '""',
+              display: 'block',
+              width: 48,
+              height: 4,
+              borderRadius: 2,
+              bgcolor: 'divider',
+              transition: 'background-color 0.15s',
+            },
+            '&:hover::after': { bgcolor: 'primary.main' },
+          }}
+        />
+
         {/* Query editor */}
-        <Box sx={{ flexShrink: 0 }}>
-          <Card>
-            <CardContent>
+        <Box sx={{ height: queryHeight, flexShrink: 0 }}>
+          <Card sx={{ height: '100%' }}>
+            <CardContent
+              sx={{
+                height: '100%',
+                boxSizing: 'border-box',
+                display: 'flex',
+                flexDirection: 'column',
+                '&:last-child': { pb: 2 },
+              }}
+            >
               <TextField
                 multiline
-                rows={5}
                 fullWidth
                 value={queryText}
                 onChange={(e) => setQueryText(e.target.value)}
                 onKeyDown={handleKeyDown}
                 placeholder="Enter a Cypher query... (Ctrl+Enter to run)"
                 variant="outlined"
+                sx={{
+                  flex: 1,
+                  minHeight: 0,
+                  '& .MuiInputBase-root': {
+                    height: '100%',
+                    alignItems: 'flex-start',
+                  },
+                  '& .MuiInputBase-input': {
+                    height: '100% !important',
+                    overflow: 'auto !important',
+                    boxSizing: 'border-box',
+                  },
+                }}
                 inputProps={{
                   style: { fontFamily: 'monospace', fontSize: 13 }
                 }}
               />
-              <Box sx={{ mt: 1, display: 'flex', justifyContent: 'flex-end' }}>
+              <Box
+                sx={{
+                  mt: 1,
+                  display: 'flex',
+                  justifyContent: 'flex-end',
+                  flexShrink: 0,
+                }}
+              >
                 <Button
                   variant="contained"
                   startIcon={<PlayArrow />}
