@@ -34,6 +34,10 @@ def _list_reports() -> list[dict[str, Any]]:
     return state.get_client().get("/api/v1/reports").get("reports", [])
 
 
+def _publish_report(report_id: str) -> None:
+    state.get_client().put(f"/api/v1/reports/{report_id}", json={"access": {"scope": "public"}})
+
+
 def _get_report(report_id: str) -> dict[str, Any] | None:
     try:
         return state.get_client().get(f"/api/v1/reports/{report_id}")
@@ -173,6 +177,12 @@ def seed_cmd(config: str, force: bool, dry_run: bool) -> None:
             if not force:
                 latest = _get_report(existing["report_id"])
                 if latest and latest.get("config") == report_config_dict:
+                    try:
+                        if existing.get("access", {}).get("scope") != "public":
+                            _publish_report(existing["report_id"])
+                    except Exception as exc:
+                        _die(exc)
+                        return
                     console.print(f"[dim][skip][/dim] '{report.name}' (config unchanged)")
                     skipped += 1
                     seeded_ids[report_key] = existing["report_id"]
@@ -189,6 +199,7 @@ def seed_cmd(config: str, force: bool, dry_run: bool) -> None:
                     f"/api/v1/reports/{existing['report_id']}/versions",
                     json={"config": report_config_dict, "comment": SEED_UPDATE_COMMENT},
                 )
+                _publish_report(existing["report_id"])
             except Exception as exc:
                 _die(exc)
                 return
@@ -210,6 +221,7 @@ def seed_cmd(config: str, force: bool, dry_run: bool) -> None:
                 f"/api/v1/reports/{new_report['report_id']}/versions",
                 json={"config": report_config_dict, "comment": SEED_COMMENT},
             )
+            _publish_report(new_report["report_id"])
         except Exception as exc:
             _die(exc)
             return

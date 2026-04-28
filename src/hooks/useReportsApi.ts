@@ -10,7 +10,14 @@ export interface ReportListItem {
   current_version: number;
   created_at: string;
   updated_at: string;
+  created_by: string;
+  updated_by: string;
+  access: ReportAccess;
   pinned: boolean;
+}
+
+export interface ReportAccess {
+  scope: 'private' | 'public';
 }
 
 export interface ReportVersion {
@@ -20,6 +27,9 @@ export interface ReportVersion {
   config: Report;
   created_at: string;
   created_by: string;
+  report_created_by: string;
+  report_updated_by: string;
+  access: ReportAccess;
   comment: string | null;
   query_capabilities?: Record<string, string>;
 }
@@ -218,6 +228,7 @@ export function useAllReports(): {
 export function useReportsMutations(): {
   createReport: (name: string) => Promise<ReportListItem>;
   cloneReport: (reportId: string, name: string) => Promise<ReportListItem>;
+  updateReportAccess: (reportId: string, scope: ReportAccess['scope']) => Promise<ReportListItem>;
   saveReportVersion: (
     reportId: string,
     config: Report,
@@ -283,6 +294,22 @@ export function useReportsMutations(): {
     [accessToken]
   );
 
+  const updateReportAccess = useCallback(
+    async (reportId: string, scope: ReportAccess['scope']): Promise<ReportListItem> => {
+      const res = await fetch(`/api/v1/reports/${reportId}`, {
+        method: 'PUT',
+        headers: {
+          ...getApiHeaders(accessToken),
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ access: { scope } })
+      });
+      if (!res.ok) throw new Error(`Failed to update report access: ${res.status}`);
+      return res.json();
+    },
+    [accessToken]
+  );
+
   const setDashboardReport = useCallback(
     async (reportId: string): Promise<void> => {
       const res = await fetch(`/api/v1/reports/${reportId}/dashboard`, {
@@ -320,7 +347,7 @@ export function useReportsMutations(): {
     [accessToken]
   );
 
-  return { createReport, cloneReport, saveReportVersion, setDashboardReport, pinReport, deleteReport };
+  return { createReport, cloneReport, updateReportAccess, saveReportVersion, setDashboardReport, pinReport, deleteReport };
 }
 
 export function useReportVersionsList(reportId: string | undefined): {
@@ -402,6 +429,7 @@ export function useReportVersion(
 export function useReport(reportId: string | undefined): {
   report: Report | undefined;
   name: string | undefined;
+  reportVersion: ReportVersion | undefined;
   queryCapabilities: Record<string, string> | undefined;
   loading: boolean;
   error: Error | null;
@@ -410,6 +438,7 @@ export function useReport(reportId: string | undefined): {
   const { auth_required } = useContext(AuthConfigContext);
   const [report, setReport] = useState<Report | undefined>(undefined);
   const [name, setName] = useState<string | undefined>(undefined);
+  const [reportVersion, setReportVersion] = useState<ReportVersion | undefined>(undefined);
   const [queryCapabilities, setQueryCapabilities] = useState<Record<string, string> | undefined>(undefined);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
@@ -421,6 +450,7 @@ export function useReport(reportId: string | undefined): {
     setLoading(true);
     setReport(undefined);
     setName(undefined);
+    setReportVersion(undefined);
     setQueryCapabilities(undefined);
     setError(null);
 
@@ -434,6 +464,7 @@ export function useReport(reportId: string | undefined): {
       .then((data: ReportVersion) => {
         setReport(data.config);
         setName(data.name);
+        setReportVersion(data);
         setQueryCapabilities(data.query_capabilities);
         setLoading(false);
       })
@@ -443,5 +474,5 @@ export function useReport(reportId: string | undefined): {
       });
   }, [reportId, accessToken, auth_required]);
 
-  return { report, name, queryCapabilities, loading, error };
+  return { report, name, reportVersion, queryCapabilities, loading, error };
 }

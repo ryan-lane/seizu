@@ -56,6 +56,8 @@ def _version_item(report_id="123", version=1):
         "config": {"rows": []},
         "created_at": "2024-01-01T00:00:00+00:00",
         "created_by": "user@example.com",
+        "updated_by": "user@example.com",
+        "access": {"scope": "public"},
         "comment": None,
     }
 
@@ -70,6 +72,8 @@ def _latest_item(report_id="123", version=1):
         "config": {"rows": []},
         "created_at": "2024-01-01T00:00:00+00:00",
         "created_by": "user@example.com",
+        "updated_by": "user@example.com",
+        "access": {"scope": "public"},
         "comment": None,
     }
 
@@ -83,6 +87,9 @@ def _metadata_item(report_id="123", current_version=1):
         "current_version": current_version,
         "created_at": "2024-01-01T00:00:00+00:00",
         "updated_at": "2024-01-01T00:00:00+00:00",
+        "created_by": "user@example.com",
+        "updated_by": "user@example.com",
+        "access": {"scope": "public"},
     }
 
 
@@ -174,6 +181,9 @@ async def test_list_reports_returns_items(patch_table, store):
                 "current_version": 1,
                 "created_at": "2024-01-01T00:00:00+00:00",
                 "updated_at": "2024-01-01T00:00:00+00:00",
+                "created_by": "user@example.com",
+                "updated_by": "user@example.com",
+                "access": {"scope": "public"},
             }
         ]
     }
@@ -202,6 +212,9 @@ async def test_list_reports_coerces_decimal(patch_table, store):
                 "current_version": Decimal("3"),
                 "created_at": "2024-01-01T00:00:00+00:00",
                 "updated_at": "2024-01-01T00:00:00+00:00",
+                "created_by": "user@example.com",
+                "updated_by": "user@example.com",
+                "access": {"scope": "public"},
             }
         ]
     }
@@ -229,9 +242,9 @@ async def test_get_report_latest_not_found(patch_table, store):
 
 
 async def test_get_report_latest_queries_correct_sk(patch_table, store):
-    patch_table.get_item.return_value = {}
+    patch_table.get_item.side_effect = [{"Item": _metadata_item(report_id="abc")}, {}]
     await store.get_report_latest("abc")
-    patch_table.get_item.assert_called_once_with(Key={"PK": "REPORT#abc", "SK": "#LATEST"})
+    assert patch_table.get_item.call_args_list[-1].kwargs == {"Key": {"PK": "REPORT#abc", "SK": "#LATEST"}}
 
 
 # ---------------------------------------------------------------------------
@@ -253,9 +266,9 @@ async def test_get_report_version_not_found(patch_table, store):
 
 
 async def test_get_report_version_uses_zero_padded_sk(patch_table, store):
-    patch_table.get_item.return_value = {}
+    patch_table.get_item.side_effect = [{"Item": _metadata_item(report_id="abc")}, {}]
     await store.get_report_version("abc", 5)
-    patch_table.get_item.assert_called_once_with(Key={"PK": "REPORT#abc", "SK": "VERSION#0000000005"})
+    assert patch_table.get_item.call_args_list[-1].kwargs == {"Key": {"PK": "REPORT#abc", "SK": "VERSION#0000000005"}}
 
 
 # ---------------------------------------------------------------------------
@@ -264,6 +277,7 @@ async def test_get_report_version_uses_zero_padded_sk(patch_table, store):
 
 
 async def test_list_report_versions_returns_items(patch_table, store):
+    patch_table.get_item.return_value = {"Item": _metadata_item()}
     patch_table.query.return_value = {"Items": [_version_item(version=2), _version_item(version=1)]}
     result = await store.list_report_versions("123")
     assert len(result) == 2
@@ -272,6 +286,7 @@ async def test_list_report_versions_returns_items(patch_table, store):
 
 
 async def test_list_report_versions_scan_index_forward_false(patch_table, store):
+    patch_table.get_item.return_value = {"Item": _metadata_item(report_id="abc")}
     patch_table.query.return_value = {"Items": []}
     await store.list_report_versions("abc")
     call_kwargs = patch_table.query.call_args[1]
@@ -615,7 +630,8 @@ async def test_get_dashboard_report_returns_none_when_not_set(patch_table, store
 async def test_get_dashboard_report_returns_report_version(patch_table, store):
     patch_table.get_item.side_effect = [
         {"Item": {"PK": "#DASHBOARD", "SK": "#POINTER", "report_id": "123"}},
-        {"Item": _version_item(report_id="123")},
+        {"Item": _metadata_item(report_id="123")},
+        {"Item": _latest_item(report_id="123")},
     ]
     result = await store.get_dashboard_report()
     assert isinstance(result, ReportVersion)
@@ -863,6 +879,7 @@ async def test_list_panel_stats_returns_empty_when_none(patch_table, store):
 
 
 async def test_list_panel_stats_returns_stat_records(patch_table, store):
+    patch_table.get_item.return_value = {"Item": _metadata_item(report_id="rid1")}
     patch_table.query.return_value = {
         "Items": [
             {

@@ -16,6 +16,7 @@ from reporting.schema.rbac import RoleItem, RoleVersion
 from reporting.schema.report_config import (
     PanelStat,
     QueryHistoryItem,
+    ReportAccess,
     ReportListItem,
     ReportVersion,
     ScheduledQueryItem,
@@ -101,19 +102,40 @@ class ReportStore(ABC):
         """Perform any one-time setup required by the backend (e.g. create table)."""
 
     @abstractmethod
-    async def list_reports(self) -> list[ReportListItem]:
-        """Return lightweight metadata for all reports."""
+    async def list_reports(self, user_id: str | None = None) -> list[ReportListItem]:
+        """Return lightweight metadata for reports visible to the user."""
 
     @abstractmethod
-    async def get_report_latest(self, report_id: str) -> ReportVersion | None:
+    async def get_report_metadata(
+        self,
+        report_id: str,
+        user_id: str | None = None,
+    ) -> ReportListItem | None:
+        """Return report metadata if it exists and is visible to the user."""
+
+    @abstractmethod
+    async def get_report_latest(
+        self,
+        report_id: str,
+        user_id: str | None = None,
+    ) -> ReportVersion | None:
         """Return the latest version of a report config, or None if not found."""
 
     @abstractmethod
-    async def get_report_version(self, report_id: str, version: int) -> ReportVersion | None:
+    async def get_report_version(
+        self,
+        report_id: str,
+        version: int,
+        user_id: str | None = None,
+    ) -> ReportVersion | None:
         """Return a specific version of a report config, or None if not found."""
 
     @abstractmethod
-    async def list_report_versions(self, report_id: str) -> list[ReportVersion]:
+    async def list_report_versions(
+        self,
+        report_id: str,
+        user_id: str | None = None,
+    ) -> list[ReportVersion]:
         """Return all stored versions for a report, newest first."""
 
     @abstractmethod
@@ -121,6 +143,7 @@ class ReportStore(ABC):
         self,
         name: str,
         created_by: str,
+        access: ReportAccess | None = None,
     ) -> ReportListItem:
         """Create a new empty report (no initial version) and return the ReportListItem."""
 
@@ -131,6 +154,7 @@ class ReportStore(ABC):
         config: dict[str, Any],
         created_by: str,
         comment: str | None = None,
+        user_id: str | None = None,
     ) -> ReportVersion | None:
         """Append a new version to an existing report and return it.
 
@@ -138,7 +162,16 @@ class ReportStore(ABC):
         """
 
     @abstractmethod
-    async def delete_report(self, report_id: str) -> bool:
+    async def update_report_metadata(
+        self,
+        report_id: str,
+        updated_by: str,
+        access: ReportAccess | None = None,
+    ) -> ReportListItem | None:
+        """Update report-level metadata without creating a new report version."""
+
+    @abstractmethod
+    async def delete_report(self, report_id: str, user_id: str | None = None) -> bool:
         """Delete a report and all its versions.
 
         Also clears the dashboard pointer if it points to this report.
@@ -146,7 +179,13 @@ class ReportStore(ABC):
         """
 
     @abstractmethod
-    async def pin_report(self, report_id: str, pinned: bool) -> bool:
+    async def pin_report(
+        self,
+        report_id: str,
+        pinned: bool,
+        updated_by: str,
+        user_id: str | None = None,
+    ) -> bool:
         """Set or clear the pinned flag on a report.
 
         Returns False if the report does not exist.

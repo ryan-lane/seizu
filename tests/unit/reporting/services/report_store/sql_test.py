@@ -13,7 +13,7 @@ from sqlalchemy.pool import StaticPool
 from sqlmodel import SQLModel
 
 from reporting.schema.mcp_config import SkillItem, SkillsetListItem, SkillsetVersion, SkillVersion
-from reporting.schema.report_config import PanelStat, ReportListItem, ReportVersion, User
+from reporting.schema.report_config import PanelStat, ReportAccess, ReportListItem, ReportVersion, User
 from reporting.services.report_store import sql as sql_module
 from reporting.services.report_store.sql import SQLModelReportStore
 
@@ -147,7 +147,7 @@ async def test_get_report_latest_returns_newest_after_update(store, mocker):
         "reporting.services.report_store.sql.generate_report_id",
         return_value="rid1",
     )
-    await store.create_report(name="r", created_by="u@x.com")
+    await store.create_report(name="r", created_by="u@x.com", access=ReportAccess(scope="public"))
     await store.save_report_version(report_id="rid1", config={"v": 1}, created_by="u@x.com")
     await store.save_report_version(report_id="rid1", config={"v": 2}, created_by="u@x.com")
     result = await store.get_report_latest("rid1")
@@ -316,7 +316,7 @@ async def test_set_dashboard_report_succeeds_for_empty_report(store, mocker):
         "reporting.services.report_store.sql.generate_report_id",
         return_value="rid1",
     )
-    await store.create_report(name="My Report", created_by="u@x.com")
+    await store.create_report(name="My Report", created_by="u@x.com", access=ReportAccess(scope="public"))
     ok = await store.set_dashboard_report("rid1")
     assert ok is True
     assert await store.get_dashboard_report_id() == "rid1"
@@ -327,7 +327,7 @@ async def test_set_and_get_dashboard_report(store, mocker):
         "reporting.services.report_store.sql.generate_report_id",
         return_value="rid1",
     )
-    await store.create_report(name="My Report", created_by="u@x.com")
+    await store.create_report(name="My Report", created_by="u@x.com", access=ReportAccess(scope="public"))
     await store.save_report_version(report_id="rid1", config={"rows": []}, created_by="u@x.com")
     ok = await store.set_dashboard_report("rid1")
     assert ok is True
@@ -345,8 +345,8 @@ async def test_set_dashboard_report_can_be_changed(store, mocker):
         "reporting.services.report_store.sql.generate_report_id",
         side_effect=lambda: next(ids),
     )
-    await store.create_report(name="r1", created_by="u@x.com")
-    await store.create_report(name="r2", created_by="u@x.com")
+    await store.create_report(name="r1", created_by="u@x.com", access=ReportAccess(scope="public"))
+    await store.create_report(name="r2", created_by="u@x.com", access=ReportAccess(scope="public"))
     await store.set_dashboard_report("rid1")
     await store.set_dashboard_report("rid2")
     assert await store.get_dashboard_report_id() == "rid2"
@@ -366,7 +366,7 @@ async def test_delete_report_removes_report(store, mocker):
         "reporting.services.report_store.sql.generate_report_id",
         return_value="rid1",
     )
-    await store.create_report(name="r", created_by="u@x.com")
+    await store.create_report(name="r", created_by="u@x.com", access=ReportAccess(scope="public"))
     await store.save_report_version(report_id="rid1", config={"v": 1}, created_by="u@x.com")
     assert await store.delete_report("rid1") is True
     assert await store.list_reports() == []
@@ -378,7 +378,7 @@ async def test_delete_report_clears_dashboard_pointer(store, mocker):
         "reporting.services.report_store.sql.generate_report_id",
         return_value="rid1",
     )
-    await store.create_report(name="r", created_by="u@x.com")
+    await store.create_report(name="r", created_by="u@x.com", access=ReportAccess(scope="public"))
     await store.set_dashboard_report("rid1")
     assert await store.get_dashboard_report_id() == "rid1"
     await store.delete_report("rid1")
@@ -392,7 +392,7 @@ async def test_delete_report_does_not_clear_other_dashboard_pointer(store, mocke
         side_effect=lambda: next(ids),
     )
     await store.create_report(name="r1", created_by="u@x.com")
-    await store.create_report(name="r2", created_by="u@x.com")
+    await store.create_report(name="r2", created_by="u@x.com", access=ReportAccess(scope="public"))
     await store.set_dashboard_report("rid2")
     await store.delete_report("rid1")
     assert await store.get_dashboard_report_id() == "rid2"
@@ -592,7 +592,7 @@ async def test_list_panel_stats_populated_on_save_version(store, mocker):
         "reporting.services.report_store.sql.generate_report_id",
         return_value="rid1",
     )
-    await store.create_report(name="Test", created_by="u@x.com")
+    await store.create_report(name="Test", created_by="u@x.com", access=ReportAccess(scope="public"))
     await store.save_report_version(report_id="rid1", config=_STAT_CONFIG, created_by="u@x.com")
     stats = await store.list_panel_stats()
     assert len(stats) == 1
@@ -609,7 +609,7 @@ async def test_list_panel_stats_replaced_on_new_version(store, mocker):
         "reporting.services.report_store.sql.generate_report_id",
         return_value="rid1",
     )
-    await store.create_report(name="Test", created_by="u@x.com")
+    await store.create_report(name="Test", created_by="u@x.com", access=ReportAccess(scope="public"))
     await store.save_report_version(report_id="rid1", config=_STAT_CONFIG, created_by="u@x.com")
     # Save a version with no stat panels — stats should be cleared
     await store.save_report_version(report_id="rid1", config={"name": "Test", "rows": []}, created_by="u@x.com")
@@ -621,7 +621,7 @@ async def test_list_panel_stats_cleared_on_delete(store, mocker):
         "reporting.services.report_store.sql.generate_report_id",
         return_value="rid1",
     )
-    await store.create_report(name="Test", created_by="u@x.com")
+    await store.create_report(name="Test", created_by="u@x.com", access=ReportAccess(scope="public"))
     await store.save_report_version(report_id="rid1", config=_STAT_CONFIG, created_by="u@x.com")
     assert len(await store.list_panel_stats()) == 1
     await store.delete_report("rid1")

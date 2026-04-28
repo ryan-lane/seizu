@@ -9,6 +9,7 @@ from reporting.schema.report_config import (
     CreateReportRequest,
     CreateVersionRequest,
     PinReportRequest,
+    UpdateReportMetadataRequest,
 )
 from reporting.services import report_store
 from reporting.services.mcp_builtins.base import BuiltinGroup, BuiltinTool, model_input_schema
@@ -27,12 +28,14 @@ def _report_id_prop() -> dict[str, Any]:
 
 
 async def _list(args: dict[str, Any], current_user: CurrentUser | None) -> dict[str, Any]:
-    reports = await report_store.list_reports()
+    user = _require_user(current_user)
+    reports = await report_store.list_reports(user_id=user.user.user_id)
     return {"reports": [r.model_dump() for r in reports]}
 
 
 async def _get(args: dict[str, Any], current_user: CurrentUser | None) -> dict[str, Any]:
-    report = await report_store.get_report_latest(args["report_id"])
+    user = _require_user(current_user)
+    report = await report_store.get_report_latest(args["report_id"], user_id=user.user.user_id)
     if not report:
         return {"error": "Report not found"}
     return report.model_dump()
@@ -61,6 +64,7 @@ async def _create_version(args: dict[str, Any], current_user: CurrentUser | None
         config=body.config,
         created_by=user.user.user_id,
         comment=body.comment,
+        user_id=user.user.user_id,
     )
     if not version:
         return {"error": "Report not found"}
@@ -68,22 +72,35 @@ async def _create_version(args: dict[str, Any], current_user: CurrentUser | None
 
 
 async def _delete(args: dict[str, Any], current_user: CurrentUser | None) -> dict[str, Any]:
-    ok = await report_store.delete_report(args["report_id"])
+    user = _require_user(current_user)
+    ok = await report_store.delete_report(args["report_id"], user_id=user.user.user_id)
     if not ok:
         return {"error": "Report not found"}
     return {"report_id": args["report_id"]}
 
 
 async def _pin(args: dict[str, Any], current_user: CurrentUser | None) -> dict[str, Any]:
+    user = _require_user(current_user)
     report_id = args["report_id"]
     body = PinReportRequest.model_validate({k: v for k, v in args.items() if k != "report_id"})
-    ok = await report_store.pin_report(report_id, body.pinned)
+    ok = await report_store.pin_report(
+        report_id,
+        body.pinned,
+        updated_by=user.user.user_id,
+        user_id=user.user.user_id,
+    )
     if not ok:
         return {"error": "Report not found"}
     return {"report_id": report_id, "pinned": body.pinned}
 
 
 async def _set_dashboard(args: dict[str, Any], current_user: CurrentUser | None) -> dict[str, Any]:
+    user = _require_user(current_user)
+    meta = await report_store.get_report_metadata(args["report_id"], user_id=user.user.user_id)
+    if not meta:
+        return {"error": "Report not found"}
+    if meta.access.scope != "public":
+        return {"error": "Dashboard report must be public"}
     ok = await report_store.set_dashboard_report(args["report_id"])
     if not ok:
         return {"error": "Report not found"}
@@ -91,14 +108,20 @@ async def _set_dashboard(args: dict[str, Any], current_user: CurrentUser | None)
 
 
 async def _list_versions(args: dict[str, Any], current_user: CurrentUser | None) -> dict[str, Any]:
-    versions = await report_store.list_report_versions(args["report_id"])
+    user = _require_user(current_user)
+    versions = await report_store.list_report_versions(args["report_id"], user_id=user.user.user_id)
     if not versions:
         return {"error": "Report not found"}
     return {"versions": [v.model_dump() for v in versions]}
 
 
 async def _get_version(args: dict[str, Any], current_user: CurrentUser | None) -> dict[str, Any]:
-    version = await report_store.get_report_version(args["report_id"], int(args["version"]))
+    user = _require_user(current_user)
+    version = await report_store.get_report_version(
+        args["report_id"],
+        int(args["version"]),
+        user_id=user.user.user_id,
+    )
     if not version:
         return {"error": "Version not found"}
     return version.model_dump()
@@ -106,7 +129,7 @@ async def _get_version(args: dict[str, Any], current_user: CurrentUser | None) -
 
 async def _clone(args: dict[str, Any], current_user: CurrentUser | None) -> dict[str, Any]:
     user = _require_user(current_user)
-    source = await report_store.get_report_latest(args["report_id"])
+    source = await report_store.get_report_latest(args["report_id"], user_id=user.user.user_id)
     if not source:
         return {"error": "Report not found"}
     body = CloneReportRequest.model_validate({k: v for k, v in args.items() if k != "report_id"})
@@ -116,8 +139,32 @@ async def _clone(args: dict[str, Any], current_user: CurrentUser | None) -> dict
         config=source.config,
         created_by=user.user.user_id,
         comment=f"Cloned from {source.name}",
+        user_id=user.user.user_id,
     )
     return new_item.model_dump()
+
+
+async def _update(args: dict[str, Any], current_user: CurrentUser | None) -> dict[str, Any]:
+    user = _require_user(current_user)
+    report_id = args["report_id"]
+    body = UpdateReportMetadataRequest.model_validate({k: v for k, v in args.items() if k != "report_id"})
+    meta = await report_store.get_report_metadata(report_id, user_id=user.user.user_id)
+    if not meta:
+        return {"error": "Report not found"}
+    if meta.created_by != user.user.user_id:
+        return {"error": "Only the report owner can update report access"}
+    if body.access is not None and body.access.scope == "private":
+        dashboard_report_id = await report_store.get_dashboard_report_id()
+        if meta.pinned or dashboard_report_id == report_id:
+            return {"error": "Report must be unpinned and removed from the dashboard before it can be made private"}
+    updated = await report_store.update_report_metadata(
+        report_id=report_id,
+        updated_by=user.user.user_id,
+        access=body.access,
+    )
+    if not updated:
+        return {"error": "Report not found"}
+    return updated.model_dump()
 
 
 GROUP_DEF = BuiltinGroup(
@@ -171,6 +218,19 @@ GROUP_DEF = BuiltinGroup(
             ),
             required_permissions=[Permission.REPORTS_WRITE.value],
             handler=_create_version,
+            requires_user=True,
+        ),
+        BuiltinTool(
+            name="reports__update",
+            group=GROUP,
+            description="Update report-level metadata such as access without creating a version.",
+            input_schema=model_input_schema(
+                UpdateReportMetadataRequest,
+                extra_properties=_report_id_prop(),
+                extra_required=["report_id"],
+            ),
+            required_permissions=[Permission.REPORTS_WRITE.value],
+            handler=_update,
             requires_user=True,
         ),
         BuiltinTool(

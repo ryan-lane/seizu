@@ -28,9 +28,25 @@ _FAKE_CURRENT_USER = CurrentUser(
 )
 
 
-def _make_app():
+def _make_current_user(user_id: str = "test-user-id", email: str | None = None) -> CurrentUser:
+    return CurrentUser(
+        user=User(
+            user_id=user_id,
+            sub="sub123",
+            iss="https://idp.example.com",
+            email=email or f"{user_id}@example.com",
+            display_name="Test User" if user_id == "test-user-id" else "Other User",
+            created_at="2024-01-01T00:00:00+00:00",
+            last_login="2024-01-01T00:00:00+00:00",
+        ),
+        jwt_claims={"token_exp": datetime.now(tz=UTC) + timedelta(minutes=10)},
+        permissions=ALL_PERMISSIONS,
+    )
+
+
+def _make_app(current_user: CurrentUser = _FAKE_CURRENT_USER):
     app = create_app()
-    app.dependency_overrides[get_current_user] = lambda: _FAKE_CURRENT_USER
+    app.dependency_overrides[get_current_user] = lambda: current_user
     return app
 
 
@@ -41,6 +57,9 @@ def _report_list_item(report_id="rid1", name="My Report", current_version=1):
         current_version=current_version,
         created_at="2024-01-01T00:00:00+00:00",
         updated_at="2024-01-01T00:00:00+00:00",
+        created_by="test-user-id",
+        updated_by="test-user-id",
+        access={"scope": "public"},
     )
 
 
@@ -53,6 +72,9 @@ def _report_version(report_id="rid1", version=1):
         created_at="2024-01-01T00:00:00+00:00",
         created_by="user@example.com",
         comment=None,
+        report_created_by="test-user-id",
+        report_updated_by="test-user-id",
+        access={"scope": "public"},
     )
 
 
@@ -139,6 +161,10 @@ async def test_get_dashboard_report_not_configured(mocker):
 
 async def test_set_dashboard_report_success(mocker):
     mocker.patch(
+        "reporting.routes.reports.report_store.get_report_metadata",
+        new=AsyncMock(return_value=_report_list_item()),
+    )
+    mocker.patch(
         "reporting.routes.reports.report_store.set_dashboard_report",
         new=AsyncMock(return_value=True),
     )
@@ -151,6 +177,10 @@ async def test_set_dashboard_report_success(mocker):
 
 async def test_set_dashboard_report_not_found(mocker):
     mocker.patch(
+        "reporting.routes.reports.report_store.get_report_metadata",
+        new=AsyncMock(return_value=None),
+    )
+    mocker.patch(
         "reporting.routes.reports.report_store.set_dashboard_report",
         new=AsyncMock(return_value=False),
     )
@@ -159,6 +189,71 @@ async def test_set_dashboard_report_not_found(mocker):
         ret = await client.put("/api/v1/reports/missing/dashboard")
     assert ret.status_code == 404
     assert "not found" in ret.json()["error"].lower()
+
+
+async def test_set_dashboard_report_rejects_private(mocker):
+    private = _report_list_item()
+    private.access.scope = "private"
+    mocker.patch(
+        "reporting.routes.reports.report_store.get_report_metadata",
+        new=AsyncMock(return_value=private),
+    )
+    app = _make_app()
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        ret = await client.put("/api/v1/reports/rid1/dashboard")
+    assert ret.status_code == 400
+    assert "public" in ret.json()["error"].lower()
+
+
+# ---------------------------------------------------------------------------
+# PUT /api/v1/reports/<report_id>
+# ---------------------------------------------------------------------------
+
+
+async def test_update_report_metadata_rejects_unpublish_when_pinned(mocker):
+    report = _report_list_item()
+    report.pinned = True
+    mocker.patch(
+        "reporting.routes.reports.report_store.get_report_metadata",
+        new=AsyncMock(return_value=report),
+    )
+    mocker.patch(
+        "reporting.routes.reports.report_store.get_dashboard_report_id",
+        new=AsyncMock(return_value=None),
+    )
+    mock_update = mocker.patch(
+        "reporting.routes.reports.report_store.update_report_metadata",
+        new=AsyncMock(),
+    )
+    app = _make_app()
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        ret = await client.put("/api/v1/reports/rid1", json={"access": {"scope": "private"}})
+
+    assert ret.status_code == 400
+    assert "private" in ret.json()["error"].lower()
+    mock_update.assert_not_called()
+
+
+async def test_update_report_metadata_rejects_unpublish_when_dashboard(mocker):
+    mocker.patch(
+        "reporting.routes.reports.report_store.get_report_metadata",
+        new=AsyncMock(return_value=_report_list_item()),
+    )
+    mocker.patch(
+        "reporting.routes.reports.report_store.get_dashboard_report_id",
+        new=AsyncMock(return_value="rid1"),
+    )
+    mock_update = mocker.patch(
+        "reporting.routes.reports.report_store.update_report_metadata",
+        new=AsyncMock(),
+    )
+    app = _make_app()
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        ret = await client.put("/api/v1/reports/rid1", json={"access": {"scope": "private"}})
+
+    assert ret.status_code == 400
+    assert "private" in ret.json()["error"].lower()
+    mock_update.assert_not_called()
 
 
 # ---------------------------------------------------------------------------
@@ -205,6 +300,22 @@ async def test_get_report_not_found(mocker):
     assert "not found" in ret.json()["error"].lower()
 
 
+async def test_get_private_report_returns_404_for_non_owner(mocker):
+    async def _get_report_latest(report_id: str, user_id: str | None = None):
+        if user_id != "test-user-id":
+            return None
+        return _report_version()
+
+    mocker.patch(
+        "reporting.routes.reports.report_store.get_report_latest",
+        new=AsyncMock(side_effect=_get_report_latest),
+    )
+    app = _make_app(_make_current_user(user_id="other-user"))
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        ret = await client.get("/api/v1/reports/rid1")
+    assert ret.status_code == 404
+
+
 # ---------------------------------------------------------------------------
 # GET /api/v1/reports/<report_id>/versions
 # ---------------------------------------------------------------------------
@@ -233,6 +344,22 @@ async def test_list_versions_report_not_found(mocker):
     app = _make_app()
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         ret = await client.get("/api/v1/reports/missing/versions")
+    assert ret.status_code == 404
+
+
+async def test_list_versions_private_report_returns_404_for_non_owner(mocker):
+    async def _list_report_versions(report_id: str, user_id: str | None = None):
+        if user_id != "test-user-id":
+            return []
+        return [_report_version(version=2), _report_version(version=1)]
+
+    mocker.patch(
+        "reporting.routes.reports.report_store.list_report_versions",
+        new=AsyncMock(side_effect=_list_report_versions),
+    )
+    app = _make_app(_make_current_user(user_id="other-user"))
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        ret = await client.get("/api/v1/reports/rid1/versions")
     assert ret.status_code == 404
 
 
@@ -276,6 +403,22 @@ async def test_get_version_not_found(mocker):
         ret = await client.get("/api/v1/reports/rid1/versions/99")
     assert ret.status_code == 404
     assert "not found" in ret.json()["error"].lower()
+
+
+async def test_get_version_private_report_returns_404_for_non_owner(mocker):
+    async def _get_report_version(report_id: str, version_num: int, user_id: str | None = None):
+        if user_id != "test-user-id":
+            return None
+        return _report_version(version=version_num)
+
+    mocker.patch(
+        "reporting.routes.reports.report_store.get_report_version",
+        new=AsyncMock(side_effect=_get_report_version),
+    )
+    app = _make_app(_make_current_user(user_id="other-user"))
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        ret = await client.get("/api/v1/reports/rid1/versions/3")
+    assert ret.status_code == 404
 
 
 # ---------------------------------------------------------------------------
@@ -380,6 +523,7 @@ async def test_create_version_passes_fields_to_service(mocker):
         config={"rows": [{"name": "r"}]},
         created_by="test-user-id",
         comment="update",
+        user_id="test-user-id",
     )
 
 
@@ -396,6 +540,28 @@ async def test_create_version_report_not_found(mocker):
         )
     assert ret.status_code == 404
     assert "not found" in ret.json()["error"].lower()
+
+
+async def test_create_version_private_report_returns_404_for_non_owner(mocker):
+    async def _save_report_version(
+        report_id: str,
+        config: dict[str, object],
+        created_by: str,
+        comment: str | None = None,
+        user_id: str | None = None,
+    ):
+        if user_id != "test-user-id":
+            return None
+        return _report_version(version=2)
+
+    mocker.patch(
+        "reporting.routes.reports.report_store.save_report_version",
+        new=AsyncMock(side_effect=_save_report_version),
+    )
+    app = _make_app(_make_current_user(user_id="other-user"))
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        ret = await client.post("/api/v1/reports/rid1/versions", json={"config": {"rows": []}})
+    assert ret.status_code == 404
 
 
 async def test_create_version_missing_config_field(mocker):
@@ -485,7 +651,7 @@ async def test_pin_report_passes_fields_to_service(mocker):
     app = _make_app()
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         await client.put("/api/v1/reports/rid1/pin", json={"pinned": True})
-    mock_pin.assert_called_once_with("rid1", True)
+    mock_pin.assert_called_once_with("rid1", True, updated_by="test-user-id", user_id="test-user-id")
 
 
 async def test_pin_report_not_found(mocker):
@@ -546,6 +712,7 @@ async def test_clone_report_success(mocker):
         config=source.config,
         created_by="test-user-id",
         comment="Cloned from My Report",
+        user_id="test-user-id",
     )
 
 

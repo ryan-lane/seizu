@@ -24,6 +24,7 @@ from reporting.schema.rbac import RoleItem, RoleVersion
 from reporting.schema.report_config import (
     PanelStat,
     QueryHistoryItem,
+    ReportAccess,
     ReportListItem,
     ReportVersion,
     ScheduledQueryItem,
@@ -139,6 +140,42 @@ def _role_from_item(item: dict) -> RoleItem:
         updated_at=item["updated_at"],
         created_by=item["created_by"],
         updated_by=item.get("updated_by"),
+    )
+
+
+def _report_visible_to_user(item: dict[str, Any], user_id: str | None) -> bool:
+    if user_id is None:
+        return True
+    access = item["access"]
+    return access["scope"] == "public" or item["created_by"] == user_id
+
+
+def _report_list_item_from_item(item: dict[str, Any]) -> ReportListItem:
+    return ReportListItem(
+        report_id=item["report_id"],
+        name=item["name"],
+        current_version=item["current_version"],
+        created_at=item["created_at"],
+        updated_at=item["updated_at"],
+        created_by=item["created_by"],
+        updated_by=item["updated_by"],
+        access=item["access"],
+        pinned=bool(item.get("pinned", False)),
+    )
+
+
+def _report_version_from_item(item: dict[str, Any], meta: dict[str, Any]) -> ReportVersion:
+    return ReportVersion(
+        report_id=item["report_id"],
+        name=item["name"],
+        version=item["version"],
+        config=item["config"],
+        created_at=item["created_at"],
+        created_by=item["created_by"],
+        comment=item.get("comment"),
+        report_created_by=meta["created_by"],
+        report_updated_by=meta["updated_by"],
+        access=meta["access"],
     )
 
 
@@ -511,7 +548,7 @@ class DynamoDBReportStore(ReportStore):
 
         await asyncio.to_thread(_op)
 
-    async def list_reports(self) -> list[ReportListItem]:
+    async def list_reports(self, user_id: str | None = None) -> list[ReportListItem]:
         """Return lightweight metadata for all reports."""
 
         def _op() -> list[ReportListItem]:
@@ -521,55 +558,85 @@ class DynamoDBReportStore(ReportStore):
                 ExpressionAttributeValues={":pk": _PK_REPORT_LIST},
             )
             items = resp.get("Items", [])
-            return [
-                ReportListItem(
-                    report_id=item["report_id"],
-                    name=item["name"],
-                    current_version=item["current_version"],
-                    created_at=item["created_at"],
-                    updated_at=item["updated_at"],
-                    pinned=bool(item.get("pinned", False)),
-                )
-                for item in items
-            ]
+            return [_report_list_item_from_item(item) for item in items if _report_visible_to_user(item, user_id)]
 
         return await asyncio.to_thread(_op)
 
-    async def get_report_latest(self, report_id: str) -> ReportVersion | None:
+    async def get_report_metadata(
+        self,
+        report_id: str,
+        user_id: str | None = None,
+    ) -> ReportListItem | None:
+        def _op() -> ReportListItem | None:
+            table = _get_table()
+            resp = table.get_item(Key={"PK": _report_pk(report_id), "SK": _SK_METADATA})
+            item = resp.get("Item")
+            if not item or not _report_visible_to_user(item, user_id):
+                return None
+            return _report_list_item_from_item(item)
+
+        return await asyncio.to_thread(_op)
+
+    async def get_report_latest(
+        self,
+        report_id: str,
+        user_id: str | None = None,
+    ) -> ReportVersion | None:
         """Return the latest version of a report config, or None if not found."""
 
         def _op() -> ReportVersion | None:
             table = _get_table()
+            meta_resp = table.get_item(Key={"PK": _report_pk(report_id), "SK": _SK_METADATA})
+            meta = meta_resp.get("Item")
+            if not meta or not _report_visible_to_user(meta, user_id):
+                return None
             resp = table.get_item(
                 Key={"PK": _report_pk(report_id), "SK": _SK_LATEST},
             )
             item = resp.get("Item")
             if not item:
                 return None
-            return ReportVersion(**item)
+            return _report_version_from_item(item, meta)
 
         return await asyncio.to_thread(_op)
 
-    async def get_report_version(self, report_id: str, version: int) -> ReportVersion | None:
+    async def get_report_version(
+        self,
+        report_id: str,
+        version: int,
+        user_id: str | None = None,
+    ) -> ReportVersion | None:
         """Return a specific version of a report config, or None if not found."""
 
         def _op() -> ReportVersion | None:
             table = _get_table()
+            meta_resp = table.get_item(Key={"PK": _report_pk(report_id), "SK": _SK_METADATA})
+            meta = meta_resp.get("Item")
+            if not meta or not _report_visible_to_user(meta, user_id):
+                return None
             resp = table.get_item(
                 Key={"PK": _report_pk(report_id), "SK": _version_sk(version)},
             )
             item = resp.get("Item")
             if not item:
                 return None
-            return ReportVersion(**item)
+            return _report_version_from_item(item, meta)
 
         return await asyncio.to_thread(_op)
 
-    async def list_report_versions(self, report_id: str) -> list[ReportVersion]:
+    async def list_report_versions(
+        self,
+        report_id: str,
+        user_id: str | None = None,
+    ) -> list[ReportVersion]:
         """Return all stored versions for a report, newest first."""
 
         def _op() -> list[ReportVersion]:
             table = _get_table()
+            meta_resp = table.get_item(Key={"PK": _report_pk(report_id), "SK": _SK_METADATA})
+            meta = meta_resp.get("Item")
+            if not meta or not _report_visible_to_user(meta, user_id):
+                return []
             resp = table.query(
                 KeyConditionExpression="PK = :pk AND begins_with(SK, :prefix)",
                 ExpressionAttributeValues={
@@ -578,7 +645,7 @@ class DynamoDBReportStore(ReportStore):
                 },
                 ScanIndexForward=False,
             )
-            return [ReportVersion(**item) for item in resp.get("Items", [])]
+            return [_report_version_from_item(item, meta) for item in resp.get("Items", [])]
 
         return await asyncio.to_thread(_op)
 
@@ -586,10 +653,12 @@ class DynamoDBReportStore(ReportStore):
         self,
         name: str,
         created_by: str,
+        access: ReportAccess | None = None,
     ) -> ReportListItem:
         """Create a new empty report (no initial version) and return the ReportListItem."""
         report_id = generate_report_id()
         now = datetime.now(tz=UTC).isoformat()
+        report_access = access or ReportAccess(scope="private")
 
         metadata_item = {
             "PK": _report_pk(report_id),
@@ -599,6 +668,9 @@ class DynamoDBReportStore(ReportStore):
             "current_version": 0,
             "created_at": now,
             "updated_at": now,
+            "created_by": created_by,
+            "updated_by": created_by,
+            "access": report_access.model_dump(),
             "pinned": False,
         }
         list_item = {
@@ -609,6 +681,9 @@ class DynamoDBReportStore(ReportStore):
             "current_version": 0,
             "created_at": now,
             "updated_at": now,
+            "created_by": created_by,
+            "updated_by": created_by,
+            "access": report_access.model_dump(),
             "pinned": False,
         }
 
@@ -623,6 +698,9 @@ class DynamoDBReportStore(ReportStore):
             current_version=0,
             created_at=now,
             updated_at=now,
+            created_by=created_by,
+            updated_by=created_by,
+            access=report_access,
             pinned=False,
         )
 
@@ -632,6 +710,7 @@ class DynamoDBReportStore(ReportStore):
         config: dict[str, Any],
         created_by: str,
         comment: str | None = None,
+        user_id: str | None = None,
     ) -> ReportVersion | None:
         """Append a new version to an existing report and return it."""
 
@@ -639,7 +718,7 @@ class DynamoDBReportStore(ReportStore):
             table = _get_table()
             resp = table.get_item(Key={"PK": _report_pk(report_id), "SK": _SK_METADATA})
             meta = resp.get("Item")
-            if not meta:
+            if not meta or not _report_visible_to_user(meta, user_id):
                 return None
 
             version = int(meta["current_version"]) + 1
@@ -667,6 +746,9 @@ class DynamoDBReportStore(ReportStore):
                 "current_version": version,
                 "created_at": meta["created_at"],
                 "updated_at": now,
+                "created_by": meta["created_by"],
+                "updated_by": created_by,
+                "access": meta["access"],
                 "pinned": pinned,
             }
             list_item = {
@@ -677,6 +759,9 @@ class DynamoDBReportStore(ReportStore):
                 "current_version": version,
                 "created_at": meta["created_at"],
                 "updated_at": now,
+                "created_by": meta["created_by"],
+                "updated_by": created_by,
+                "access": meta["access"],
                 "pinned": pinned,
             }
 
@@ -705,17 +790,57 @@ class DynamoDBReportStore(ReportStore):
                 list_item,
                 stats_item,
             )
-            return ReportVersion(**version_item)
+            return _report_version_from_item(version_item, metadata_item)
 
         return await asyncio.to_thread(_op)
 
-    async def delete_report(self, report_id: str) -> bool:
+    async def update_report_metadata(
+        self,
+        report_id: str,
+        updated_by: str,
+        access: ReportAccess | None = None,
+    ) -> ReportListItem | None:
+        def _op() -> ReportListItem | None:
+            table = _get_table()
+            resp = table.get_item(Key={"PK": _report_pk(report_id), "SK": _SK_METADATA})
+            meta = resp.get("Item")
+            if not meta:
+                return None
+
+            now = datetime.now(tz=UTC).isoformat()
+            new_access = access.model_dump() if access is not None else meta["access"]
+            updated = {
+                **meta,
+                "updated_at": now,
+                "updated_by": updated_by,
+                "access": new_access,
+            }
+            list_item = {
+                "PK": _PK_REPORT_LIST,
+                "SK": f"REPORT#{report_id}",
+                "report_id": report_id,
+                "name": meta["name"],
+                "current_version": meta["current_version"],
+                "created_at": meta["created_at"],
+                "updated_at": now,
+                "created_by": meta["created_by"],
+                "updated_by": updated_by,
+                "access": new_access,
+                "pinned": bool(meta.get("pinned", False)),
+            }
+            _transact_put_sync(table, updated, list_item)
+            return _report_list_item_from_item(list_item)
+
+        return await asyncio.to_thread(_op)
+
+    async def delete_report(self, report_id: str, user_id: str | None = None) -> bool:
         """Delete a report and all its versions."""
 
         def _op() -> bool:
             table = _get_table()
             resp = table.get_item(Key={"PK": _report_pk(report_id), "SK": _SK_METADATA})
-            if not resp.get("Item"):
+            meta = resp.get("Item")
+            if not meta or not _report_visible_to_user(meta, user_id):
                 return False
 
             items_resp = table.query(
@@ -740,23 +865,31 @@ class DynamoDBReportStore(ReportStore):
 
         return await asyncio.to_thread(_op)
 
-    async def pin_report(self, report_id: str, pinned: bool) -> bool:
+    async def pin_report(
+        self,
+        report_id: str,
+        pinned: bool,
+        updated_by: str,
+        user_id: str | None = None,
+    ) -> bool:
         """Set or clear the pinned flag on a report."""
 
         def _op() -> bool:
             table = _get_table()
             resp = table.get_item(Key={"PK": _report_pk(report_id), "SK": _SK_METADATA})
-            if not resp.get("Item"):
+            meta = resp.get("Item")
+            if not meta or not _report_visible_to_user(meta, user_id):
                 return False
+            now = datetime.now(tz=UTC).isoformat()
             table.update_item(
                 Key={"PK": _report_pk(report_id), "SK": _SK_METADATA},
-                UpdateExpression="SET pinned = :pinned",
-                ExpressionAttributeValues={":pinned": pinned},
+                UpdateExpression="SET pinned = :pinned, updated_at = :updated_at, updated_by = :updated_by",
+                ExpressionAttributeValues={":pinned": pinned, ":updated_at": now, ":updated_by": updated_by},
             )
             table.update_item(
                 Key={"PK": _PK_REPORT_LIST, "SK": f"REPORT#{report_id}"},
-                UpdateExpression="SET pinned = :pinned",
-                ExpressionAttributeValues={":pinned": pinned},
+                UpdateExpression="SET pinned = :pinned, updated_at = :updated_at, updated_by = :updated_by",
+                ExpressionAttributeValues={":pinned": pinned, ":updated_at": now, ":updated_by": updated_by},
             )
             return True
 
@@ -781,7 +914,10 @@ class DynamoDBReportStore(ReportStore):
         def _op() -> bool:
             table = _get_table()
             resp = table.get_item(Key={"PK": _report_pk(report_id), "SK": _SK_METADATA})
-            if not resp.get("Item"):
+            meta = resp.get("Item")
+            if not meta:
+                return False
+            if meta["access"]["scope"] != "public":
                 return False
             table.put_item(
                 Item={
@@ -800,7 +936,10 @@ class DynamoDBReportStore(ReportStore):
         report_id = await self.get_dashboard_report_id()
         if not report_id:
             return None
-        return await self.get_report_latest(report_id)
+        report = await self.get_report_latest(report_id)
+        if report and report.access.scope == "public":
+            return report
+        return None
 
     async def list_panel_stats(self) -> list[PanelStat]:
         """Return all PanelStat records across all reports."""
@@ -814,6 +953,10 @@ class DynamoDBReportStore(ReportStore):
             result = []
             for item in resp.get("Items", []):
                 report_id = item["report_id"]
+                meta_resp = table.get_item(Key={"PK": _report_pk(report_id), "SK": _SK_METADATA})
+                meta = meta_resp.get("Item")
+                if not meta or meta["access"]["scope"] != "public":
+                    continue
                 for stat_data in item.get("stats", []):
                     result.append(
                         PanelStat(

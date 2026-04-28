@@ -36,9 +36,11 @@ import EditIcon from '@mui/icons-material/Edit';
 import HistoryIcon from '@mui/icons-material/History';
 import DashboardIcon from '@mui/icons-material/Dashboard';
 import DashboardOutlinedIcon from '@mui/icons-material/DashboardOutlined';
+import LockIcon from '@mui/icons-material/Lock';
 import PushPinIcon from '@mui/icons-material/PushPin';
 import PushPinOutlinedIcon from '@mui/icons-material/PushPinOutlined';
 import MoreVertIcon from '@mui/icons-material/MoreVert';
+import PublicIcon from '@mui/icons-material/Public';
 import Error from '@mui/icons-material/Error';
 
 import {
@@ -47,6 +49,7 @@ import {
   useReportsList,
   useReportsMutations
 } from 'src/hooks/useReportsApi';
+import { useCurrentUser } from 'src/hooks/useCurrentUser';
 import { usePermissions } from 'src/hooks/usePermissions';
 
 // ---------------------------------------------------------------------------
@@ -61,16 +64,30 @@ interface RowMenuProps {
   onEdit: () => void;
   onHistory: () => void;
   onClone: () => void;
+  onToggleAccess: () => void;
   onDelete: () => void;
+  isOwner: boolean;
 }
 
-function RowMenu({ report, isDashboard, onSetDashboard, onPin, onEdit, onHistory, onClone, onDelete }: RowMenuProps) {
+function RowMenu({
+  report,
+  isDashboard,
+  onSetDashboard,
+  onPin,
+  onEdit,
+  onHistory,
+  onClone,
+  onToggleAccess,
+  onDelete,
+  isOwner
+}: RowMenuProps) {
   const [anchor, setAnchor] = useState<null | HTMLElement>(null);
   const hasPermission = usePermissions();
 
   const canWrite = hasPermission('reports:write');
   const canDelete = hasPermission('reports:delete');
   const canSetDashboard = hasPermission('reports:set_dashboard');
+  const canUpdateAccess = canWrite && isOwner;
 
   const close = () => setAnchor(null);
 
@@ -125,12 +142,35 @@ function RowMenu({ report, isDashboard, onSetDashboard, onPin, onEdit, onHistory
           <span>
             <MenuItem
               onClick={() => { onSetDashboard(); close(); }}
-              disabled={isDashboard || !canSetDashboard}
+              disabled={isDashboard || !canSetDashboard || report.access.scope !== 'public'}
             >
               <ListItemIcon>
                 {isDashboard ? <DashboardIcon fontSize="small" color="primary" /> : <DashboardOutlinedIcon fontSize="small" />}
               </ListItemIcon>
               <ListItemText>{isDashboard ? 'Current dashboard' : 'Set as dashboard'}</ListItemText>
+            </MenuItem>
+          </span>
+        </Tooltip>
+
+        <Tooltip
+          title={
+            !canUpdateAccess
+              ? 'Only the report owner can publish or unpublish'
+              : ''
+          }
+          placement="left"
+        >
+          <span>
+            <MenuItem
+              onClick={() => { onToggleAccess(); close(); }}
+              disabled={!canUpdateAccess}
+            >
+              <ListItemIcon>
+                {report.access.scope === 'public'
+                  ? <LockIcon fontSize="small" />
+                  : <PublicIcon fontSize="small" />}
+              </ListItemIcon>
+              <ListItemText>{report.access.scope === 'public' ? 'Unpublish' : 'Publish'}</ListItemText>
             </MenuItem>
           </span>
         </Tooltip>
@@ -175,8 +215,9 @@ function RowMenu({ report, isDashboard, onSetDashboard, onPin, onEdit, onHistory
 function ReportsList() {
   const { reports, loading, error, refresh } = useReportsList();
   const { dashboardReportId, refresh: refreshDashboard } = useDashboardReportId();
-  const { createReport, cloneReport, saveReportVersion, setDashboardReport, pinReport, deleteReport } =
+  const { createReport, cloneReport, saveReportVersion, setDashboardReport, pinReport, updateReportAccess, deleteReport } =
     useReportsMutations();
+  const currentUser = useCurrentUser();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const hasPermission = usePermissions();
@@ -229,6 +270,16 @@ function ReportsList() {
     try {
       await pinReport(reportId, pinned);
       refresh();
+    } catch {
+      // ignore – user can retry
+    }
+  };
+
+  const handleToggleAccess = async (report: ReportListItem) => {
+    try {
+      await updateReportAccess(report.report_id, report.access.scope === 'public' ? 'private' : 'public');
+      refresh();
+      refreshDashboard();
     } catch {
       // ignore – user can retry
     }
@@ -324,6 +375,7 @@ function ReportsList() {
                 )}
                 {reports.map((report) => {
                   const isDashboard = report.report_id === dashboardReportId;
+                  const isOwner = currentUser?.user_id === report.created_by;
                   return (
                     <TableRow key={report.report_id} hover>
                       <TableCell>
@@ -349,6 +401,20 @@ function ReportsList() {
                               />
                             </Tooltip>
                           )}
+                          <Tooltip title={report.access.scope === 'public' ? 'Visible to report readers' : 'Private to the owner'}>
+                            <Chip
+                              icon={
+                                report.access.scope === 'public'
+                                  ? <PublicIcon sx={{ fontSize: '0.85rem !important' }} />
+                                  : <LockIcon sx={{ fontSize: '0.85rem !important' }} />
+                              }
+                              label={report.access.scope === 'public' ? 'Public' : 'Draft'}
+                              size="small"
+                              color={report.access.scope === 'public' ? 'success' : 'default'}
+                              variant="outlined"
+                              sx={{ height: 20, fontSize: '0.7rem' }}
+                            />
+                          </Tooltip>
                           {isDashboard && (
                             <Tooltip title="Currently set as the dashboard">
                               <Chip
@@ -378,7 +444,9 @@ function ReportsList() {
                           onEdit={() => navigate(`/app/reports/${report.report_id}?edit=true`)}
                           onHistory={() => navigate(`/app/reports/${report.report_id}/history`)}
                           onClone={() => handleCloneOpen(report)}
+                          onToggleAccess={() => handleToggleAccess(report)}
                           onDelete={() => setDeleteTarget(report)}
+                          isOwner={isOwner}
                         />
                       </TableCell>
                     </TableRow>
