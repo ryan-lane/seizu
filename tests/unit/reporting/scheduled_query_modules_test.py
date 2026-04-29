@@ -3,6 +3,6 @@ from reporting import scheduled_query_modules
 
 async def test_load_modules(mocker):
     await scheduled_query_modules.load_modules()
-    assert list(scheduled_query_modules._MODULES.keys()) == ["sqs", "slack"]
-    assert scheduled_query_modules.get_module_names() == ["sqs", "slack"]
+    assert list(scheduled_query_modules._MODULES.keys()) == ["sqs", "slack", "statsd"]
+    assert scheduled_query_modules.get_module_names() == ["sqs", "slack", "statsd"]
     assert scheduled_query_modules.get_module("sqs") is not None
