@@ -465,12 +465,19 @@ function MarkdownEditor({ value, onChange, sourceLabel = 'Markdown content' }: M
                 '& ul, & ol': { pl: 3, my: 1 },
                 '& ul[data-type="taskList"]': {
                   listStyle: 'none',
-                  pl: 1,
+                  pl: 0,
+                  '& p': { my: 0 },
                   '& li': {
                     display: 'flex',
-                    alignItems: 'flex-start',
+                    alignItems: 'center',
                     gap: 1,
-                    '& label': { mt: '2px', flexShrink: 0 },
+                    '& > label': {
+                      flexShrink: 0,
+                      display: 'flex',
+                      alignItems: 'center',
+                      cursor: 'pointer',
+                      userSelect: 'none',
+                    },
                     '& > div': { flex: 1 }
                   }
                 },
