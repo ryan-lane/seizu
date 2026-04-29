@@ -1,8 +1,7 @@
-import { Box, Divider, Drawer, List } from '@mui/material';
+import { Box, Drawer, List } from '@mui/material';
 import Dashboard from '@mui/icons-material/Dashboard';
 import Insights from '@mui/icons-material/Insights';
 import Article from '@mui/icons-material/Article';
-import MenuBook from '@mui/icons-material/MenuBook';
 import Terminal from '@mui/icons-material/Terminal';
 import Schedule from '@mui/icons-material/Schedule';
 import Extension from '@mui/icons-material/Extension';
@@ -73,14 +72,6 @@ function DashboardSidebar({ onMobileClose = () => {}, openMobile = false }: Dash
       : [])
   ];
 
-  const adminItems: NavItemData[] = [
-    {
-      href: '/app/documentation',
-      icon: MenuBook,
-      title: 'Documentation'
-    }
-  ];
-
   const content = (
     <Box
       sx={{
@@ -92,18 +83,6 @@ function DashboardSidebar({ onMobileClose = () => {}, openMobile = false }: Dash
       <Box sx={{ p: 2 }}>
         <List>
           {items.map((item) => (
-            <NavItem
-              href={item.href}
-              key={item.title}
-              title={item.title}
-              icon={item.icon}
-              subItems={item.subItems}
-            />
-          ))}
-        </List>
-        <Divider />
-        <List>
-          {adminItems.map((item) => (
             <NavItem
               href={item.href}
               key={item.title}

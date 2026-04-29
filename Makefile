@@ -164,10 +164,6 @@ restart:
 logs:
 	docker compose logs -f $(call args)
 
-.PHONY: send_stats
-send_stats:
-	docker compose $(COMPOSE_PROFILES) run --rm seizu-dashboard-stats
-
 .PHONY: sync_aws
 sync_aws:
 	docker compose run cartography --neo4j-uri=bolt://neo4j:7687 --selected-modules=create-indexes,aws,analysis --aws-sync-all-profiles --permission-relationships-file=/etc/cartography/permission_relationships.yaml

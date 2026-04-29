@@ -274,12 +274,6 @@ class Panel(BaseModel):
         ],
     )
 
-    metric: str | None = Field(
-        default=None,
-        description=("The statsd metric to send from the panel data. Only used for ``count`` and ``progress`` panels."),
-        examples=["cves.severity"],
-    )
-
 
 class Row(BaseModel):
     name: str = Field(

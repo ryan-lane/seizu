@@ -193,40 +193,6 @@ services:
         condition: service_healthy
     networks:
       auth:
-  # ─────────────────────────────────────────────────────────────────────────
-  seizu-dashboard-stats:
-    image: ghcr.io/mappedsky/seizu
-    profiles:
-      - nostart
-    restart: on-failure
-    user: seizu
-    depends_on:
-      neo4j:
-        condition: service_healthy
-      dynamodb:
-        condition: service_healthy
-      postgres:
-        condition: service_healthy
-        required: false
-    environment:
-      - NEO4J_URI=bolt://neo4j:7687
-      - STATSD_HOST=telegraf
-      # Report store — must match the seizu service so stats are read from the
-      # same backend that report versions are written to.
-      - REPORT_STORE_BACKEND
-      - AWS_ACCESS_KEY_ID=fake
-      - AWS_SECRET_ACCESS_KEY=fake
-      - AWS_DEFAULT_REGION=us-east-1
-      - DYNAMODB_TABLE_NAME=seizu-reports
-      - DYNAMODB_ENDPOINT_URL=http://dynamodb:8000
-      - DYNAMODB_REGION=us-east-1
-      - SQL_DATABASE_URL=postgresql://seizu:seizu@postgres:5432/seizu
-    command: python -m reporting.dashboard_stats
-    volumes:
-      - .:/home/seizu/seizu
-    networks:
-      stats:
-      database:
   seizu-scheduled-queries:
     image: ghcr.io/mappedsky/seizu
     restart: on-failure
@@ -246,8 +212,10 @@ services:
       - AWS_DEFAULT_REGION=us-east-1
       - "SQS_CREATE_SCHEDULED_QUERY_QUEUES=true"
       - SQS_URL=http://sqs:9324
-      - SCHEDULED_QUERY_MODULES=reporting.scheduled_query_modules.sqs,reporting.scheduled_query_modules.slack,reporting.scheduled_query_modules.log
+      - SCHEDULED_QUERY_MODULES=reporting.scheduled_query_modules.sqs,reporting.scheduled_query_modules.slack,reporting.scheduled_query_modules.log,reporting.scheduled_query_modules.statsd
       - SLACK_OAUTH_BOT_TOKEN
+      - STATSD_HOST=telegraf
+      - STATSD_CONSTANT_TAGS
       - REPORT_STORE_BACKEND
       - DYNAMODB_TABLE_NAME=seizu-reports
       - DYNAMODB_ENDPOINT_URL=http://dynamodb:8000
@@ -301,8 +269,6 @@ services:
       - "OIDC_SCOPE=openid email profile"
       # Disable HTTPS redirect in development (plain HTTP)
       - "TALISMAN_FORCE_HTTPS=false"
-      - STATSD_EXTERNAL_PREFIX=seizu
-      - STATSD_EXTERNAL_PROVIDER=newrelic
       # Report store backend — set REPORT_STORE_BACKEND=sqlmodel to switch
       - REPORT_STORE_BACKEND
       # DynamoDB — points to the local DynamoDB container in development
@@ -344,7 +310,6 @@ services:
     command: bash -c "cd /run/seizu && exec gunicorn --config /home/seizu/seizu/gunicorn.conf reporting.asgi:application --reload --workers=2 -k uvicorn.workers.UvicornWorker --access-logfile=- --error-logfile=-"
     networks:
       proxy:
-      stats:
       database:
   seizu-node:
     image: oven/bun

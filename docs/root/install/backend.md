@@ -150,17 +150,16 @@ When ``MCP_OAUTH_AUTHORIZATION_ENDPOINT`` and ``MCP_OAUTH_TOKEN_ENDPOINT`` are s
 
 * ``ENABLE_SCHEDULED_QUERIES``: Whether or not scheduled queries should be enabled. Note that if the worker is not running, scheduled queries will not run, even if this is set to true; default: ``True``
 * ``SCHEDULED_QUERY_FREQUENCY``: The frequency in seconds for how often we'll attempt to run scheduled queries; default: ``20``
-* ``SCHEDULED_QUERY_MODULES``: A comma separated list of python import locations for available scheduled query modules; default: ``reporting.scheduled_query_modules.sqs,reporting.scheduled_query_modules.slack``
+* ``SCHEDULED_QUERY_MODULES``: A comma separated list of python import locations for available scheduled query modules; default: ``reporting.scheduled_query_modules.sqs,reporting.scheduled_query_modules.slack,reporting.scheduled_query_modules.statsd``
 
-### Statsd configuration
+### StatsD configuration
 
-Through the stats worker, seizu can send the results of queries configured in the dashboard configuration to your time series service, via statsd.
-Note that the statsd support uses tags, so your time series database must also support tagging (like datadog, new relic, etc), and the statsd server your sending to must also support tags (like telegraf, with datadog extensions enabled).
+The ``statsd`` scheduled query action module sends numeric query results to a StatsD server.
+Note that the StatsD support uses DogStatsD tag extensions, so your StatsD server must also support tags (e.g. Telegraf with ``datadog_extensions = true``).
 
-* ``STATSD_HOST``: The hostname of the statsd server; default: ``None``
-* ``STATSD_PORT``: The port of the statsd server; default: ``8125``
-* ``STATSD_CONSTANT_TAGS``: A comma separated list of ``tag_name:tag_value`` tags to apply to every stat; default: ``None``
-* ``DASHBOARD_STATS_MAX_INPUT_RESULTS``: When sending stats for panels that have an input, only send stats if the number of values in the input is less than this number; default: ``100``;
+* ``STATSD_HOST``: The hostname of the StatsD server; default: ``None`` (module logs a warning and skips when unset)
+* ``STATSD_PORT``: The port of the StatsD server; default: ``8125``
+* ``STATSD_CONSTANT_TAGS``: A comma-separated list of ``tag_name:tag_value`` tags attached to every metric; default: ``None``
 
 ### Logging configuration
 

@@ -72,7 +72,6 @@ def mock_store():
         "get_dashboard_report_id": None,
         "set_dashboard_report": True,
         "get_dashboard_report": None,
-        "list_panel_stats": [],
         "get_or_create_user": None,
         "update_user_profile": None,
         "get_user": None,
@@ -193,13 +192,6 @@ async def test_get_dashboard_report_delegates(mock_store):
     mock_store.get_dashboard_report.return_value = None
     await report_store.get_dashboard_report()
     mock_store.get_dashboard_report.assert_called_once()
-
-
-async def test_list_panel_stats_delegates(mock_store):
-    mock_store.list_panel_stats.return_value = []
-    result = await report_store.list_panel_stats()
-    mock_store.list_panel_stats.assert_called_once()
-    assert result == []
 
 
 async def test_facade_delegates_remaining_methods(mock_store):

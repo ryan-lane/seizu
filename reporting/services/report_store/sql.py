@@ -22,7 +22,6 @@ from reporting.schema.mcp_config import (
 )
 from reporting.schema.rbac import RoleItem, RoleVersion
 from reporting.schema.report_config import (
-    PanelStat,
     QueryHistoryItem,
     ReportAccess,
     ReportListItem,
@@ -31,7 +30,7 @@ from reporting.schema.report_config import (
     ScheduledQueryVersion,
     User,
 )
-from reporting.services.report_store.base import ReportStore, extract_panel_stats
+from reporting.services.report_store.base import ReportStore
 
 logger = logging.getLogger(__name__)
 
@@ -87,18 +86,6 @@ class UserRecord(SQLModel, table=True):  # type: ignore
     created_at: str
     last_login: str
     archived_at: str | None = None
-
-
-class PanelStatRecord(SQLModel, table=True):  # type: ignore
-    __tablename__ = "panel_stats"
-    id: int | None = Field(default=None, primary_key=True)
-    report_id: str = Field(index=True)
-    metric: str
-    panel_type: str
-    cypher: str
-    static_params: dict[str, Any] = Field(default={}, sa_column=Column(JSON, nullable=False))
-    input_param_name: str | None = None
-    input_cypher: str | None = None
 
 
 class ScheduledQueryRecord(SQLModel, table=True):  # type: ignore
@@ -532,24 +519,6 @@ class SQLModelReportStore(ReportStore):
             report.updated_by = created_by
             session.add(report)
 
-            # Replace panel stats for this report atomically with the version write.
-            old_stats_stmt = select(PanelStatRecord).where(PanelStatRecord.report_id == report_id)
-            old_stats_result = await session.execute(old_stats_stmt)
-            for old_stat in old_stats_result.scalars().all():
-                await session.delete(old_stat)
-            for stat in extract_panel_stats(report_id, config):
-                session.add(
-                    PanelStatRecord(
-                        report_id=report_id,
-                        metric=stat.metric,
-                        panel_type=stat.panel_type,
-                        cypher=stat.cypher,
-                        static_params=stat.static_params,
-                        input_param_name=stat.input_param_name,
-                        input_cypher=stat.input_cypher,
-                    )
-                )
-
             await session.commit()
 
         return ReportVersion(
@@ -599,11 +568,6 @@ class SQLModelReportStore(ReportStore):
             result = await session.execute(stmt)
             for version_record in result.scalars().all():
                 await session.delete(version_record)
-
-            stats_stmt = select(PanelStatRecord).where(PanelStatRecord.report_id == report_id)
-            stats_result = await session.execute(stats_stmt)
-            for stat_record in stats_result.scalars().all():
-                await session.delete(stat_record)
 
             await session.delete(report)
             await session.commit()
@@ -659,32 +623,6 @@ class SQLModelReportStore(ReportStore):
         if report and report.access.scope == "public":
             return report
         return None
-
-    async def list_panel_stats(self) -> list[PanelStat]:
-        """Return all PanelStat records across all reports."""
-        async with AsyncSession(_get_engine()) as session:
-            report_result = await session.execute(select(ReportRecord))
-            public_report_ids = {
-                report.report_id for report in report_result.scalars().all() if report.access["scope"] == "public"
-            }
-            if not public_report_ids:
-                return []
-            result = await session.execute(
-                select(PanelStatRecord).where(col(PanelStatRecord.report_id).in_(public_report_ids))
-            )
-            rows = result.scalars().all()
-            return [
-                PanelStat(
-                    report_id=r.report_id,
-                    metric=r.metric,
-                    panel_type=r.panel_type,
-                    cypher=r.cypher,
-                    static_params=r.static_params or {},
-                    input_param_name=r.input_param_name,
-                    input_cypher=r.input_cypher,
-                )
-                for r in rows
-            ]
 
     async def list_scheduled_queries(self) -> list[ScheduledQueryItem]:
         async with AsyncSession(_get_engine()) as session:

@@ -36,7 +36,6 @@ reports:
           - cypher: cves-total
             type: count
             caption: Total CVEs
-            metric: cve.count
             size: 2
           - cypher: |-
               MATCH (c:CVE)
@@ -51,7 +50,6 @@ reports:
               - name: base_severity
                 value: CRITICAL
             caption: Critical CVEs
-            metric: cve.progress
             size: 2
             threshold: 0
           - cypher: cves-severity-of-total
@@ -61,7 +59,6 @@ reports:
               - name: base_severity
                 value: HIGH
             caption: High CVEs
-            metric: cve.progress
             size: 2
             threshold: 0
           - cypher: cves-severity-of-total
@@ -71,7 +68,6 @@ reports:
               - name: base_severity
                 value: MEDIUM
             caption: Medium CVEs
-            metric: cve.progress
             size: 2
             threshold: 0
           - cypher: cves-severity-of-total
@@ -81,7 +77,6 @@ reports:
               - name: base_severity
                 value: LOW
             caption: Low CVEs
-            metric: cve.progress
             size: 2
             threshold: 0
       - name: CVEs as pie, bar panels
@@ -539,3 +534,19 @@ scheduled_queries:
             - base_severity
             - base_score
             - description
+
+  - name: CVE counts by severity
+    cypher: |-
+      MATCH (c:CVE)
+      WHERE c.base_severity IS NOT NULL
+      WITH c.base_severity AS severity, count(c.id) AS total
+      RETURN {severity: severity, total: total} AS details
+    frequency: 60
+    enabled: true
+    actions:
+      - action_type: statsd
+        action_config:
+          metric: cves.count
+          value_field: total
+          tag_fields:
+            - severity

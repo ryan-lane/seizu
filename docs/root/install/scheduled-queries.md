@@ -164,6 +164,40 @@ Local development options:
 - `SQS_CREATE_SCHEDULED_QUERY_QUEUES`: Automatically create the configured queues if they don't exist.
 - `SQS_URL`: URL for a local/fake SQS server.
 
+### statsd
+
+The `statsd` action emits a numeric field from each query result row as a DogStatsD metric.
+Enabled by default; requires `STATSD_HOST` to be configured (the action logs a warning and skips emission when it is unset).
+
+| Field | Required | Description |
+|-------|----------|-------------|
+| metric | Yes | StatsD metric name to emit (e.g. `cves.critical`). |
+| value\_field | Yes | Field in each result row that holds the numeric value. |
+| metric\_type | No | `gauge` (default), `increment`, or `decrement`. |
+| tag\_fields | No | List of fields whose values are attached as DogStatsD tags (`field:value`). |
+| query\_return\_attribute | No | Top-level attribute of each result row that contains the data. Default: `details` |
+
+Requires the following environment variables (see [StatsD configuration](backend.html#statsd-configuration)):
+
+- `STATSD_HOST`: hostname of a DogStatsD-compatible server (e.g. Telegraf).
+
+#### Example
+
+```yaml
+  - name: CVEs by severity
+    cypher: |
+      MATCH (c:CVE) RETURN c.base_severity AS severity, count(c) AS total
+    frequency: 60
+    enabled: true
+    actions:
+      - action_type: statsd
+        action_config:
+          metric: cves.count
+          value_field: total
+          tag_fields:
+            - severity
+```
+
 ### log
 
 The `log` action logs query results using Python's standard logger. Intended for development and testing; not enabled by default.
@@ -178,7 +212,7 @@ The `log` action logs query results using Python's standard logger. Intended for
 To enable the `log` module, add it to `SCHEDULED_QUERY_MODULES`:
 
 ```
-SCHEDULED_QUERY_MODULES=reporting.scheduled_query_modules.sqs,reporting.scheduled_query_modules.slack,reporting.scheduled_query_modules.log
+SCHEDULED_QUERY_MODULES=reporting.scheduled_query_modules.sqs,reporting.scheduled_query_modules.slack,reporting.scheduled_query_modules.statsd,reporting.scheduled_query_modules.log
 ```
 
 ## Custom Actions

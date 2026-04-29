@@ -1,10 +1,5 @@
 import { createContext } from 'react';
 
-export interface StatsConfig {
-  external_prefix: string;
-  external_provider: string;
-}
-
 export interface PanelParam {
   name: string;
   value?: string;
@@ -15,7 +10,6 @@ export interface Panel {
   type: string;
   cypher?: string;
   details_cypher?: string;
-  metric?: string;
   caption?: string;
   size?: number;
   threshold?: number;
@@ -91,7 +85,6 @@ export interface ActionConfigFieldDef {
 
 export interface SeizuConfig {
   config: AppConfig;
-  stats: StatsConfig;
   scheduled_query_action_types: string[];
   scheduled_query_action_schemas: Record<string, ActionConfigFieldDef[]>;
 }

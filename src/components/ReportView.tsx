@@ -121,7 +121,6 @@ const PanelItem = memo(function PanelItem({ item, rowIndex, index, varData, allI
     cypher: resolveQuery(item.cypher),
     details_cypher: resolveQuery(item.details_cypher),
     type: item.type,
-    metric: item.metric,
     columns: item.columns,
     caption: item.caption,
     params,

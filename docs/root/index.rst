@@ -12,7 +12,6 @@ Seizu includes:
 * A configuration-driven react/mui frontend, with support for a dashboard, arbitrary reports, using a row/panel based layout with various panel types for visualizing data
 * An interactive **Query Console** for running ad-hoc Cypher queries, with graph, table, and raw result views, and a collapsible database schema browser showing available node labels, relationship types, and property keys
 * A backend worker that can run queries on a schedule, or triggered by graph events, with action plugins that can use the results; for example, sending query results to a slack channel, or an sqs queue
-* A backend worker that can push query results from panels into statsd, for historical data tracking purposes
 * An **MCP server** at ``/api/v1/mcp`` that exposes user-defined Cypher-backed tools to LLM agents such as Claude
 * A mechanism of providing SSO for Neo4j, when Seizu is placed behind an OAuth2 proxy
 
@@ -45,7 +44,6 @@ Documentation
     install/scheduled-queries
     install/mcp-toolsets
     install/mcp-skillsets
-    install/stats
 
 .. toctree::
     :caption: Development

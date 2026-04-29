@@ -14,7 +14,6 @@ from reporting.schema.mcp_config import (
 )
 from reporting.schema.rbac import RoleItem, RoleVersion
 from reporting.schema.report_config import (
-    PanelStat,
     QueryHistoryItem,
     ReportAccess,
     ReportListItem,
@@ -183,10 +182,6 @@ async def get_user(user_id: str) -> User | None:
 
 async def archive_user(user_id: str) -> bool:
     return await get_store().archive_user(user_id)
-
-
-async def list_panel_stats() -> list[PanelStat]:
-    return await get_store().list_panel_stats()
 
 
 async def list_scheduled_queries() -> list[ScheduledQueryItem]:

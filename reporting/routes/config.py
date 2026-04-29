@@ -24,10 +24,6 @@ async def get_config() -> dict:
     return {
         "auth_required": settings.DEVELOPMENT_ONLY_REQUIRE_AUTH,
         "oidc": oidc_config,
-        "stats": {
-            "external_provider": settings.STATSD_EXTERNAL_PROVIDER,
-            "external_prefix": settings.STATSD_EXTERNAL_PREFIX,
-        },
         "scheduled_query_action_types": scheduled_query_modules.get_configured_action_names(),
         "scheduled_query_action_schemas": action_schemas,
         "config": {},
