@@ -1,5 +1,6 @@
 networks:
   database:
+  stats:
   proxy:
   auth:
   credentials:
@@ -15,6 +16,14 @@ volumes:
   dynamodb_data:
   postgres_data:
 services:
+  telegraf:
+    image: telegraf
+    volumes:
+      - ./.compose/telegraf/telegraf.conf:/etc/telegraf/telegraf.conf
+    environment:
+      - METRICS_PREFIX=seizu
+    networks:
+      stats:
   dynamodb:
     build:
       context: .compose/dynamodb
@@ -203,8 +212,10 @@ services:
       - AWS_DEFAULT_REGION=us-east-1
       - "SQS_CREATE_SCHEDULED_QUERY_QUEUES=true"
       - SQS_URL=http://sqs:9324
-      - SCHEDULED_QUERY_MODULES=reporting.scheduled_query_modules.sqs,reporting.scheduled_query_modules.slack,reporting.scheduled_query_modules.log
+      - SCHEDULED_QUERY_MODULES=reporting.scheduled_query_modules.sqs,reporting.scheduled_query_modules.slack,reporting.scheduled_query_modules.log,reporting.scheduled_query_modules.statsd
       - SLACK_OAUTH_BOT_TOKEN
+      - STATSD_HOST=telegraf
+      - STATSD_CONSTANT_TAGS
       - REPORT_STORE_BACKEND
       - DYNAMODB_TABLE_NAME=seizu-reports
       - DYNAMODB_ENDPOINT_URL=http://dynamodb:8000
@@ -215,6 +226,7 @@ services:
     volumes:
       - .:/home/seizu/seizu
     networks:
+      stats:
       database:
   seizu:
     image: ghcr.io/mappedsky/seizu
@@ -329,6 +341,8 @@ services:
       - ./.compose/cartography/permission_relationships.yaml:/etc/cartography/permission_relationships.yaml
       - ./.compose/cartography/kube.config:/etc/cartography/kube.config
     environment:
+      - "STATSD_ENABLED=true"
+      - STATSD_HOST=telegraf
       - GITHUB_TOKEN=${CARTOGRAPHY_GITHUB_TOKEN}
       - CROWDSTRIKE_CLIENT_ID
       - CROWDSTRIKE_CLIENT_SECRET
@@ -337,4 +351,5 @@ services:
     networks:
       credentials:
           ipv4_address: "169.254.169.2"
+      stats:
       database:

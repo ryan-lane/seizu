@@ -10,6 +10,13 @@ PORT = int_env("PORT", 8080)
 # The location of the react app build directory
 STATIC_FOLDER = str_env("STATIC_FOLDER", "/build")
 
+# The hostname of the statsd server (used by the statsd scheduled query action module)
+STATSD_HOST = str_env("STATSD_HOST")
+# The port of the statsd server
+STATSD_PORT = int_env("STATSD_PORT", 8125)
+# A comma separated list of tag_name:tag_value tags to apply to every stat
+STATSD_CONSTANT_TAGS = list_env("STATSD_CONSTANT_TAGS")
+
 # The location of the logging configuration file
 LOG_CONFIG_FILE = str_env(
     "LOG_CONFIG_FILE",
@@ -102,6 +109,7 @@ SCHEDULED_QUERY_MODULES = list_env(
     [
         "reporting.scheduled_query_modules.sqs",
         "reporting.scheduled_query_modules.slack",
+        "reporting.scheduled_query_modules.statsd",
     ],
 )
 # NOTE: scheduled query module settings are defined within the modules themselves
