@@ -18,16 +18,18 @@ describe('MarkdownPanelEditor', () => {
     render(<MarkdownPanelEditor value="" onChange={() => {}} />);
     expect(screen.getByRole('button', { name: 'Bold' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Italic' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Heading 2' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Heading 3' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Strikethrough' })).toBeInTheDocument();
+    expect(screen.getByRole('combobox', { name: 'Heading level' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Bullet list' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Ordered list' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Task list' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Blockquote' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Inline code' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Code block' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Link' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Remove link' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Table' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Horizontal rule' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Undo' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Redo' })).toBeInTheDocument();
   });
@@ -102,4 +104,5 @@ describe('MarkdownPanelEditor', () => {
     expect(screen.getByRole('dialog')).toBeInTheDocument();
     expect(screen.getByLabelText('URL')).toBeInTheDocument();
   });
+
 });

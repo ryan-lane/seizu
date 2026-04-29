@@ -10,12 +10,14 @@ import {
   IconButton,
   Menu,
   MenuItem,
+  Select,
   Stack,
   TextField,
   ToggleButton,
   ToggleButtonGroup,
   Tooltip
 } from '@mui/material';
+import ChecklistIcon from '@mui/icons-material/Checklist';
 import CodeIcon from '@mui/icons-material/Code';
 import DataObjectIcon from '@mui/icons-material/DataObject';
 import FormatBoldIcon from '@mui/icons-material/FormatBold';
@@ -23,6 +25,8 @@ import FormatItalicIcon from '@mui/icons-material/FormatItalic';
 import FormatListBulletedIcon from '@mui/icons-material/FormatListBulleted';
 import FormatListNumberedIcon from '@mui/icons-material/FormatListNumbered';
 import FormatQuoteIcon from '@mui/icons-material/FormatQuote';
+import FormatStrikethroughIcon from '@mui/icons-material/FormatStrikethrough';
+import HorizontalRuleIcon from '@mui/icons-material/HorizontalRule';
 import LinkIcon from '@mui/icons-material/Link';
 import LinkOffIcon from '@mui/icons-material/LinkOff';
 import RedoIcon from '@mui/icons-material/Redo';
@@ -35,10 +39,13 @@ import { Table } from '@tiptap/extension-table';
 import { TableCell } from '@tiptap/extension-table-cell';
 import { TableHeader } from '@tiptap/extension-table-header';
 import { TableRow } from '@tiptap/extension-table-row';
+import { TaskItem } from '@tiptap/extension-task-item';
+import { TaskList } from '@tiptap/extension-task-list';
 import { Markdown } from 'tiptap-markdown';
 import type { MarkdownStorage } from 'tiptap-markdown';
 
 type Mode = 'wysiwyg' | 'source';
+type HeadingLevel = 1 | 2 | 3 | 4 | 5 | 6;
 
 interface MarkdownEditorProps {
   value: string | undefined;
@@ -51,6 +58,14 @@ function getMarkdown(editor: Editor): string {
     | MarkdownStorage
     | undefined;
   return storage?.getMarkdown() ?? '';
+}
+
+function getHeadingValue(editor: Editor | null): string {
+  if (!editor) return 'paragraph';
+  for (let level = 1; level <= 6; level++) {
+    if (editor.isActive('heading', { level })) return String(level);
+  }
+  return 'paragraph';
 }
 
 interface ToolbarButtonProps {
@@ -97,6 +112,8 @@ function MarkdownEditor({ value, onChange, sourceLabel = 'Markdown content' }: M
       TableRow,
       TableHeader,
       TableCell,
+      TaskList,
+      TaskItem.configure({ nested: true }),
       Markdown.configure({
         html: false,
         tightLists: true,
@@ -154,6 +171,15 @@ function MarkdownEditor({ value, onChange, sourceLabel = 'Markdown content' }: M
     editor.chain().focus().extendMarkRange('link').unsetLink().run();
   }
 
+  function applyHeading(val: string) {
+    if (!editor) return;
+    if (val === 'paragraph') {
+      editor.chain().focus().setParagraph().run();
+    } else {
+      editor.chain().focus().toggleHeading({ level: parseInt(val, 10) as HeadingLevel }).run();
+    }
+  }
+
   const inTable = editor?.isActive('table') ?? false;
 
   function runTableCommand(cmd: (chain: ReturnType<Editor['chain']>) => ReturnType<Editor['chain']>) {
@@ -187,6 +213,10 @@ function MarkdownEditor({ value, onChange, sourceLabel = 'Markdown content' }: M
         <Box>
           <Box
             sx={{
+              position: 'sticky',
+              top: 0,
+              zIndex: 1,
+              bgcolor: 'background.paper',
               display: 'flex',
               flexWrap: 'wrap',
               alignItems: 'center',
@@ -214,27 +244,36 @@ function MarkdownEditor({ value, onChange, sourceLabel = 'Markdown content' }: M
             >
               <FormatItalicIcon fontSize="small" />
             </ToolbarButton>
+            <ToolbarButton
+              label="Strikethrough"
+              active={editor?.isActive('strike') ?? false}
+              onClick={() => editor?.chain().focus().toggleStrike().run()}
+              disabled={!editor}
+            >
+              <FormatStrikethroughIcon fontSize="small" />
+            </ToolbarButton>
             <Divider orientation="vertical" flexItem sx={{ mx: 0.5 }} />
-            <ToolbarButton
-              label="Heading 2"
-              active={editor?.isActive('heading', { level: 2 }) ?? false}
-              onClick={() => editor?.chain().focus().toggleHeading({ level: 2 }).run()}
+            <Select
+              inputProps={{ 'aria-label': 'Heading level' }}
+              value={getHeadingValue(editor)}
+              onChange={(e) => applyHeading(e.target.value as string)}
+              size="small"
               disabled={!editor}
+              sx={{
+                fontSize: '0.8rem',
+                minWidth: 120,
+                height: 30,
+                '& .MuiSelect-select': { py: '4px' }
+              }}
             >
-              <Box component="span" sx={{ fontWeight: 700, fontSize: '0.8rem' }}>
-                H2
-              </Box>
-            </ToolbarButton>
-            <ToolbarButton
-              label="Heading 3"
-              active={editor?.isActive('heading', { level: 3 }) ?? false}
-              onClick={() => editor?.chain().focus().toggleHeading({ level: 3 }).run()}
-              disabled={!editor}
-            >
-              <Box component="span" sx={{ fontWeight: 700, fontSize: '0.8rem' }}>
-                H3
-              </Box>
-            </ToolbarButton>
+              <MenuItem value="paragraph" sx={{ fontSize: '0.85rem' }}>Normal text</MenuItem>
+              <MenuItem value="1" sx={{ fontSize: '0.85rem' }}>Heading 1</MenuItem>
+              <MenuItem value="2" sx={{ fontSize: '0.85rem' }}>Heading 2</MenuItem>
+              <MenuItem value="3" sx={{ fontSize: '0.85rem' }}>Heading 3</MenuItem>
+              <MenuItem value="4" sx={{ fontSize: '0.85rem' }}>Heading 4</MenuItem>
+              <MenuItem value="5" sx={{ fontSize: '0.85rem' }}>Heading 5</MenuItem>
+              <MenuItem value="6" sx={{ fontSize: '0.85rem' }}>Heading 6</MenuItem>
+            </Select>
             <Divider orientation="vertical" flexItem sx={{ mx: 0.5 }} />
             <ToolbarButton
               label="Bullet list"
@@ -251,6 +290,14 @@ function MarkdownEditor({ value, onChange, sourceLabel = 'Markdown content' }: M
               disabled={!editor}
             >
               <FormatListNumberedIcon fontSize="small" />
+            </ToolbarButton>
+            <ToolbarButton
+              label="Task list"
+              active={editor?.isActive('taskList') ?? false}
+              onClick={() => editor?.chain().focus().toggleTaskList().run()}
+              disabled={!editor}
+            >
+              <ChecklistIcon fontSize="small" />
             </ToolbarButton>
             <ToolbarButton
               label="Blockquote"
@@ -378,6 +425,13 @@ function MarkdownEditor({ value, onChange, sourceLabel = 'Markdown content' }: M
                 Delete table
               </MenuItem>
             </Menu>
+            <ToolbarButton
+              label="Horizontal rule"
+              onClick={() => editor?.chain().focus().setHorizontalRule().run()}
+              disabled={!editor}
+            >
+              <HorizontalRuleIcon fontSize="small" />
+            </ToolbarButton>
             <Divider orientation="vertical" flexItem sx={{ mx: 0.5 }} />
             <ToolbarButton
               label="Undo"
@@ -409,6 +463,24 @@ function MarkdownEditor({ value, onChange, sourceLabel = 'Markdown content' }: M
                 '& p': { my: 1 },
                 '& h1, & h2, & h3, & h4, & h5, & h6': { mt: 2, mb: 1 },
                 '& ul, & ol': { pl: 3, my: 1 },
+                '& ul[data-type="taskList"]': {
+                  listStyle: 'none',
+                  pl: 0,
+                  '& p': { my: 0 },
+                  '& li': {
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 1,
+                    '& > label': {
+                      flexShrink: 0,
+                      display: 'flex',
+                      alignItems: 'center',
+                      cursor: 'pointer',
+                      userSelect: 'none',
+                    },
+                    '& > div': { flex: 1 }
+                  }
+                },
                 '& blockquote': {
                   borderLeft: '4px solid',
                   borderColor: 'divider',
@@ -433,6 +505,7 @@ function MarkdownEditor({ value, onChange, sourceLabel = 'Markdown content' }: M
                 },
                 '& pre code': { bgcolor: 'transparent', p: 0 },
                 '& a': { color: 'primary.main', textDecoration: 'underline' },
+                '& hr': { border: 'none', borderTop: '2px solid', borderColor: 'divider', my: 2 },
                 '& table': {
                   borderCollapse: 'collapse',
                   tableLayout: 'fixed',

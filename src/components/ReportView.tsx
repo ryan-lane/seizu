@@ -214,6 +214,14 @@ const PanelItem = memo(function PanelItem({ item, rowIndex, index, varData, allI
         '& p': { mb: 1 },
         '& h2, & h3, & h4, & h5, & h6': { mb: 1 },
         '& ul, & ol': { mb: 1 },
+        '& li:has(> input[type="checkbox"])': {
+          listStyle: 'none',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '6px',
+          ml: '-1.5em',
+          '& p': { my: 0 },
+        },
       }}>
         <MuiMarkdown options={{ overrides: markdownOverrides }}>
           {item.markdown}
