@@ -22,7 +22,6 @@ from reporting.schema.mcp_config import (
 )
 from reporting.schema.rbac import RoleItem, RoleVersion
 from reporting.schema.report_config import (
-    PanelStat,
     QueryHistoryItem,
     ReportAccess,
     ReportListItem,
@@ -31,7 +30,7 @@ from reporting.schema.report_config import (
     ScheduledQueryVersion,
     User,
 )
-from reporting.services.report_store.base import ReportStore, extract_panel_stats
+from reporting.services.report_store.base import ReportStore
 
 logger = logging.getLogger(__name__)
 
@@ -51,10 +50,6 @@ _PK_DASHBOARD = "#DASHBOARD"
 _SK_DASHBOARD_POINTER = "#POINTER"
 # User lookup — PK is shared; SK encodes iss + sub for lookup by external identity.
 _PK_USER_LOOKUP = "USER_LOOKUP"
-# Panel stats — pre-computed stat descriptors; one item per report stored under a
-# single shared PK for efficient full listing.  SK encodes report_id so the item
-# can be targeted directly for updates and deletes without a query.
-_PK_PANEL_STATS = "PANEL_STATS"
 # Scheduled queries — list index PK for listing all scheduled queries.
 _PK_SCHEDULED_QUERY_LIST = "SCHEDULED_QUERY_LIST"
 # Toolsets — list index PK for listing all toolsets.
@@ -765,30 +760,12 @@ class DynamoDBReportStore(ReportStore):
                 "pinned": pinned,
             }
 
-            stats = extract_panel_stats(report_id, config)
-            stats_item = {
-                "PK": _PK_PANEL_STATS,
-                "SK": f"REPORT#{report_id}",
-                "report_id": report_id,
-                "stats": [
-                    {
-                        "metric": s.metric,
-                        "panel_type": s.panel_type,
-                        "cypher": s.cypher,
-                        "static_params": _floats_to_decimal(s.static_params),
-                        "input_param_name": s.input_param_name,
-                        "input_cypher": s.input_cypher,
-                    }
-                    for s in stats
-                ],
-            }
             _transact_put_sync(
                 table,
                 version_item,
                 latest_item,
                 metadata_item,
                 list_item,
-                stats_item,
             )
             return _report_version_from_item(version_item, metadata_item)
 
@@ -850,7 +827,6 @@ class DynamoDBReportStore(ReportStore):
             )
             keys_to_delete = [{"PK": item["PK"], "SK": item["SK"]} for item in items_resp.get("Items", [])]
             keys_to_delete.append({"PK": _PK_REPORT_LIST, "SK": f"REPORT#{report_id}"})
-            keys_to_delete.append({"PK": _PK_PANEL_STATS, "SK": f"REPORT#{report_id}"})
 
             dashboard_resp = table.get_item(Key={"PK": _PK_DASHBOARD, "SK": _SK_DASHBOARD_POINTER})
             dashboard_item = dashboard_resp.get("Item")
@@ -940,38 +916,6 @@ class DynamoDBReportStore(ReportStore):
         if report and report.access.scope == "public":
             return report
         return None
-
-    async def list_panel_stats(self) -> list[PanelStat]:
-        """Return all PanelStat records across all reports."""
-
-        def _op() -> list[PanelStat]:
-            table = _get_table()
-            resp = table.query(
-                KeyConditionExpression="PK = :pk",
-                ExpressionAttributeValues={":pk": _PK_PANEL_STATS},
-            )
-            result = []
-            for item in resp.get("Items", []):
-                report_id = item["report_id"]
-                meta_resp = table.get_item(Key={"PK": _report_pk(report_id), "SK": _SK_METADATA})
-                meta = meta_resp.get("Item")
-                if not meta or meta["access"]["scope"] != "public":
-                    continue
-                for stat_data in item.get("stats", []):
-                    result.append(
-                        PanelStat(
-                            report_id=report_id,
-                            metric=stat_data["metric"],
-                            panel_type=stat_data["panel_type"],
-                            cypher=stat_data["cypher"],
-                            static_params=stat_data.get("static_params", {}),
-                            input_param_name=stat_data.get("input_param_name"),
-                            input_cypher=stat_data.get("input_cypher"),
-                        )
-                    )
-            return result
-
-        return await asyncio.to_thread(_op)
 
     async def list_scheduled_queries(self) -> list[ScheduledQueryItem]:
         def _op() -> list[ScheduledQueryItem]:

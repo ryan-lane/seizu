@@ -152,16 +152,6 @@ When ``MCP_OAUTH_AUTHORIZATION_ENDPOINT`` and ``MCP_OAUTH_TOKEN_ENDPOINT`` are s
 * ``SCHEDULED_QUERY_FREQUENCY``: The frequency in seconds for how often we'll attempt to run scheduled queries; default: ``20``
 * ``SCHEDULED_QUERY_MODULES``: A comma separated list of python import locations for available scheduled query modules; default: ``reporting.scheduled_query_modules.sqs,reporting.scheduled_query_modules.slack``
 
-### Statsd configuration
-
-Through the stats worker, seizu can send the results of queries configured in the dashboard configuration to your time series service, via statsd.
-Note that the statsd support uses tags, so your time series database must also support tagging (like datadog, new relic, etc), and the statsd server your sending to must also support tags (like telegraf, with datadog extensions enabled).
-
-* ``STATSD_HOST``: The hostname of the statsd server; default: ``None``
-* ``STATSD_PORT``: The port of the statsd server; default: ``8125``
-* ``STATSD_CONSTANT_TAGS``: A comma separated list of ``tag_name:tag_value`` tags to apply to every stat; default: ``None``
-* ``DASHBOARD_STATS_MAX_INPUT_RESULTS``: When sending stats for panels that have an input, only send stats if the number of values in the input is less than this number; default: ``100``;
-
 ### Logging configuration
 
 seizu ships with a sane json structured logging configuration, and good defaults, but you can override them via a config file.

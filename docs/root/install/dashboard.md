@@ -129,7 +129,6 @@ To simply display a count of a particular query, use a ``count`` panel.
 | params | A list of parameters to pass into the query. See [the PanelParam schema](schema.html#panelparam) for more info. |
 | caption | The caption to show as the title of this panel. |
 | type | The type of panel. ``count``, for this panel type. |
-| metric | The statsd metric to push for this panel, if stats pushing is enabled. |
 | size | The width of this panel. |
 
 #### Example
@@ -138,7 +137,6 @@ To simply display a count of a particular query, use a ``count`` panel.
         - cypher: cves
           details_cypher: cves-details
           caption: Total CVEs
-          metric: cves.total
           type: count
           size: 3
 ```
@@ -158,7 +156,6 @@ By default, this panel will color the progress data based on a threshold of <70%
 | caption | The caption to show as the title of this panel. |
 | type | The type of panel. ``progress``, for this panel type. |
 | threshold | The lower threshold percentage to consider this result an error. Set to `0` to disable threshold. Default: ``70`` |
-| metric | The statsd metric to push for this panel, if stats pushing is enabled. |
 | size | The width of this panel. |
 
 #### Example

@@ -1,4 +1,4 @@
-import { useContext, useState } from 'react';
+import { useState } from 'react';
 import {
   Box,
   Button,
@@ -18,7 +18,6 @@ import {
 import useMediaQuery from '@mui/material/useMediaQuery';
 import { useTheme } from '@mui/material/styles';
 
-import { ConfigContext } from 'src/config.context';
 import CypherTable from 'src/components/reports/CypherTable';
 
 interface TabPanelProps {
@@ -51,7 +50,6 @@ function a11yProps(index: number) {
 interface DetailsData {
   params?: Record<string, unknown>;
   type?: string;
-  metric?: string;
   caption?: string;
   cypher?: string;
   details_cypher?: string;
@@ -68,7 +66,6 @@ interface CypherDetailsProps {
 }
 
 export default function CypherDetails({ details, open, setOpen }: CypherDetailsProps) {
-  const { config } = useContext(ConfigContext);
   const theme = useTheme();
   const fullScreen = useMediaQuery(theme.breakpoints.down('sm'));
   const handleClose = () => {
@@ -93,38 +90,6 @@ export default function CypherDetails({ details, open, setOpen }: CypherDetailsP
         </span>
       );
     });
-  }
-
-  let statsPrefix;
-  if (config.stats.external_prefix === '') {
-    statsPrefix = '';
-  } else {
-    statsPrefix = `${config.stats.external_prefix}.`;
-  }
-
-  let query;
-  if (config.stats.external_provider === 'newrelic') {
-    if (details.type === 'count') {
-      let where;
-      if (details.params === undefined || details.params.length === 0) {
-        where = '';
-      } else {
-        where = `WHERE ${Object.keys(details.params)
-          .map((key) => `${key} = '${details.params![key]}'`)
-          .join(' ')}`;
-      }
-      query = `SELECT latest(\`${statsPrefix}${details.metric}.total.value\`) AS '${details.caption}' FROM Metric ${where} SINCE 24 HOURS AGO TIMESERIES AUTO`;
-    } else if (details.type === 'progress') {
-      let where;
-      if (details.params === undefined || details.params.length === 0) {
-        where = '';
-      } else {
-        where = `WHERE ${Object.keys(details.params)
-          .map((key) => `${key} = '${details.params![key]}'`)
-          .join(' ')}`;
-      }
-      query = `SELECT latest(\`${statsPrefix}${details.metric}.numerator.value\`) / latest(\`${statsPrefix}${details.metric}.denominator.value\`) * 100 AS '${details.caption}' FROM Metric ${where} SINCE 24 HOURS AGO TIMESERIES AUTO`;
-    }
   }
 
   let cypherRow;
@@ -165,7 +130,7 @@ export default function CypherDetails({ details, open, setOpen }: CypherDetailsP
       <TableRow>
         <TableCell>
           <Typography variant="body1">
-            Query Parameters (and statsd metric tags)
+            Query Parameters
           </Typography>
         </TableCell>
         <TableCell>
@@ -175,65 +140,11 @@ export default function CypherDetails({ details, open, setOpen }: CypherDetailsP
     );
   }
 
-  let queryRow;
-  if (query !== undefined) {
-    queryRow = (
-      <TableRow>
-        <TableCell>
-          <Typography variant="body1">Example stats query</Typography>
-        </TableCell>
-        <TableCell>
-          <Typography variant="body1">{query}</Typography>
-        </TableCell>
-      </TableRow>
-    );
-  }
-
-  let metricText;
-  if (details.type === 'count') {
-    metricText = (
-      <Typography variant="body1">
-        {statsPrefix}
-        {details.metric}
-        .total
-      </Typography>
-    );
-  } else if (details.type === 'progress') {
-    metricText = (
-      <>
-        <Typography variant="body1">
-          {statsPrefix}
-          {details.metric}
-          .numerator
-        </Typography>
-        <br />
-        <Typography variant="body1">
-          {statsPrefix}
-          {details.metric}
-          .denominator
-        </Typography>
-      </>
-    );
-  }
-  let metricRow;
-  if (details.metric !== undefined && details.metric !== null) {
-    metricRow = (
-      <>
-        <TableRow>
-          <TableCell>
-            <Typography variant="body1">Statsd metric</Typography>
-          </TableCell>
-          <TableCell>{metricText}</TableCell>
-        </TableRow>
-        {queryRow}
-      </>
-    );
-  }
   let cypherTabs;
   let cypherTabPanel;
   if (details.details_cypher === undefined || details.details_cypher === null) {
     cypherTabs = [
-      <Tab key={0} label="Query and Metric Details" {...a11yProps(0)} />
+      <Tab key={0} label="Query Details" {...a11yProps(0)} />
     ];
     cypherTabPanel = (
       <TabPanel value={value} index={0}>
@@ -243,7 +154,6 @@ export default function CypherDetails({ details, open, setOpen }: CypherDetailsP
               {cypherRow}
               {detailsCypherRow}
               {paramsRow}
-              {metricRow}
             </TableBody>
           </Table>
         </TableContainer>
@@ -252,7 +162,7 @@ export default function CypherDetails({ details, open, setOpen }: CypherDetailsP
   } else {
     cypherTabs = [
       <Tab key={0} label="Data Details" {...a11yProps(0)} />,
-      <Tab key={1} label="Query and Metric Details" {...a11yProps(1)} />
+      <Tab key={1} label="Query Details" {...a11yProps(1)} />
     ];
     cypherTabPanel = (
       <>
@@ -275,7 +185,6 @@ export default function CypherDetails({ details, open, setOpen }: CypherDetailsP
                 {cypherRow}
                 {detailsCypherRow}
                 {paramsRow}
-                {metricRow}
               </TableBody>
             </Table>
           </TableContainer>
@@ -299,7 +208,7 @@ export default function CypherDetails({ details, open, setOpen }: CypherDetailsP
             <Tabs
               value={value}
               onChange={handleChange}
-              aria-label="Query and metric details tabs"
+              aria-label="Query details tabs"
             >
               {cypherTabs}
             </Tabs>

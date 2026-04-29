@@ -7,7 +7,6 @@ import Reports from 'src/pages/Reports';
 import ReportHistory from 'src/pages/ReportHistory';
 import ReportVersionView from 'src/pages/ReportVersionView';
 import ReportsList from 'src/pages/ReportsList';
-import Documentation from 'src/pages/Documentation';
 import NotFound from 'src/pages/NotFound';
 import QueryConsole from 'src/pages/QueryConsole';
 import ScheduledQueries from 'src/pages/ScheduledQueries';
@@ -50,7 +49,6 @@ const routes = [
       { path: 'skillsets/:skillsetId/skills/:skillId/history', element: <SkillHistory /> },
       { path: 'roles', element: <Roles /> },
       { path: 'roles/:roleId/history', element: <RoleHistory /> },
-      { path: 'documentation', element: <Documentation /> },
       { path: '*', element: <Navigate to="/404" /> }
     ]
   },

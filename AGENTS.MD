@@ -4,10 +4,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What is Seizu?
 
-Seizu (星図) is a configuration-driven reporting platform for Neo4j graph data. Three runtimes:
+Seizu (星図) is a configuration-driven reporting platform for Neo4j graph data. Two runtimes:
 - **FastAPI web app** (`reporting/`) — serves the React frontend and REST API (ASGI, Gunicorn + UvicornWorker)
 - **Scheduled query worker** (`reporting/scheduled_queries.py`) — runs Cypher queries on a schedule with pluggable action plugins (SQS, Slack, log); reads from the database, not the YAML config
-- **Dashboard stats worker** (`reporting/dashboard_stats.py`) — pushes panel metrics into StatsD/Telegraf
 
 ## Running Commands with Docker
 
@@ -111,7 +110,7 @@ FastAPI, Python 3.12, Gunicorn + UvicornWorker (ASGI). All I/O is async (neo4j a
 - `reporting/settings.py` — all config via env vars (Pydantic)
 - `reporting/routes/` — `APIRouter`s: `config.py`, `me.py`, `query.py`, `reports.py`, `users.py`, `validate.py`, `scheduled_queries.py`, `static.py` (healthcheck only)
 - `reporting/authnz/__init__.py` — `HTTPBearer` + FastAPI `Depends(get_current_user)`; `CurrentUser` dataclass (`user: User`, `jwt_claims: dict`); `sync_user_profile` dependency chains on `get_current_user`; tests override via `app.dependency_overrides[get_current_user]`
-- `reporting/services/` — all async: `reporting_neo4j.py` (async Neo4j driver + distributed locking), `report_store/` (pluggable store), `query_validator.py`, `reporting_statsd.py`
+- `reporting/services/` — all async: `reporting_neo4j.py` (async Neo4j driver + distributed locking), `report_store/` (pluggable store), `query_validator.py`
 - `reporting/schema/reporting_config.py` — Pydantic models for the YAML config
 - `reporting/schema/report_config.py` — Pydantic models for DynamoDB items and API schemas
 
@@ -278,12 +277,10 @@ Action schemas served via `GET /api/v1/config` as `scheduled_query_action_schema
 |---------|------|
 | `seizu` | FastAPI backend + static frontend |
 | `seizu-node` | Bun dev server |
-| `seizu-dashboard-stats` | Stats worker |
 | `seizu-scheduled-queries` | Scheduled query worker |
 | `neo4j` | Graph database |
 | `dynamodb` | DynamoDB Local (default backend) |
 | `postgres` | PostgreSQL (`sqlmodel` profile) |
-| `telegraf` | Metrics aggregation |
 | `sqs` | ElasticMQ (local SQS) |
 | `authentik-*` | OIDC provider (profile: `auth`) |
 | `cartography` | Graph data sync (profile: `nostart`) |

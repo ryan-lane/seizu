@@ -10,21 +10,6 @@ PORT = int_env("PORT", 8080)
 # The location of the react app build directory
 STATIC_FOLDER = str_env("STATIC_FOLDER", "/build")
 
-# The hostname of the statsd server
-STATSD_HOST = str_env("STATSD_HOST")
-# The port of the statsd server
-STATSD_PORT = int_env("STATSD_PORT", 8125)
-# A comma separated list of tag_name:tag_value tags to apply to every stat
-STATSD_CONSTANT_TAGS = list_env("STATSD_CONSTANT_TAGS")
-# A prefix set by an external aggregator, like telegraf. This can be used
-# by the dashboard in the documentation and details views, when showing
-# metric names.
-STATSD_EXTERNAL_PREFIX = str_env("STATSD_EXTERNAL_PREFIX")
-# The external provider being used for metrics. This can be used by the
-# dashboard to show example metrics queries in the details view.
-# Currently supported values: newrelic
-STATSD_EXTERNAL_PROVIDER = str_env("STATSD_EXTERNAL_PROVIDER")
-
 # The location of the logging configuration file
 LOG_CONFIG_FILE = str_env(
     "LOG_CONFIG_FILE",
@@ -125,9 +110,6 @@ SCHEDULED_QUERY_MODULES = list_env(
 # Set to True in production to enforce HTTPS. Disable in development or when
 # running behind an SSL-terminating load balancer.
 TALISMAN_FORCE_HTTPS = bool_env("TALISMAN_FORCE_HTTPS", True)
-
-# Maximum number of stats we will generate for panels with inputs
-DASHBOARD_STATS_MAX_INPUT_RESULTS = int_env("DASHBOARD_STATS_MAX_INPUT_RESULTS", 100)
 
 # DynamoDB settings for report config storage
 # Name of the DynamoDB table used to store report configs and version history

@@ -14,7 +14,6 @@ from reporting.schema.mcp_config import (
 )
 from reporting.schema.rbac import RoleItem, RoleVersion
 from reporting.schema.report_config import (
-    PanelStat,
     QueryHistoryItem,
     ReportAccess,
     ReportListItem,
@@ -23,75 +22,6 @@ from reporting.schema.report_config import (
     ScheduledQueryVersion,
     User,
 )
-
-
-def extract_panel_stats(report_id: str, config: dict[str, Any]) -> list[PanelStat]:
-    """Parse a report config dict and return PanelStat records for every stat-worthy panel.
-
-    A panel qualifies when all of the following hold:
-    - ``type`` is ``"count"`` or ``"progress"``
-    - ``metric`` is set
-    - ``cypher`` is set
-    - At most one param references an input (panels with >1 input params are skipped
-      because the tag cardinality would be unmanageably high)
-
-    The ``cypher`` field is resolved against ``report.queries`` at extraction time so
-    that stat workers never need to load full report configs.
-    """
-    # Import here to avoid module-level circular dependencies.
-    from reporting.schema import reporting_config
-
-    try:
-        report = reporting_config.Report.model_validate(config)
-    except Exception:
-        return []
-
-    stats: list[PanelStat] = []
-    for row in report.rows:
-        for panel in row.panels:
-            if panel.type not in ("count", "progress"):
-                continue
-            if not panel.metric or not panel.cypher:
-                continue
-
-            cypher = report.queries.get(panel.cypher, panel.cypher)
-            static_params: dict[str, Any] = {}
-            input_params = []
-            for p in panel.params:
-                if p.value:
-                    static_params[p.name] = p.value
-                elif p.input_id:
-                    input_params.append(p)
-
-            if len(input_params) > 1:
-                # Too many inputs — cardinality would be too high.
-                continue
-
-            input_param_name = None
-            input_cypher = None
-            if len(input_params) == 1:
-                input_ref = input_params[0]
-                _input = next(
-                    (i for i in report.inputs if i.input_id == input_ref.input_id),
-                    None,
-                )
-                if _input is None or _input.cypher is None:
-                    continue
-                input_param_name = input_ref.name
-                input_cypher = _input.cypher
-
-            stats.append(
-                PanelStat(
-                    report_id=report_id,
-                    metric=panel.metric,
-                    panel_type=panel.type,
-                    cypher=cypher,
-                    static_params=static_params,
-                    input_param_name=input_param_name,
-                    input_cypher=input_cypher,
-                )
-            )
-    return stats
 
 
 class ReportStore(ABC):
@@ -249,15 +179,6 @@ class ReportStore(ABC):
         """Soft-delete a user by setting archived_at.
 
         Returns False if the user does not exist.
-        """
-
-    @abstractmethod
-    async def list_panel_stats(self) -> list[PanelStat]:
-        """Return all PanelStat records across all reports.
-
-        These are pre-computed descriptors written atomically with each
-        ``save_report_version`` call.  The stats worker uses this to avoid
-        loading every full report config on each run.
         """
 
     @abstractmethod

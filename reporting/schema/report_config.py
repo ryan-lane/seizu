@@ -75,28 +75,6 @@ class ReportVersion(BaseModel):
         return _coerce_decimal(v)
 
 
-class PanelStat(BaseModel):
-    """Pre-computed stat descriptor extracted from a report panel.
-
-    Written to the store on every ``save_report_version`` call so that
-    ``dashboard_stats`` can fetch just the panels that require metric emission
-    without loading every full report config on each loop.
-    """
-
-    report_id: str
-    metric: str
-    panel_type: str  # "count" or "progress"
-    cypher: str  # resolved Cypher string (key already looked up against report.queries)
-    static_params: dict[str, Any] = Field(default_factory=dict)
-    input_param_name: str | None = None  # param name for the single input, if any
-    input_cypher: str | None = None  # Cypher that produces input values
-
-    @field_validator("static_params", mode="before")
-    @classmethod
-    def coerce_static_params(cls, v: Any) -> dict[str, Any]:
-        return _coerce_decimal(v)
-
-
 class ReportListResponse(BaseModel):
     reports: list["ReportListItem"]
 

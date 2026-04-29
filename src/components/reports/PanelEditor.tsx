@@ -294,17 +294,6 @@ function PanelEditor({ open, panel, onClose, onSave }: PanelEditorProps) {
             />
           )}
 
-          {/* Metric for count/progress */}
-          {hasThreshold && (
-            <TextField
-              size="small"
-              label="StatsD metric"
-              value={form.metric ?? ''}
-              onChange={(e) => set('metric', e.target.value || undefined)}
-              helperText="Optional StatsD metric name to publish."
-            />
-          )}
-
           {/* Legend for bar/pie */}
           {hasLegend && (
             <FormControl size="small" sx={{ width: 200 }}>
@@ -465,7 +454,6 @@ function cleanPanel(panel: Panel): Panel {
   if (panel.details_cypher) result.details_cypher = panel.details_cypher;
   if (panel.markdown) result.markdown = panel.markdown;
   if (panel.threshold != null) result.threshold = panel.threshold;
-  if (panel.metric) result.metric = panel.metric;
   if (panel.table_id) result.table_id = panel.table_id;
   if (panel.bar_settings) result.bar_settings = panel.bar_settings;
   if (panel.pie_settings) result.pie_settings = panel.pie_settings;
