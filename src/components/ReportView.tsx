@@ -220,6 +220,7 @@ const PanelItem = memo(function PanelItem({ item, rowIndex, index, varData, allI
           alignItems: 'center',
           gap: '6px',
           ml: '-1.5em',
+          '& p': { my: 0 },
         },
       }}>
         <MuiMarkdown options={{ overrides: markdownOverrides }}>
