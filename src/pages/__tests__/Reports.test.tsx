@@ -1,4 +1,4 @@
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { ThemeProvider, createTheme } from '@mui/material/styles';
 import Reports from 'src/pages/Reports';
@@ -27,9 +27,23 @@ function Wrapper({ children }: { children: React.ReactNode }) {
 describe('Reports', () => {
   let mockUseReport: jest.Mock;
   let mockUseReportsMutations: jest.Mock;
+  let saveReportVersion: jest.Mock;
 
   beforeEach(() => {
     jest.clearAllMocks();
+    saveReportVersion = jest.fn().mockResolvedValue({
+      report_id: 'r1',
+      name: 'Renamed Report',
+      version: 2,
+      config: { schema_version: 1, name: 'Renamed Report', rows: [] },
+      created_at: '2026-01-02T00:00:00Z',
+      created_by: 'owner',
+      report_created_by: 'owner',
+      report_updated_by: 'owner',
+      access: { scope: 'private' },
+      comment: null,
+      query_capabilities: {},
+    });
     mockUseReport = jest.spyOn(reportsApiModule, 'useReport') as unknown as jest.Mock;
     mockUseReportsMutations = jest.spyOn(reportsApiModule, 'useReportsMutations') as unknown as jest.Mock;
     mockUsePermissionState.mockReturnValue({
@@ -70,9 +84,9 @@ describe('Reports', () => {
       error: null,
     });
     mockUseReportsMutations.mockReturnValue({
-      saveReportVersion: jest.fn(),
+      saveReportVersion,
       cloneReport: jest.fn(),
-      updateReportAccess: jest.fn(),
+      updateReportVisibility: jest.fn(),
     });
   });
 
@@ -86,5 +100,22 @@ describe('Reports', () => {
     render(<Reports />, { wrapper: Wrapper });
 
     expect(screen.getByLabelText('Report name')).toHaveValue('Metadata Report Name');
+  });
+
+  it('saves the edited report name through the new report version', async () => {
+    render(<Reports />, { wrapper: Wrapper });
+
+    fireEvent.change(screen.getByLabelText('Report name'), {
+      target: { value: 'Renamed Report' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /save version/i }));
+
+    await waitFor(() => expect(saveReportVersion).toHaveBeenCalled());
+    expect(saveReportVersion).toHaveBeenCalledWith(
+      'r1',
+      expect.objectContaining({ name: 'Renamed Report' }),
+      undefined,
+      true
+    );
   });
 });

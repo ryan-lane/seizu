@@ -718,7 +718,11 @@ class DynamoDBReportStore(ReportStore):
 
             version = int(meta["current_version"]) + 1
             config_name = config.get("name")
-            name = config_name.strip() if isinstance(config_name, str) and config_name.strip() else meta["name"]
+            if isinstance(config_name, str) and config_name.strip():
+                report_name = config_name.strip()
+            else:
+                report_name = meta["name"]
+            stored_config = {**config, "name": report_name}
             pinned = bool(meta.get("pinned", False))
             now = datetime.now(tz=UTC).isoformat()
 
@@ -726,9 +730,9 @@ class DynamoDBReportStore(ReportStore):
                 "PK": _report_pk(report_id),
                 "SK": _version_sk(version),
                 "report_id": report_id,
-                "name": name,
+                "name": report_name,
                 "version": version,
-                "config": _floats_to_decimal(config),
+                "config": _floats_to_decimal(stored_config),
                 "created_at": now,
                 "created_by": created_by,
                 "comment": comment,
@@ -738,7 +742,7 @@ class DynamoDBReportStore(ReportStore):
                 "PK": _report_pk(report_id),
                 "SK": _SK_METADATA,
                 "report_id": report_id,
-                "name": name,
+                "name": report_name,
                 "current_version": version,
                 "created_at": meta["created_at"],
                 "updated_at": now,
@@ -751,7 +755,7 @@ class DynamoDBReportStore(ReportStore):
                 "PK": _PK_REPORT_LIST,
                 "SK": f"REPORT#{report_id}",
                 "report_id": report_id,
-                "name": name,
+                "name": report_name,
                 "current_version": version,
                 "created_at": meta["created_at"],
                 "updated_at": now,
@@ -772,7 +776,7 @@ class DynamoDBReportStore(ReportStore):
 
         return await asyncio.to_thread(_op)
 
-    async def update_report_metadata(
+    async def update_report_visibility(
         self,
         report_id: str,
         updated_by: str,

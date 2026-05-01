@@ -500,7 +500,11 @@ class SQLModelReportStore(ReportStore):
 
             version = report.current_version + 1
             config_name = config.get("name")
-            name = config_name.strip() if isinstance(config_name, str) and config_name.strip() else report.name
+            if isinstance(config_name, str) and config_name.strip():
+                report_name = config_name.strip()
+            else:
+                report_name = report.name
+            stored_config = {**config, "name": report_name}
             report_created_by = report.created_by
             report_access = report.access
             now = datetime.now(tz=UTC).isoformat()
@@ -509,14 +513,14 @@ class SQLModelReportStore(ReportStore):
                 ReportVersionRecord(
                     report_id=report_id,
                     version=version,
-                    config=config,
+                    config=stored_config,
                     created_at=now,
                     created_by=created_by,
                     comment=comment,
                 )
             )
             report.current_version = version
-            report.name = name
+            report.name = report_name
             report.updated_at = now
             report.updated_by = created_by
             session.add(report)
@@ -525,9 +529,9 @@ class SQLModelReportStore(ReportStore):
 
         return ReportVersion(
             report_id=report_id,
-            name=name,
+            name=report_name,
             version=version,
-            config=config,
+            config=stored_config,
             created_at=now,
             created_by=created_by,
             comment=comment,
@@ -536,7 +540,7 @@ class SQLModelReportStore(ReportStore):
             access=report_access,
         )
 
-    async def update_report_metadata(
+    async def update_report_visibility(
         self,
         report_id: str,
         updated_by: str,

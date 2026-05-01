@@ -7,7 +7,7 @@ from reporting import settings
 from reporting.app import create_app
 from reporting.authnz import CurrentUser, get_current_user
 from reporting.authnz.permissions import ALL_PERMISSIONS
-from reporting.schema.report_config import ReportListItem, ReportVersion, User
+from reporting.schema.report_config import ReportAccess, ReportListItem, ReportVersion, User
 
 settings.REPORT_QUERY_SIGNING_SECRET = "test-secret"
 
@@ -232,11 +232,32 @@ async def test_set_dashboard_report_rejects_private(mocker):
 
 
 # ---------------------------------------------------------------------------
-# PUT /api/v1/reports/<report_id>
+# PUT /api/v1/reports/<report_id>/visibility
 # ---------------------------------------------------------------------------
 
 
-async def test_update_report_metadata_rejects_unpublish_when_pinned(mocker):
+async def test_update_report_visibility_passes_access_to_service(mocker):
+    mocker.patch(
+        "reporting.routes.reports.report_store.get_report_metadata",
+        new=AsyncMock(return_value=_report_list_item()),
+    )
+    mock_update = mocker.patch(
+        "reporting.routes.reports.report_store.update_report_visibility",
+        new=AsyncMock(return_value=_report_list_item()),
+    )
+    app = _make_app()
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        ret = await client.put("/api/v1/reports/rid1/visibility", json={"access": {"scope": "public"}})
+
+    assert ret.status_code == 200
+    mock_update.assert_called_once_with(
+        report_id="rid1",
+        updated_by="test-user-id",
+        access=ReportAccess(scope="public"),
+    )
+
+
+async def test_update_report_visibility_rejects_unpublish_when_pinned(mocker):
     report = _report_list_item()
     report.pinned = True
     mocker.patch(
@@ -248,19 +269,19 @@ async def test_update_report_metadata_rejects_unpublish_when_pinned(mocker):
         new=AsyncMock(return_value=None),
     )
     mock_update = mocker.patch(
-        "reporting.routes.reports.report_store.update_report_metadata",
+        "reporting.routes.reports.report_store.update_report_visibility",
         new=AsyncMock(),
     )
     app = _make_app()
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
-        ret = await client.put("/api/v1/reports/rid1", json={"access": {"scope": "private"}})
+        ret = await client.put("/api/v1/reports/rid1/visibility", json={"access": {"scope": "private"}})
 
     assert ret.status_code == 400
     assert "private" in ret.json()["error"].lower()
     mock_update.assert_not_called()
 
 
-async def test_update_report_metadata_rejects_unpublish_when_dashboard(mocker):
+async def test_update_report_visibility_rejects_unpublish_when_dashboard(mocker):
     mocker.patch(
         "reporting.routes.reports.report_store.get_report_metadata",
         new=AsyncMock(return_value=_report_list_item()),
@@ -270,12 +291,12 @@ async def test_update_report_metadata_rejects_unpublish_when_dashboard(mocker):
         new=AsyncMock(return_value="rid1"),
     )
     mock_update = mocker.patch(
-        "reporting.routes.reports.report_store.update_report_metadata",
+        "reporting.routes.reports.report_store.update_report_visibility",
         new=AsyncMock(),
     )
     app = _make_app()
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
-        ret = await client.put("/api/v1/reports/rid1", json={"access": {"scope": "private"}})
+        ret = await client.put("/api/v1/reports/rid1/visibility", json={"access": {"scope": "private"}})
 
     assert ret.status_code == 400
     assert "private" in ret.json()["error"].lower()
@@ -549,6 +570,26 @@ async def test_create_version_passes_fields_to_service(mocker):
         config={"rows": [{"name": "r"}]},
         created_by="test-user-id",
         comment="update",
+        user_id="test-user-id",
+    )
+
+
+async def test_create_version_passes_config_name_to_service(mocker):
+    mock_save = mocker.patch(
+        "reporting.routes.reports.report_store.save_report_version",
+        new=AsyncMock(return_value=_report_version(version=2)),
+    )
+    app = _make_app()
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        await client.post(
+            "/api/v1/reports/rid1/versions",
+            json={"config": {"name": "Renamed Report", "rows": []}, "comment": "rename"},
+        )
+    mock_save.assert_called_once_with(
+        report_id="rid1",
+        config={"name": "Renamed Report", "rows": []},
+        created_by="test-user-id",
+        comment="rename",
         user_id="test-user-id",
     )
 

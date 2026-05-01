@@ -237,7 +237,7 @@ export function useAllReports(): {
 export function useReportsMutations(): {
   createReport: (name: string) => Promise<ReportListItem>;
   cloneReport: (reportId: string, name: string) => Promise<ReportListItem>;
-  updateReportAccess: (reportId: string, scope: ReportAccess['scope']) => Promise<ReportListItem>;
+  updateReportVisibility: (reportId: string, scope: ReportAccess['scope']) => Promise<ReportListItem>;
   saveReportVersion: (
     reportId: string,
     config: Report,
@@ -303,9 +303,9 @@ export function useReportsMutations(): {
     [accessToken]
   );
 
-  const updateReportAccess = useCallback(
+  const updateReportVisibility = useCallback(
     async (reportId: string, scope: ReportAccess['scope']): Promise<ReportListItem> => {
-      const res = await fetch(`/api/v1/reports/${reportId}`, {
+      const res = await fetch(`/api/v1/reports/${reportId}/visibility`, {
         method: 'PUT',
         headers: {
           ...getApiHeaders(accessToken),
@@ -313,7 +313,7 @@ export function useReportsMutations(): {
         },
         body: JSON.stringify({ access: { scope } })
       });
-      if (!res.ok) throw new Error(`Failed to update report access: ${res.status}`);
+      if (!res.ok) throw new Error(`Failed to update report visibility: ${res.status}`);
       return res.json();
     },
     [accessToken]
@@ -356,7 +356,15 @@ export function useReportsMutations(): {
     [accessToken]
   );
 
-  return { createReport, cloneReport, updateReportAccess, saveReportVersion, setDashboardReport, pinReport, deleteReport };
+  return {
+    createReport,
+    cloneReport,
+    updateReportVisibility,
+    saveReportVersion,
+    setDashboardReport,
+    pinReport,
+    deleteReport
+  };
 }
 
 export function useReportVersionsList(reportId: string | undefined): {

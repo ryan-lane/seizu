@@ -215,7 +215,7 @@ function RowMenu({
 function ReportsList() {
   const { reports, loading, error, refresh } = useReportsList();
   const { dashboardReportId, refresh: refreshDashboard } = useDashboardReportId();
-  const { createReport, cloneReport, saveReportVersion, setDashboardReport, pinReport, updateReportAccess, deleteReport } =
+  const { createReport, cloneReport, saveReportVersion, setDashboardReport, pinReport, updateReportVisibility, deleteReport } =
     useReportsMutations();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -276,7 +276,7 @@ function ReportsList() {
 
   const handleToggleAccess = async (report: ReportListItem) => {
     try {
-      await updateReportAccess(report.report_id, report.access.scope === 'public' ? 'private' : 'public');
+      await updateReportVisibility(report.report_id, report.access.scope === 'public' ? 'private' : 'public');
       refresh();
       refreshDashboard();
     } catch {

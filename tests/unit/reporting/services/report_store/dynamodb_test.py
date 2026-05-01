@@ -368,7 +368,7 @@ async def test_save_report_version_increments_version(patch_table, store):
 
     assert result.version == 4
     assert result.name == "My Report"
-    assert result.config == {"rows": [{"name": "new"}]}
+    assert result.config == {"name": "My Report", "rows": [{"name": "new"}]}
     assert result.comment == "v4"
 
 
@@ -393,6 +393,7 @@ async def test_save_report_version_updates_report_name_from_config(patch_table, 
     assert metadata_item["name"] == "Renamed Report"
     assert list_item["name"] == "Renamed Report"
     assert version_item["name"] == "Renamed Report"
+    assert version_item["config"]["name"] == "Renamed Report"
 
 
 async def test_save_report_version_ignores_blank_config_name(patch_table, store):

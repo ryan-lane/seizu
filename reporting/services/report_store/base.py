@@ -92,13 +92,13 @@ class ReportStore(ABC):
         """
 
     @abstractmethod
-    async def update_report_metadata(
+    async def update_report_visibility(
         self,
         report_id: str,
         updated_by: str,
         access: ReportAccess | None = None,
     ) -> ReportListItem | None:
-        """Update report-level metadata without creating a new report version."""
+        """Update report visibility without creating a new report version."""
 
     @abstractmethod
     async def delete_report(self, report_id: str, user_id: str | None = None) -> bool:

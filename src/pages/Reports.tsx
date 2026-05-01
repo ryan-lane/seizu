@@ -46,7 +46,7 @@ function Reports() {
   const [displayedQueryCapabilities, setDisplayedQueryCapabilities] = useState<Record<string, string> | undefined>(undefined);
 
   const { report, name, reportVersion, queryCapabilities, loading, error } = useReport(id);
-  const { saveReportVersion, cloneReport, updateReportAccess } = useReportsMutations();
+  const { saveReportVersion, cloneReport, updateReportVisibility } = useReportsMutations();
 
   const [cloneOpen, setCloneOpen] = useState(false);
   const [cloneName, setCloneName] = useState('');
@@ -124,7 +124,7 @@ function Reports() {
     if (!id || !displayedAccessScope) return;
     setUpdatingAccess(true);
     try {
-      const updated = await updateReportAccess(id, displayedAccessScope === 'public' ? 'private' : 'public');
+      const updated = await updateReportVisibility(id, displayedAccessScope === 'public' ? 'private' : 'public');
       setDisplayedAccessScope(updated.access.scope);
     } finally {
       setUpdatingAccess(false);

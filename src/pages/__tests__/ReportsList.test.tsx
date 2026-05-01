@@ -116,7 +116,7 @@ describe('ReportsList', () => {
       saveReportVersion: jest.fn(),
       setDashboardReport: jest.fn(),
       pinReport: jest.fn(),
-      updateReportAccess: jest.fn(),
+      updateReportVisibility: jest.fn(),
       deleteReport: jest.fn(),
     });
   });
