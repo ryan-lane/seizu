@@ -283,7 +283,7 @@ describe('useReportsList', () => {
   it('fetches and returns reports list', async () => {
     mockFetch.mockResolvedValue({
       ok: true,
-      json: () => Promise.resolve({ reports: REPORTS })
+      json: () => Promise.resolve({ reports: REPORTS, total: 2, page: 1, per_page: 500 })
     });
 
     const { result } = renderHook(() => useReportsList(), {
@@ -292,7 +292,14 @@ describe('useReportsList', () => {
 
     await waitFor(() => expect(result.current.loading).toBe(false));
     expect(result.current.reports).toEqual(REPORTS);
+    expect(result.current.total).toBe(2);
+    expect(result.current.page).toBe(1);
+    expect(result.current.perPage).toBe(500);
     expect(result.current.error).toBeNull();
+    expect(mockFetch).toHaveBeenCalledWith(
+      '/api/v1/reports?page=1&per_page=500',
+      expect.any(Object)
+    );
   });
 
   it('includes pinned field in returned items', async () => {

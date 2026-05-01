@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { Box, CircularProgress, Typography, TextField, Autocomplete } from '@mui/material';
+import { CircularProgress, Typography, TextField, Autocomplete } from '@mui/material';
 import { useLazyCypherQuery } from 'src/hooks/useCypherQuery';
 import { setQueryStringValue } from 'src/components/QueryString';
 
@@ -17,6 +17,7 @@ interface CypherAutocompleteProps {
   value?: Record<string, AutocompleteOption | undefined>;
   setValue?: (val: Record<string, AutocompleteOption | undefined>) => void;
   reportQueryToken?: string;
+  size?: 'small' | 'medium';
 }
 
 export default function CypherAutocomplete({
@@ -27,7 +28,8 @@ export default function CypherAutocomplete({
   labelName,
   value,
   setValue,
-  reportQueryToken
+  reportQueryToken,
+  size = 'medium'
 }: CypherAutocompleteProps) {
   const [run, { loading, error, records }] = useLazyCypherQuery(cypher, reportQueryToken);
 
@@ -43,9 +45,19 @@ export default function CypherAutocomplete({
 
   if (loading || records === undefined) {
     return (
-      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', p: 4 }}>
-        <CircularProgress size={40} />
-      </Box>
+      <TextField
+        disabled
+        fullWidth
+        label={labelName}
+        size={size}
+        value=""
+        variant="outlined"
+        slotProps={{
+          input: {
+            endAdornment: <CircularProgress size={16} />
+          }
+        }}
+      />
     );
   }
 
@@ -86,6 +98,7 @@ export default function CypherAutocomplete({
       clearOnBlur
       handleHomeEndKeys
       id={inputId}
+      size={size}
       getOptionLabel={(option) => option?.label || ''}
       options={mungedRecords}
       isOptionEqualToValue={(option, val) => {

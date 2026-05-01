@@ -1,7 +1,6 @@
 import { render, screen, fireEvent, cleanup, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { ThemeProvider, createTheme } from '@mui/material/styles';
-import { ConfigContext } from 'src/config.context';
 import { AuthConfigContext, type AuthConfig } from 'src/authConfig.context';
 import DashboardNavbar from '../DashboardNavbar';
 
@@ -16,11 +15,9 @@ const theme = createTheme();
 const mockUseCurrentUser = useCurrentUser as jest.MockedFunction<typeof useCurrentUser>;
 
 function Wrapper({
-  contextValue,
   authConfig,
   children
 }: {
-  contextValue: any;
   authConfig?: AuthConfig;
   children: React.ReactNode;
 }) {
@@ -28,9 +25,7 @@ function Wrapper({
     <MemoryRouter>
       <ThemeProvider theme={theme}>
         <AuthConfigContext.Provider value={authConfig ?? { auth_required: false, oidc: null, userManager: null }}>
-          <ConfigContext.Provider value={contextValue}>
-            {children}
-          </ConfigContext.Provider>
+          {children}
         </AuthConfigContext.Provider>
       </ThemeProvider>
     </MemoryRouter>
@@ -51,8 +46,6 @@ const CURRENT_USER = {
 
 describe('DashboardNavbar', () => {
   const defaultProps = {
-    setConfigUpdate: jest.fn(),
-    setConfig: jest.fn(),
     onMobileNavOpen: jest.fn()
   };
 
@@ -65,38 +58,33 @@ describe('DashboardNavbar', () => {
 
   it('renders without error', () => {
     const { container } = render(
-      <Wrapper contextValue={{}}>
+      <Wrapper>
         <DashboardNavbar {...defaultProps} />
       </Wrapper>
     );
     expect(container.firstChild).not.toBeNull();
   });
 
-  it('shows refresh snackbar when configUpdate is defined', () => {
+  it('calls the sidebar toggle handler from the desktop collapse button', () => {
+    const onSidebarToggle = jest.fn();
     render(
-      <Wrapper contextValue={{}}>
-        <DashboardNavbar {...defaultProps} configUpdate={{ some: 'update' } as any} />
+      <Wrapper>
+        <DashboardNavbar
+          {...defaultProps}
+          onSidebarToggle={onSidebarToggle}
+        />
       </Wrapper>
     );
-    expect(screen.getByText('Settings have changed.')).toBeInTheDocument();
-  });
 
-  it('calls setConfig and setConfigUpdate when Refresh is clicked', () => {
-    const configUpdate = { some: 'update' } as any;
-    render(
-      <Wrapper contextValue={{}}>
-        <DashboardNavbar {...defaultProps} configUpdate={configUpdate} />
-      </Wrapper>
-    );
-    fireEvent.click(screen.getByText(/refresh/i));
-    expect(defaultProps.setConfig).toHaveBeenCalledWith(configUpdate);
-    expect(defaultProps.setConfigUpdate).toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: /collapse sidebar/i }));
+
+    expect(onSidebarToggle).toHaveBeenCalledTimes(1);
   });
 
   it('renders no user info when currentUser is null', () => {
     mockUseCurrentUser.mockReturnValue(null);
     const { container } = render(
-      <Wrapper contextValue={{}}>
+      <Wrapper>
         <DashboardNavbar {...defaultProps} />
       </Wrapper>
     );
@@ -107,7 +95,7 @@ describe('DashboardNavbar', () => {
   it('renders email when user is authenticated', () => {
     mockUseCurrentUser.mockReturnValue(CURRENT_USER);
     render(
-      <Wrapper contextValue={{}}>
+      <Wrapper>
         <DashboardNavbar {...defaultProps} />
       </Wrapper>
     );
@@ -127,7 +115,7 @@ describe('DashboardNavbar', () => {
       permissions: [],
     });
     render(
-      <Wrapper contextValue={{}}>
+      <Wrapper>
         <DashboardNavbar {...defaultProps} />
       </Wrapper>
     );
@@ -147,7 +135,7 @@ describe('DashboardNavbar', () => {
       permissions: [],
     });
     render(
-      <Wrapper contextValue={{}}>
+      <Wrapper>
         <DashboardNavbar {...defaultProps} />
       </Wrapper>
     );
@@ -157,7 +145,7 @@ describe('DashboardNavbar', () => {
   it('renders avatar SVG when user is authenticated', () => {
     mockUseCurrentUser.mockReturnValue(CURRENT_USER);
     const { container } = render(
-      <Wrapper contextValue={{}}>
+      <Wrapper>
         <DashboardNavbar {...defaultProps} />
       </Wrapper>
     );
@@ -167,7 +155,7 @@ describe('DashboardNavbar', () => {
   it('opens the user menu from the avatar button', () => {
     mockUseCurrentUser.mockReturnValue(CURRENT_USER);
     render(
-      <Wrapper contextValue={{}}>
+      <Wrapper>
         <DashboardNavbar {...defaultProps} />
       </Wrapper>
     );
@@ -184,7 +172,6 @@ describe('DashboardNavbar', () => {
     const removeUser = jest.fn().mockResolvedValue(undefined);
     render(
       <Wrapper
-        contextValue={{}}
         authConfig={{
           auth_required: true,
           oidc: null,
@@ -219,7 +206,7 @@ describe('DashboardNavbar', () => {
       permissions: [],
     });
     render(
-      <Wrapper contextValue={{}}>
+      <Wrapper>
         <DashboardNavbar {...defaultProps} />
       </Wrapper>
     );

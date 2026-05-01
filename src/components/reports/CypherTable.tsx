@@ -1,11 +1,14 @@
 import { useEffect, useState } from 'react';
 import Error from '@mui/icons-material/Error';
 import {
+  Box,
   Button,
   Dialog,
   DialogContent,
   DialogActions,
   IconButton,
+  Paper,
+  Skeleton,
   Tooltip,
   Typography
 } from '@mui/material';
@@ -83,6 +86,43 @@ function flattenRecord(record: QueryRecord): QueryRecord {
 }
 import CypherDetails from 'src/components/reports/CypherDetails';
 import QueryValidationBadge from 'src/components/reports/QueryValidationBadge';
+
+function TableLoadingSkeleton({ height }: { height?: string }) {
+  const bodyHeight = height ?? '475px';
+
+  return (
+    <Paper data-testid="cypher-table-loading-skeleton" variant="outlined" sx={{ overflow: 'hidden' }}>
+      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', minHeight: 64, px: 2 }}>
+        <Skeleton variant="text" width={200} height={30} />
+        <Box sx={{ display: 'flex', gap: 1 }}>
+          <Skeleton variant="circular" width={32} height={32} />
+          <Skeleton variant="circular" width={32} height={32} />
+          <Skeleton variant="circular" width={32} height={32} />
+          <Skeleton variant="circular" width={32} height={32} />
+        </Box>
+      </Box>
+      <Box sx={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr 1fr', alignItems: 'center', minHeight: 56, gap: 2, px: 2, borderTop: 1, borderBottom: 1, borderColor: 'divider' }}>
+        <Skeleton variant="text" height={24} />
+        <Skeleton variant="text" height={24} />
+        <Skeleton variant="text" height={24} />
+      </Box>
+      <Box sx={{ height: bodyHeight, px: 2, py: 1.5 }}>
+        {Array.from({ length: 8 }).map((_, index) => (
+          // eslint-disable-next-line react/no-array-index-key
+          <Box key={index} sx={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr 1fr', gap: 2, py: 1 }}>
+            <Skeleton variant="text" height={22} />
+            <Skeleton variant="text" height={22} />
+            <Skeleton variant="text" height={22} />
+          </Box>
+        ))}
+      </Box>
+      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', minHeight: 52, gap: 2, px: 2, borderTop: 1, borderColor: 'divider' }}>
+        <Skeleton variant="text" width={90} height={24} />
+        <Skeleton variant="text" width={120} height={24} />
+      </Box>
+    </Paper>
+  );
+}
 
 interface CypherTableProps {
   cypher?: string;
@@ -177,6 +217,9 @@ export default function CypherTable({
     setExpandOpen(false);
   };
 
+  let tableBodyHeight = '';
+  let tableBodySkeletonHeight = '';
+
   const options: Record<string, unknown> & { responsive: string; selectableRows: string; print: boolean } = {
     responsive: 'simple',
     selectableRows: 'none',
@@ -220,19 +263,35 @@ export default function CypherTable({
 
   if (expandOpen) {
     // window height minus the size of the table header and footer
-    options.tableBodyHeight = `${expandSize - 225}px`;
+    tableBodyHeight = `${expandSize - 225}px`;
+    tableBodySkeletonHeight = tableBodyHeight;
+    options.tableBodyHeight = tableBodyHeight;
     options.rowsPerPage = '100';
   } else if (height !== undefined) {
+    tableBodyHeight = height;
+    tableBodySkeletonHeight = height;
     options.tableBodyHeight = height;
   } else {
     // window height minus the size of the table header and footer, and the caption
-    options.tableBodyHeight = `${expandSize - 275}px`;
+    const defaultBodyHeight = Math.max(expandSize - 275, 160);
+    tableBodyHeight = `${defaultBodyHeight}px`;
+    tableBodySkeletonHeight = `${Math.min(defaultBodyHeight, 750)}px`;
+    options.tableBodyHeight = tableBodyHeight;
     // Set the maximum height for normal views, to avoid expanding forever
     options.tableBodyMaxHeight = '750px';
   }
 
   if (loading || records === undefined) {
-    return <MUIDataTable data={[]} columns={[]} options={{ options }} />;
+    return (
+      <>
+        {caption && (
+          <Typography gutterBottom variant="h4">
+            {caption}
+          </Typography>
+        )}
+        <TableLoadingSkeleton height={tableBodySkeletonHeight} />
+      </>
+    );
   }
 
   if (records === null || records.length === 0) {

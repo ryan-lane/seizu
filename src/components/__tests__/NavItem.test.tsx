@@ -76,4 +76,19 @@ describe('NavItem', () => {
     );
     expect(screen.getByRole('link', { name: /settings/i })).toBeInTheDocument();
   });
+
+  it('keeps an accessible label when collapsed', () => {
+    function MockIcon() {
+      return <svg data-testid="mock-icon" />;
+    }
+
+    render(
+      <Wrapper>
+        <NavItem collapsed href="/reports" title="Reports" icon={MockIcon as any} />
+      </Wrapper>
+    );
+
+    expect(screen.getByRole('link', { name: /reports/i })).toBeInTheDocument();
+    expect(screen.queryByText('Reports')).not.toBeInTheDocument();
+  });
 });

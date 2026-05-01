@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, memo, type Ref } from 'react';
 import {
   Accordion,
   AccordionDetails,
@@ -54,6 +54,12 @@ import { useDroppable } from '@dnd-kit/core';
 
 import { Report, Row, Panel, ReportInput, InputValue } from 'src/config.context';
 import PanelEditor, { EditablePanel } from 'src/components/reports/PanelEditor';
+import {
+  DASHBOARD_NAVBAR_HEIGHT,
+  DASHBOARD_SIDEBAR_WIDTH_VAR
+} from 'src/components/dashboardLayoutConstants';
+
+const EDIT_CONTENT_PX = { xs: 1.5, sm: 2 } as const;
 
 // ---------------------------------------------------------------------------
 // Edit-state types (panels/rows get stable _id for DnD keys)
@@ -467,17 +473,22 @@ interface QueryRowProps {
   value: string;
   onRename: (oldKey: string, newKey: string) => void;
   onValueChange: (key: string, value: string) => void;
+  onDraftValueChange: (key: string, value: string) => void;
   onDelete: (key: string) => void;
 }
 
 // Isolated row component so that local key-name state doesn't cause the
 // parent to re-key the entire list on every keystroke.
-function QueryRow({ queryKey, value, onRename, onValueChange, onDelete }: QueryRowProps) {
+function QueryRow({ queryKey, value, onRename, onValueChange, onDraftValueChange, onDelete }: QueryRowProps) {
   const [localKey, setLocalKey] = useState(queryKey);
+  const [localValue, setLocalValue] = useState(value);
 
   // Keep local key in sync if the parent renames it externally
   if (localKey !== queryKey && document.activeElement?.getAttribute('data-query-key') !== queryKey) {
     setLocalKey(queryKey);
+  }
+  if (localValue !== value && document.activeElement?.getAttribute('data-query-value') !== queryKey) {
+    setLocalValue(value);
   }
 
   return (
@@ -504,10 +515,16 @@ function QueryRow({ queryKey, value, onRename, onValueChange, onDelete }: QueryR
         label="Cypher"
         multiline
         minRows={4}
-        value={value}
-        onChange={(e) => onValueChange(queryKey, e.target.value)}
+        value={localValue}
+        onChange={(e) => {
+          setLocalValue(e.target.value);
+          onDraftValueChange(queryKey, e.target.value);
+        }}
+        onBlur={() => {
+          if (localValue !== value) onValueChange(queryKey, localValue);
+        }}
         sx={{ flex: 1 }}
-        inputProps={{ style: { fontFamily: 'monospace', fontSize: '0.8rem' } }}
+        inputProps={{ 'data-query-value': queryKey, style: { fontFamily: 'monospace', fontSize: '0.8rem' } }}
       />
       <Tooltip title="Delete query">
         <IconButton onClick={() => onDelete(queryKey)} size="small" sx={{ mt: 0.5 }}>
@@ -518,13 +535,216 @@ function QueryRow({ queryKey, value, onRename, onValueChange, onDelete }: QueryR
   );
 }
 
+interface EditToolbarProps {
+  initialReportName: string;
+  saving: boolean;
+  saveError: string | null;
+  toolbarRef: Ref<HTMLDivElement>;
+  onCancel: () => void;
+  onSave: (reportName: string, saveComment: string) => void;
+}
+
+const EditToolbar = memo(function EditToolbar({
+  initialReportName,
+  saving,
+  saveError,
+  toolbarRef,
+  onCancel,
+  onSave
+}: EditToolbarProps) {
+  const [reportName, setReportName] = useState(initialReportName);
+  const [saveComment, setSaveComment] = useState('');
+
+  useEffect(() => {
+    setReportName(initialReportName);
+  }, [initialReportName]);
+
+  return (
+    <Box
+      ref={toolbarRef}
+      sx={{
+        position: 'fixed',
+        top: DASHBOARD_NAVBAR_HEIGHT,
+        left: { xs: 0, lg: `var(${DASHBOARD_SIDEBAR_WIDTH_VAR})` },
+        right: 0,
+        zIndex: (theme) => theme.zIndex.appBar - 1,
+        bgcolor: 'background.default',
+        borderBottom: '1px solid',
+        borderColor: 'divider',
+        boxShadow: 1,
+        px: EDIT_CONTENT_PX,
+        py: 2,
+        display: 'flex',
+        alignItems: 'center',
+        gap: 1.5
+      }}
+    >
+      <Typography variant="body2" fontWeight="medium" sx={{ flexShrink: 0 }}>
+        Editing report
+      </Typography>
+      <TextField
+        size="small"
+        label="Report name"
+        value={reportName}
+        onChange={(e) => setReportName(e.target.value)}
+        sx={{ width: 260 }}
+      />
+      <TextField
+        size="small"
+        label="Save comment (optional)"
+        value={saveComment}
+        onChange={(e) => setSaveComment(e.target.value)}
+        sx={{ flex: 1, maxWidth: 400 }}
+      />
+      {saveError && (
+        <Typography variant="caption" color="error">
+          {saveError}
+        </Typography>
+      )}
+      <Box sx={{ ml: 'auto', display: 'flex', gap: 1 }}>
+        <Button
+          variant="outlined"
+          size="small"
+          startIcon={<CancelIcon />}
+          onClick={onCancel}
+          disabled={saving}
+        >
+          Cancel
+        </Button>
+        <Button
+          variant="contained"
+          size="small"
+          startIcon={saving ? <CircularProgress size={16} /> : <SaveIcon />}
+          onClick={() => onSave(reportName, saveComment)}
+          disabled={saving || !reportName.trim()}
+        >
+          Save version
+        </Button>
+      </Box>
+    </Box>
+  );
+});
+
+interface EditableRowCardProps {
+  row: EditableRow;
+  rowIndex: number;
+  onRename: (rowId: string, name: string) => void;
+  onAddPanel: (rowId: string) => void;
+  onDeleteRow: (rowId: string) => void;
+  onEditPanel: (rowId: string, panelId: string) => void;
+  onDeletePanel: (rowId: string, panelId: string) => void;
+  onResizePanel: (rowId: string, panelId: string, delta: number) => void;
+}
+
+const EditableRowCard = memo(function EditableRowCard({
+  row,
+  rowIndex,
+  onRename,
+  onAddPanel,
+  onDeleteRow,
+  onEditPanel,
+  onDeletePanel,
+  onResizePanel
+}: EditableRowCardProps) {
+  const [rowName, setRowName] = useState(row.name);
+
+  useEffect(() => {
+    setRowName(row.name);
+  }, [row._id, row.name]);
+
+  const commitRowName = () => {
+    const trimmed = rowName.trim();
+    if (trimmed && trimmed !== row.name) {
+      onRename(row._id, trimmed);
+    } else if (!trimmed) {
+      setRowName(row.name);
+    }
+  };
+
+  return (
+    <Container
+      maxWidth={false}
+      sx={{ px: EDIT_CONTENT_PX, pt: rowIndex === 0 ? 0.75 : 0, pb: 1.5 }}
+    >
+      <Paper elevation={1} sx={{ p: 1.5 }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+          <TextField
+            size="small"
+            label="Row name"
+            value={rowName}
+            onChange={(e) => setRowName(e.target.value)}
+            onBlur={commitRowName}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.currentTarget.blur();
+              }
+            }}
+            sx={{ flex: 1, maxWidth: 360 }}
+          />
+          <Box sx={{ flex: 1 }} />
+          <Tooltip title="Add panel to this row">
+            <Button
+              size="small"
+              startIcon={<Add />}
+              onClick={() => onAddPanel(row._id)}
+            >
+              Add panel
+            </Button>
+          </Tooltip>
+          <Tooltip title="Delete row">
+            <IconButton
+              size="small"
+              color="error"
+              onClick={() => onDeleteRow(row._id)}
+            >
+              <DeleteIcon fontSize="small" />
+            </IconButton>
+          </Tooltip>
+        </Box>
+        <Divider sx={{ mb: 1.5 }} />
+
+        <SortableContext
+          items={row.panels.map((p) => p._id)}
+          strategy={horizontalListSortingStrategy}
+        >
+          <DroppableRowArea rowId={row._id}>
+            <Grid container spacing={1.5}>
+              {row.panels.length === 0 && (
+                <Grid size={12}>
+                  <Typography variant="body2" color="text.secondary" sx={{ py: 2, px: 1 }}>
+                    No panels yet. Click "Add panel" to add one, or drag a panel here.
+                  </Typography>
+                </Grid>
+              )}
+              {row.panels.map((panel) => {
+                const size = Math.max(1, Math.min(12, panel.size ?? 3));
+                return (
+                  <Grid key={panel._id} size={{ lg: size, md: size, xl: size, xs: 12 }}>
+                    <SortablePanelCard
+                      panel={panel}
+                      onEdit={() => onEditPanel(row._id, panel._id)}
+                      onDelete={() => onDeletePanel(row._id, panel._id)}
+                      onResize={(delta) => onResizePanel(row._id, panel._id, delta)}
+                    />
+                  </Grid>
+                );
+              })}
+            </Grid>
+          </DroppableRowArea>
+        </SortableContext>
+      </Paper>
+    </Container>
+  );
+});
+
 interface NamedQueryEditorProps {
   queries: Record<string, string>;
   onChange: (q: Record<string, string>) => void;
+  onDraftValueChange: (key: string, value: string) => void;
   onRename: (oldKey: string, newKey: string) => void;
 }
 
-function NamedQueryEditor({ queries, onChange, onRename }: NamedQueryEditorProps) {
+function NamedQueryEditor({ queries, onChange, onDraftValueChange, onRename }: NamedQueryEditorProps) {
   // Stable insertion-order list so React keys don't thrash when a key is renamed
   const [keyOrder, setKeyOrder] = useState<string[]>(() => Object.keys(queries));
 
@@ -573,6 +793,7 @@ function NamedQueryEditor({ queries, onChange, onRename }: NamedQueryEditorProps
           value={queries[key] ?? ''}
           onRename={renameKey}
           onValueChange={updateValue}
+          onDraftValueChange={onDraftValueChange}
           onDelete={removeQuery}
         />
       ))}
@@ -597,10 +818,10 @@ export interface EditableReportViewProps {
 }
 
 function EditableReportView({ report, reportId: _reportId, onSave, onCancel }: EditableReportViewProps) {
-  const [reportName, setReportName] = useState(report.name ?? '');
   const [namedQueries, setNamedQueries] = useState<Record<string, string>>(
     report.queries ?? {}
   );
+  const namedQueriesRef = useRef<Record<string, string>>(report.queries ?? {});
   const [editableRows, setEditableRows] = useState<EditableRow[]>(
     toEditableRows(report.rows)
   );
@@ -609,9 +830,10 @@ function EditableReportView({ report, reportId: _reportId, onSave, onCancel }: E
   );
   const [inputEditorOpen, setInputEditorOpen] = useState(false);
   const [editingInputIndex, setEditingInputIndex] = useState<number | null>(null);
-  const [saveComment, setSaveComment] = useState('');
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const toolbarRef = useRef<HTMLDivElement | null>(null);
+  const [toolbarHeight, setToolbarHeight] = useState(72);
 
   // Panel editor dialog state
   const [editorOpen, setEditorOpen] = useState(false);
@@ -626,6 +848,30 @@ function EditableReportView({ report, reportId: _reportId, onSave, onCancel }: E
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } })
   );
+
+  function updateNamedQueries(next: Record<string, string>) {
+    namedQueriesRef.current = next;
+    setNamedQueries(next);
+  }
+
+  function updateNamedQueryDraft(key: string, value: string) {
+    namedQueriesRef.current = { ...namedQueriesRef.current, [key]: value };
+  }
+
+  useEffect(() => {
+    if (toolbarRef.current === null) return undefined;
+
+    const updateToolbarHeight = () => {
+      setToolbarHeight(toolbarRef.current?.offsetHeight ?? 72);
+    };
+
+    updateToolbarHeight();
+    if (typeof ResizeObserver === 'undefined') return undefined;
+
+    const observer = new ResizeObserver(updateToolbarHeight);
+    observer.observe(toolbarRef.current);
+    return () => observer.disconnect();
+  }, []);
 
   // ---------------------------------------------------------------------------
   // Row operations
@@ -839,14 +1085,14 @@ function EditableReportView({ report, reportId: _reportId, onSave, onCancel }: E
   // Save
   // ---------------------------------------------------------------------------
 
-  async function handleSave() {
+  async function handleSave(reportName: string, saveComment: string) {
     setSaving(true);
     setSaveError(null);
     try {
       const updatedReport: Report = {
         ...report,
         name: reportName,
-        queries: namedQueries,
+        queries: namedQueriesRef.current,
         inputs: editableInputs.length ? editableInputs : undefined,
         rows: fromEditableRows(editableRows)
       };
@@ -864,65 +1110,18 @@ function EditableReportView({ report, reportId: _reportId, onSave, onCancel }: E
   return (
     <>
       {/* Top toolbar */}
-      <Box
-        sx={{
-          position: 'sticky',
-          top: 64,
-          zIndex: 100,
-          bgcolor: 'background.default',
-          borderBottom: '1px solid',
-          borderColor: 'divider',
-          px: 3,
-          py: 1.5,
-          display: 'flex',
-          alignItems: 'center',
-          gap: 2
-        }}
-      >
-        <Typography variant="subtitle1" fontWeight="medium" sx={{ flexShrink: 0 }}>
-          Editing report
-        </Typography>
-        <TextField
-          size="small"
-          label="Report name"
-          value={reportName}
-          onChange={(e) => setReportName(e.target.value)}
-          sx={{ width: 260 }}
-        />
-        <TextField
-          size="small"
-          label="Save comment (optional)"
-          value={saveComment}
-          onChange={(e) => setSaveComment(e.target.value)}
-          sx={{ flex: 1, maxWidth: 400 }}
-        />
-        {saveError && (
-          <Typography variant="caption" color="error">
-            {saveError}
-          </Typography>
-        )}
-        <Box sx={{ ml: 'auto', display: 'flex', gap: 1 }}>
-          <Button
-            variant="outlined"
-            startIcon={<CancelIcon />}
-            onClick={onCancel}
-            disabled={saving}
-          >
-            Cancel
-          </Button>
-          <Button
-            variant="contained"
-            startIcon={saving ? <CircularProgress size={16} /> : <SaveIcon />}
-            onClick={handleSave}
-            disabled={saving || !reportName.trim()}
-          >
-            Save version
-          </Button>
-        </Box>
-      </Box>
+      <EditToolbar
+        initialReportName={report.name ?? ''}
+        saving={saving}
+        saveError={saveError}
+        toolbarRef={toolbarRef}
+        onCancel={onCancel}
+        onSave={handleSave}
+      />
+      <Box sx={{ height: toolbarHeight }} />
 
       {/* Named queries section */}
-      <Container maxWidth={false} sx={{ pt: 2, pb: 1 }}>
+      <Container maxWidth={false} sx={{ px: EDIT_CONTENT_PX, pt: 1.5, pb: 1 }}>
         <Accordion variant="outlined" disableGutters defaultExpanded>
           <AccordionSummary expandIcon={<ExpandMoreIcon />}>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -940,7 +1139,8 @@ function EditableReportView({ report, reportId: _reportId, onSave, onCancel }: E
           <AccordionDetails>
             <NamedQueryEditor
               queries={namedQueries}
-              onChange={setNamedQueries}
+              onChange={updateNamedQueries}
+              onDraftValueChange={updateNamedQueryDraft}
               onRename={handleQueryRename}
             />
           </AccordionDetails>
@@ -948,7 +1148,7 @@ function EditableReportView({ report, reportId: _reportId, onSave, onCancel }: E
       </Container>
 
       {/* Inputs section */}
-      <Container maxWidth={false} sx={{ pt: 0, pb: 1 }}>
+      <Container maxWidth={false} sx={{ px: EDIT_CONTENT_PX, pt: 0, pb: 1 }}>
         <Accordion variant="outlined" disableGutters defaultExpanded>
           <AccordionSummary expandIcon={<ExpandMoreIcon />}>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -992,72 +1192,18 @@ function EditableReportView({ report, reportId: _reportId, onSave, onCancel }: E
 
       {/* Rows with panels */}
       <DndContext sensors={sensors} onDragStart={onDragStart} onDragEnd={onDragEnd}>
-        {editableRows.map((row) => (
-          <Container key={row._id} maxWidth={false} sx={{ pb: 2 }}>
-            <Paper elevation={1} sx={{ p: 2 }}>
-              {/* Row header */}
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
-                <TextField
-                  size="small"
-                  label="Row name"
-                  value={row.name}
-                  onChange={(e) => renameRow(row._id, e.target.value)}
-                  sx={{ flex: 1, maxWidth: 360 }}
-                />
-                <Box sx={{ flex: 1 }} />
-                <Tooltip title="Add panel to this row">
-                  <Button
-                    size="small"
-                    startIcon={<Add />}
-                    onClick={() => openAddPanel(row._id)}
-                  >
-                    Add panel
-                  </Button>
-                </Tooltip>
-                <Tooltip title="Delete row">
-                  <IconButton
-                    size="small"
-                    color="error"
-                    onClick={() => deleteRow(row._id)}
-                  >
-                    <DeleteIcon fontSize="small" />
-                  </IconButton>
-                </Tooltip>
-              </Box>
-              <Divider sx={{ mb: 1.5 }} />
-
-              {/* Panel grid */}
-              <SortableContext
-                items={row.panels.map((p) => p._id)}
-                strategy={horizontalListSortingStrategy}
-              >
-                <DroppableRowArea rowId={row._id}>
-                  <Grid container spacing={2}>
-                    {row.panels.length === 0 && (
-                      <Grid size={12}>
-                        <Typography variant="body2" color="text.secondary" sx={{ py: 2, px: 1 }}>
-                          No panels yet. Click "Add panel" to add one, or drag a panel here.
-                        </Typography>
-                      </Grid>
-                    )}
-                    {row.panels.map((panel) => {
-                      const size = Math.max(1, Math.min(12, panel.size ?? 3));
-                      return (
-                        <Grid key={panel._id} size={{ lg: size, md: size, xl: size, xs: 12 }}>
-                          <SortablePanelCard
-                            panel={panel}
-                            onEdit={() => openEditPanel(row._id, panel._id)}
-                            onDelete={() => deletePanel(row._id, panel._id)}
-                            onResize={(delta) => resizePanel(row._id, panel._id, delta)}
-                          />
-                        </Grid>
-                      );
-                    })}
-                  </Grid>
-                </DroppableRowArea>
-              </SortableContext>
-            </Paper>
-          </Container>
+        {editableRows.map((row, rowIndex) => (
+          <EditableRowCard
+            key={row._id}
+            row={row}
+            rowIndex={rowIndex}
+            onRename={renameRow}
+            onAddPanel={openAddPanel}
+            onDeleteRow={deleteRow}
+            onEditPanel={openEditPanel}
+            onDeletePanel={deletePanel}
+            onResizePanel={resizePanel}
+          />
         ))}
 
         <DragOverlay>
@@ -1066,7 +1212,7 @@ function EditableReportView({ report, reportId: _reportId, onSave, onCancel }: E
       </DndContext>
 
       {/* Add row */}
-      <Container maxWidth={false} sx={{ pb: 3 }}>
+      <Container maxWidth={false} sx={{ px: EDIT_CONTENT_PX, pb: 2.5 }}>
         <Button variant="outlined" startIcon={<Add />} onClick={addRow} fullWidth>
           Add Row
         </Button>

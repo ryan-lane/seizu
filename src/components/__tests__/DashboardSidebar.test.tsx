@@ -10,9 +10,16 @@ jest.mock('src/hooks/usePermissions', () => ({
 }));
 
 const mockUsePermissions = usePermissionsModule.usePermissions as jest.MockedFunction<typeof usePermissionsModule.usePermissions>;
-const theme = createTheme();
+const lightTheme = createTheme({ palette: { mode: 'light' } });
+const darkTheme = createTheme({ palette: { mode: 'dark' } });
 
-function Wrapper({ children }: { children: React.ReactNode }) {
+function Wrapper({
+  children,
+  theme = lightTheme
+}: {
+  children: React.ReactNode;
+  theme?: ReturnType<typeof createTheme>;
+}) {
   return (
     <MemoryRouter>
       <ThemeProvider theme={theme}>{children}</ThemeProvider>
@@ -46,5 +53,45 @@ describe('DashboardSidebar', () => {
     renderSidebar(['roles:read']);
 
     expect(screen.getByRole('link', { name: 'Roles' })).toHaveAttribute('href', '/app/roles');
+  });
+
+  it('renders the full logo in the expanded sidebar', () => {
+    mockUsePermissions.mockReturnValue(() => false);
+
+    render(<DashboardSidebar />, { wrapper: Wrapper });
+
+    expect(screen.getByAltText('Seizu')).toHaveAttribute('src', '/static/images/logo-horizontal-black.svg');
+  });
+
+  it('renders the mark in the collapsed sidebar', () => {
+    mockUsePermissions.mockReturnValue(() => false);
+
+    render(<DashboardSidebar collapsed />, { wrapper: Wrapper });
+
+    expect(screen.getByAltText('Seizu')).toHaveAttribute('src', '/static/images/logo-mark-light.svg');
+  });
+
+  it('uses dark-surface logo assets in dark mode', () => {
+    mockUsePermissions.mockReturnValue(() => false);
+
+    render(
+      <Wrapper theme={darkTheme}>
+        <DashboardSidebar />
+      </Wrapper>
+    );
+
+    expect(screen.getByAltText('Seizu')).toHaveAttribute('src', '/static/images/logo-horizontal-white.svg');
+  });
+
+  it('uses the dark-surface mark in dark mode when collapsed', () => {
+    mockUsePermissions.mockReturnValue(() => false);
+
+    render(
+      <Wrapper theme={darkTheme}>
+        <DashboardSidebar collapsed />
+      </Wrapper>
+    );
+
+    expect(screen.getByAltText('Seizu')).toHaveAttribute('src', '/static/images/logo-mark.svg');
   });
 });

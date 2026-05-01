@@ -17,7 +17,7 @@ async def test_config(mocker):
     assert ret_json["config"] == {}
     assert "reports" not in ret_json["config"].keys()
     assert "dashboard" not in ret_json["config"].keys()
-    assert "$schema" in ret_json["schema"].keys()
+    assert "schema" not in ret_json
 
 
 async def test_config_auth_required_true(mocker):

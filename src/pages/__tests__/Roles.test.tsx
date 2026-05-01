@@ -7,6 +7,7 @@ import * as usePermissionsModule from 'src/hooks/usePermissions';
 
 jest.mock('src/hooks/usePermissions', () => ({
   usePermissions: jest.fn(),
+  usePermissionState: jest.fn(),
 }));
 
 jest.mock('src/hooks/useRolesApi', () => {
@@ -24,6 +25,7 @@ jest.mock('src/components/UserDisplay', () => ({
 }));
 
 const mockUsePermissions = usePermissionsModule.usePermissions as jest.MockedFunction<typeof usePermissionsModule.usePermissions>;
+const mockUsePermissionState = usePermissionsModule.usePermissionState as jest.MockedFunction<typeof usePermissionsModule.usePermissionState>;
 const mockUseBuiltinRolesList = rolesApiModule.useBuiltinRolesList as unknown as jest.Mock;
 const mockUseRolesList = rolesApiModule.useRolesList as unknown as jest.Mock;
 const mockUseRoleMutations = rolesApiModule.useRoleMutations as unknown as jest.Mock;
@@ -66,7 +68,9 @@ function Wrapper({ children }: { children: React.ReactNode }) {
 }
 
 function setPermissions(permissions: string[]) {
-  mockUsePermissions.mockReturnValue((permission: string) => permissions.includes(permission));
+  const hasPermission = (permission: string) => permissions.includes(permission);
+  mockUsePermissions.mockReturnValue(hasPermission);
+  mockUsePermissionState.mockReturnValue({ hasPermission, loading: false, currentUser: null });
 }
 
 describe('Roles', () => {
@@ -100,6 +104,15 @@ describe('Roles', () => {
     render(<Roles />, { wrapper: Wrapper });
 
     expect(screen.getByText('You do not have access to role management.')).toBeInTheDocument();
+  });
+
+  it('shows a spinner while permissions are loading', () => {
+    mockUsePermissionState.mockReturnValue({ hasPermission: () => false, loading: true, currentUser: null });
+
+    render(<Roles />, { wrapper: Wrapper });
+
+    expect(screen.getByRole('progressbar')).toBeInTheDocument();
+    expect(screen.queryByText('You do not have access to role management.')).not.toBeInTheDocument();
   });
 
   it('renders built-in and user-defined roles together', () => {

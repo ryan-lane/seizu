@@ -1,5 +1,3 @@
-import { createContext } from 'react';
-
 export interface PanelParam {
   name: string;
   value?: string;
@@ -69,10 +67,6 @@ export interface Report {
   inputs?: ReportInput[];
 }
 
-export interface AppConfig {
-  [key: string]: unknown;
-}
-
 export interface ActionConfigFieldDef {
   name: string;
   label: string;
@@ -84,14 +78,6 @@ export interface ActionConfigFieldDef {
 }
 
 export interface SeizuConfig {
-  config: AppConfig;
   scheduled_query_action_types: string[];
   scheduled_query_action_schemas: Record<string, ActionConfigFieldDef[]>;
 }
-
-export interface ConfigContextValue {
-  config?: SeizuConfig;
-}
-
-// eslint-disable-next-line import/prefer-default-export
-export const ConfigContext = createContext<ConfigContextValue>({});

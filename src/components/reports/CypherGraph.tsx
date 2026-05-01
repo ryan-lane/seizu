@@ -4,7 +4,6 @@ import {
   Card,
   CardContent,
   CardHeader,
-  CircularProgress,
   Divider,
   Grid,
   IconButton,
@@ -41,6 +40,7 @@ import {
 import '@xyflow/react/dist/style.css';
 import { useLazyCypherQuery } from 'src/hooks/useCypherQuery';
 import QueryValidationBadge from 'src/components/reports/QueryValidationBadge';
+import { GraphPanelSkeleton } from 'src/components/reports/PanelLoadingSkeletons';
 import GraphDetailPanel, { GraphSummaryPanel } from 'src/components/reports/GraphDetailPanel';
 import { chartPalette } from 'src/theme/brand';
 
@@ -651,11 +651,7 @@ export default function CypherGraph({
   }
 
   if (loading || records === undefined) {
-    return (
-      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', p: 4 }}>
-        <CircularProgress size={40} />
-      </Box>
-    );
+    return <GraphPanelSkeleton caption={caption} fillHeight={fillHeight} />;
   }
 
   if (records.length === 0) {

@@ -14,6 +14,7 @@ import Info from '@mui/icons-material/Info';
 import Error from '@mui/icons-material/Error';
 import { useLazyCypherQuery } from 'src/hooks/useCypherQuery';
 import CypherDetails from 'src/components/reports/CypherDetails';
+import { ProgressPanelSkeleton } from 'src/components/reports/PanelLoadingSkeletons';
 import QueryValidationBadge from 'src/components/reports/QueryValidationBadge';
 
 interface CypherProgressProps {
@@ -115,11 +116,7 @@ export default function CypherProgress({
   }
 
   if (loading || records === undefined) {
-    return (
-      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', p: 4 }}>
-        <CircularProgress size={40} />
-      </Box>
-    );
+    return <ProgressPanelSkeleton caption={caption} />;
   }
 
   if (first === undefined) {

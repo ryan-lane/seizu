@@ -499,7 +499,8 @@ class SQLModelReportStore(ReportStore):
                 return None
 
             version = report.current_version + 1
-            name = report.name
+            config_name = config.get("name")
+            name = config_name.strip() if isinstance(config_name, str) and config_name.strip() else report.name
             report_created_by = report.created_by
             report_access = report.access
             now = datetime.now(tz=UTC).isoformat()
@@ -515,6 +516,7 @@ class SQLModelReportStore(ReportStore):
                 )
             )
             report.current_version = version
+            report.name = name
             report.updated_at = now
             report.updated_by = created_by
             session.add(report)

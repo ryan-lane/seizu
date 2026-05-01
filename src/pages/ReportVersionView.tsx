@@ -20,7 +20,7 @@ import ReportView from 'src/components/ReportView';
 import UserDisplay from 'src/components/UserDisplay';
 import { useReportVersion, useReportVersionsList, useReportsMutations } from 'src/hooks/useReportsApi';
 import { Report } from 'src/config.context';
-import { usePermissions } from 'src/hooks/usePermissions';
+import { usePermissionState } from 'src/hooks/usePermissions';
 
 function ReportVersionView() {
   const { id, version } = useParams();
@@ -41,7 +41,7 @@ function ReportVersionView() {
     ? sortedVersionNums[currentIdx + 1]
     : null;
 
-  const hasPermission = usePermissions();
+  const { hasPermission, loading: permissionsLoading } = usePermissionState();
   const canWrite = hasPermission('reports:write');
 
   const [restoring, setRestoring] = useState(false);
@@ -65,7 +65,7 @@ function ReportVersionView() {
     }
   }
 
-  if (loading) {
+  if (loading || permissionsLoading || (reportVersion && reportVersion.query_capabilities === undefined)) {
     return (
       <Box sx={{ display: 'flex', justifyContent: 'center', p: 4 }}>
         <CircularProgress />
@@ -185,7 +185,9 @@ function ReportVersionView() {
       <ReportView
         report={reportVersion.config as Report}
         title={reportVersion.name}
+        showTitle
         queryCapabilities={reportVersion.query_capabilities}
+        stickyToolbar={false}
       />
     </>
   );

@@ -77,6 +77,9 @@ class ReportVersion(BaseModel):
 
 class ReportListResponse(BaseModel):
     reports: list["ReportListItem"]
+    total: int
+    page: int
+    per_page: int
 
 
 class ReportVersionListResponse(BaseModel):

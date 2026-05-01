@@ -18,14 +18,7 @@ import {
   ListItemText,
   Menu,
   MenuItem,
-  Paper,
   Switch,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
   TextField,
   Tooltip,
   Typography
@@ -44,6 +37,14 @@ import {
   CreateToolsetRequest,
   UpdateToolsetRequest
 } from 'src/hooks/useToolsetsApi';
+import ListTable, {
+  ListTableColumn,
+  listTableActionColumnSx,
+  listTableMonoCellSx,
+  listTablePrimaryCellSx,
+  listTableSecondaryCellSx,
+  listTableTruncateSx
+} from 'src/components/ListTable';
 import UserDisplay from 'src/components/UserDisplay';
 import { usePermissions } from 'src/hooks/usePermissions';
 
@@ -60,6 +61,11 @@ const isBuiltinToolset = (id: string): boolean =>
   id.startsWith(BUILTIN_PREFIX) && id.endsWith('__');
 
 const LOWER_SNAKE_ID = /^[a-z][a-z0-9]*(?:_[a-z0-9]+)*$/;
+
+const descriptionColumnSx = { ...listTableSecondaryCellSx, width: '24%' };
+const versionColumnSx = { ...listTableSecondaryCellSx, width: 88 };
+const updatedAtColumnSx = { ...listTableSecondaryCellSx, width: 180 };
+const updatedByColumnSx = { ...listTableSecondaryCellSx, width: 150 };
 
 // ---------------------------------------------------------------------------
 // Create/Edit dialog
@@ -303,6 +309,118 @@ function Toolsets() {
   };
 
   const allRows: ToolsetListItem[] = toolsets;
+  const columns: ListTableColumn<ToolsetListItem>[] = [
+    {
+      key: 'name',
+      label: 'Name',
+      cellSx: listTablePrimaryCellSx,
+      render: (item) => (
+        <Typography
+          variant="body2"
+          fontWeight={500}
+          sx={[
+            { cursor: 'pointer', '&:hover': { textDecoration: 'underline' } },
+            listTableTruncateSx
+          ]}
+          onClick={() => navigate(`/app/toolsets/${item.toolset_id}/tools`)}
+        >
+          {item.name}
+        </Typography>
+      )
+    },
+    {
+      key: 'type',
+      label: 'Type',
+      cellSx: { width: 130 },
+      render: (item) => {
+        const isBuiltin = isBuiltinToolset(item.toolset_id);
+        return (
+          <Chip
+            label={isBuiltin ? 'Built-in' : 'User-defined'}
+            size="small"
+            variant={isBuiltin ? 'outlined' : 'filled'}
+            color={isBuiltin ? 'primary' : 'default'}
+          />
+        );
+      }
+    },
+    {
+      key: 'slug',
+      label: 'Slug',
+      hideBelow: 'lg',
+      cellSx: listTableMonoCellSx,
+      render: (item) => item.toolset_id
+    },
+    {
+      key: 'description',
+      label: 'Description',
+      hideBelow: 'md',
+      cellSx: descriptionColumnSx,
+      render: (item) => (
+        <Typography
+          variant="body2"
+          color="text.secondary"
+          sx={listTableTruncateSx}
+        >
+          {item.description || '—'}
+        </Typography>
+      )
+    },
+    {
+      key: 'status',
+      label: 'Status',
+      render: (item) => (
+        <Chip
+          label={item.enabled ? 'Enabled' : 'Disabled'}
+          color={item.enabled ? 'success' : 'default'}
+          size="small"
+        />
+      )
+    },
+    {
+      key: 'version',
+      label: 'Version',
+      hideBelow: 'sm',
+      cellSx: versionColumnSx,
+      render: (item) => isBuiltinToolset(item.toolset_id) ? '—' : `v${item.current_version}`
+    },
+    {
+      key: 'updated_at',
+      label: 'Last updated',
+      hideBelow: 'xl',
+      cellSx: updatedAtColumnSx,
+      render: (item) => isBuiltinToolset(item.toolset_id) || !item.updated_at ? '—' : new Date(item.updated_at).toLocaleString()
+    },
+    {
+      key: 'updated_by',
+      label: 'Updated by',
+      hideBelow: 'lg',
+      cellSx: updatedByColumnSx,
+      render: (item) => isBuiltinToolset(item.toolset_id) ? '—' : (
+        item.updated_by
+          ? <UserDisplay userId={item.updated_by} />
+          : <UserDisplay userId={item.created_by} />
+      )
+    },
+    {
+      key: 'actions',
+      align: 'right',
+      cellSx: listTableActionColumnSx,
+      render: (item) => {
+        const isBuiltin = isBuiltinToolset(item.toolset_id);
+        return (
+          <RowMenu
+            item={item}
+            isBuiltin={isBuiltin}
+            onEdit={() => openEdit(item)}
+            onTools={() => navigate(`/app/toolsets/${item.toolset_id}/tools`)}
+            onHistory={() => navigate(`/app/toolsets/${item.toolset_id}/history`)}
+            onDelete={() => setDeleteTarget(item)}
+          />
+        );
+      }
+    }
+  ];
 
   return (
     <>
@@ -330,97 +448,12 @@ function Toolsets() {
         )}
 
         {!loading && !error && (
-          <TableContainer component={Paper} variant="outlined">
-            <Table>
-              <TableHead>
-                <TableRow>
-                  <TableCell>Name</TableCell>
-                  <TableCell>Slug</TableCell>
-                  <TableCell>Description</TableCell>
-                  <TableCell>Status</TableCell>
-                  <TableCell>Version</TableCell>
-                  <TableCell>Latest Update</TableCell>
-                  <TableCell>Updated By</TableCell>
-                  <TableCell />
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {allRows.length === 0 && (
-                  <TableRow>
-                    <TableCell colSpan={8}>
-                      <Typography color="text.secondary" sx={{ py: 1 }}>
-                        No toolsets yet. Create one above.
-                      </Typography>
-                    </TableCell>
-                  </TableRow>
-                )}
-                {allRows.map((item) => {
-                  const isBuiltin = isBuiltinToolset(item.toolset_id);
-                  return (
-                    <TableRow key={item.toolset_id} hover>
-                      <TableCell>
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                          <Typography
-                            variant="body2"
-                            fontWeight={500}
-                            sx={{ cursor: 'pointer', '&:hover': { textDecoration: 'underline' } }}
-                            onClick={() => navigate(`/app/toolsets/${item.toolset_id}/tools`)}
-                          >
-                            {item.name}
-                          </Typography>
-                          {isBuiltin && (
-                            <Chip label="Built-in" size="small" variant="outlined" color="primary" />
-                          )}
-                        </Box>
-                      </TableCell>
-                      <TableCell sx={{ color: 'text.secondary', fontFamily: 'monospace' }}>
-                        {item.toolset_id}
-                      </TableCell>
-                      <TableCell sx={{ color: 'text.secondary', maxWidth: 320 }}>
-                        <Typography
-                          variant="body2"
-                          color="text.secondary"
-                          sx={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
-                        >
-                          {item.description || '—'}
-                        </Typography>
-                      </TableCell>
-                      <TableCell>
-                        <Chip
-                          label={item.enabled ? 'Enabled' : 'Disabled'}
-                          color={item.enabled ? 'success' : 'default'}
-                          size="small"
-                        />
-                      </TableCell>
-                      <TableCell sx={{ color: 'text.secondary' }}>
-                        {isBuiltin ? '—' : `v${item.current_version}`}
-                      </TableCell>
-                      <TableCell sx={{ color: 'text.secondary' }}>
-                        {isBuiltin || !item.updated_at ? '—' : new Date(item.updated_at).toLocaleString()}
-                      </TableCell>
-                      <TableCell sx={{ color: 'text.secondary' }}>
-                        {isBuiltin ? '—' : (
-                          item.updated_by
-                            ? <UserDisplay userId={item.updated_by} />
-                            : <UserDisplay userId={item.created_by} />
-                        )}
-                      </TableCell>
-                      <TableCell align="right" sx={{ width: 48, pr: 1 }}>
-                        <RowMenu
-                          item={item}
-                          isBuiltin={isBuiltin}
-                          onEdit={() => openEdit(item)}
-                          onTools={() => navigate(`/app/toolsets/${item.toolset_id}/tools`)}
-                          onHistory={() => navigate(`/app/toolsets/${item.toolset_id}/history`)}
-                          onDelete={() => setDeleteTarget(item)}
-                        />
-                      </TableCell>
-                    </TableRow>
-                  );
-                })}
-              </TableBody>
-            </Table>
-          </TableContainer>
+          <ListTable
+            rows={allRows}
+            columns={columns}
+            getRowKey={(item) => item.toolset_id}
+            emptyMessage="No toolsets yet. Create one above."
+          />
         )}
       </Box>
 

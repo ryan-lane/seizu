@@ -105,6 +105,42 @@ describe('ReportView param building', () => {
 
   afterEach(cleanup);
 
+  it('renders the report title as a heading when enabled', () => {
+    const report = makeReport([
+      {
+        type: 'count',
+        cypher: 'cves-total',
+        caption: 'Total CVEs'
+      }
+    ]);
+
+    render(
+      <Wrapper>
+        <ReportView report={report} title="Executive Risk Report" showTitle />
+      </Wrapper>
+    );
+
+    expect(screen.getByRole('heading', { name: 'Executive Risk Report', level: 1 })).toBeInTheDocument();
+  });
+
+  it('does not render the report title as a heading by default', () => {
+    const report = makeReport([
+      {
+        type: 'count',
+        cypher: 'cves-total',
+        caption: 'Total CVEs'
+      }
+    ]);
+
+    render(
+      <Wrapper>
+        <ReportView report={report} title="Dashboard" />
+      </Wrapper>
+    );
+
+    expect(screen.queryByRole('heading', { name: 'Dashboard', level: 1 })).not.toBeInTheDocument();
+  });
+
   it('passes static value params correctly to panel', () => {
     const report = makeReport([
       {

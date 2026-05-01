@@ -717,7 +717,8 @@ class DynamoDBReportStore(ReportStore):
                 return None
 
             version = int(meta["current_version"]) + 1
-            name = meta["name"]
+            config_name = config.get("name")
+            name = config_name.strip() if isinstance(config_name, str) and config_name.strip() else meta["name"]
             pinned = bool(meta.get("pinned", False))
             now = datetime.now(tz=UTC).isoformat()
 

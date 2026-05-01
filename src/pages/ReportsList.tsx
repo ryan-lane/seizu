@@ -18,13 +18,6 @@ import {
   ListItemText,
   Menu,
   MenuItem,
-  Paper,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
   TextField,
   Tooltip,
   Typography
@@ -49,8 +42,14 @@ import {
   useReportsList,
   useReportsMutations
 } from 'src/hooks/useReportsApi';
-import { useCurrentUser } from 'src/hooks/useCurrentUser';
-import { usePermissions } from 'src/hooks/usePermissions';
+import { usePermissionState } from 'src/hooks/usePermissions';
+import ListTable, {
+  ListTableColumn,
+  listTableActionColumnSx,
+  listTablePrimaryCellSx,
+  listTableSecondaryCellSx
+} from 'src/components/ListTable';
+import UserDisplay from 'src/components/UserDisplay';
 
 // ---------------------------------------------------------------------------
 // Per-row overflow menu
@@ -67,6 +66,7 @@ interface RowMenuProps {
   onToggleAccess: () => void;
   onDelete: () => void;
   isOwner: boolean;
+  hasPermission: (permission: string) => boolean;
 }
 
 function RowMenu({
@@ -79,10 +79,10 @@ function RowMenu({
   onClone,
   onToggleAccess,
   onDelete,
-  isOwner
+  isOwner,
+  hasPermission
 }: RowMenuProps) {
   const [anchor, setAnchor] = useState<null | HTMLElement>(null);
-  const hasPermission = usePermissions();
 
   const canWrite = hasPermission('reports:write');
   const canDelete = hasPermission('reports:delete');
@@ -217,10 +217,9 @@ function ReportsList() {
   const { dashboardReportId, refresh: refreshDashboard } = useDashboardReportId();
   const { createReport, cloneReport, saveReportVersion, setDashboardReport, pinReport, updateReportAccess, deleteReport } =
     useReportsMutations();
-  const currentUser = useCurrentUser();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
-  const hasPermission = usePermissions();
+  const { hasPermission, loading: permissionsLoading, currentUser } = usePermissionState();
 
   const [createOpen, setCreateOpen] = useState(() => searchParams.get('new') === '1');
   const [newName, setNewName] = useState('');
@@ -322,6 +321,119 @@ function ReportsList() {
     }
   };
 
+  const columns: ListTableColumn<ReportListItem>[] = [
+    {
+      key: 'name',
+      label: 'Name',
+      cellSx: listTablePrimaryCellSx,
+      render: (report) => {
+        const isDashboard = report.report_id === dashboardReportId;
+        return (
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minWidth: 0, flexWrap: 'wrap' }}>
+            <Link
+              component={RouterLink}
+              to={`/app/reports/${report.report_id}`}
+              underline="hover"
+              color="inherit"
+              fontWeight="medium"
+            >
+              {report.name}
+            </Link>
+            {report.pinned && (
+              <Tooltip title="Pinned to sidebar">
+                <Chip
+                  icon={<PushPinIcon sx={{ fontSize: '0.85rem !important' }} />}
+                  label="Pinned"
+                  size="small"
+                  color="primary"
+                  variant="outlined"
+                  sx={{ height: 20, fontSize: '0.7rem' }}
+                />
+              </Tooltip>
+            )}
+            {isDashboard && (
+              <Tooltip title="Currently set as the dashboard">
+                <Chip
+                  icon={<DashboardIcon sx={{ fontSize: '0.85rem !important' }} />}
+                  label="Dashboard"
+                  size="small"
+                  color="primary"
+                  variant="outlined"
+                  sx={{ height: 20, fontSize: '0.7rem' }}
+                />
+              </Tooltip>
+            )}
+          </Box>
+        );
+      }
+    },
+    {
+      key: 'visibility',
+      label: 'Visibility',
+      cellSx: { width: 120 },
+      render: (report) => (
+        <Tooltip title={report.access.scope === 'public' ? 'Visible to report readers' : 'Private to the owner'}>
+          <Chip
+            icon={
+              report.access.scope === 'public'
+                ? <PublicIcon sx={{ fontSize: '0.85rem !important' }} />
+                : <LockIcon sx={{ fontSize: '0.85rem !important' }} />
+            }
+            label={report.access.scope === 'public' ? 'Public' : 'Draft'}
+            size="small"
+            color={report.access.scope === 'public' ? 'success' : 'default'}
+            variant="outlined"
+          />
+        </Tooltip>
+      )
+    },
+    {
+      key: 'version',
+      label: 'Version',
+      hideBelow: 'sm',
+      cellSx: { ...listTableSecondaryCellSx, width: 96 },
+      render: (report) => `v${report.current_version}`
+    },
+    {
+      key: 'updated_at',
+      label: 'Last updated',
+      hideBelow: 'md',
+      cellSx: { ...listTableSecondaryCellSx, width: 200 },
+      render: (report) => new Date(report.updated_at).toLocaleString()
+    },
+    {
+      key: 'updated_by',
+      label: 'Updated by',
+      hideBelow: 'lg',
+      cellSx: { ...listTableSecondaryCellSx, width: 150 },
+      render: (report) => <UserDisplay userId={report.updated_by || report.created_by} />
+    },
+    {
+      key: 'actions',
+      align: 'right',
+      cellSx: listTableActionColumnSx,
+      render: (report) => {
+        const isDashboard = report.report_id === dashboardReportId;
+        const isOwner = currentUser?.user_id === report.created_by;
+        return (
+          <RowMenu
+            report={report}
+            isDashboard={isDashboard}
+            onSetDashboard={() => handleSetDashboard(report.report_id)}
+            onPin={() => handlePin(report.report_id, !report.pinned)}
+            onEdit={() => navigate(`/app/reports/${report.report_id}?edit=true`)}
+            onHistory={() => navigate(`/app/reports/${report.report_id}/history`)}
+            onClone={() => handleCloneOpen(report)}
+            onToggleAccess={() => handleToggleAccess(report)}
+            onDelete={() => setDeleteTarget(report)}
+            isOwner={isOwner}
+            hasPermission={hasPermission}
+          />
+        );
+      }
+    }
+  ];
+
   return (
     <>
       <Helmet>
@@ -332,7 +444,7 @@ function ReportsList() {
           sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}
         >
           <Typography variant="h1">Reports</Typography>
-          {hasPermission('reports:write') && (
+          {!permissionsLoading && hasPermission('reports:write') && (
             <Button variant="contained" startIcon={<Add />} onClick={() => setCreateOpen(true)}>
               New report
             </Button>
@@ -353,108 +465,12 @@ function ReportsList() {
         )}
 
         {!loading && !error && (
-          <TableContainer component={Paper} variant="outlined">
-            <Table>
-              <TableHead>
-                <TableRow>
-                  <TableCell>Name</TableCell>
-                  <TableCell>Version</TableCell>
-                  <TableCell>Last updated</TableCell>
-                  <TableCell />
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {reports.length === 0 && (
-                  <TableRow>
-                    <TableCell colSpan={4}>
-                      <Typography color="text.secondary" sx={{ py: 1 }}>
-                        No reports yet. Create one above.
-                      </Typography>
-                    </TableCell>
-                  </TableRow>
-                )}
-                {reports.map((report) => {
-                  const isDashboard = report.report_id === dashboardReportId;
-                  const isOwner = currentUser?.user_id === report.created_by;
-                  return (
-                    <TableRow key={report.report_id} hover>
-                      <TableCell>
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                          <Link
-                            component={RouterLink}
-                            to={`/app/reports/${report.report_id}`}
-                            underline="hover"
-                            color="inherit"
-                            fontWeight="medium"
-                          >
-                            {report.name}
-                          </Link>
-                          {report.pinned && (
-                            <Tooltip title="Pinned to sidebar">
-                              <Chip
-                                icon={<PushPinIcon sx={{ fontSize: '0.85rem !important' }} />}
-                                label="Pinned"
-                                size="small"
-                                color="primary"
-                                variant="outlined"
-                                sx={{ height: 20, fontSize: '0.7rem' }}
-                              />
-                            </Tooltip>
-                          )}
-                          <Tooltip title={report.access.scope === 'public' ? 'Visible to report readers' : 'Private to the owner'}>
-                            <Chip
-                              icon={
-                                report.access.scope === 'public'
-                                  ? <PublicIcon sx={{ fontSize: '0.85rem !important' }} />
-                                  : <LockIcon sx={{ fontSize: '0.85rem !important' }} />
-                              }
-                              label={report.access.scope === 'public' ? 'Public' : 'Draft'}
-                              size="small"
-                              color={report.access.scope === 'public' ? 'success' : 'default'}
-                              variant="outlined"
-                              sx={{ height: 20, fontSize: '0.7rem' }}
-                            />
-                          </Tooltip>
-                          {isDashboard && (
-                            <Tooltip title="Currently set as the dashboard">
-                              <Chip
-                                icon={<DashboardIcon sx={{ fontSize: '0.85rem !important' }} />}
-                                label="Dashboard"
-                                size="small"
-                                color="primary"
-                                variant="outlined"
-                                sx={{ height: 20, fontSize: '0.7rem' }}
-                              />
-                            </Tooltip>
-                          )}
-                        </Box>
-                      </TableCell>
-                      <TableCell sx={{ color: 'text.secondary' }}>
-                        v{report.current_version}
-                      </TableCell>
-                      <TableCell sx={{ color: 'text.secondary' }}>
-                        {new Date(report.updated_at).toLocaleString()}
-                      </TableCell>
-                      <TableCell align="right" sx={{ width: 48, pr: 1 }}>
-                        <RowMenu
-                          report={report}
-                          isDashboard={isDashboard}
-                          onSetDashboard={() => handleSetDashboard(report.report_id)}
-                          onPin={() => handlePin(report.report_id, !report.pinned)}
-                          onEdit={() => navigate(`/app/reports/${report.report_id}?edit=true`)}
-                          onHistory={() => navigate(`/app/reports/${report.report_id}/history`)}
-                          onClone={() => handleCloneOpen(report)}
-                          onToggleAccess={() => handleToggleAccess(report)}
-                          onDelete={() => setDeleteTarget(report)}
-                          isOwner={isOwner}
-                        />
-                      </TableCell>
-                    </TableRow>
-                  );
-                })}
-              </TableBody>
-            </Table>
-          </TableContainer>
+          <ListTable
+            rows={reports}
+            columns={columns}
+            getRowKey={(report) => report.report_id}
+            emptyMessage="No reports yet. Create one above."
+          />
         )}
       </Box>
 

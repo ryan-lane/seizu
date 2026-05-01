@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo, memo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef, memo } from 'react';
 import { Helmet } from 'react-helmet';
 import {
   Box,
@@ -28,12 +28,17 @@ import CypherProgress from 'src/components/reports/CypherProgress';
 import CypherTable from 'src/components/reports/CypherTable';
 import CypherVerticalTable from 'src/components/reports/CypherVerticalTable';
 import FreeTextInput from 'src/components/reports/FreeTextInput';
+import {
+  DASHBOARD_NAVBAR_HEIGHT,
+  DASHBOARD_SIDEBAR_WIDTH_VAR
+} from 'src/components/dashboardLayoutConstants';
 
 const EMPTY_QUERY_CAPABILITIES: Record<string, string> = {};
+const REPORT_CONTENT_PX = { xs: 1.5, sm: 2 } as const;
 
 function MarkdownTable({ children }: { children?: React.ReactNode }) {
   return (
-    <TableContainer component={Paper} variant="outlined" sx={{ my: 1 }}>
+    <TableContainer component={Paper} variant="outlined" sx={{ my: 2 }}>
       <Table size="small" sx={{ borderCollapse: 'collapse' }}>
         {children}
       </Table>
@@ -214,6 +219,7 @@ const PanelItem = memo(function PanelItem({ item, rowIndex, index, varData, allI
         '& p': { mb: 1 },
         '& h2, & h3, & h4, & h5, & h6': { mb: 1 },
         '& ul, & ol': { mb: 1 },
+        '& hr': { my: 2 },
         '& li:has(> input[type="checkbox"])': {
           listStyle: 'none',
           display: 'flex',
@@ -272,11 +278,28 @@ const PanelItem = memo(function PanelItem({ item, rowIndex, index, varData, allI
 interface ReportViewProps {
   report: Report;
   title?: string;
+  showTitle?: boolean;
   boxSx?: object;
   queryCapabilities?: Record<string, string>;
+  toolbarActions?: React.ReactNode;
+  stickyToolbar?: boolean;
 }
 
-function ReportView({ report, title, boxSx = { height: '100%', py: 3 }, queryCapabilities }: ReportViewProps) {
+function inputWidth(size?: number) {
+  if (size === undefined) return 220;
+  return Math.min(Math.max(size * 70, 180), 420);
+}
+
+function ReportView({
+  report,
+  title,
+  showTitle = false,
+  boxSx = { minHeight: '100%', pb: 3 },
+  queryCapabilities,
+  toolbarActions,
+  stickyToolbar = true
+}: ReportViewProps) {
+  const displayTitle = title ?? report.name;
   const reportQueries = useMemo(() => report.queries ?? {}, [report]);
   const capabilities = queryCapabilities ?? EMPTY_QUERY_CAPABILITIES;
   const resolveQuery = useCallback((cypher: string | undefined): string | undefined => {
@@ -285,6 +308,8 @@ function ReportView({ report, title, boxSx = { height: '100%', py: 3 }, queryCap
   }, [reportQueries]);
   const resolveCapability = useCallback((path: string): string | undefined => capabilities[path], [capabilities]);
   const [varData, setVarData] = useState({});
+  const toolbarRef = useRef<HTMLDivElement | null>(null);
+  const [toolbarHeight, setToolbarHeight] = useState(64);
 
   useEffect(() => {
     const initialVarState = {};
@@ -304,21 +329,23 @@ function ReportView({ report, title, boxSx = { height: '100%', py: 3 }, queryCap
     setVarData(initialVarState);
   }, [report]);
 
-  const head = [];
+  const inputControls: React.ReactNode[] = [];
   if (report.inputs) {
     report.inputs.forEach((input, index) => {
       if (input === undefined) {
-        head.push(
-          <Grid
-            key={input.input_id}
-            size={{ lg: 3, md: 3, xl: 3, xs: 3 }}
-            sx={{ pl: 3, pb: 2, pr: 3 }}
+        inputControls.push(
+          <Box
+            key={`undefined-input-${index}`}
+            sx={{
+              minWidth: 180,
+              width: { xs: '100%', sm: inputWidth() }
+            }}
           >
-            <Paper elevation={1} sx={{ p: 2 }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
               <Error />
-              <Typography>Undefined input id: {input.input_id}</Typography>
-            </Paper>
-          </Grid>
+              <Typography>Undefined input</Typography>
+            </Box>
+          </Box>
         );
         return;
       }
@@ -335,6 +362,7 @@ function ReportView({ report, title, boxSx = { height: '100%', py: 3 }, queryCap
             value={varData}
             setValue={setVarData}
             reportQueryToken={resolveCapability(`inputs.${index}.cypher`)}
+            size="small"
           />
         );
       } else if (input.type === 'text') {
@@ -345,35 +373,106 @@ function ReportView({ report, title, boxSx = { height: '100%', py: 3 }, queryCap
             labelName={input.label}
             value={varData}
             setValue={setVarData}
+            size="small"
           />
         );
       }
 
-      let size;
-      let xsSize;
-      if (input.size === undefined) {
-        size = 3;
-        xsSize = 6;
-      } else if (input.size < 7) {
-        size = input.size;
-        xsSize = input.size * 2;
-      } else {
-        size = input.size;
-        xsSize = input.size;
-      }
-      head.push(
-        <Grid
+      inputControls.push(
+        <Box
           key={input.input_id}
-          size={{ lg: size, md: size, xl: size, xs: xsSize }}
-          sx={{ pl: 3, pb: 2, pr: 3 }}
+          sx={{
+            flex: { xs: '1 1 100%', sm: `0 1 ${inputWidth(input.size)}px` },
+            minWidth: { xs: '100%', sm: 180 },
+            maxWidth: { xs: 'none', sm: inputWidth(input.size) }
+          }}
         >
-          <Paper elevation={1} sx={{ p: 2 }}>
-            {inputComponent}
-          </Paper>
-        </Grid>
+          {inputComponent}
+        </Box>
       );
     });
   }
+
+  useEffect(() => {
+    if (!stickyToolbar || toolbarRef.current === null) return undefined;
+
+    const updateToolbarHeight = () => {
+      setToolbarHeight(toolbarRef.current?.offsetHeight ?? 64);
+    };
+
+    updateToolbarHeight();
+    if (typeof ResizeObserver === 'undefined') return undefined;
+
+    const observer = new ResizeObserver(updateToolbarHeight);
+    observer.observe(toolbarRef.current);
+    return () => observer.disconnect();
+  }, [stickyToolbar, inputControls.length, toolbarActions]);
+
+  const hasToolbar = inputControls.length > 0 || toolbarActions !== undefined;
+  const toolbar = hasToolbar ? (
+    <Box
+      ref={toolbarRef}
+      sx={{
+        position: stickyToolbar ? 'fixed' : 'static',
+        top: stickyToolbar ? DASHBOARD_NAVBAR_HEIGHT : 'auto',
+        right: stickyToolbar ? 0 : 'auto',
+        left: stickyToolbar ? { xs: 0, lg: `var(${DASHBOARD_SIDEBAR_WIDTH_VAR})` } : 'auto',
+        zIndex: (theme) => theme.zIndex.appBar - 1,
+        bgcolor: 'background.paper',
+        borderBottom: 1,
+        borderColor: 'divider',
+        boxShadow: stickyToolbar ? 1 : 'none',
+        px: REPORT_CONTENT_PX,
+        py: 2,
+        mb: stickyToolbar ? 0 : 2,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        gap: 1.5,
+        flexWrap: 'wrap'
+      }}
+    >
+      {inputControls.length > 0 && (
+        <Box
+          sx={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 1,
+            flex: '1 1 320px',
+            flexWrap: 'wrap',
+            minWidth: 0
+          }}
+        >
+          {inputControls}
+        </Box>
+      )}
+      {toolbarActions && (
+        <Box
+          sx={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'flex-end',
+            gap: 1,
+            flex: inputControls.length > 0 ? '0 0 auto' : '1 1 auto',
+            flexWrap: 'wrap',
+            ml: 'auto',
+            '& .MuiButton-root': {
+              minHeight: 40
+            },
+            '& .MuiIconButton-root': {
+              height: 40,
+              width: 40
+            },
+            '& .MuiChip-root': {
+              height: 32
+            }
+          }}
+        >
+          {toolbarActions}
+        </Box>
+      )}
+    </Box>
+  ) : null;
 
   const rows = [];
   report.rows.forEach((row, rowIndex) => {
@@ -393,13 +492,13 @@ function ReportView({ report, title, boxSx = { height: '100%', py: 3 }, queryCap
       />
     ));
     rows.push(
-      <Container key={row.name} maxWidth={false} sx={{ pb: 2 }}>
-        <Paper elevation={1} sx={{ p: 2 }}>
+      <Container key={row.name} maxWidth={false} sx={{ px: REPORT_CONTENT_PX, pb: 1.5 }}>
+        <Paper elevation={1} sx={{ p: 1.5 }}>
           <Typography gutterBottom variant="h2">
             {row.name}
           </Typography>
           <Divider />
-          <Grid container spacing={2} sx={{ py: 2 }}>
+          <Grid container spacing={1.5} sx={{ py: 1.5 }}>
             {items}
           </Grid>
         </Paper>
@@ -409,14 +508,39 @@ function ReportView({ report, title, boxSx = { height: '100%', py: 3 }, queryCap
 
   return (
     <>
-      <Helmet>
-        <title>{title} | Seizu</title>
-      </Helmet>
+      {displayTitle && (
+        <Helmet>
+          <title>{displayTitle} | Seizu</title>
+        </Helmet>
+      )}
       <Box sx={boxSx}>
-        <Grid container>
-          {head}
+        {toolbar}
+        {hasToolbar && stickyToolbar && <Box sx={{ height: toolbarHeight }} />}
+        {showTitle && displayTitle && (
+          <Box
+            sx={{
+              bgcolor: 'background.paper',
+              borderBottom: 1,
+              borderColor: 'divider',
+              mb: 2
+            }}
+          >
+            <Container
+              maxWidth={false}
+              sx={{
+                px: REPORT_CONTENT_PX,
+                py: 1.75
+              }}
+            >
+              <Typography component="h1" variant="h2" sx={{ lineHeight: 1.25 }}>
+                {displayTitle}
+              </Typography>
+            </Container>
+          </Box>
+        )}
+        <Box>
           {rows}
-        </Grid>
+        </Box>
       </Box>
     </>
   );

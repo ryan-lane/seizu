@@ -97,6 +97,31 @@ async def test_list_reports_success(mocker):
     assert reports[0]["report_id"] == "rid1"
     assert reports[0]["name"] == "My Report"
     assert reports[0]["current_version"] == 1
+    assert ret.json()["total"] == 1
+    assert ret.json()["page"] == 1
+    assert ret.json()["per_page"] == 100
+
+
+async def test_list_reports_paginates(mocker):
+    mocker.patch(
+        "reporting.routes.reports.report_store.list_reports",
+        new=AsyncMock(
+            return_value=[
+                _report_list_item(report_id="rid1", name="Report 1"),
+                _report_list_item(report_id="rid2", name="Report 2"),
+                _report_list_item(report_id="rid3", name="Report 3"),
+            ]
+        ),
+    )
+    app = _make_app()
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        ret = await client.get("/api/v1/reports?page=2&per_page=1")
+    assert ret.status_code == 200
+    body = ret.json()
+    assert body["total"] == 3
+    assert body["page"] == 2
+    assert body["per_page"] == 1
+    assert [report["report_id"] for report in body["reports"]] == ["rid2"]
 
 
 async def test_list_reports_empty(mocker):
@@ -109,6 +134,7 @@ async def test_list_reports_empty(mocker):
         ret = await client.get("/api/v1/reports")
     assert ret.status_code == 200
     assert ret.json()["reports"] == []
+    assert ret.json()["total"] == 0
 
 
 # ---------------------------------------------------------------------------
@@ -709,7 +735,7 @@ async def test_clone_report_success(mocker):
     mock_create.assert_called_once_with(name="Copy of My Report", created_by="test-user-id")
     mock_save.assert_called_once_with(
         report_id="new1",
-        config=source.config,
+        config={**source.config, "name": "Copy of My Report"},
         created_by="test-user-id",
         comment="Cloned from My Report",
         user_id="test-user-id",

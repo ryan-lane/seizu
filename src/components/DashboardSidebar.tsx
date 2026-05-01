@@ -1,4 +1,6 @@
+import { Link as RouterLink } from 'react-router-dom';
 import { Box, Drawer, List } from '@mui/material';
+import { useTheme } from '@mui/material/styles';
 import Dashboard from '@mui/icons-material/Dashboard';
 import Insights from '@mui/icons-material/Insights';
 import Article from '@mui/icons-material/Article';
@@ -12,15 +14,32 @@ import Hidden from 'src/components/Hidden';
 import { NavItemData } from 'src/components/NavItem';
 import { useReportsList } from 'src/hooks/useReportsApi';
 import { usePermissions } from 'src/hooks/usePermissions';
+import {
+  DASHBOARD_SIDEBAR_EXPANDED_WIDTH,
+  DASHBOARD_SIDEBAR_WIDTH_VAR
+} from 'src/components/dashboardLayoutConstants';
 
 interface DashboardSidebarProps {
+  collapsed?: boolean;
   onMobileClose?: () => void;
   openMobile?: boolean;
 }
 
-function DashboardSidebar({ onMobileClose = () => {}, openMobile = false }: DashboardSidebarProps) {
+function DashboardSidebar({
+  collapsed = false,
+  onMobileClose = () => {},
+  openMobile = false
+}: DashboardSidebarProps) {
+  const theme = useTheme();
   const { reports } = useReportsList();
   const hasPermission = usePermissions();
+  const logoSrc = collapsed
+    ? (theme.palette.mode === 'dark'
+        ? '/static/images/logo-mark.svg'
+        : '/static/images/logo-mark-light.svg')
+    : (theme.palette.mode === 'dark'
+        ? '/static/images/logo-horizontal-white.svg'
+        : '/static/images/logo-horizontal-black.svg');
   const reportSubitems: NavItemData[] = reports
     .filter((report) => report.pinned)
     .map((report) => ({
@@ -72,18 +91,44 @@ function DashboardSidebar({ onMobileClose = () => {}, openMobile = false }: Dash
       : [])
   ];
 
-  const content = (
+  const content = (isCollapsed: boolean) => (
     <Box
       sx={{
         display: 'flex',
         flexDirection: 'column',
-        height: '100%'
+        height: '100%',
+        overflowX: 'hidden'
       }}
     >
-      <Box sx={{ p: 2 }}>
+      <Box
+        component={RouterLink}
+        to="/"
+        sx={{
+          alignItems: 'center',
+          display: 'flex',
+          height: 68,
+          justifyContent: isCollapsed ? 'center' : 'flex-start',
+          px: isCollapsed ? 1 : 2,
+          textDecoration: 'none'
+        }}
+      >
+        <Box
+          component="img"
+          alt="Seizu"
+          src={logoSrc}
+          sx={{
+            display: 'block',
+            height: isCollapsed ? 34 : 42,
+            maxWidth: '100%',
+            objectFit: 'contain'
+          }}
+        />
+      </Box>
+      <Box sx={{ p: isCollapsed ? 1 : 2 }}>
         <List>
           {items.map((item) => (
             <NavItem
+              collapsed={isCollapsed}
               href={item.href}
               key={item.title}
               title={item.title}
@@ -106,11 +151,11 @@ function DashboardSidebar({ onMobileClose = () => {}, openMobile = false }: Dash
           variant="temporary"
           PaperProps={{
             sx: {
-              width: 256
+              width: DASHBOARD_SIDEBAR_EXPANDED_WIDTH
             }
           }}
         >
-          {content}
+          {content(false)}
         </Drawer>
       </Hidden>
       <Hidden>
@@ -119,14 +164,18 @@ function DashboardSidebar({ onMobileClose = () => {}, openMobile = false }: Dash
           open
           variant="persistent"
           PaperProps={{
-            sx: {
-              width: 256,
-              top: 64,
-              height: 'calc(100% - 64px)'
-            }
+            sx: (theme) => ({
+              width: `var(${DASHBOARD_SIDEBAR_WIDTH_VAR})`,
+              top: 0,
+              height: '100%',
+              overflowX: 'hidden',
+              transition: theme.transitions.create('width', {
+                duration: theme.transitions.duration.shorter
+              })
+            })
           }}
         >
-          {content}
+          {content(collapsed)}
         </Drawer>
       </Hidden>
     </>

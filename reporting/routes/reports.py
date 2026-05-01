@@ -1,7 +1,7 @@
 import logging
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 
 from reporting.authnz import CurrentUser, require_permission
 from reporting.authnz.permissions import Permission
@@ -40,10 +40,20 @@ def _with_query_capabilities(
 
 @router.get("/api/v1/reports", response_model=ReportListResponse)
 async def list_reports(
+    page: int = Query(default=1, ge=1),
+    per_page: int = Query(default=100, ge=1, le=500),
     current: CurrentUser = Depends(require_permission(Permission.REPORTS_READ)),
 ) -> ReportListResponse:
     """List all reports."""
-    return ReportListResponse(reports=await report_store.list_reports(user_id=current.user.user_id))
+    reports = await report_store.list_reports(user_id=current.user.user_id)
+    start = (page - 1) * per_page
+    end = start + per_page
+    return ReportListResponse(
+        reports=reports[start:end],
+        total=len(reports),
+        page=page,
+        per_page=per_page,
+    )
 
 
 @router.get("/api/v1/reports/dashboard", response_model=ReportVersion, response_model_exclude_none=True)
@@ -228,9 +238,10 @@ async def clone_report(
         name=body.name,
         created_by=current.user.user_id,
     )
+    cloned_config = {**source.config, "name": body.name}
     await report_store.save_report_version(
         report_id=new_item.report_id,
-        config=source.config,
+        config=cloned_config,
         created_by=current.user.user_id,
         comment=f"Cloned from {source.name}",
         user_id=current.user.user_id,

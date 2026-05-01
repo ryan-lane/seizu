@@ -3,17 +3,42 @@ import { useState } from 'react';
 import { AuthContext } from 'src/auth.context';
 import { AuthConfigContext } from 'src/authConfig.context';
 import { useLazyCypherQuery } from 'src/hooks/useCypherQuery';
+import { CurrentUser, CurrentUserState, CurrentUserStateProvider } from 'src/hooks/useCurrentUser';
+import { usePermissionState } from 'src/hooks/usePermissions';
+
+jest.mock('src/hooks/usePermissions', () => ({
+  usePermissionState: jest.fn(),
+}));
 
 const CYPHER = 'MATCH (n) RETURN n';
 
 const AUTH_CONFIG_NO_OIDC = { auth_required: false, oidc: null, userManager: null };
+const CURRENT_USER: CurrentUser = {
+  user_id: 'user-1',
+  sub: 'sub-1',
+  iss: 'issuer',
+  email: 'dev@example.com',
+  display_name: 'Developer',
+  created_at: '2025-01-01T00:00:00Z',
+  last_login: '2025-01-01T00:00:00Z',
+  archived_at: null,
+  permissions: ['query:execute', 'reports:read']
+};
 
-function makeWrapper(authRequired: boolean, accessToken: string | null) {
+const mockUsePermissionState = usePermissionState as jest.MockedFunction<typeof usePermissionState>;
+
+function makeWrapper(
+  authRequired: boolean,
+  accessToken: string | null,
+  currentUserState: CurrentUserState = { currentUser: CURRENT_USER, loading: false }
+) {
   return function Wrapper({ children }: { children: React.ReactNode }) {
     return (
       <AuthConfigContext.Provider value={{ ...AUTH_CONFIG_NO_OIDC, auth_required: authRequired }}>
         <AuthContext.Provider value={{ user: null, accessToken, isLoading: false }}>
-          {children}
+          <CurrentUserStateProvider value={currentUserState}>
+            {children}
+          </CurrentUserStateProvider>
         </AuthContext.Provider>
       </AuthConfigContext.Provider>
     );
@@ -28,7 +53,9 @@ function StatefulWrapper({ children }: { children: React.ReactNode }) {
   return (
     <AuthConfigContext.Provider value={{ ...AUTH_CONFIG_NO_OIDC, auth_required: true }}>
       <AuthContext.Provider value={{ user: null, accessToken, isLoading: false }}>
-        {children}
+        <CurrentUserStateProvider value={{ currentUser: CURRENT_USER, loading: false }}>
+          {children}
+        </CurrentUserStateProvider>
       </AuthContext.Provider>
     </AuthConfigContext.Provider>
   );
@@ -37,6 +64,11 @@ function StatefulWrapper({ children }: { children: React.ReactNode }) {
 describe('useLazyCypherQuery', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockUsePermissionState.mockReturnValue({
+      hasPermission: () => true,
+      loading: false,
+      currentUser: CURRENT_USER
+    });
     global.fetch = jest.fn().mockResolvedValue({
       json: () => Promise.resolve({ results: [] })
     });
@@ -51,6 +83,42 @@ describe('useLazyCypherQuery', () => {
       run();
     });
     expect(global.fetch).not.toHaveBeenCalled();
+  });
+
+  it('does not fetch while permissions are loading', () => {
+    mockUsePermissionState.mockReturnValue({
+      hasPermission: () => false,
+      loading: true,
+      currentUser: null
+    });
+    const { result } = renderHook(() => useLazyCypherQuery(CYPHER), {
+      wrapper: makeWrapper(false, null, { currentUser: null, loading: true })
+    });
+    const [run] = result.current;
+    act(() => {
+      run();
+    });
+    expect(global.fetch).not.toHaveBeenCalled();
+  });
+
+  it('does not fetch when the user lacks query permission', () => {
+    mockUsePermissionState.mockReturnValue({
+      hasPermission: () => false,
+      loading: false,
+      currentUser: { ...CURRENT_USER, permissions: ['reports:read'] }
+    });
+    const { result } = renderHook(() => useLazyCypherQuery(CYPHER), {
+      wrapper: makeWrapper(false, null, {
+        currentUser: { ...CURRENT_USER, permissions: ['reports:read'] },
+        loading: false
+      })
+    });
+    const [run] = result.current;
+    act(() => {
+      run();
+    });
+    expect(global.fetch).not.toHaveBeenCalled();
+    expect(result.current[1].error?.message).toBe('You do not have permission to run this query.');
   });
 
   it('fetches with Authorization header when auth_required and accessToken is set', () => {
