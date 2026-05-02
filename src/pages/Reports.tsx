@@ -31,6 +31,7 @@ import EditableReportView from 'src/components/EditableReportView';
 import { useReport, useReportsMutations } from 'src/hooks/useReportsApi';
 import { Report } from 'src/config.context';
 import { usePermissionState } from 'src/hooks/usePermissions';
+import type { BackState } from 'src/navigation';
 
 function Reports() {
   const { id } = useParams();
@@ -173,7 +174,7 @@ function Reports() {
       label: 'History',
       icon: <HistoryIcon fontSize="small" />,
       disabled: false,
-      onClick: () => navigate(`/app/reports/${id}/history`)
+      onClick: () => navigate(`/app/reports/${id}/history`, { state: { fromLabel: displayedName ?? 'report' } satisfies BackState })
     },
     ...(canWriteReports
       ? [

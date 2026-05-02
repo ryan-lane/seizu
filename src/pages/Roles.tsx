@@ -49,6 +49,7 @@ import ListTable, {
   listTableSecondaryCellSx,
   listTableTruncateSx
 } from 'src/components/ListTable';
+import type { BackState } from 'src/navigation';
 
 const descriptionColumnSx = { ...listTableSecondaryCellSx, width: '22%' };
 const permissionsColumnSx = { width: '24%' };
@@ -541,7 +542,7 @@ function Roles() {
             hasPermission={hasPermission}
             onView={() => setDetailTarget(item)}
             onEdit={() => { setEditTarget(item); setDialogOpen(true); }}
-            onHistory={() => navigate(`/app/roles/${item.role_id}/history`)}
+            onHistory={() => navigate(`/app/roles/${item.role_id}/history`, { state: { fromLabel: 'Roles' } satisfies BackState })}
             onDelete={() => setDeleteTarget(item)}
           />
         );

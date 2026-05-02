@@ -133,14 +133,35 @@ describe('ReportHistory', () => {
     );
   });
 
-  it('navigates back to the report on "Back to report" click', async () => {
+  it('shows back button with fromLabel when navigated from within the app', () => {
+    function StatefulWrapper({ children }: { children: React.ReactNode }) {
+      return (
+        <MemoryRouter
+          initialEntries={[
+            { pathname: '/app/reports/r1', state: {} },
+            { pathname: '/app/reports/r1/history', state: { fromLabel: 'My Report' } }
+          ]}
+          initialIndex={1}
+        >
+          <ThemeProvider theme={theme}>
+            <Routes>
+              <Route path="/app/reports/:id" element={<div>report</div>} />
+              <Route path="/app/reports/:id/history" element={<>{children}</>} />
+            </Routes>
+          </ThemeProvider>
+        </MemoryRouter>
+      );
+    }
+
+    render(<ReportHistory />, { wrapper: StatefulWrapper });
+
+    expect(screen.getByRole('button', { name: /back to my report/i })).toBeInTheDocument();
+  });
+
+  it('hides back button when navigated directly (no fromLabel in state)', () => {
     render(<ReportHistory />, { wrapper: Wrapper });
 
-    fireEvent.click(screen.getByRole('button', { name: /back to report/i }));
-
-    await waitFor(() => {
-      expect(screen.getByTestId('nav-location')).toHaveTextContent('/app/reports/r1');
-    });
+    expect(screen.queryByRole('button', { name: /back to/i })).not.toBeInTheDocument();
   });
 
   it('shows loading spinner while loading', () => {

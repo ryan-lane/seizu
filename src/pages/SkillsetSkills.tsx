@@ -32,6 +32,7 @@ import ListTable, {
 import MarkdownEditor from 'src/components/MarkdownEditor';
 import UserDisplay from 'src/components/UserDisplay';
 import { usePermissions } from 'src/hooks/usePermissions';
+import type { BackState } from 'src/navigation';
 
 const LOWER_SNAKE_ID = /^[a-z][a-z0-9]*(?:_[a-z0-9]+)*$/;
 const RAW_PLACEHOLDER_RE = /{{\s*([^{}]+?)\s*}}/g;
@@ -562,7 +563,7 @@ function SkillsetSkills() {
           onDetail={() => setDetailTarget(skill)}
           onEdit={() => { setEditTarget(skill); setDialogOpen(true); }}
           onRender={() => setRenderTarget(skill)}
-          onHistory={() => navigate(`/app/skillsets/${skillsetId}/skills/${skill.skill_id}/history`)}
+          onHistory={() => navigate(`/app/skillsets/${skillsetId}/skills/${skill.skill_id}/history`, { state: { fromLabel: 'Skills' } satisfies BackState })}
           onDelete={() => setDeleteTarget(skill)}
         />
       )

@@ -50,6 +50,7 @@ import ListTable, {
   listTableSecondaryCellSx
 } from 'src/components/ListTable';
 import UserDisplay from 'src/components/UserDisplay';
+import type { BackState } from 'src/navigation';
 
 // ---------------------------------------------------------------------------
 // Per-row overflow menu
@@ -422,7 +423,7 @@ function ReportsList() {
             onSetDashboard={() => handleSetDashboard(report.report_id)}
             onPin={() => handlePin(report.report_id, !report.pinned)}
             onEdit={() => navigate(`/app/reports/${report.report_id}?edit=true`)}
-            onHistory={() => navigate(`/app/reports/${report.report_id}/history`)}
+            onHistory={() => navigate(`/app/reports/${report.report_id}/history`, { state: { fromLabel: 'Reports' } satisfies BackState })}
             onClone={() => handleCloneOpen(report)}
             onToggleAccess={() => handleToggleAccess(report)}
             onDelete={() => setDeleteTarget(report)}

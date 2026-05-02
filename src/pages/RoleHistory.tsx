@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { Helmet } from 'react-helmet';
 import {
   Box,
@@ -34,6 +34,7 @@ import {
 } from 'src/hooks/useRolesApi';
 import UserDisplay from 'src/components/UserDisplay';
 import { usePermissionState } from 'src/hooks/usePermissions';
+import type { BackState } from 'src/navigation';
 
 interface RowMenuProps {
   isCurrent: boolean;
@@ -99,6 +100,8 @@ function permissionSummary(version: RoleVersion) {
 function RoleHistory() {
   const { roleId } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
+  const { fromLabel } = (location.state ?? {}) as BackState;
   const { hasPermission, loading: permissionsLoading } = usePermissionState();
   const canRead = hasPermission('roles:read');
   const builtin = !!roleId && isBuiltinRole(roleId);
@@ -159,15 +162,17 @@ function RoleHistory() {
         <title>{roleName ? `History - ${roleName} | Seizu` : 'History | Seizu'}</title>
       </Helmet>
       <Box sx={{ p: 3 }}>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
-          <Button
-            size="small"
-            startIcon={<ArrowBackIcon />}
-            onClick={() => navigate('/app/roles')}
-          >
-            Back to roles
-          </Button>
-        </Box>
+        {fromLabel && (
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+            <Button
+              size="small"
+              startIcon={<ArrowBackIcon />}
+              onClick={() => navigate(-1)}
+            >
+              Back to {fromLabel}
+            </Button>
+          </Box>
+        )}
 
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 3 }}>
           <HistoryIcon color="action" />
