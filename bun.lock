@@ -39,7 +39,6 @@
         "react": "^19.2.4",
         "react-dom": "^19.2.4",
         "react-helmet": "^6.1.0",
-        "react-promise-tracker": "^2.1.1",
         "react-router-dom": "^7.13.1",
         "tiptap-markdown": "^0.9.0",
       },
@@ -1330,8 +1329,6 @@
     "react-is": ["react-is@19.2.4", "", {}, "sha512-W+EWGn2v0ApPKgKKCy/7s7WHXkboGcsrXE+2joLyVxkbyVQfO3MUEaUQDHoSmb8TFFrSKYa9mw64WZHNHSDzYA=="],
 
     "react-lifecycles-compat": ["react-lifecycles-compat@3.0.4", "", {}, "sha512-fBASbA6LnOU9dOU2eW7aQ8xmYBSXUIWr+UmF9b1efZBazGNO+rcXT/icdKnYm2pTwcRylVUYwW7H1PHfLekVzA=="],
-
-    "react-promise-tracker": ["react-promise-tracker@2.1.1", "", { "peerDependencies": { "react": ">=16.8.0" } }, "sha512-NM7FrJ4y5aRN3FIeVtmeF8leIDQIdYni9pleHTvuX6Kz5zsIHMYSNERmvzTxvPuzei0iNiNiudsXySP63TXA8A=="],
 
     "react-router": ["react-router@7.13.1", "", { "dependencies": { "cookie": "^1.0.1", "set-cookie-parser": "^2.6.0" }, "peerDependencies": { "react": ">=18", "react-dom": ">=18" } }, "sha512-td+xP4X2/6BJvZoX6xw++A2DdEi++YypA69bJUV5oVvqf6/9/9nNlD70YO1e9d3MyamJEBQFEzk6mbfDYbqrSA=="],
 

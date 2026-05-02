@@ -1,6 +1,7 @@
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { AuthContext } from 'src/auth.context';
 import { AuthConfigContext } from 'src/authConfig.context';
+import type { Report } from 'src/config.context';
 import { useReportVersionsList, useReportVersion, useReportsList, useReportsMutations } from 'src/hooks/useReportsApi';
 
 const AUTH_CONFIG_NO_OIDC = { auth_required: false, oidc: null, userManager: null };
@@ -283,7 +284,7 @@ describe('useReportsList', () => {
   it('fetches and returns reports list', async () => {
     mockFetch.mockResolvedValue({
       ok: true,
-      json: () => Promise.resolve({ reports: REPORTS })
+      json: () => Promise.resolve({ reports: REPORTS, total: 2, page: 1, per_page: 500 })
     });
 
     const { result } = renderHook(() => useReportsList(), {
@@ -292,7 +293,14 @@ describe('useReportsList', () => {
 
     await waitFor(() => expect(result.current.loading).toBe(false));
     expect(result.current.reports).toEqual(REPORTS);
+    expect(result.current.total).toBe(2);
+    expect(result.current.page).toBe(1);
+    expect(result.current.perPage).toBe(500);
     expect(result.current.error).toBeNull();
+    expect(mockFetch).toHaveBeenCalledWith(
+      '/api/v1/reports?page=1&per_page=500',
+      expect.any(Object)
+    );
   });
 
   it('includes pinned field in returned items', async () => {
@@ -348,6 +356,102 @@ describe('useReportsList', () => {
     await waitFor(() => expect(result.current.loading).toBe(false));
     expect(result.current.error).not.toBeNull();
     expect(result.current.reports).toEqual([]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// useReportsMutations – saveReportVersion
+// ---------------------------------------------------------------------------
+
+describe('useReportsMutations (saveReportVersion)', () => {
+  let mockFetch: jest.Mock;
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockFetch = jest.fn();
+    global.fetch = mockFetch;
+  });
+
+  it('sends the report config name as the single write-side report name', async () => {
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({
+        report_id: 'r1',
+        name: 'Renamed Report',
+        version: 2,
+        config: { name: 'Renamed Report', rows: [] },
+        created_at: '2024-01-02T00:00:00Z',
+        created_by: 'alice@example.com',
+        comment: 'rename'
+      })
+    });
+
+    const { result } = renderHook(() => useReportsMutations(), {
+      wrapper: makeWrapper(false, null)
+    });
+
+    const config: Report = { name: 'Renamed Report', rows: [] };
+    await act(async () => {
+      await result.current.saveReportVersion('r1', config, 'rename', true);
+    });
+
+    expect(mockFetch).toHaveBeenCalledWith(
+      '/api/v1/reports/r1/versions?include_query_capabilities=true',
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({
+          config,
+          comment: 'rename'
+        })
+      })
+    );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// useReportsMutations – updateReportVisibility
+// ---------------------------------------------------------------------------
+
+describe('useReportsMutations (updateReportVisibility)', () => {
+  let mockFetch: jest.Mock;
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockFetch = jest.fn();
+    global.fetch = mockFetch;
+  });
+
+  it('updateReportVisibility calls PUT /api/v1/reports/:id/visibility', async () => {
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({
+        report_id: 'r1',
+        name: 'My Report',
+        current_version: 2,
+        created_at: '2024-01-01T00:00:00Z',
+        updated_at: '2024-01-02T00:00:00Z',
+        created_by: 'alice@example.com',
+        updated_by: 'alice@example.com',
+        access: { scope: 'public' },
+        pinned: false
+      })
+    });
+
+    const { result } = renderHook(() => useReportsMutations(), {
+      wrapper: makeWrapper(false, null)
+    });
+
+    await act(async () => {
+      await result.current.updateReportVisibility('r1', 'public');
+    });
+
+    expect(mockFetch).toHaveBeenCalledWith(
+      '/api/v1/reports/r1/visibility',
+      expect.objectContaining({
+        method: 'PUT',
+        body: JSON.stringify({ access: { scope: 'public' } })
+      })
+    );
   });
 });
 

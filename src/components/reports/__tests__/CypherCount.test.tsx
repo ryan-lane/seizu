@@ -67,12 +67,12 @@ describe('CypherCount', () => {
     expect(screen.getByText('(Set param1, param2)')).toBeInTheDocument();
   });
 
-  it('shows loading spinner when loading', () => {
+  it('shows a count skeleton when loading', () => {
     useLazyCypherQuery.mockReturnValue([
       mockRunQuery,
       { ...defaultState, loading: true }
     ]);
-    const { container } = render(
+    render(
       <Wrapper>
         <CypherCount
           cypher="MATCH (n) RETURN count(n) as total"
@@ -80,8 +80,8 @@ describe('CypherCount', () => {
         />
       </Wrapper>
     );
-    // CircularProgress spinner is rendered
-    expect(container.firstChild).not.toBeNull();
+    expect(screen.getByTestId('count-panel-loading-skeleton')).toBeInTheDocument();
+    expect(screen.queryByRole('progressbar')).not.toBeInTheDocument();
   });
 
   it('shows error message when query fails', () => {

@@ -1,10 +1,8 @@
 import { useEffect, useState } from 'react';
 import {
-  Box,
   Card,
   CardContent,
   CardHeader,
-  CircularProgress,
   Divider,
   IconButton,
   Grid,
@@ -17,6 +15,7 @@ import { BarChart } from '@mui/x-charts/BarChart';
 import { chartColorsFor } from 'src/theme/brand';
 import { useLazyCypherQuery, QueryRecord } from 'src/hooks/useCypherQuery';
 import CypherDetails from 'src/components/reports/CypherDetails';
+import { ChartPanelSkeleton } from 'src/components/reports/PanelLoadingSkeletons';
 import QueryValidationBadge from 'src/components/reports/QueryValidationBadge';
 
 interface BarSettings {
@@ -116,11 +115,7 @@ export default function CypherBar({
   }
 
   if (loading || records === undefined) {
-    return (
-      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', p: 4 }}>
-        <CircularProgress size={40} />
-      </Box>
-    );
+    return <ChartPanelSkeleton caption={caption} variant="bar" />;
   }
 
   if (first === undefined) {

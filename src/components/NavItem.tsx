@@ -6,7 +6,7 @@ import {
 } from 'react-router-dom';
 import ExpandLess from '@mui/icons-material/ExpandLess';
 import ExpandMore from '@mui/icons-material/ExpandMore';
-import { Button, Collapse, List, ListItem, SxProps, Theme } from '@mui/material';
+import { Button, Collapse, List, ListItem, SxProps, Theme, Tooltip } from '@mui/material';
 import { SvgIconComponent } from '@mui/icons-material';
 
 export interface NavItemData {
@@ -17,26 +17,48 @@ export interface NavItemData {
 }
 
 interface NavItemProps extends NavItemData {
+  collapsed?: boolean;
   sx?: SxProps<Theme>;
 }
 
-function NavItem({ href, icon: Icon, title, subItems, ...rest }: NavItemProps) {
+function NavItem({ collapsed = false, href, icon: Icon, title, subItems, ...rest }: NavItemProps) {
   const location = useLocation();
 
   const [open, setOpen] = React.useState(true);
+  const active = href
+    ? !!matchPath(
+        {
+          path: href,
+          end: true
+        },
+        location.pathname
+      )
+    : false;
+
+  const buttonContent = (
+    <>
+      {Icon && <Icon fontSize="small" />}
+      {!collapsed && <span>{title}</span>}
+    </>
+  );
+
+  const buttonSx = {
+    color: 'text.secondary',
+    fontWeight: 'medium',
+    justifyContent: collapsed ? 'center' : 'flex-start',
+    gap: collapsed ? 0 : 1,
+    letterSpacing: 0,
+    minWidth: 0,
+    px: collapsed ? 1 : 1.5,
+    textTransform: 'none',
+    width: '100%',
+    ...(active && {
+      color: 'primary.main'
+    })
+  };
 
   if (subItems === undefined) {
-    const active = href
-      ? !!matchPath(
-          {
-            path: href,
-            end: true
-          },
-          location.pathname
-        )
-      : false;
-
-    return (
+    const item = (
       <div>
         <ListItem
           disableGutters
@@ -47,28 +69,51 @@ function NavItem({ href, icon: Icon, title, subItems, ...rest }: NavItemProps) {
           }}
         >
           <Button
+            aria-label={collapsed ? title : undefined}
             component={RouterLink}
-            sx={{
-              color: 'text.secondary',
-              fontWeight: 'medium',
-              justifyContent: 'flex-start',
-              letterSpacing: 0,
-              textTransform: 'none',
-              width: '100%',
-              ...(active && {
-                color: 'primary.main'
-              }),
-              '& svg': {
-                mr: 1
-              }
-            }}
+            sx={buttonSx}
             to={href}
-            startIcon={Icon && <Icon fontSize="small" />}
           >
-            <span>{title}</span>
+            {buttonContent}
           </Button>
         </ListItem>
       </div>
+    );
+
+    return collapsed ? (
+      <Tooltip title={title} placement="right">
+        {item}
+      </Tooltip>
+    ) : item;
+  }
+
+  if (collapsed) {
+    const item = (
+      <div>
+        <ListItem
+          disableGutters
+          sx={{
+            display: 'flex',
+            py: 0,
+            ...(rest.sx as object)
+          }}
+        >
+          <Button
+            aria-label={title}
+            component={href ? RouterLink : 'button'}
+            to={href}
+            sx={buttonSx}
+          >
+            {buttonContent}
+          </Button>
+        </ListItem>
+      </div>
+    );
+
+    return (
+      <Tooltip title={title} placement="right">
+        {item}
+      </Tooltip>
     );
   }
 
@@ -85,19 +130,11 @@ function NavItem({ href, icon: Icon, title, subItems, ...rest }: NavItemProps) {
           component={href ? RouterLink : 'button'}
           to={href}
           sx={{
-            color: 'text.secondary',
-            fontWeight: 'medium',
-            justifyContent: 'flex-start',
-            letterSpacing: 0,
-            textTransform: 'none',
-            flex: 1,
-            '& svg': {
-              mr: 1
-            }
+            ...buttonSx,
+            flex: 1
           }}
-          startIcon={Icon && <Icon fontSize="small" />}
         >
-          <span>{title}</span>
+          {buttonContent}
         </Button>
         <Button
           onClick={() => setOpen(!open)}
@@ -110,6 +147,7 @@ function NavItem({ href, icon: Icon, title, subItems, ...rest }: NavItemProps) {
         <List disablePadding>
           {subItems.map((item) => (
             <NavItem
+              collapsed={collapsed}
               href={item.href}
               key={item.title}
               title={item.title}

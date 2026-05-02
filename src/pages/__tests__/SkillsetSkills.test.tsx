@@ -85,6 +85,10 @@ describe('SkillsetSkills', () => {
   it('opens skill details when optional metadata arrays are absent', () => {
     render(<SkillsetSkills />, { wrapper: Wrapper });
 
+    expect(screen.getByText('Last updated')).toBeInTheDocument();
+    expect(screen.getByText('Updated by')).toBeInTheDocument();
+    expect(screen.getByText('alice@example.com')).toBeInTheDocument();
+
     fireEvent.click(screen.getByText('Triage'));
 
     const dialog = screen.getByRole('dialog', { name: 'Triage' });

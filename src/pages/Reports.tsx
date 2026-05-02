@@ -9,7 +9,13 @@ import {
   DialogActions,
   DialogContent,
   DialogTitle,
+  IconButton,
+  ListItemIcon,
+  ListItemText,
+  Menu,
+  MenuItem,
   TextField,
+  Tooltip,
   Typography,
 } from '@mui/material';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
@@ -17,21 +23,20 @@ import Error from '@mui/icons-material/Error';
 import EditIcon from '@mui/icons-material/Edit';
 import HistoryIcon from '@mui/icons-material/History';
 import LockIcon from '@mui/icons-material/Lock';
+import MoreVertIcon from '@mui/icons-material/MoreVert';
 import PublicIcon from '@mui/icons-material/Public';
 
 import ReportView from 'src/components/ReportView';
 import EditableReportView from 'src/components/EditableReportView';
 import { useReport, useReportsMutations } from 'src/hooks/useReportsApi';
 import { Report } from 'src/config.context';
-import { useCurrentUser } from 'src/hooks/useCurrentUser';
-import { usePermissions } from 'src/hooks/usePermissions';
+import { usePermissionState } from 'src/hooks/usePermissions';
 
 function Reports() {
   const { id } = useParams();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
-  const hasPermission = usePermissions();
-  const currentUser = useCurrentUser();
+  const { hasPermission, loading: permissionsLoading, currentUser } = usePermissionState();
 
   const [editMode, setEditMode] = useState(searchParams.get('edit') === 'true');
   const [displayedReport, setDisplayedReport] = useState<Report | undefined>(undefined);
@@ -41,13 +46,14 @@ function Reports() {
   const [displayedQueryCapabilities, setDisplayedQueryCapabilities] = useState<Record<string, string> | undefined>(undefined);
 
   const { report, name, reportVersion, queryCapabilities, loading, error } = useReport(id);
-  const { saveReportVersion, cloneReport, updateReportAccess } = useReportsMutations();
+  const { saveReportVersion, cloneReport, updateReportVisibility } = useReportsMutations();
 
   const [cloneOpen, setCloneOpen] = useState(false);
   const [cloneName, setCloneName] = useState('');
   const [cloning, setCloning] = useState(false);
   const [cloneError, setCloneError] = useState<string | null>(null);
   const [updatingAccess, setUpdatingAccess] = useState(false);
+  const [actionsAnchor, setActionsAnchor] = useState<null | HTMLElement>(null);
 
   const handleCloneOpen = () => {
     setCloneName(`Copy of ${displayedName ?? ''}`);
@@ -72,7 +78,10 @@ function Reports() {
   };
 
   useEffect(() => {
-    if (report) setDisplayedReport(report);
+    if (report) {
+      const reportName = name?.trim() || report.name;
+      setDisplayedReport(reportName ? { ...report, name: reportName } : report);
+    }
     if (name) setDisplayedName(name);
     if (reportVersion) {
       setDisplayedAccessScope(reportVersion.access.scope);
@@ -101,9 +110,11 @@ function Reports() {
   async function handleSave(updatedReport: Report, comment: string) {
     if (!id) return;
     const version = await saveReportVersion(id, updatedReport, comment || undefined, true);
-    setDisplayedReport(version.config);
-    setDisplayedName(version.name);
+    const savedName = updatedReport.name?.trim() || version.name;
+    setDisplayedReport(savedName ? { ...version.config, name: savedName } : version.config);
+    setDisplayedName(savedName);
     setDisplayedQueryCapabilities(version.query_capabilities);
+    window.dispatchEvent(new Event('seizu:reports-updated'));
     setEditMode(false);
     // Navigate back to view mode (clears ?edit param)
     navigate(`/app/reports/${id}`, { replace: true });
@@ -113,14 +124,14 @@ function Reports() {
     if (!id || !displayedAccessScope) return;
     setUpdatingAccess(true);
     try {
-      const updated = await updateReportAccess(id, displayedAccessScope === 'public' ? 'private' : 'public');
+      const updated = await updateReportVisibility(id, displayedAccessScope === 'public' ? 'private' : 'public');
       setDisplayedAccessScope(updated.access.scope);
     } finally {
       setUpdatingAccess(false);
     }
   }
 
-  if (loading && !displayedReport) {
+  if ((loading && !displayedReport) || permissionsLoading) {
     return (
       <Box sx={{ display: 'flex', justifyContent: 'center', p: 4 }}>
         <CircularProgress />
@@ -139,8 +150,54 @@ function Reports() {
 
   if (!displayedReport) return null;
 
+  if (displayedQueryCapabilities === undefined) {
+    return (
+      <Box sx={{ display: 'flex', justifyContent: 'center', p: 4 }}>
+        <CircularProgress />
+      </Box>
+    );
+  }
+
   const isOwner = currentUser?.user_id === displayedOwnerId;
   const canUpdateAccess = hasPermission('reports:write') && isOwner;
+  const canWriteReports = hasPermission('reports:write');
+  const actionsMenuOpen = Boolean(actionsAnchor);
+
+  const closeActionsMenu = () => {
+    setActionsAnchor(null);
+  };
+
+  const secondaryActions = [
+    {
+      key: 'history',
+      label: 'History',
+      icon: <HistoryIcon fontSize="small" />,
+      disabled: false,
+      onClick: () => navigate(`/app/reports/${id}/history`)
+    },
+    ...(canWriteReports
+      ? [
+          {
+            key: 'visibility',
+            label: displayedAccessScope === 'public' ? 'Unpublish' : 'Publish',
+            icon: updatingAccess
+              ? <CircularProgress size={18} />
+              : displayedAccessScope === 'public'
+                ? <LockIcon fontSize="small" />
+                : <PublicIcon fontSize="small" />,
+            disabled: !canUpdateAccess || updatingAccess,
+            onClick: handleToggleAccess
+          },
+          {
+            key: 'clone',
+            label: 'Clone',
+            icon: <ContentCopyIcon fontSize="small" />,
+            disabled: false,
+            onClick: handleCloneOpen
+          }
+        ]
+      : [])
+  ];
 
   if (editMode) {
     return (
@@ -153,64 +210,84 @@ function Reports() {
     );
   }
 
-  return (
-    <Box>
-      <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1, px: 3, pt: 2 }}>
-        {displayedAccessScope && (
-          <Chip
-            icon={displayedAccessScope === 'public' ? <PublicIcon /> : <LockIcon />}
-            label={displayedAccessScope === 'public' ? 'Public' : 'Draft'}
-            size="small"
-            color={displayedAccessScope === 'public' ? 'success' : 'default'}
-            variant="outlined"
-            sx={{ alignSelf: 'center' }}
-          />
-        )}
+  const reportActions = (
+    <>
+      {displayedAccessScope && (
+        <Chip
+          icon={displayedAccessScope === 'public' ? <PublicIcon /> : <LockIcon />}
+          label={displayedAccessScope === 'public' ? 'Public' : 'Draft'}
+          size="small"
+          color={displayedAccessScope === 'public' ? 'success' : 'default'}
+          variant="outlined"
+          sx={{ alignSelf: 'center' }}
+        />
+      )}
+      {canWriteReports && (
+        <Button
+          variant="contained"
+          size="small"
+          startIcon={<EditIcon />}
+          onClick={handleEnterEdit}
+        >
+          Edit Report
+        </Button>
+      )}
+      {secondaryActions.length === 1 ? (
         <Button
           variant="outlined"
           size="small"
-          startIcon={<HistoryIcon />}
-          onClick={() => navigate(`/app/reports/${id}/history`)}
+          startIcon={secondaryActions[0].icon}
+          disabled={secondaryActions[0].disabled}
+          onClick={secondaryActions[0].onClick}
         >
-          History
+          {secondaryActions[0].label}
         </Button>
-        {hasPermission('reports:write') && (
-          <>
-            <Button
-              variant="outlined"
+      ) : (
+        <>
+          <Tooltip title="More actions">
+            <IconButton
+              aria-label="More actions"
               size="small"
-              startIcon={
-                updatingAccess
-                  ? <CircularProgress size={16} />
-                  : displayedAccessScope === 'public'
-                    ? <LockIcon />
-                    : <PublicIcon />
-              }
-              onClick={handleToggleAccess}
-              disabled={!canUpdateAccess || updatingAccess}
+              onClick={(event) => setActionsAnchor(event.currentTarget)}
             >
-              {displayedAccessScope === 'public' ? 'Unpublish' : 'Publish'}
-            </Button>
-            <Button
-              variant="outlined"
-              size="small"
-              startIcon={<ContentCopyIcon />}
-              onClick={handleCloneOpen}
-            >
-              Clone
-            </Button>
-            <Button
-              variant="outlined"
-              size="small"
-              startIcon={<EditIcon />}
-              onClick={handleEnterEdit}
-            >
-              Edit report
-            </Button>
-          </>
-        )}
-      </Box>
-      <ReportView report={displayedReport} title={displayedName} queryCapabilities={displayedQueryCapabilities} />
+              <MoreVertIcon fontSize="small" />
+            </IconButton>
+          </Tooltip>
+          <Menu
+            anchorEl={actionsAnchor}
+            open={actionsMenuOpen}
+            onClose={closeActionsMenu}
+            anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+            transformOrigin={{ vertical: 'top', horizontal: 'right' }}
+          >
+            {secondaryActions.map((action) => (
+              <MenuItem
+                key={action.key}
+                onClick={() => {
+                  closeActionsMenu();
+                  action.onClick();
+                }}
+                disabled={action.disabled}
+              >
+                <ListItemIcon>{action.icon}</ListItemIcon>
+                <ListItemText>{action.label}</ListItemText>
+              </MenuItem>
+            ))}
+          </Menu>
+        </>
+      )}
+    </>
+  );
+
+  return (
+    <Box>
+      <ReportView
+        report={displayedReport}
+        title={displayedName}
+        showTitle
+        queryCapabilities={displayedQueryCapabilities}
+        toolbarActions={reportActions}
+      />
 
       <Dialog open={cloneOpen} onClose={() => setCloneOpen(false)} maxWidth="sm" fullWidth>
         <DialogTitle>Clone report</DialogTitle>

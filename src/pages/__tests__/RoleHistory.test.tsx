@@ -6,7 +6,7 @@ import * as rolesApiModule from 'src/hooks/useRolesApi';
 import * as usePermissionsModule from 'src/hooks/usePermissions';
 
 jest.mock('src/hooks/usePermissions', () => ({
-  usePermissions: jest.fn(),
+  usePermissionState: jest.fn(),
 }));
 
 jest.mock('src/hooks/useRolesApi', () => {
@@ -26,7 +26,7 @@ jest.mock('react-helmet', () => ({
   Helmet: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 }));
 
-const mockUsePermissions = usePermissionsModule.usePermissions as jest.MockedFunction<typeof usePermissionsModule.usePermissions>;
+const mockUsePermissionState = usePermissionsModule.usePermissionState as jest.MockedFunction<typeof usePermissionsModule.usePermissionState>;
 const mockUseRoleVersionsList = rolesApiModule.useRoleVersionsList as unknown as jest.Mock;
 const mockUseRoleMutations = rolesApiModule.useRoleMutations as unknown as jest.Mock;
 const theme = createTheme();
@@ -73,7 +73,11 @@ function Wrapper({ children }: { children: React.ReactNode }) {
 }
 
 function setPermissions(permissions: string[]) {
-  mockUsePermissions.mockReturnValue((permission: string) => permissions.includes(permission));
+  mockUsePermissionState.mockReturnValue({
+    hasPermission: (permission: string) => permissions.includes(permission),
+    loading: false,
+    currentUser: null,
+  });
 }
 
 describe('RoleHistory', () => {

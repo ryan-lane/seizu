@@ -6,10 +6,10 @@ import * as reportsApiModule from 'src/hooks/useReportsApi';
 import * as usePermissionsModule from 'src/hooks/usePermissions';
 
 jest.mock('src/hooks/usePermissions', () => ({
-  usePermissions: jest.fn(),
+  usePermissionState: jest.fn(),
 }));
 
-const mockUsePermissions = usePermissionsModule.usePermissions as jest.MockedFunction<typeof usePermissionsModule.usePermissions>;
+const mockUsePermissionState = usePermissionsModule.usePermissionState as jest.MockedFunction<typeof usePermissionsModule.usePermissionState>;
 
 jest.mock('react-helmet', () => ({
   Helmet: ({ children }: { children: React.ReactNode }) => <>{children}</>
@@ -56,7 +56,8 @@ const VERSION_1 = {
   config: { rows: [] },
   created_at: '2024-01-01T00:00:00Z',
   created_by: 'alice@example.com',
-  comment: 'Initial version'
+  comment: 'Initial version',
+  query_capabilities: {}
 };
 
 const VERSION_2 = {
@@ -66,7 +67,8 @@ const VERSION_2 = {
   config: { rows: [] },
   created_at: '2024-01-02T00:00:00Z',
   created_by: 'bob@example.com',
-  comment: null
+  comment: null,
+  query_capabilities: {}
 };
 
 const ALL_VERSIONS = [VERSION_1, VERSION_2];
@@ -85,7 +87,7 @@ describe('ReportVersionView', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     // Default: user has reports:write permission.
-    mockUsePermissions.mockReturnValue(() => true);
+    mockUsePermissionState.mockReturnValue({ hasPermission: () => true, loading: false, currentUser: null });
     useReportVersion = jest.spyOn(reportsApiModule, 'useReportVersion') as unknown as jest.Mock;
     useReportVersion.mockReturnValue({ reportVersion: VERSION_1, loading: false, error: null });
     useReportVersionsList = jest.spyOn(reportsApiModule, 'useReportVersionsList') as unknown as jest.Mock;
@@ -174,7 +176,7 @@ describe('ReportVersionView', () => {
   });
 
   it('Restore button is disabled when user lacks reports:write', () => {
-    mockUsePermissions.mockReturnValue(() => false);
+    mockUsePermissionState.mockReturnValue({ hasPermission: () => false, loading: false, currentUser: null });
     render(<ReportVersionView />, { wrapper: Wrapper });
 
     expect(screen.getByRole('button', { name: /restore this version/i })).toBeDisabled();

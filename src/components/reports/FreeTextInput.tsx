@@ -11,6 +11,7 @@ interface FreeTextInputProps {
   labelName?: string;
   value?: Record<string, InputValue | undefined>;
   setValue?: (val: Record<string, InputValue | undefined>) => void;
+  size?: 'small' | 'medium';
 }
 
 export default function FreeTextInput({
@@ -18,7 +19,8 @@ export default function FreeTextInput({
   inputDefault,
   labelName,
   value,
-  setValue
+  setValue,
+  size = 'medium'
 }: FreeTextInputProps) {
   const [localValue, setLocalValue] = useState(
     value?.[inputId || '']?.value ?? inputDefault?.value ?? ''
@@ -50,6 +52,7 @@ export default function FreeTextInput({
       label={labelName}
       variant="outlined"
       fullWidth
+      size={size}
     />
   );
 }

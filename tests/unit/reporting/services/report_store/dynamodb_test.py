@@ -368,8 +368,44 @@ async def test_save_report_version_increments_version(patch_table, store):
 
     assert result.version == 4
     assert result.name == "My Report"
-    assert result.config == {"rows": [{"name": "new"}]}
+    assert result.config == {"name": "My Report", "rows": [{"name": "new"}]}
     assert result.comment == "v4"
+
+
+async def test_save_report_version_updates_report_name_from_config(patch_table, store):
+    patch_table.get_item.return_value = {"Item": _metadata_item(current_version=1)}
+
+    result = await store.save_report_version(
+        report_id="123",
+        config={"name": "Renamed Report", "rows": []},
+        created_by="editor@example.com",
+    )
+
+    assert result.name == "Renamed Report"
+    items = patch_table.meta.client.transact_write_items.call_args[1]["TransactItems"]
+    stored_items = [item["Put"]["Item"] for item in items]
+    metadata_item = next(item for item in stored_items if item["PK"] == "REPORT#123" and item["SK"] == "#METADATA")
+    list_item = next(item for item in stored_items if item["PK"] == "REPORT_LIST" and item["SK"] == "REPORT#123")
+    version_item = next(
+        item for item in stored_items if item["PK"] == "REPORT#123" and item["SK"] == "VERSION#0000000002"
+    )
+
+    assert metadata_item["name"] == "Renamed Report"
+    assert list_item["name"] == "Renamed Report"
+    assert version_item["name"] == "Renamed Report"
+    assert version_item["config"]["name"] == "Renamed Report"
+
+
+async def test_save_report_version_ignores_blank_config_name(patch_table, store):
+    patch_table.get_item.return_value = {"Item": _metadata_item(current_version=1)}
+
+    result = await store.save_report_version(
+        report_id="123",
+        config={"name": "   ", "rows": []},
+        created_by="editor@example.com",
+    )
+
+    assert result.name == "My Report"
 
 
 async def test_save_report_version_writes_five_items_transactionally(patch_table, store):

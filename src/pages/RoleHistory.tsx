@@ -33,16 +33,16 @@ import {
   useRoleVersionsList
 } from 'src/hooks/useRolesApi';
 import UserDisplay from 'src/components/UserDisplay';
-import { usePermissions } from 'src/hooks/usePermissions';
+import { usePermissionState } from 'src/hooks/usePermissions';
 
 interface RowMenuProps {
   isCurrent: boolean;
+  hasPermission: (permission: string) => boolean;
   onRestore: () => void;
 }
 
-function RowMenu({ isCurrent, onRestore }: RowMenuProps) {
+function RowMenu({ isCurrent, hasPermission, onRestore }: RowMenuProps) {
   const [anchor, setAnchor] = useState<null | HTMLElement>(null);
-  const hasPermission = usePermissions();
   const close = () => setAnchor(null);
 
   const canWrite = hasPermission('roles:write');
@@ -99,7 +99,7 @@ function permissionSummary(version: RoleVersion) {
 function RoleHistory() {
   const { roleId } = useParams();
   const navigate = useNavigate();
-  const hasPermission = usePermissions();
+  const { hasPermission, loading: permissionsLoading } = usePermissionState();
   const canRead = hasPermission('roles:read');
   const builtin = !!roleId && isBuiltinRole(roleId);
 
@@ -119,6 +119,14 @@ function RoleHistory() {
       comment: `Restored from version ${version.version}`
     });
     navigate('/app/roles');
+  }
+
+  if (permissionsLoading) {
+    return (
+      <Box sx={{ display: 'flex', justifyContent: 'center', p: 4 }}>
+        <CircularProgress />
+      </Box>
+    );
   }
 
   if (!canRead) {
@@ -245,6 +253,7 @@ function RoleHistory() {
                       <TableCell align="right" sx={{ width: 48, pr: 1 }}>
                         <RowMenu
                           isCurrent={isCurrent}
+                          hasPermission={hasPermission}
                           onRestore={() => handleRestore(v)}
                         />
                       </TableCell>

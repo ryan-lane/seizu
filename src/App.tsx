@@ -11,6 +11,7 @@ import { brand } from 'src/theme/brand';
 import routes from 'src/routes';
 import { AuthConfigContext, type AuthConfig, type OidcConfig } from 'src/authConfig.context';
 import { createUserManager } from 'src/userManager';
+import { CurrentUserProvider } from 'src/hooks/useCurrentUser';
 
 function App() {
   const prefersDarkMode = useMediaQuery('(prefers-color-scheme: dark)');
@@ -66,7 +67,9 @@ function App() {
       <ThemeProvider theme={theme}>
         <GlobalStyles />
         <CssBaseline />
-        <AuthProvider>{routing}</AuthProvider>
+        <AuthProvider>
+          <CurrentUserProvider>{routing}</CurrentUserProvider>
+        </AuthProvider>
       </ThemeProvider>
     </AuthConfigContext.Provider>
   );

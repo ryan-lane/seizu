@@ -278,6 +278,79 @@ async def test_reports_create_version_success():
     )
 
 
+async def test_reports_create_version_passes_config_name_to_service():
+    with patch(
+        "reporting.services.mcp_builtins.reports.report_store.save_report_version",
+        new_callable=AsyncMock,
+        return_value=_report_version(2),
+    ) as mock_save:
+        server = _build_mcp_server()
+        result = await _call(
+            server,
+            "reports__create_version",
+            {
+                "report_id": "r1",
+                "config": {"name": "Renamed Report", "rows": []},
+                "comment": "rename",
+            },
+        )
+        data = json.loads(result[0].text)
+
+    assert data["version"] == 2
+    mock_save.assert_awaited_once_with(
+        report_id="r1",
+        config={"name": "Renamed Report", "rows": []},
+        created_by="u1",
+        comment="rename",
+        user_id="u1",
+    )
+
+
+async def test_reports_clone_passes_clone_name_to_saved_version():
+    source = ReportVersion(
+        report_id="source",
+        name="Source Report",
+        version=3,
+        config={"name": "Source Report", "rows": []},
+        created_at=_NOW,
+        created_by="u1",
+        comment=None,
+        report_created_by="u1",
+        report_updated_by="u1",
+        access={"scope": "public"},
+    )
+    new_item = _report_list_item(report_id="clone", name="Cloned Report")
+    with (
+        patch(
+            "reporting.services.mcp_builtins.reports.report_store.get_report_latest",
+            new_callable=AsyncMock,
+            return_value=source,
+        ),
+        patch(
+            "reporting.services.mcp_builtins.reports.report_store.create_report",
+            new_callable=AsyncMock,
+            return_value=new_item,
+        ),
+        patch(
+            "reporting.services.mcp_builtins.reports.report_store.save_report_version",
+            new_callable=AsyncMock,
+            return_value=_report_version(1),
+        ) as mock_save,
+    ):
+        server = _build_mcp_server()
+        result = await _call(server, "reports__clone", {"report_id": "source", "name": "Cloned Report"})
+        data = json.loads(result[0].text)
+
+    assert data["report_id"] == "clone"
+    mock_save.assert_awaited_once_with(
+        report_id="clone",
+        config={"name": "Cloned Report", "rows": []},
+        created_by="u1",
+        comment="Cloned from Source Report",
+        user_id="u1",
+    )
+
+
 async def test_reports_create_version_returns_error_for_private_report_from_non_owner():
     async def _save_report_version(
         report_id: str,
@@ -324,7 +397,7 @@ async def test_reports_create_version_returns_error_when_missing():
     assert data == {"error": "Report not found"}
 
 
-async def test_reports_update_rejects_unpublish_when_pinned():
+async def test_reports_update_visibility_rejects_unpublish_when_pinned():
     report = _report_list_item()
     report.pinned = True
     with (
@@ -339,19 +412,19 @@ async def test_reports_update_rejects_unpublish_when_pinned():
             return_value=None,
         ),
         patch(
-            "reporting.services.mcp_builtins.reports.report_store.update_report_metadata",
+            "reporting.services.mcp_builtins.reports.report_store.update_report_visibility",
             new_callable=AsyncMock,
         ) as mock_update,
     ):
         server = _build_mcp_server()
-        result = await _call(server, "reports__update", {"report_id": "r1", "access": {"scope": "private"}})
+        result = await _call(server, "reports__update_visibility", {"report_id": "r1", "access": {"scope": "private"}})
         data = json.loads(result[0].text)
 
     assert data == {"error": "Report must be unpinned and removed from the dashboard before it can be made private"}
     mock_update.assert_not_called()
 
 
-async def test_reports_update_rejects_unpublish_when_dashboard():
+async def test_reports_update_visibility_rejects_unpublish_when_dashboard():
     with (
         patch(
             "reporting.services.mcp_builtins.reports.report_store.get_report_metadata",
@@ -364,12 +437,12 @@ async def test_reports_update_rejects_unpublish_when_dashboard():
             return_value="r1",
         ),
         patch(
-            "reporting.services.mcp_builtins.reports.report_store.update_report_metadata",
+            "reporting.services.mcp_builtins.reports.report_store.update_report_visibility",
             new_callable=AsyncMock,
         ) as mock_update,
     ):
         server = _build_mcp_server()
-        result = await _call(server, "reports__update", {"report_id": "r1", "access": {"scope": "private"}})
+        result = await _call(server, "reports__update_visibility", {"report_id": "r1", "access": {"scope": "private"}})
         data = json.loads(result[0].text)
 
     assert data == {"error": "Report must be unpinned and removed from the dashboard before it can be made private"}

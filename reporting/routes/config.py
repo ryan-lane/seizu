@@ -1,7 +1,6 @@
 from fastapi import APIRouter
 
 from reporting import scheduled_query_modules, settings
-from reporting.schema import reporting_config
 
 router = APIRouter()
 
@@ -9,7 +8,6 @@ router = APIRouter()
 @router.get("/api/v1/config", include_in_schema=False)
 async def get_config() -> dict:
     """Get frontend configuration."""
-    schema = reporting_config.output_json_schema()
     oidc_config = None
     if settings.OIDC_AUTHORITY:
         oidc_config = {
@@ -27,5 +25,4 @@ async def get_config() -> dict:
         "scheduled_query_action_types": scheduled_query_modules.get_configured_action_names(),
         "scheduled_query_action_schemas": action_schemas,
         "config": {},
-        "schema": schema,
     }

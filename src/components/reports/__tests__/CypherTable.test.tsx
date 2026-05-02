@@ -82,6 +82,22 @@ describe('CypherTable', () => {
     ).toBeInTheDocument();
   });
 
+  it('shows a table skeleton while loading', () => {
+    useLazyCypherQuery.mockReturnValue([
+      mockRunQuery,
+      { ...defaultState, loading: true }
+    ]);
+    render(
+      <Wrapper>
+        <CypherTable cypher="MATCH (n) RETURN n" caption="Loading Table" />
+      </Wrapper>
+    );
+    expect(screen.getByText('Loading Table')).toBeInTheDocument();
+    expect(screen.getByTestId('cypher-table-loading-skeleton')).toBeInTheDocument();
+    expect(screen.queryByRole('progressbar')).not.toBeInTheDocument();
+    expect(screen.queryByText('No records found.')).not.toBeInTheDocument();
+  });
+
   it('shows no records message when records array is empty', () => {
     useLazyCypherQuery.mockReturnValue([
       mockRunQuery,

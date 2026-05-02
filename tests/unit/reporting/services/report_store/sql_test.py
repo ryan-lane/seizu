@@ -136,7 +136,7 @@ async def test_get_report_latest_returns_version(store, mocker):
     assert result.report_id == "rid1"
     assert result.name == "r1"
     assert result.version == 1
-    assert result.config == {"rows": [{"name": "r1"}]}
+    assert result.config == {"name": "r1", "rows": [{"name": "r1"}]}
     assert result.created_by == "user@example.com"
     assert result.comment == "v1"
 
@@ -151,7 +151,7 @@ async def test_get_report_latest_returns_newest_after_update(store, mocker):
     await store.save_report_version(report_id="rid1", config={"v": 2}, created_by="u@x.com")
     result = await store.get_report_latest("rid1")
     assert result.version == 2
-    assert result.config == {"v": 2}
+    assert result.config == {"name": "r", "v": 2}
 
 
 # ---------------------------------------------------------------------------
@@ -176,9 +176,9 @@ async def test_get_report_version_found(store, mocker):
     v2 = await store.get_report_version("rid1", 2)
     assert v1.version == 1
     assert v1.name == "r"
-    assert v1.config == {"v": 1}
+    assert v1.config == {"name": "r", "v": 1}
     assert v2.version == 2
-    assert v2.config == {"v": 2}
+    assert v2.config == {"name": "r", "v": 2}
 
 
 # ---------------------------------------------------------------------------
@@ -260,11 +260,11 @@ async def test_save_report_version_increments_version(store, mocker):
     )
     assert result.version == 1
     assert result.name == "r"
-    assert result.config == {"v": 2}
+    assert result.config == {"name": "r", "v": 2}
     assert result.comment == "update"
 
 
-async def test_save_report_version_does_not_change_name(store, mocker):
+async def test_save_report_version_does_not_change_name_without_config_name(store, mocker):
     mocker.patch(
         "reporting.services.report_store.sql.generate_report_id",
         return_value="rid1",
@@ -278,6 +278,45 @@ async def test_save_report_version_does_not_change_name(store, mocker):
     result = await store.list_reports()
     assert result[0].name == "Original Name"
     assert result[0].current_version == 1
+
+
+async def test_save_report_version_updates_name_from_config(store, mocker):
+    mocker.patch(
+        "reporting.services.report_store.sql.generate_report_id",
+        return_value="rid1",
+    )
+    await store.create_report(name="Original Name", created_by="u@x.com")
+    version = await store.save_report_version(
+        report_id="rid1",
+        config={"name": "Renamed Report", "rows": []},
+        created_by="u@x.com",
+    )
+
+    reports = await store.list_reports()
+    latest = await store.get_report_latest("rid1")
+
+    assert version.name == "Renamed Report"
+    assert reports[0].name == "Renamed Report"
+    assert latest.name == "Renamed Report"
+    assert latest.config["name"] == "Renamed Report"
+
+
+async def test_save_report_version_ignores_blank_config_name(store, mocker):
+    mocker.patch(
+        "reporting.services.report_store.sql.generate_report_id",
+        return_value="rid1",
+    )
+    await store.create_report(name="Original Name", created_by="u@x.com")
+    version = await store.save_report_version(
+        report_id="rid1",
+        config={"name": "   ", "rows": []},
+        created_by="u@x.com",
+    )
+
+    reports = await store.list_reports()
+
+    assert version.name == "Original Name"
+    assert reports[0].name == "Original Name"
 
 
 async def test_save_report_version_latest_reflects_new_version(store, mocker):

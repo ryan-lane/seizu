@@ -1,6 +1,7 @@
 import { useState, useCallback, useContext } from 'react';
 import { AuthContext } from 'src/auth.context';
 import { AuthConfigContext } from 'src/authConfig.context';
+import { usePermissionState } from 'src/hooks/usePermissions';
 
 export type QueryRecord = Record<string, unknown>;
 
@@ -19,6 +20,7 @@ export function useLazyCypherQuery(
 ): [(params?: Record<string, unknown>) => void, QueryState] {
   const { accessToken } = useContext(AuthContext);
   const { auth_required } = useContext(AuthConfigContext);
+  const { hasPermission, loading: permissionsLoading } = usePermissionState();
   const [state, setState] = useState<QueryState>({
     loading: false,
     error: null,
@@ -33,6 +35,21 @@ export function useLazyCypherQuery(
       if (!cypher) return;
       // When auth is required, wait until we have a token before querying.
       if (auth_required && !accessToken) return;
+      if (permissionsLoading) return;
+
+      const requiredPermission = reportToken ? 'reports:read' : 'query:execute';
+      if (!hasPermission(requiredPermission)) {
+        setState({
+          loading: false,
+          error: new Error('You do not have permission to run this query.'),
+          records: undefined,
+          first: undefined,
+          warnings: [],
+          queryErrors: []
+        });
+        return;
+      }
+
       setState({ loading: true, error: null, records: undefined, first: undefined, warnings: [], queryErrors: [] });
 
       const headers: Record<string, string> = {
@@ -93,7 +110,7 @@ export function useLazyCypherQuery(
           setState({ loading: false, error: err, records: undefined, first: undefined, warnings: [], queryErrors: [] });
         });
     },
-    [cypher, reportToken, accessToken, auth_required]
+    [cypher, reportToken, accessToken, auth_required, permissionsLoading, hasPermission]
   );
 
   return [run, state];

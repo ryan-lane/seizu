@@ -126,7 +126,7 @@ def publish_report(
 ) -> None:
     """Make a report public."""
     try:
-        state.get_client().put(f"/api/v1/reports/{report_id}", json={"access": {"scope": "public"}})
+        state.get_client().put(f"/api/v1/reports/{report_id}/visibility", json={"access": {"scope": "public"}})
     except Exception as exc:
         _die(exc)
         return
@@ -139,7 +139,7 @@ def unpublish_report(
 ) -> None:
     """Make a report private."""
     try:
-        state.get_client().put(f"/api/v1/reports/{report_id}", json={"access": {"scope": "private"}})
+        state.get_client().put(f"/api/v1/reports/{report_id}/visibility", json={"access": {"scope": "private"}})
     except Exception as exc:
         _die(exc)
         return

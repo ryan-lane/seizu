@@ -20,12 +20,6 @@ import {
   Menu,
   MenuItem,
   Paper,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
   TextField,
   Tooltip,
   Typography
@@ -47,7 +41,20 @@ import {
   useRolesList
 } from 'src/hooks/useRolesApi';
 import UserDisplay from 'src/components/UserDisplay';
-import { usePermissions } from 'src/hooks/usePermissions';
+import { usePermissionState } from 'src/hooks/usePermissions';
+import ListTable, {
+  ListTableColumn,
+  listTableActionColumnSx,
+  listTablePrimaryCellSx,
+  listTableSecondaryCellSx,
+  listTableTruncateSx
+} from 'src/components/ListTable';
+
+const descriptionColumnSx = { ...listTableSecondaryCellSx, width: '22%' };
+const permissionsColumnSx = { width: '24%' };
+const versionColumnSx = { ...listTableSecondaryCellSx, width: 88 };
+const updatedAtColumnSx = { ...listTableSecondaryCellSx, width: 180 };
+const updatedByColumnSx = { ...listTableSecondaryCellSx, width: 150 };
 
 function permissionGroup(permission: string): string {
   return permission.split(':')[0] || 'other';
@@ -282,15 +289,15 @@ function RoleDialog({ open, onClose, onSave, initial, availablePermissions }: Ro
 
 interface RowMenuProps {
   isBuiltin: boolean;
+  hasPermission: (permission: string) => boolean;
   onView: () => void;
   onEdit: () => void;
   onHistory: () => void;
   onDelete: () => void;
 }
 
-function RowMenu({ isBuiltin, onView, onEdit, onHistory, onDelete }: RowMenuProps) {
+function RowMenu({ isBuiltin, hasPermission, onView, onEdit, onHistory, onDelete }: RowMenuProps) {
   const [anchor, setAnchor] = useState<null | HTMLElement>(null);
-  const hasPermission = usePermissions();
   const close = () => setAnchor(null);
 
   const canWrite = hasPermission('roles:write');
@@ -353,7 +360,7 @@ function RowMenu({ isBuiltin, onView, onEdit, onHistory, onDelete }: RowMenuProp
 
 function Roles() {
   const navigate = useNavigate();
-  const hasPermission = usePermissions();
+  const { hasPermission, loading: permissionsLoading } = usePermissionState();
   const canRead = hasPermission('roles:read');
   const { roles: builtinRoles, loading: builtinLoading, error: builtinError } = useBuiltinRolesList(canRead);
   const { roles, loading, error, refresh } = useRolesList(canRead);
@@ -398,6 +405,14 @@ function Roles() {
     }
   };
 
+  if (permissionsLoading) {
+    return (
+      <Box sx={{ display: 'flex', justifyContent: 'center', p: 4 }}>
+        <CircularProgress />
+      </Box>
+    );
+  }
+
   if (!canRead) {
     return (
       <Box sx={{ p: 3 }}>
@@ -408,6 +423,131 @@ function Roles() {
 
   const isLoading = builtinLoading || loading;
   const loadError = builtinError || error;
+  const columns: ListTableColumn<RoleItem>[] = [
+    {
+      key: 'name',
+      label: 'Name',
+      cellSx: listTablePrimaryCellSx,
+      render: (item) => (
+        <Button
+          variant="text"
+          size="small"
+          onClick={() => setDetailTarget(item)}
+          sx={[
+            {
+              px: 0,
+              py: 0,
+              minWidth: 0,
+              maxWidth: '100%',
+              justifyContent: 'flex-start',
+              color: 'text.primary',
+              fontSize: '0.875rem',
+              lineHeight: 1.43,
+              textTransform: 'none',
+              fontWeight: 500,
+              '&:hover': {
+                backgroundColor: 'transparent',
+                textDecoration: 'underline'
+              }
+            },
+            listTableTruncateSx
+          ]}
+        >
+          {item.name}
+        </Button>
+      )
+    },
+    {
+      key: 'type',
+      label: 'Type',
+      cellSx: { width: 130 },
+      render: (item) => {
+        const builtin = isBuiltinRole(item.role_id);
+        return (
+          <Chip
+            label={builtin ? 'Built-in' : 'User-defined'}
+            size="small"
+            variant={builtin ? 'outlined' : 'filled'}
+            color={builtin ? 'primary' : 'default'}
+          />
+        );
+      }
+    },
+    {
+      key: 'description',
+      label: 'Description',
+      hideBelow: 'md',
+      cellSx: descriptionColumnSx,
+      render: (item) => (
+        <Typography variant="body2" color="text.secondary" sx={listTableTruncateSx}>
+          {item.description || '-'}
+        </Typography>
+      )
+    },
+    {
+      key: 'permissions',
+      label: 'Permissions',
+      hideBelow: 'lg',
+      cellSx: permissionsColumnSx,
+      render: (item) => {
+        const visiblePermissions = item.permissions.slice(0, 3);
+        const remaining = item.permissions.length - visiblePermissions.length;
+        return (
+          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+            {visiblePermissions.map((permission) => (
+              <Chip key={permission} label={permission} size="small" variant="outlined" />
+            ))}
+            {remaining > 0 && (
+              <Chip label={`+${remaining}`} size="small" variant="outlined" />
+            )}
+          </Box>
+        );
+      }
+    },
+    {
+      key: 'version',
+      label: 'Version',
+      hideBelow: 'sm',
+      cellSx: versionColumnSx,
+      render: (item) => isBuiltinRole(item.role_id) ? '-' : `v${item.current_version}`
+    },
+    {
+      key: 'updated_at',
+      label: 'Last updated',
+      hideBelow: 'xl',
+      cellSx: updatedAtColumnSx,
+      render: (item) => isBuiltinRole(item.role_id) || !item.updated_at ? '-' : new Date(item.updated_at).toLocaleString()
+    },
+    {
+      key: 'updated_by',
+      label: 'Updated by',
+      hideBelow: 'lg',
+      cellSx: updatedByColumnSx,
+      render: (item) => isBuiltinRole(item.role_id) ? '-' : (
+        item.updated_by
+          ? <UserDisplay userId={item.updated_by} />
+          : <UserDisplay userId={item.created_by} />
+      )
+    },
+    {
+      key: 'actions',
+      align: 'right',
+      cellSx: listTableActionColumnSx,
+      render: (item) => {
+        const builtin = isBuiltinRole(item.role_id);
+        return (
+          <RowMenu
+            isBuiltin={builtin}
+            hasPermission={hasPermission}
+            onView={() => setDetailTarget(item)}
+            onEdit={() => { setEditTarget(item); setDialogOpen(true); }}
+            onHistory={() => navigate(`/app/roles/${item.role_id}/history`)}
+            onDelete={() => setDeleteTarget(item)}
+          />
+        );
+      }
+    }
+  ];
 
   return (
     <>
@@ -439,97 +579,12 @@ function Roles() {
         )}
 
         {!isLoading && !loadError && (
-          <TableContainer component={Paper} variant="outlined">
-            <Table>
-              <TableHead>
-                <TableRow>
-                  <TableCell>Name</TableCell>
-                  <TableCell>Type</TableCell>
-                  <TableCell>Description</TableCell>
-                  <TableCell>Permissions</TableCell>
-                  <TableCell>Version</TableCell>
-                  <TableCell>Latest Update</TableCell>
-                  <TableCell>Updated By</TableCell>
-                  <TableCell />
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {allRows.length === 0 && (
-                  <TableRow>
-                    <TableCell colSpan={8}>
-                      <Typography color="text.secondary" sx={{ py: 1 }}>
-                        No roles found.
-                      </Typography>
-                    </TableCell>
-                  </TableRow>
-                )}
-                {allRows.map((item) => {
-                  const builtin = isBuiltinRole(item.role_id);
-                  const visiblePermissions = item.permissions.slice(0, 3);
-                  const remaining = item.permissions.length - visiblePermissions.length;
-                  return (
-                    <TableRow key={item.role_id} hover>
-                      <TableCell>
-                        <Button
-                          variant="text"
-                          size="small"
-                          onClick={() => setDetailTarget(item)}
-                          sx={{ px: 0, minWidth: 0, textTransform: 'none', fontWeight: 700 }}
-                        >
-                          {item.name}
-                        </Button>
-                      </TableCell>
-                      <TableCell>
-                        <Chip
-                          label={builtin ? 'Built-in' : 'User-defined'}
-                          size="small"
-                          variant={builtin ? 'outlined' : 'filled'}
-                          color={builtin ? 'primary' : 'default'}
-                        />
-                      </TableCell>
-                      <TableCell sx={{ color: 'text.secondary', maxWidth: 320 }}>
-                        <Typography variant="body2" color="text.secondary" sx={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                          {item.description || '-'}
-                        </Typography>
-                      </TableCell>
-                      <TableCell sx={{ minWidth: 250 }}>
-                        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
-                          {visiblePermissions.map((permission) => (
-                            <Chip key={permission} label={permission} size="small" variant="outlined" />
-                          ))}
-                          {remaining > 0 && (
-                            <Chip label={`+${remaining}`} size="small" variant="outlined" />
-                          )}
-                        </Box>
-                      </TableCell>
-                      <TableCell sx={{ color: 'text.secondary' }}>
-                        {builtin ? '-' : `v${item.current_version}`}
-                      </TableCell>
-                      <TableCell sx={{ color: 'text.secondary' }}>
-                        {builtin || !item.updated_at ? '-' : new Date(item.updated_at).toLocaleString()}
-                      </TableCell>
-                      <TableCell sx={{ color: 'text.secondary' }}>
-                        {builtin ? '-' : (
-                          item.updated_by
-                            ? <UserDisplay userId={item.updated_by} />
-                            : <UserDisplay userId={item.created_by} />
-                        )}
-                      </TableCell>
-                      <TableCell align="right" sx={{ width: 48, pr: 1 }}>
-                        <RowMenu
-                          isBuiltin={builtin}
-                          onView={() => setDetailTarget(item)}
-                          onEdit={() => { setEditTarget(item); setDialogOpen(true); }}
-                          onHistory={() => navigate(`/app/roles/${item.role_id}/history`)}
-                          onDelete={() => setDeleteTarget(item)}
-                        />
-                      </TableCell>
-                    </TableRow>
-                  );
-                })}
-              </TableBody>
-            </Table>
-          </TableContainer>
+          <ListTable
+            rows={allRows}
+            columns={columns}
+            getRowKey={(item) => item.role_id}
+            emptyMessage="No roles found."
+          />
         )}
       </Box>
 

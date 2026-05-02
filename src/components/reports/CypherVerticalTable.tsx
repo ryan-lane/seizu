@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
 import {
   Box,
-  CircularProgress,
   Divider,
   IconButton,
   List,
@@ -38,6 +37,7 @@ function flattenRecord(record: QueryRecord): QueryRecord {
   return record;
 }
 import CypherDetails from 'src/components/reports/CypherDetails';
+import { VerticalTableSkeleton } from 'src/components/reports/PanelLoadingSkeletons';
 import QueryValidationBadge from 'src/components/reports/QueryValidationBadge';
 
 interface CypherVerticalTableProps {
@@ -110,11 +110,7 @@ export default function CypherVerticalTable({
   }
 
   if (loading || records === undefined) {
-    return (
-      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', p: 4 }}>
-        <CircularProgress size={40} />
-      </Box>
-    );
+    return <VerticalTableSkeleton />;
   }
 
   if (records === null || records.length === 0) {

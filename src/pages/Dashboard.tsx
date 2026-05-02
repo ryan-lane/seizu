@@ -6,7 +6,7 @@ import { useDashboardReport } from 'src/hooks/useReportsApi';
 function Dashboard() {
   const { report, queryCapabilities, loading } = useDashboardReport();
 
-  if (loading) {
+  if (loading || (report && queryCapabilities === undefined)) {
     return (
       <Box sx={{ display: 'flex', justifyContent: 'center', p: 4 }}>
         <CircularProgress />

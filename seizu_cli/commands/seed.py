@@ -35,7 +35,7 @@ def _list_reports() -> list[dict[str, Any]]:
 
 
 def _publish_report(report_id: str) -> None:
-    state.get_client().put(f"/api/v1/reports/{report_id}", json={"access": {"scope": "public"}})
+    state.get_client().put(f"/api/v1/reports/{report_id}/visibility", json={"access": {"scope": "public"}})
 
 
 def _get_report(report_id: str) -> dict[str, Any] | None:

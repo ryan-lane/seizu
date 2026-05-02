@@ -1,4 +1,4 @@
-import { useState, useContext } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Box,
@@ -21,17 +21,10 @@ import {
   ListItemText,
   Menu,
   MenuItem,
-  Paper,
   Radio,
   RadioGroup,
   Select,
   Switch,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
   TextField,
   Tooltip,
   Typography,
@@ -55,12 +48,19 @@ import {
   ScheduledQueryWatchScan,
   ScheduledQueryAction
 } from 'src/hooks/useScheduledQueriesApi';
-import { ConfigContext, ActionConfigFieldDef } from 'src/config.context';
+import { ActionConfigFieldDef, SeizuConfig } from 'src/config.context';
 import ScheduledQueryDetailDialog, {
   ScheduledQueryViewData
 } from 'src/components/ScheduledQueryDetailDialog';
 import UserDisplay from 'src/components/UserDisplay';
 import { usePermissions } from 'src/hooks/usePermissions';
+import ListTable, {
+  ListTableColumn,
+  listTableActionColumnSx,
+  listTablePrimaryCellSx,
+  listTableSecondaryCellSx,
+  listTableTruncateSx
+} from 'src/components/ListTable';
 
 const EMPTY_FORM: ScheduledQueryRequest = {
   name: '',
@@ -223,12 +223,18 @@ interface ScheduledQueryDialogProps {
   onClose: () => void;
   onSave: (req: ScheduledQueryRequest) => Promise<void>;
   initial: ScheduledQueryItem | null;
+  actionTypes: string[];
+  actionSchemas: Record<string, ActionConfigFieldDef[]>;
 }
 
-function ScheduledQueryDialog({ open, onClose, onSave, initial }: ScheduledQueryDialogProps) {
-  const { config } = useContext(ConfigContext);
-  const actionTypes = config?.scheduled_query_action_types ?? [];
-  const actionSchemas = config?.scheduled_query_action_schemas ?? {};
+function ScheduledQueryDialog({
+  open,
+  onClose,
+  onSave,
+  initial,
+  actionTypes,
+  actionSchemas
+}: ScheduledQueryDialogProps) {
   const [name, setName] = useState(initial?.name ?? EMPTY_FORM.name);
   const [cypher, setCypher] = useState(initial?.cypher ?? EMPTY_FORM.cypher);
   const [enabled, setEnabled] = useState(initial?.enabled ?? EMPTY_FORM.enabled);
@@ -683,6 +689,34 @@ function ScheduledQueries() {
   const [deleteTarget, setDeleteTarget] = useState<ScheduledQueryItem | null>(null);
   const [detailItem, setDetailItem] = useState<ScheduledQueryViewData | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [actionConfig, setActionConfig] = useState<SeizuConfig>({
+    scheduled_query_action_types: [],
+    scheduled_query_action_schemas: {}
+  });
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch('/api/v1/config')
+      .then((res) => {
+        if (!res.ok) throw new globalThis.Error(`Failed to load scheduled query action config: ${res.status}`);
+        return res.json();
+      })
+      .then((config: SeizuConfig) => {
+        if (!cancelled) {
+          setActionConfig({
+            scheduled_query_action_types: config.scheduled_query_action_types ?? [],
+            scheduled_query_action_schemas: config.scheduled_query_action_schemas ?? {}
+          });
+        }
+      })
+      .catch((err: unknown) => {
+        console.log('Scheduled query action config fetch error', err);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const openCreate = () => {
     setEditTarget(null);
@@ -717,6 +751,141 @@ function ScheduledQueries() {
     }
   };
 
+  const columns: ListTableColumn<ScheduledQueryItem>[] = [
+    {
+      key: 'name',
+      label: 'Name',
+      cellSx: listTablePrimaryCellSx,
+      render: (item) => (
+        <Box sx={{ minWidth: 0 }}>
+          <Typography
+            variant="body2"
+            fontWeight={500}
+            sx={[
+              { cursor: 'pointer', '&:hover': { textDecoration: 'underline' } },
+              listTableTruncateSx
+            ]}
+            onClick={() => setDetailItem({
+              name: item.name,
+              cypher: item.cypher,
+              params: item.params,
+              frequency: item.frequency,
+              watch_scans: item.watch_scans,
+              enabled: item.enabled,
+              actions: item.actions,
+              last_run_status: item.last_run_status,
+              last_run_at: item.last_run_at,
+              last_errors: item.last_errors,
+            })}
+          >
+            {item.name}
+          </Typography>
+          <Typography
+            variant="caption"
+            color="text.secondary"
+            sx={{ ...listTableTruncateSx, fontFamily: 'monospace', display: 'block' }}
+          >
+            {item.cypher.split('\n')[0]}
+          </Typography>
+        </Box>
+      )
+    },
+    {
+      key: 'trigger',
+      label: 'Trigger',
+      hideBelow: 'md',
+      cellSx: { ...listTableSecondaryCellSx, width: 150 },
+      render: (item) => triggerSummary(item)
+    },
+    {
+      key: 'configured_actions',
+      label: 'Actions',
+      hideBelow: 'lg',
+      cellSx: { width: '18%' },
+      render: (item) => (
+        item.actions.length === 0 ? (
+          <Typography variant="body2" color="text.secondary">None</Typography>
+        ) : (
+          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+            {item.actions.map((action, index) => (
+              <Chip key={`${action.action_type}-${index}`} label={action.action_type} size="small" />
+            ))}
+          </Box>
+        )
+      )
+    },
+    {
+      key: 'status',
+      label: 'Status',
+      cellSx: { width: 140 },
+      render: (item) => (
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+          <Chip
+            label={item.enabled ? 'Enabled' : 'Disabled'}
+            color={item.enabled ? 'success' : 'default'}
+            size="small"
+          />
+          <Tooltip title={
+            item.last_run_status === 'success'
+              ? `Last run succeeded${item.last_run_at ? ` at ${new Date(item.last_run_at).toLocaleString()}` : ''}`
+              : item.last_run_status === 'failure'
+                ? `Last run failed${item.last_run_at ? ` at ${new Date(item.last_run_at).toLocaleString()}` : ''}`
+                : 'No runs yet'
+          }>
+            <FiberManualRecordIcon
+              sx={{
+                fontSize: 12,
+                color: item.last_run_status === 'success'
+                  ? 'success.main'
+                  : item.last_run_status === 'failure'
+                    ? 'error.main'
+                    : 'warning.main',
+              }}
+            />
+          </Tooltip>
+        </Box>
+      )
+    },
+    {
+      key: 'version',
+      label: 'Version',
+      hideBelow: 'sm',
+      cellSx: { ...listTableSecondaryCellSx, width: 88 },
+      render: (item) => `v${item.current_version}`
+    },
+    {
+      key: 'updated_at',
+      label: 'Last updated',
+      hideBelow: 'xl',
+      cellSx: { ...listTableSecondaryCellSx, width: 180 },
+      render: (item) => new Date(item.updated_at).toLocaleString()
+    },
+    {
+      key: 'updated_by',
+      label: 'Updated by',
+      hideBelow: 'lg',
+      cellSx: { ...listTableSecondaryCellSx, width: 150 },
+      render: (item) => item.updated_by ? (
+        <UserDisplay userId={item.updated_by} />
+      ) : (
+        <UserDisplay userId={item.created_by} />
+      )
+    },
+    {
+      key: 'row_actions',
+      align: 'right',
+      cellSx: listTableActionColumnSx,
+      render: (item) => (
+        <RowMenu
+          item={item}
+          onEdit={() => openEdit(item)}
+          onHistory={() => navigate(`/app/scheduled-queries/${item.scheduled_query_id}/history`)}
+          onDelete={() => setDeleteTarget(item)}
+        />
+      )
+    }
+  ];
+
   return (
     <>
       <Box sx={{ p: 3 }}>
@@ -743,125 +912,12 @@ function ScheduledQueries() {
         )}
 
         {!loading && !error && (
-          <TableContainer component={Paper} variant="outlined">
-            <Table>
-              <TableHead>
-                <TableRow>
-                  <TableCell>Name</TableCell>
-                  <TableCell>Trigger</TableCell>
-                  <TableCell>Actions</TableCell>
-                  <TableCell>Status</TableCell>
-                  <TableCell>Version</TableCell>
-                  <TableCell>Latest Update</TableCell>
-                  <TableCell>Updated By</TableCell>
-                  <TableCell />
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {scheduledQueries.length === 0 && (
-                  <TableRow>
-                    <TableCell colSpan={8}>
-                      <Typography color="text.secondary" sx={{ py: 1 }}>
-                        No scheduled queries yet. Create one above.
-                      </Typography>
-                    </TableCell>
-                  </TableRow>
-                )}
-                {scheduledQueries.map((item) => (
-                  <TableRow key={item.scheduled_query_id} hover>
-                    <TableCell>
-                      <Typography
-                        variant="body2"
-                        fontWeight={500}
-                        sx={{ cursor: 'pointer', '&:hover': { textDecoration: 'underline' } }}
-                        onClick={() => setDetailItem({
-                          name: item.name,
-                          cypher: item.cypher,
-                          params: item.params,
-                          frequency: item.frequency,
-                          watch_scans: item.watch_scans,
-                          enabled: item.enabled,
-                          actions: item.actions,
-                          last_run_status: item.last_run_status,
-                          last_run_at: item.last_run_at,
-                          last_errors: item.last_errors,
-                        })}
-                      >
-                        {item.name}
-                      </Typography>
-                      <Typography
-                        variant="caption"
-                        color="text.secondary"
-                        sx={{ fontFamily: 'monospace', display: 'block', maxWidth: 320, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
-                      >
-                        {item.cypher.split('\n')[0]}
-                      </Typography>
-                    </TableCell>
-                    <TableCell sx={{ color: 'text.secondary' }}>
-                      {triggerSummary(item)}
-                    </TableCell>
-                    <TableCell>
-                      {item.actions.length === 0 ? (
-                        <Typography variant="body2" color="text.secondary">None</Typography>
-                      ) : (
-                        item.actions.map((a, i) => (
-                          <Chip key={i} label={a.action_type} size="small" sx={{ mr: 0.5 }} />
-                        ))
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                        <Chip
-                          label={item.enabled ? 'Enabled' : 'Disabled'}
-                          color={item.enabled ? 'success' : 'default'}
-                          size="small"
-                        />
-                        <Tooltip title={
-                          item.last_run_status === 'success'
-                            ? `Last run succeeded${item.last_run_at ? ` at ${new Date(item.last_run_at).toLocaleString()}` : ''}`
-                            : item.last_run_status === 'failure'
-                              ? `Last run failed${item.last_run_at ? ` at ${new Date(item.last_run_at).toLocaleString()}` : ''}`
-                              : 'No runs yet'
-                        }>
-                          <FiberManualRecordIcon
-                            sx={{
-                              fontSize: 12,
-                              color: item.last_run_status === 'success'
-                                ? 'success.main'
-                                : item.last_run_status === 'failure'
-                                  ? 'error.main'
-                                  : 'warning.main',
-                            }}
-                          />
-                        </Tooltip>
-                      </Box>
-                    </TableCell>
-                    <TableCell sx={{ color: 'text.secondary' }}>
-                      v{item.current_version}
-                    </TableCell>
-                    <TableCell sx={{ color: 'text.secondary' }}>
-                      {new Date(item.updated_at).toLocaleString()}
-                    </TableCell>
-                    <TableCell sx={{ color: 'text.secondary' }}>
-                      {item.updated_by ? (
-                        <UserDisplay userId={item.updated_by} />
-                      ) : (
-                        <UserDisplay userId={item.created_by} />
-                      )}
-                    </TableCell>
-                    <TableCell align="right" sx={{ width: 48, pr: 1 }}>
-                      <RowMenu
-                        item={item}
-                        onEdit={() => openEdit(item)}
-                        onHistory={() => navigate(`/app/scheduled-queries/${item.scheduled_query_id}/history`)}
-                        onDelete={() => setDeleteTarget(item)}
-                      />
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </TableContainer>
+          <ListTable
+            rows={scheduledQueries}
+            columns={columns}
+            getRowKey={(item) => item.scheduled_query_id}
+            emptyMessage="No scheduled queries yet. Create one above."
+          />
         )}
       </Box>
 
@@ -871,6 +927,8 @@ function ScheduledQueries() {
         onClose={() => setDialogOpen(false)}
         onSave={handleSave}
         initial={editTarget}
+        actionTypes={actionConfig.scheduled_query_action_types}
+        actionSchemas={actionConfig.scheduled_query_action_schemas}
       />
 
       <ScheduledQueryDetailDialog

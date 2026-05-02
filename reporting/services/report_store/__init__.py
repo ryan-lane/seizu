@@ -106,12 +106,12 @@ async def save_report_version(
     )
 
 
-async def update_report_metadata(
+async def update_report_visibility(
     report_id: str,
     updated_by: str,
     access: ReportAccess | None = None,
 ) -> ReportListItem | None:
-    return await get_store().update_report_metadata(
+    return await get_store().update_report_visibility(
         report_id=report_id,
         updated_by=updated_by,
         access=access,

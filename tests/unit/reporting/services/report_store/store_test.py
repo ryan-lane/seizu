@@ -66,7 +66,7 @@ def mock_store():
         "list_report_versions": [],
         "create_report": None,
         "save_report_version": None,
-        "update_report_metadata": None,
+        "update_report_visibility": None,
         "delete_report": True,
         "pin_report": True,
         "get_dashboard_report_id": None,
@@ -204,8 +204,8 @@ async def test_facade_delegates_remaining_methods(mock_store):
     await report_store.pin_report("rid1", True, updated_by="u@x.com")
     mock_store.pin_report.assert_awaited_once_with("rid1", True, updated_by="u@x.com", user_id=None)
 
-    await report_store.update_report_metadata("rid1", updated_by="u@x.com")
-    mock_store.update_report_metadata.assert_awaited_once_with(
+    await report_store.update_report_visibility("rid1", updated_by="u@x.com")
+    mock_store.update_report_visibility.assert_awaited_once_with(
         report_id="rid1",
         updated_by="u@x.com",
         access=None,

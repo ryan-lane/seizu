@@ -3,8 +3,8 @@ import { useNavigate, useParams } from 'react-router-dom';
 import {
   Alert, Box, Button, Checkbox, Chip, CircularProgress, Dialog, DialogActions, DialogContent,
   DialogContentText, DialogTitle, Divider, FormControl, FormControlLabel, IconButton,
-  InputLabel, ListItemIcon, ListItemText, Menu, MenuItem, Paper, Select, Switch,
-  Table, TableBody, TableCell, TableContainer, TableHead, TableRow, TextField,
+  InputLabel, ListItemIcon, ListItemText, Menu, MenuItem, Select, Switch,
+  Table, TableBody, TableCell, TableHead, TableRow, TextField,
   Tooltip, Typography
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
@@ -21,12 +21,25 @@ import {
   useSkillsList, useSkillMutations, SkillItem, CreateSkillRequest, UpdateSkillRequest
 } from 'src/hooks/useSkillsetsApi';
 import { ToolParamDef, useToolCatalog } from 'src/hooks/useToolsetsApi';
+import ListTable, {
+  ListTableColumn,
+  listTableActionColumnSx,
+  listTableMonoCellSx,
+  listTablePrimaryCellSx,
+  listTableSecondaryCellSx,
+  listTableTruncateSx
+} from 'src/components/ListTable';
 import MarkdownEditor from 'src/components/MarkdownEditor';
 import UserDisplay from 'src/components/UserDisplay';
 import { usePermissions } from 'src/hooks/usePermissions';
 
 const LOWER_SNAKE_ID = /^[a-z][a-z0-9]*(?:_[a-z0-9]+)*$/;
 const RAW_PLACEHOLDER_RE = /{{\s*([^{}]+?)\s*}}/g;
+
+const descriptionColumnSx = { ...listTableSecondaryCellSx, width: '26%' };
+const versionColumnSx = { ...listTableSecondaryCellSx, width: 88 };
+const updatedAtColumnSx = { ...listTableSecondaryCellSx, width: 180 };
+const updatedByColumnSx = { ...listTableSecondaryCellSx, width: 150 };
 
 function skillStatus(skill: SkillItem): { enabled: boolean; label: string } {
   const effectiveEnabled = skill.effective_enabled ?? skill.enabled;
@@ -468,6 +481,94 @@ function SkillsetSkills() {
     refresh();
   };
 
+  const columns: ListTableColumn<SkillItem>[] = [
+    {
+      key: 'name',
+      label: 'Name',
+      cellSx: listTablePrimaryCellSx,
+      render: (skill) => (
+        <Typography
+          variant="body2"
+          fontWeight={500}
+          sx={[
+            { cursor: 'pointer', '&:hover': { textDecoration: 'underline' } },
+            listTableTruncateSx
+          ]}
+          onClick={() => setDetailTarget(skill)}
+        >
+          {skill.name}
+        </Typography>
+      )
+    },
+    {
+      key: 'slug',
+      label: 'Slug',
+      hideBelow: 'lg',
+      cellSx: listTableMonoCellSx,
+      render: (skill) => skill.skill_id
+    },
+    {
+      key: 'description',
+      label: 'Description',
+      hideBelow: 'md',
+      cellSx: descriptionColumnSx,
+      render: (skill) => (
+        <Typography variant="body2" color="text.secondary" sx={listTableTruncateSx}>
+          {skill.description || '-'}
+        </Typography>
+      )
+    },
+    {
+      key: 'status',
+      label: 'Status',
+      render: (skill) => (
+        <Chip
+          label={skillStatus(skill).label}
+          color={skillStatus(skill).enabled ? 'success' : 'default'}
+          size="small"
+        />
+      )
+    },
+    {
+      key: 'version',
+      label: 'Version',
+      hideBelow: 'sm',
+      cellSx: versionColumnSx,
+      render: (skill) => `v${skill.current_version}`
+    },
+    {
+      key: 'updated_at',
+      label: 'Last updated',
+      hideBelow: 'xl',
+      cellSx: updatedAtColumnSx,
+      render: (skill) => skill.updated_at ? new Date(skill.updated_at).toLocaleString() : '-'
+    },
+    {
+      key: 'updated_by',
+      label: 'Updated by',
+      hideBelow: 'lg',
+      cellSx: updatedByColumnSx,
+      render: (skill) => skill.updated_by ? <UserDisplay userId={skill.updated_by} /> : <UserDisplay userId={skill.created_by} />
+    },
+    {
+      key: 'actions',
+      align: 'right',
+      cellSx: listTableActionColumnSx,
+      render: (skill) => (
+        <SkillRowMenu
+          canWrite={hasPermission('skills:write')}
+          canDelete={hasPermission('skills:delete')}
+          canRender={hasPermission('skills:render') && skillStatus(skill).enabled}
+          onDetail={() => setDetailTarget(skill)}
+          onEdit={() => { setEditTarget(skill); setDialogOpen(true); }}
+          onRender={() => setRenderTarget(skill)}
+          onHistory={() => navigate(`/app/skillsets/${skillsetId}/skills/${skill.skill_id}/history`)}
+          onDelete={() => setDeleteTarget(skill)}
+        />
+      )
+    }
+  ];
+
   return (
     <>
       <Box sx={{ p: 3 }}>
@@ -479,51 +580,12 @@ function SkillsetSkills() {
         {loading && <Box sx={{ display: 'flex', justifyContent: 'center', p: 4 }}><CircularProgress /></Box>}
         {error && <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}><Error /><Typography>Failed to load skills</Typography></Box>}
         {!loading && !error && (
-          <TableContainer component={Paper} variant="outlined">
-            <Table>
-              <TableHead><TableRow><TableCell>Name</TableCell><TableCell>Slug</TableCell><TableCell>Description</TableCell><TableCell>Status</TableCell><TableCell>Version</TableCell><TableCell>Updated By</TableCell><TableCell /></TableRow></TableHead>
-              <TableBody>
-                {skills.length === 0 && <TableRow><TableCell colSpan={7}><Typography color="text.secondary" sx={{ py: 1 }}>No skills yet. Create one above.</Typography></TableCell></TableRow>}
-                {skills.map((skill) => (
-                  <TableRow key={skill.skill_id} hover>
-                    <TableCell>
-                      <Typography
-                        variant="body2"
-                        fontWeight={500}
-                        sx={{ cursor: 'pointer', '&:hover': { textDecoration: 'underline' } }}
-                        onClick={() => setDetailTarget(skill)}
-                      >
-                        {skill.name}
-                      </Typography>
-                    </TableCell>
-                    <TableCell sx={{ color: 'text.secondary', fontFamily: 'monospace' }}>{skill.skill_id}</TableCell>
-                    <TableCell sx={{ color: 'text.secondary', maxWidth: 360 }}><Typography variant="body2" color="text.secondary" sx={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{skill.description || '-'}</Typography></TableCell>
-                    <TableCell>
-                      <Chip
-                        label={skillStatus(skill).label}
-                        color={skillStatus(skill).enabled ? 'success' : 'default'}
-                        size="small"
-                      />
-                    </TableCell>
-                    <TableCell sx={{ color: 'text.secondary' }}>{`v${skill.current_version}`}</TableCell>
-                    <TableCell sx={{ color: 'text.secondary' }}>{skill.updated_by ? <UserDisplay userId={skill.updated_by} /> : <UserDisplay userId={skill.created_by} />}</TableCell>
-                    <TableCell align="right" sx={{ width: 48, pr: 1 }}>
-                      <SkillRowMenu
-                        canWrite={hasPermission('skills:write')}
-                        canDelete={hasPermission('skills:delete')}
-                        canRender={hasPermission('skills:render') && skillStatus(skill).enabled}
-                        onDetail={() => setDetailTarget(skill)}
-                        onEdit={() => { setEditTarget(skill); setDialogOpen(true); }}
-                        onRender={() => setRenderTarget(skill)}
-                        onHistory={() => navigate(`/app/skillsets/${skillsetId}/skills/${skill.skill_id}/history`)}
-                        onDelete={() => setDeleteTarget(skill)}
-                      />
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </TableContainer>
+          <ListTable
+            rows={skills}
+            columns={columns}
+            getRowKey={(skill) => skill.skill_id}
+            emptyMessage="No skills yet. Create one above."
+          />
         )}
       </Box>
       <SkillDialog key={editTarget?.skill_id ?? 'new'} open={dialogOpen} onClose={() => setDialogOpen(false)} onSave={handleSave} initial={editTarget} />

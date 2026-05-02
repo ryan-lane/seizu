@@ -1,7 +1,7 @@
 import logging
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 
 from reporting.authnz import CurrentUser, require_permission
 from reporting.authnz.permissions import Permission
@@ -15,7 +15,7 @@ from reporting.schema.report_config import (
     ReportListResponse,
     ReportVersion,
     ReportVersionListResponse,
-    UpdateReportMetadataRequest,
+    UpdateReportVisibilityRequest,
 )
 from reporting.services import report_store
 from reporting.services.report_query_tokens import build_report_query_capabilities
@@ -40,10 +40,20 @@ def _with_query_capabilities(
 
 @router.get("/api/v1/reports", response_model=ReportListResponse)
 async def list_reports(
+    page: int = Query(default=1, ge=1),
+    per_page: int = Query(default=100, ge=1, le=500),
     current: CurrentUser = Depends(require_permission(Permission.REPORTS_READ)),
 ) -> ReportListResponse:
     """List all reports."""
-    return ReportListResponse(reports=await report_store.list_reports(user_id=current.user.user_id))
+    reports = await report_store.list_reports(user_id=current.user.user_id)
+    start = (page - 1) * per_page
+    end = start + per_page
+    return ReportListResponse(
+        reports=reports[start:end],
+        total=len(reports),
+        page=page,
+        per_page=per_page,
+    )
 
 
 @router.get("/api/v1/reports/dashboard", response_model=ReportVersion, response_model_exclude_none=True)
@@ -160,17 +170,17 @@ async def create_report(
     )
 
 
-@router.put("/api/v1/reports/{report_id}", response_model=ReportListItem)
-async def update_report_metadata(
+@router.put("/api/v1/reports/{report_id}/visibility", response_model=ReportListItem)
+async def update_report_visibility(
     report_id: str,
-    body: UpdateReportMetadataRequest,
+    body: UpdateReportVisibilityRequest,
     current: CurrentUser = Depends(require_permission(Permission.REPORTS_WRITE)),
 ) -> ReportListItem:
-    """Update report-level metadata without creating a report version."""
+    """Update report visibility without creating a report version."""
     meta = await report_store.get_report_metadata(report_id, user_id=current.user.user_id)
     if not meta:
         raise HTTPException(status_code=404, detail="Report not found")
-    if meta.created_by != current.user.user_id:
+    if body.access is not None and meta.created_by != current.user.user_id:
         raise HTTPException(status_code=403, detail="Only the report owner can update report access")
     if body.access is not None and body.access.scope == "private":
         dashboard_report_id = await report_store.get_dashboard_report_id()
@@ -179,7 +189,7 @@ async def update_report_metadata(
                 status_code=400,
                 detail="Report must be unpinned and removed from the dashboard before it can be made private",
             )
-    updated = await report_store.update_report_metadata(
+    updated = await report_store.update_report_visibility(
         report_id=report_id,
         updated_by=current.user.user_id,
         access=body.access,
@@ -228,9 +238,10 @@ async def clone_report(
         name=body.name,
         created_by=current.user.user_id,
     )
+    cloned_config = {**source.config, "name": body.name}
     await report_store.save_report_version(
         report_id=new_item.report_id,
-        config=source.config,
+        config=cloned_config,
         created_by=current.user.user_id,
         comment=f"Cloned from {source.name}",
         user_id=current.user.user_id,

@@ -162,6 +162,27 @@ def test_clone_report_api_error(mock_client: MagicMock) -> None:
 
 
 # ---------------------------------------------------------------------------
+# publish / unpublish
+# ---------------------------------------------------------------------------
+
+
+def test_publish_report(mock_client: MagicMock) -> None:
+    mock_client.put.return_value = {}
+    result = runner.invoke(app, ["publish", "r1"])
+    assert result.exit_code == 0
+    assert "Published" in result.output
+    mock_client.put.assert_called_once_with("/api/v1/reports/r1/visibility", json={"access": {"scope": "public"}})
+
+
+def test_unpublish_report(mock_client: MagicMock) -> None:
+    mock_client.put.return_value = {}
+    result = runner.invoke(app, ["unpublish", "r1"])
+    assert result.exit_code == 0
+    assert "Unpublished" in result.output
+    mock_client.put.assert_called_once_with("/api/v1/reports/r1/visibility", json={"access": {"scope": "private"}})
+
+
+# ---------------------------------------------------------------------------
 # delete
 # ---------------------------------------------------------------------------
 

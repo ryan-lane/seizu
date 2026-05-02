@@ -3,8 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import {
   Alert, Box, Button, Chip, CircularProgress, Dialog, DialogActions, DialogContent,
   DialogContentText, DialogTitle, Divider, FormControlLabel, IconButton, ListItemIcon,
-  ListItemText, Menu, MenuItem, Paper, Switch, Table, TableBody, TableCell,
-  TableContainer, TableHead, TableRow, TextField, Tooltip, Typography
+  ListItemText, Menu, MenuItem, Switch, TextField, Tooltip, Typography
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import PsychologyIcon from '@mui/icons-material/Psychology';
@@ -17,10 +16,23 @@ import {
   useSkillsetsList, useSkillsetMutations, SkillsetListItem,
   CreateSkillsetRequest, UpdateSkillsetRequest
 } from 'src/hooks/useSkillsetsApi';
+import ListTable, {
+  ListTableColumn,
+  listTableActionColumnSx,
+  listTableMonoCellSx,
+  listTablePrimaryCellSx,
+  listTableSecondaryCellSx,
+  listTableTruncateSx
+} from 'src/components/ListTable';
 import UserDisplay from 'src/components/UserDisplay';
 import { usePermissions } from 'src/hooks/usePermissions';
 
 const LOWER_SNAKE_ID = /^[a-z][a-z0-9]*(?:_[a-z0-9]+)*$/;
+
+const descriptionColumnSx = { ...listTableSecondaryCellSx, width: '24%' };
+const versionColumnSx = { ...listTableSecondaryCellSx, width: 88 };
+const updatedAtColumnSx = { ...listTableSecondaryCellSx, width: 180 };
+const updatedByColumnSx = { ...listTableSecondaryCellSx, width: 150 };
 
 interface SkillsetDialogProps {
   open: boolean;
@@ -176,6 +188,85 @@ function Skillsets() {
     }
   };
 
+  const columns: ListTableColumn<SkillsetListItem>[] = [
+    {
+      key: 'name',
+      label: 'Name',
+      cellSx: listTablePrimaryCellSx,
+      render: (item) => (
+        <Typography
+          variant="body2"
+          fontWeight={500}
+          sx={[
+            { cursor: 'pointer', '&:hover': { textDecoration: 'underline' } },
+            listTableTruncateSx
+          ]}
+          onClick={() => navigate(`/app/skillsets/${item.skillset_id}/skills`)}
+        >
+          {item.name}
+        </Typography>
+      )
+    },
+    {
+      key: 'slug',
+      label: 'Slug',
+      hideBelow: 'lg',
+      cellSx: listTableMonoCellSx,
+      render: (item) => item.skillset_id
+    },
+    {
+      key: 'description',
+      label: 'Description',
+      hideBelow: 'md',
+      cellSx: descriptionColumnSx,
+      render: (item) => (
+        <Typography variant="body2" color="text.secondary" sx={listTableTruncateSx}>
+          {item.description || '-'}
+        </Typography>
+      )
+    },
+    {
+      key: 'status',
+      label: 'Status',
+      render: (item) => <Chip label={item.enabled ? 'Enabled' : 'Disabled'} color={item.enabled ? 'success' : 'default'} size="small" />
+    },
+    {
+      key: 'version',
+      label: 'Version',
+      hideBelow: 'sm',
+      cellSx: versionColumnSx,
+      render: (item) => `v${item.current_version}`
+    },
+    {
+      key: 'updated_at',
+      label: 'Last updated',
+      hideBelow: 'xl',
+      cellSx: updatedAtColumnSx,
+      render: (item) => item.updated_at ? new Date(item.updated_at).toLocaleString() : '-'
+    },
+    {
+      key: 'updated_by',
+      label: 'Updated by',
+      hideBelow: 'lg',
+      cellSx: updatedByColumnSx,
+      render: (item) => item.updated_by ? <UserDisplay userId={item.updated_by} /> : <UserDisplay userId={item.created_by} />
+    },
+    {
+      key: 'actions',
+      align: 'right',
+      cellSx: listTableActionColumnSx,
+      render: (item) => (
+        <RowMenu
+          item={item}
+          onEdit={() => { setEditTarget(item); setDialogOpen(true); }}
+          onSkills={() => navigate(`/app/skillsets/${item.skillset_id}/skills`)}
+          onHistory={() => navigate(`/app/skillsets/${item.skillset_id}/history`)}
+          onDelete={() => setDeleteTarget(item)}
+        />
+      )
+    }
+  ];
+
   return (
     <>
       <Box sx={{ p: 3 }}>
@@ -188,55 +279,12 @@ function Skillsets() {
         {loading && <Box sx={{ display: 'flex', justifyContent: 'center', p: 4 }}><CircularProgress /></Box>}
         {error && <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}><Error /><Typography>Failed to load skillsets</Typography></Box>}
         {!loading && !error && (
-          <TableContainer component={Paper} variant="outlined">
-            <Table>
-              <TableHead>
-                <TableRow>
-                  <TableCell>Name</TableCell>
-                  <TableCell>Slug</TableCell>
-                  <TableCell>Description</TableCell>
-                  <TableCell>Status</TableCell>
-                  <TableCell>Version</TableCell>
-                  <TableCell>Latest Update</TableCell>
-                  <TableCell>Updated By</TableCell>
-                  <TableCell />
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {skillsets.length === 0 && (
-                  <TableRow>
-                    <TableCell colSpan={8}><Typography color="text.secondary" sx={{ py: 1 }}>No skillsets yet. Create one above.</Typography></TableCell>
-                  </TableRow>
-                )}
-                {skillsets.map((item) => (
-                  <TableRow key={item.skillset_id} hover>
-                    <TableCell>
-                      <Typography variant="body2" fontWeight={500} sx={{ cursor: 'pointer', '&:hover': { textDecoration: 'underline' } }} onClick={() => navigate(`/app/skillsets/${item.skillset_id}/skills`)}>
-                        {item.name}
-                      </Typography>
-                    </TableCell>
-                    <TableCell sx={{ color: 'text.secondary', fontFamily: 'monospace' }}>{item.skillset_id}</TableCell>
-                    <TableCell sx={{ color: 'text.secondary', maxWidth: 320 }}>
-                      <Typography variant="body2" color="text.secondary" sx={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.description || '-'}</Typography>
-                    </TableCell>
-                    <TableCell><Chip label={item.enabled ? 'Enabled' : 'Disabled'} color={item.enabled ? 'success' : 'default'} size="small" /></TableCell>
-                    <TableCell sx={{ color: 'text.secondary' }}>{`v${item.current_version}`}</TableCell>
-                    <TableCell sx={{ color: 'text.secondary' }}>{item.updated_at ? new Date(item.updated_at).toLocaleString() : '-'}</TableCell>
-                    <TableCell sx={{ color: 'text.secondary' }}>{item.updated_by ? <UserDisplay userId={item.updated_by} /> : <UserDisplay userId={item.created_by} />}</TableCell>
-                    <TableCell align="right" sx={{ width: 48, pr: 1 }}>
-                      <RowMenu
-                        item={item}
-                        onEdit={() => { setEditTarget(item); setDialogOpen(true); }}
-                        onSkills={() => navigate(`/app/skillsets/${item.skillset_id}/skills`)}
-                        onHistory={() => navigate(`/app/skillsets/${item.skillset_id}/history`)}
-                        onDelete={() => setDeleteTarget(item)}
-                      />
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </TableContainer>
+          <ListTable
+            rows={skillsets}
+            columns={columns}
+            getRowKey={(item) => item.skillset_id}
+            emptyMessage="No skillsets yet. Create one above."
+          />
         )}
       </Box>
       <SkillsetDialog key={editTarget?.skillset_id ?? 'new'} open={dialogOpen} onClose={() => setDialogOpen(false)} onSave={handleSave} initial={editTarget} />

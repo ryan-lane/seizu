@@ -9,7 +9,7 @@ from reporting.schema.report_config import (
     CreateReportRequest,
     CreateVersionRequest,
     PinReportRequest,
-    UpdateReportMetadataRequest,
+    UpdateReportVisibilityRequest,
 )
 from reporting.services import report_store
 from reporting.services.mcp_builtins.base import BuiltinGroup, BuiltinTool, model_input_schema
@@ -134,9 +134,10 @@ async def _clone(args: dict[str, Any], current_user: CurrentUser | None) -> dict
         return {"error": "Report not found"}
     body = CloneReportRequest.model_validate({k: v for k, v in args.items() if k != "report_id"})
     new_item = await report_store.create_report(name=body.name, created_by=user.user.user_id)
+    cloned_config = {**source.config, "name": body.name}
     await report_store.save_report_version(
         report_id=new_item.report_id,
-        config=source.config,
+        config=cloned_config,
         created_by=user.user.user_id,
         comment=f"Cloned from {source.name}",
         user_id=user.user.user_id,
@@ -144,20 +145,20 @@ async def _clone(args: dict[str, Any], current_user: CurrentUser | None) -> dict
     return new_item.model_dump()
 
 
-async def _update(args: dict[str, Any], current_user: CurrentUser | None) -> dict[str, Any]:
+async def _update_visibility(args: dict[str, Any], current_user: CurrentUser | None) -> dict[str, Any]:
     user = _require_user(current_user)
     report_id = args["report_id"]
-    body = UpdateReportMetadataRequest.model_validate({k: v for k, v in args.items() if k != "report_id"})
+    body = UpdateReportVisibilityRequest.model_validate({k: v for k, v in args.items() if k != "report_id"})
     meta = await report_store.get_report_metadata(report_id, user_id=user.user.user_id)
     if not meta:
         return {"error": "Report not found"}
-    if meta.created_by != user.user.user_id:
+    if body.access is not None and meta.created_by != user.user.user_id:
         return {"error": "Only the report owner can update report access"}
     if body.access is not None and body.access.scope == "private":
         dashboard_report_id = await report_store.get_dashboard_report_id()
         if meta.pinned or dashboard_report_id == report_id:
             return {"error": "Report must be unpinned and removed from the dashboard before it can be made private"}
-    updated = await report_store.update_report_metadata(
+    updated = await report_store.update_report_visibility(
         report_id=report_id,
         updated_by=user.user.user_id,
         access=body.access,
@@ -221,16 +222,16 @@ GROUP_DEF = BuiltinGroup(
             requires_user=True,
         ),
         BuiltinTool(
-            name="reports__update",
+            name="reports__update_visibility",
             group=GROUP,
-            description="Update report-level metadata such as access without creating a version.",
+            description="Update report visibility without creating a version.",
             input_schema=model_input_schema(
-                UpdateReportMetadataRequest,
+                UpdateReportVisibilityRequest,
                 extra_properties=_report_id_prop(),
                 extra_required=["report_id"],
             ),
             required_permissions=[Permission.REPORTS_WRITE.value],
-            handler=_update,
+            handler=_update_visibility,
             requires_user=True,
         ),
         BuiltinTool(

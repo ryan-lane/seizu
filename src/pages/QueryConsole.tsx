@@ -4,16 +4,17 @@ import {
   Button,
   Card,
   CardContent,
+  CircularProgress,
   TextField,
   Typography
 } from '@mui/material';
 import PlayArrow from '@mui/icons-material/PlayArrow';
 import CypherGraph from 'src/components/reports/CypherGraph';
 import QueryConsoleSchemaPanel from 'src/components/QueryConsoleSchemaPanel';
-import { usePermissions } from 'src/hooks/usePermissions';
+import { usePermissionState } from 'src/hooks/usePermissions';
 
 export default function QueryConsole() {
-  const hasPermission = usePermissions();
+  const { hasPermission, loading: permissionsLoading } = usePermissionState();
   const [queryText, setQueryText] = useState('');
   const [submittedQuery, setSubmittedQuery] = useState<string | undefined>(
     undefined
@@ -78,6 +79,14 @@ export default function QueryConsole() {
     },
     [queryHeight]
   );
+
+  if (permissionsLoading) {
+    return (
+      <Box sx={{ display: 'flex', justifyContent: 'center', p: 4 }}>
+        <CircularProgress />
+      </Box>
+    );
+  }
 
   if (!hasPermission('query:execute')) {
     return (

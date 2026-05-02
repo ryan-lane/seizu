@@ -77,6 +77,9 @@ class ReportVersion(BaseModel):
 
 class ReportListResponse(BaseModel):
     reports: list["ReportListItem"]
+    total: int
+    page: int
+    per_page: int
 
 
 class ReportVersionListResponse(BaseModel):
@@ -111,8 +114,8 @@ class PinReportRequest(BaseModel):
     pinned: bool
 
 
-class UpdateReportMetadataRequest(BaseModel):
-    """Request body for PUT /api/v1/reports/<id>."""
+class UpdateReportVisibilityRequest(BaseModel):
+    """Request body for PUT /api/v1/reports/<id>/visibility."""
 
     access: ReportAccess | None = None
 

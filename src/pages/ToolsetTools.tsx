@@ -21,15 +21,8 @@ import {
   ListItemText,
   Menu,
   MenuItem,
-  Paper,
   Select,
   Switch,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
   TextField,
   Tooltip,
   Typography
@@ -51,6 +44,14 @@ import {
   CreateToolRequest,
   UpdateToolRequest
 } from 'src/hooks/useToolsetsApi';
+import ListTable, {
+  ListTableColumn,
+  listTableActionColumnSx,
+  listTableMonoCellSx,
+  listTablePrimaryCellSx,
+  listTableSecondaryCellSx,
+  listTableTruncateSx
+} from 'src/components/ListTable';
 import ToolDetailDialog, { ToolViewData } from 'src/components/ToolDetailDialog';
 import UserDisplay from 'src/components/UserDisplay';
 import { usePermissions } from 'src/hooks/usePermissions';
@@ -68,6 +69,12 @@ const isBuiltinToolset = (id: string | undefined | null): boolean =>
   !!id && id.startsWith(BUILTIN_PREFIX) && id.endsWith('__');
 
 const LOWER_SNAKE_ID = /^[a-z][a-z0-9]*(?:_[a-z0-9]+)*$/;
+
+const descriptionColumnSx = { ...listTableSecondaryCellSx, width: '22%' };
+const paramsColumnSx = { ...listTableSecondaryCellSx, width: 96 };
+const versionColumnSx = { ...listTableSecondaryCellSx, width: 88 };
+const updatedAtColumnSx = { ...listTableSecondaryCellSx, width: 180 };
+const updatedByColumnSx = { ...listTableSecondaryCellSx, width: 150 };
 
 function toolStatus(item: ToolItem): { enabled: boolean; label: string } {
   const effectiveEnabled = item.effective_enabled ?? item.enabled;
@@ -497,6 +504,131 @@ function ToolsetTools() {
   };
 
   const displayTools: ToolItem[] = tools;
+  const columns: ListTableColumn<ToolItem>[] = [
+    {
+      key: 'name',
+      label: 'Name',
+      cellSx: listTablePrimaryCellSx,
+      render: (item) => (
+        <Typography
+          variant="body2"
+          fontWeight={500}
+          sx={[
+            { cursor: 'pointer', '&:hover': { textDecoration: 'underline' } },
+            listTableTruncateSx
+          ]}
+          onClick={() =>
+            setDetailItem({
+              name: item.name,
+              description: item.description,
+              cypher: item.cypher,
+              parameters: item.parameters,
+              enabled: item.enabled,
+              effective_enabled: item.effective_enabled,
+              disabled_reason: item.disabled_reason
+            })
+          }
+        >
+          {item.name}
+        </Typography>
+      )
+    },
+    {
+      key: 'slug',
+      label: 'Slug',
+      hideBelow: 'lg',
+      cellSx: listTableMonoCellSx,
+      render: (item) => item.tool_id
+    },
+    {
+      key: 'description',
+      label: 'Description',
+      hideBelow: 'md',
+      cellSx: descriptionColumnSx,
+      render: (item) => (
+        <Typography
+          variant="body2"
+          color="text.secondary"
+          sx={listTableTruncateSx}
+        >
+          {item.description || '—'}
+        </Typography>
+      )
+    },
+    {
+      key: 'status',
+      label: 'Status',
+      render: (item) => (
+        <Chip
+          label={toolStatus(item).label}
+          color={toolStatus(item).enabled ? 'success' : 'default'}
+          size="small"
+        />
+      )
+    },
+    {
+      key: 'parameters',
+      label: 'Parameters',
+      hideBelow: 'md',
+      cellSx: paramsColumnSx,
+      render: (item) => item.parameters.length === 0 ? '—' : item.parameters.length
+    },
+    {
+      key: 'version',
+      label: 'Version',
+      hideBelow: 'sm',
+      cellSx: versionColumnSx,
+      render: (item) => isBuiltinToolset(item.toolset_id) ? '—' : `v${item.current_version}`
+    },
+    {
+      key: 'updated_at',
+      label: 'Last updated',
+      hideBelow: 'xl',
+      cellSx: updatedAtColumnSx,
+      render: (item) => isBuiltinToolset(item.toolset_id) || !item.updated_at ? '—' : new Date(item.updated_at).toLocaleString()
+    },
+    {
+      key: 'updated_by',
+      label: 'Updated by',
+      hideBelow: 'lg',
+      cellSx: updatedByColumnSx,
+      render: (item) => isBuiltinToolset(item.toolset_id) ? '—' : (
+        item.updated_by
+          ? <UserDisplay userId={item.updated_by} />
+          : <UserDisplay userId={item.created_by} />
+      )
+    },
+    {
+      key: 'actions',
+      align: 'right',
+      cellSx: listTableActionColumnSx,
+      render: (item) => {
+        const itemIsBuiltin = isBuiltinToolset(item.toolset_id);
+        return (
+          <RowMenu
+            item={item}
+            isBuiltin={itemIsBuiltin}
+            onEdit={() => openEdit(item)}
+            onDetail={() =>
+              setDetailItem({
+                name: item.name,
+                description: item.description,
+                cypher: item.cypher,
+                parameters: item.parameters,
+                enabled: item.enabled,
+                effective_enabled: item.effective_enabled,
+                disabled_reason: item.disabled_reason
+              })
+            }
+            onHistory={() =>
+              navigate(`/app/toolsets/${toolsetId}/tools/${item.tool_id}/history`)
+            }
+            onDelete={() => setDeleteTarget(item)}
+          />
+        );
+      }
+    }
+  ];
 
   return (
     <>
@@ -539,118 +671,12 @@ function ToolsetTools() {
         )}
 
         {!loading && !error && (
-          <TableContainer component={Paper} variant="outlined">
-            <Table>
-              <TableHead>
-                <TableRow>
-                  <TableCell>Name</TableCell>
-                  <TableCell>Slug</TableCell>
-                  <TableCell>Description</TableCell>
-                  <TableCell>Status</TableCell>
-                  <TableCell>Parameters</TableCell>
-                  <TableCell>Version</TableCell>
-                  <TableCell>Latest Update</TableCell>
-                  <TableCell>Updated By</TableCell>
-                  <TableCell />
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {displayTools.length === 0 && (
-                  <TableRow>
-                    <TableCell colSpan={9}>
-                      <Typography color="text.secondary" sx={{ py: 1 }}>
-                        No tools yet. Create one above.
-                      </Typography>
-                    </TableCell>
-                  </TableRow>
-                )}
-                {displayTools.map((item) => {
-                  const itemIsBuiltin = isBuiltinToolset(item.toolset_id);
-                  return (
-                    <TableRow key={item.tool_id} hover>
-                      <TableCell>
-                        <Typography
-                          variant="body2"
-                          fontWeight={500}
-                          sx={{ cursor: 'pointer', '&:hover': { textDecoration: 'underline' } }}
-                          onClick={() =>
-                            setDetailItem({
-                              name: item.name,
-                              description: item.description,
-                              cypher: item.cypher,
-                              parameters: item.parameters,
-                              enabled: item.enabled,
-                              effective_enabled: item.effective_enabled,
-                              disabled_reason: item.disabled_reason
-                            })
-                          }
-                        >
-                          {item.name}
-                        </Typography>
-                      </TableCell>
-                      <TableCell sx={{ color: 'text.secondary', fontFamily: 'monospace' }}>
-                        {item.tool_id}
-                      </TableCell>
-                      <TableCell sx={{ color: 'text.secondary', maxWidth: 280 }}>
-                        <Typography
-                          variant="body2"
-                          color="text.secondary"
-                          sx={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
-                        >
-                          {item.description || '—'}
-                        </Typography>
-                      </TableCell>
-                      <TableCell>
-                        <Chip
-                          label={toolStatus(item).label}
-                          color={toolStatus(item).enabled ? 'success' : 'default'}
-                          size="small"
-                        />
-                      </TableCell>
-                      <TableCell sx={{ color: 'text.secondary' }}>
-                        {item.parameters.length === 0 ? '—' : item.parameters.length}
-                      </TableCell>
-                      <TableCell sx={{ color: 'text.secondary' }}>
-                        {itemIsBuiltin ? '—' : `v${item.current_version}`}
-                      </TableCell>
-                      <TableCell sx={{ color: 'text.secondary' }}>
-                        {itemIsBuiltin || !item.updated_at ? '—' : new Date(item.updated_at).toLocaleString()}
-                      </TableCell>
-                      <TableCell sx={{ color: 'text.secondary' }}>
-                        {itemIsBuiltin ? '—' : (
-                          item.updated_by
-                            ? <UserDisplay userId={item.updated_by} />
-                            : <UserDisplay userId={item.created_by} />
-                        )}
-                      </TableCell>
-                      <TableCell align="right" sx={{ width: 48, pr: 1 }}>
-                        <RowMenu
-                          item={item}
-                          isBuiltin={itemIsBuiltin}
-                          onEdit={() => openEdit(item)}
-                          onDetail={() =>
-                            setDetailItem({
-                              name: item.name,
-                              description: item.description,
-                              cypher: item.cypher,
-                              parameters: item.parameters,
-                              enabled: item.enabled,
-                              effective_enabled: item.effective_enabled,
-                              disabled_reason: item.disabled_reason
-                            })
-                          }
-                          onHistory={() =>
-                            navigate(`/app/toolsets/${toolsetId}/tools/${item.tool_id}/history`)
-                          }
-                          onDelete={() => setDeleteTarget(item)}
-                        />
-                      </TableCell>
-                    </TableRow>
-                  );
-                })}
-              </TableBody>
-            </Table>
-          </TableContainer>
+          <ListTable
+            rows={displayTools}
+            columns={columns}
+            getRowKey={(item) => item.tool_id}
+            emptyMessage="No tools yet. Create one above."
+          />
         )}
       </Box>
 
