@@ -55,6 +55,7 @@ import ListTable, {
 import ToolDetailDialog, { ToolViewData } from 'src/components/ToolDetailDialog';
 import UserDisplay from 'src/components/UserDisplay';
 import { usePermissions } from 'src/hooks/usePermissions';
+import type { BackState } from 'src/navigation';
 
 // ---------------------------------------------------------------------------
 // Built-in toolset detection
@@ -621,7 +622,7 @@ function ToolsetTools() {
               })
             }
             onHistory={() =>
-              navigate(`/app/toolsets/${toolsetId}/tools/${item.tool_id}/history`)
+              navigate(`/app/toolsets/${toolsetId}/tools/${item.tool_id}/history`, { state: { fromLabel: 'Tools' } satisfies BackState })
             }
             onDelete={() => setDeleteTarget(item)}
           />

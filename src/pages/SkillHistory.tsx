@@ -28,7 +28,7 @@ import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import HistoryIcon from '@mui/icons-material/History';
 import MoreVertIcon from '@mui/icons-material/MoreVert';
 import RestoreIcon from '@mui/icons-material/Restore';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useLocation, useParams } from 'react-router-dom';
 import { Helmet } from 'react-helmet';
 import {
   SkillVersion,
@@ -37,6 +37,7 @@ import {
 } from 'src/hooks/useSkillsetsApi';
 import UserDisplay from 'src/components/UserDisplay';
 import { usePermissions } from 'src/hooks/usePermissions';
+import type { BackState } from 'src/navigation';
 
 interface RowMenuProps {
   isCurrent: boolean;
@@ -166,6 +167,8 @@ function SkillVersionDetailDialog({
 function SkillHistory() {
   const { skillsetId, skillId } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
+  const { fromLabel } = (location.state ?? {}) as BackState;
   const { versions, loading, error } = useSkillVersionsList(skillsetId ?? null, skillId ?? null);
   const { updateSkill } = useSkillMutations(skillsetId ?? '');
   const [detailVersion, setDetailVersion] = useState<SkillVersion | null>(null);
@@ -191,7 +194,7 @@ function SkillHistory() {
   return (
     <Box sx={{ p: 3 }}>
       <Helmet><title>{name ? `History - ${name} | Seizu` : 'History | Seizu'}</title></Helmet>
-      <Button startIcon={<ArrowBackIcon />} onClick={() => navigate(`/app/skillsets/${skillsetId}/skills`)} sx={{ mb: 2 }}>Back to skills</Button>
+      {fromLabel && <Button startIcon={<ArrowBackIcon />} onClick={() => navigate(-1)} sx={{ mb: 2 }}>Back to {fromLabel}</Button>}
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 3 }}>
         <HistoryIcon color="action" /><Typography variant="h1">Version history{name ? ` - ${name}` : ''}</Typography>
       </Box>

@@ -149,13 +149,39 @@ describe('ReportVersionView', () => {
   // ---------------------------------------------------------------------------
 
   it('navigates back to history list on "Back to history" click', async () => {
-    render(<ReportVersionView />, { wrapper: Wrapper });
+    function BackWrapper({ children }: { children: React.ReactNode }) {
+      return (
+        <MemoryRouter
+          initialEntries={[
+            { pathname: '/app/reports/r1/history', state: {} },
+            { pathname: '/app/reports/r1/versions/1', state: { fromLabel: 'History – My Report' } }
+          ]}
+          initialIndex={1}
+        >
+          <ThemeProvider theme={theme}>
+            <TestLocation />
+            <Routes>
+              <Route path="/app/reports/:id/history" element={<div>history</div>} />
+              <Route path="/app/reports/:id/versions/:version" element={<>{children}</>} />
+            </Routes>
+          </ThemeProvider>
+        </MemoryRouter>
+      );
+    }
 
-    fireEvent.click(screen.getByRole('button', { name: /back to history/i }));
+    render(<ReportVersionView />, { wrapper: BackWrapper });
+
+    fireEvent.click(screen.getByRole('button', { name: /back to history – my report/i }));
 
     await waitFor(() => {
       expect(screen.getByTestId('nav-location')).toHaveTextContent('/app/reports/r1/history');
     });
+  });
+
+  it('hides back button when navigated directly (no fromLabel in state)', () => {
+    render(<ReportVersionView />, { wrapper: Wrapper });
+
+    expect(screen.queryByRole('button', { name: /back to/i })).not.toBeInTheDocument();
   });
 
   // ---------------------------------------------------------------------------

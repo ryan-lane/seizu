@@ -26,6 +26,7 @@ import ListTable, {
 } from 'src/components/ListTable';
 import UserDisplay from 'src/components/UserDisplay';
 import { usePermissions } from 'src/hooks/usePermissions';
+import type { BackState } from 'src/navigation';
 
 const LOWER_SNAKE_ID = /^[a-z][a-z0-9]*(?:_[a-z0-9]+)*$/;
 
@@ -260,7 +261,7 @@ function Skillsets() {
           item={item}
           onEdit={() => { setEditTarget(item); setDialogOpen(true); }}
           onSkills={() => navigate(`/app/skillsets/${item.skillset_id}/skills`)}
-          onHistory={() => navigate(`/app/skillsets/${item.skillset_id}/history`)}
+          onHistory={() => navigate(`/app/skillsets/${item.skillset_id}/history`, { state: { fromLabel: 'Skillsets' } satisfies BackState })}
           onDelete={() => setDeleteTarget(item)}
         />
       )

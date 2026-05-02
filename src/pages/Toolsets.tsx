@@ -47,6 +47,7 @@ import ListTable, {
 } from 'src/components/ListTable';
 import UserDisplay from 'src/components/UserDisplay';
 import { usePermissions } from 'src/hooks/usePermissions';
+import type { BackState } from 'src/navigation';
 
 // ---------------------------------------------------------------------------
 // Built-in synthetic toolsets
@@ -414,7 +415,7 @@ function Toolsets() {
             isBuiltin={isBuiltin}
             onEdit={() => openEdit(item)}
             onTools={() => navigate(`/app/toolsets/${item.toolset_id}/tools`)}
-            onHistory={() => navigate(`/app/toolsets/${item.toolset_id}/history`)}
+            onHistory={() => navigate(`/app/toolsets/${item.toolset_id}/history`, { state: { fromLabel: 'Toolsets' } satisfies BackState })}
             onDelete={() => setDeleteTarget(item)}
           />
         );

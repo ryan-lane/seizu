@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { Helmet } from 'react-helmet';
 import {
   Alert,
@@ -21,10 +21,13 @@ import UserDisplay from 'src/components/UserDisplay';
 import { useReportVersion, useReportVersionsList, useReportsMutations } from 'src/hooks/useReportsApi';
 import { Report } from 'src/config.context';
 import { usePermissionState } from 'src/hooks/usePermissions';
+import type { BackState } from 'src/navigation';
 
 function ReportVersionView() {
   const { id, version } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
+  const { fromLabel } = (location.state ?? {}) as BackState;
 
   const { reportVersion, loading, error } = useReportVersion(id, version);
   const { versions } = useReportVersionsList(id);
@@ -104,15 +107,18 @@ function ReportVersionView() {
           gap: 2
         }}
       >
-        <Button
-          size="small"
-          startIcon={<ArrowBackIcon />}
-          onClick={() => navigate(`/app/reports/${id}/history`)}
-        >
-          Back to history
-        </Button>
-
-        <Divider orientation="vertical" flexItem />
+        {fromLabel && (
+          <>
+            <Button
+              size="small"
+              startIcon={<ArrowBackIcon />}
+              onClick={() => navigate(-1)}
+            >
+              Back to {fromLabel}
+            </Button>
+            <Divider orientation="vertical" flexItem />
+          </>
+        )}
 
         <Tooltip title={prevVersion === null ? 'No older version' : ''}>
           <span>

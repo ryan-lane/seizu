@@ -61,6 +61,7 @@ import ListTable, {
   listTableSecondaryCellSx,
   listTableTruncateSx
 } from 'src/components/ListTable';
+import type { BackState } from 'src/navigation';
 
 const EMPTY_FORM: ScheduledQueryRequest = {
   name: '',
@@ -879,7 +880,7 @@ function ScheduledQueries() {
         <RowMenu
           item={item}
           onEdit={() => openEdit(item)}
-          onHistory={() => navigate(`/app/scheduled-queries/${item.scheduled_query_id}/history`)}
+          onHistory={() => navigate(`/app/scheduled-queries/${item.scheduled_query_id}/history`, { state: { fromLabel: 'Scheduled Queries' } satisfies BackState })}
           onDelete={() => setDeleteTarget(item)}
         />
       )

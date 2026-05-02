@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { Helmet } from 'react-helmet';
 import {
   Box,
@@ -32,6 +32,7 @@ import {
 } from 'src/hooks/useToolsetsApi';
 import UserDisplay from 'src/components/UserDisplay';
 import { usePermissions } from 'src/hooks/usePermissions';
+import type { BackState } from 'src/navigation';
 
 // ---------------------------------------------------------------------------
 // Per-row overflow menu
@@ -94,6 +95,8 @@ function RowMenu({ isCurrent, onRestore }: RowMenuProps) {
 function ToolsetHistory() {
   const { toolsetId } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
+  const { fromLabel } = (location.state ?? {}) as BackState;
 
   const { versions, loading, error } = useToolsetVersionsList(toolsetId ?? null);
   const { updateToolset } = useToolsetMutations();
@@ -119,15 +122,17 @@ function ToolsetHistory() {
         <title>{toolsetName ? `History – ${toolsetName} | Seizu` : 'History | Seizu'}</title>
       </Helmet>
       <Box sx={{ p: 3 }}>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
-          <Button
-            size="small"
-            startIcon={<ArrowBackIcon />}
-            onClick={() => navigate('/app/toolsets')}
-          >
-            Back to toolsets
-          </Button>
-        </Box>
+        {fromLabel && (
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+            <Button
+              size="small"
+              startIcon={<ArrowBackIcon />}
+              onClick={() => navigate(-1)}
+            >
+              Back to {fromLabel}
+            </Button>
+          </Box>
+        )}
 
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 3 }}>
           <HistoryIcon color="action" />

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useParams, useNavigate, Link as RouterLink } from 'react-router-dom';
+import { useParams, useNavigate, useLocation, Link as RouterLink } from 'react-router-dom';
 import { Helmet } from 'react-helmet';
 import {
   Box,
@@ -33,6 +33,7 @@ import { ReportVersion, useReportVersionsList, useReportsMutations } from 'src/h
 import { Report } from 'src/config.context';
 import UserDisplay from 'src/components/UserDisplay';
 import { usePermissions } from 'src/hooks/usePermissions';
+import type { BackState } from 'src/navigation';
 
 // ---------------------------------------------------------------------------
 // Per-row overflow menu
@@ -106,6 +107,8 @@ function RowMenu({ version: _version, isCurrent, onView, onRestore }: RowMenuPro
 function ReportHistory() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
+  const { fromLabel } = (location.state ?? {}) as BackState;
 
   const { versions, loading, error } = useReportVersionsList(id);
   const { saveReportVersion } = useReportsMutations();
@@ -130,15 +133,17 @@ function ReportHistory() {
         <title>{reportName ? `History – ${reportName} | Seizu` : `History | Seizu`}</title>
       </Helmet>
       <Box sx={{ p: 3 }}>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
-          <Button
-            size="small"
-            startIcon={<ArrowBackIcon />}
-            onClick={() => navigate(`/app/reports/${id}`)}
-          >
-            Back to report
-          </Button>
-        </Box>
+        {fromLabel && (
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+            <Button
+              size="small"
+              startIcon={<ArrowBackIcon />}
+              onClick={() => navigate(-1)}
+            >
+              Back to {fromLabel}
+            </Button>
+          </Box>
+        )}
 
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 3 }}>
           <HistoryIcon color="action" />
@@ -229,7 +234,7 @@ function ReportHistory() {
                         <RowMenu
                           version={v}
                           isCurrent={isCurrent}
-                          onView={() => navigate(`/app/reports/${id}/versions/${v.version}`)}
+                          onView={() => navigate(`/app/reports/${id}/versions/${v.version}`, { state: { fromLabel: reportName ? `History – ${reportName}` : 'history' } satisfies BackState })}
                           onRestore={() => handleRestore(v)}
                         />
                       </TableCell>

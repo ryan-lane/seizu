@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { Helmet } from 'react-helmet';
 import {
   Box,
@@ -36,6 +36,7 @@ import ScheduledQueryDetailDialog, {
   ScheduledQueryViewData
 } from 'src/components/ScheduledQueryDetailDialog';
 import { usePermissions } from 'src/hooks/usePermissions';
+import type { BackState } from 'src/navigation';
 
 // ---------------------------------------------------------------------------
 // Per-row overflow menu
@@ -101,6 +102,8 @@ function RowMenu({ version: _version, isCurrent, onRestore }: RowMenuProps) {
 function ScheduledQueryHistory() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
+  const { fromLabel } = (location.state ?? {}) as BackState;
 
   const { versions, loading, error } = useScheduledQueryVersionsList(id ?? null);
   const { updateScheduledQuery } = useScheduledQueriesMutations();
@@ -131,15 +134,17 @@ function ScheduledQueryHistory() {
         <title>{queryName ? `History – ${queryName} | Seizu` : `History | Seizu`}</title>
       </Helmet>
       <Box sx={{ p: 3 }}>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
-          <Button
-            size="small"
-            startIcon={<ArrowBackIcon />}
-            onClick={() => navigate('/app/scheduled-queries')}
-          >
-            Back to scheduled queries
-          </Button>
-        </Box>
+        {fromLabel && (
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+            <Button
+              size="small"
+              startIcon={<ArrowBackIcon />}
+              onClick={() => navigate(-1)}
+            >
+              Back to {fromLabel}
+            </Button>
+          </Box>
+        )}
 
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 3 }}>
           <HistoryIcon color="action" />
