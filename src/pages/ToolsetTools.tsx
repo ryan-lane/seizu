@@ -56,6 +56,7 @@ import ToolDetailDialog, { ToolViewData } from 'src/components/ToolDetailDialog'
 import UserDisplay from 'src/components/UserDisplay';
 import { usePermissions } from 'src/hooks/usePermissions';
 import type { BackState } from 'src/navigation';
+import { pageContentSx } from 'src/theme/layout';
 
 // ---------------------------------------------------------------------------
 // Built-in toolset detection
@@ -633,7 +634,7 @@ function ToolsetTools() {
 
   return (
     <>
-      <Box sx={{ p: 3 }}>
+      <Box sx={pageContentSx}>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
           <Button
             size="small"

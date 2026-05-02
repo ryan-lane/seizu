@@ -32,6 +32,7 @@ import { useReport, useReportsMutations } from 'src/hooks/useReportsApi';
 import { Report } from 'src/config.context';
 import { usePermissionState } from 'src/hooks/usePermissions';
 import type { BackState } from 'src/navigation';
+import { pageContentSx } from 'src/theme/layout';
 
 function Reports() {
   const { id } = useParams();
@@ -142,7 +143,7 @@ function Reports() {
 
   if ((error || !displayedReport) && !loading) {
     return (
-      <Box sx={{ p: 3, display: 'flex', alignItems: 'center', gap: 1 }}>
+      <Box sx={{ ...pageContentSx, display: 'flex', alignItems: 'center', gap: 1 }}>
         <Error />
         <Typography>Failed to load report</Typography>
       </Box>

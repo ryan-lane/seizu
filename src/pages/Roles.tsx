@@ -50,6 +50,7 @@ import ListTable, {
   listTableTruncateSx
 } from 'src/components/ListTable';
 import type { BackState } from 'src/navigation';
+import { pageContentSx } from 'src/theme/layout';
 
 const descriptionColumnSx = { ...listTableSecondaryCellSx, width: '22%' };
 const permissionsColumnSx = { width: '24%' };
@@ -438,7 +439,7 @@ function Roles() {
 
   if (!canRead) {
     return (
-      <Box sx={{ p: 3 }}>
+      <Box sx={pageContentSx}>
         <Typography>You do not have access to role management.</Typography>
       </Box>
     );
@@ -574,7 +575,7 @@ function Roles() {
 
   return (
     <>
-      <Box sx={{ p: 3 }}>
+      <Box sx={pageContentSx}>
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
           <Typography variant="h1">Roles</Typography>
           {hasPermission('roles:write') && (

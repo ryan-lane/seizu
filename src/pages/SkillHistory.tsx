@@ -39,6 +39,7 @@ import { useToolCatalog } from 'src/hooks/useToolsetsApi';
 import UserDisplay from 'src/components/UserDisplay';
 import { usePermissions } from 'src/hooks/usePermissions';
 import type { BackState } from 'src/navigation';
+import { pageContentSx } from 'src/theme/layout';
 
 interface RowMenuProps {
   isCurrent: boolean;
@@ -217,7 +218,7 @@ function SkillHistory() {
   };
 
   return (
-    <Box sx={{ p: 3 }}>
+    <Box sx={pageContentSx}>
       <Helmet><title>{name ? `History - ${name} | Seizu` : 'History | Seizu'}</title></Helmet>
       {fromLabel && <Button startIcon={<ArrowBackIcon />} onClick={() => navigate(-1)} sx={{ mb: 2 }}>Back to {fromLabel}</Button>}
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 3 }}>

@@ -12,6 +12,7 @@ import PlayArrow from '@mui/icons-material/PlayArrow';
 import CypherGraph from 'src/components/reports/CypherGraph';
 import QueryConsoleSchemaPanel from 'src/components/QueryConsoleSchemaPanel';
 import { usePermissionState } from 'src/hooks/usePermissions';
+import { pageContentSx } from 'src/theme/layout';
 
 export default function QueryConsole() {
   const { hasPermission, loading: permissionsLoading } = usePermissionState();
@@ -90,7 +91,7 @@ export default function QueryConsole() {
 
   if (!hasPermission('query:execute')) {
     return (
-      <Box sx={{ p: 3 }}>
+      <Box sx={pageContentSx}>
         <Typography>You do not have access to the query console.</Typography>
       </Box>
     );
@@ -115,7 +116,7 @@ export default function QueryConsole() {
           flex: 1,
           display: 'flex',
           flexDirection: 'column',
-          p: 3,
+          ...pageContentSx,
           boxSizing: 'border-box',
           minWidth: 0,
           overflow: 'hidden'

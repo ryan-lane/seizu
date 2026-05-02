@@ -8,6 +8,7 @@ import AuthProvider from 'src/components/AuthProvider';
 import shadows from 'src/theme/shadows';
 import typography from 'src/theme/typography';
 import { brand } from 'src/theme/brand';
+import { contentContainerRootStyles } from 'src/theme/layout';
 import routes from 'src/routes';
 import { AuthConfigContext, type AuthConfig, type OidcConfig } from 'src/authConfig.context';
 import { createUserManager } from 'src/userManager';
@@ -55,7 +56,20 @@ function App() {
               divider: 'rgba(58, 90, 165, 0.16)'
             },
         shadows,
-        typography
+        typography,
+        components: {
+          MuiContainer: {
+            styleOverrides: {
+              root: ({ ownerState, theme }) => ({
+                ...contentContainerRootStyles(theme),
+                ...(ownerState.disableGutters && {
+                  paddingLeft: 0,
+                  paddingRight: 0
+                })
+              })
+            }
+          }
+        }
       }),
     [prefersDarkMode]
   );

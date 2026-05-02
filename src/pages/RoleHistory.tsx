@@ -35,6 +35,7 @@ import {
 import UserDisplay from 'src/components/UserDisplay';
 import { usePermissionState } from 'src/hooks/usePermissions';
 import type { BackState } from 'src/navigation';
+import { pageContentSx } from 'src/theme/layout';
 
 interface RowMenuProps {
   isCurrent: boolean;
@@ -134,7 +135,7 @@ function RoleHistory() {
 
   if (!canRead) {
     return (
-      <Box sx={{ p: 3 }}>
+      <Box sx={pageContentSx}>
         <Typography>You do not have access to role management.</Typography>
       </Box>
     );
@@ -142,7 +143,7 @@ function RoleHistory() {
 
   if (builtin) {
     return (
-      <Box sx={{ p: 3 }}>
+      <Box sx={pageContentSx}>
         <Button
           size="small"
           startIcon={<ArrowBackIcon />}
@@ -161,7 +162,7 @@ function RoleHistory() {
       <Helmet>
         <title>{roleName ? `History - ${roleName} | Seizu` : 'History | Seizu'}</title>
       </Helmet>
-      <Box sx={{ p: 3 }}>
+      <Box sx={pageContentSx}>
         {fromLabel && (
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
             <Button

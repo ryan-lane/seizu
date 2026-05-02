@@ -2,6 +2,7 @@ import { Box, CircularProgress, Typography } from '@mui/material';
 
 import ReportView from 'src/components/ReportView';
 import { useDashboardReport } from 'src/hooks/useReportsApi';
+import { pageContentSx } from 'src/theme/layout';
 
 function Dashboard() {
   const { report, queryCapabilities, loading } = useDashboardReport();
@@ -16,7 +17,7 @@ function Dashboard() {
 
   if (!report) {
     return (
-      <Box sx={{ p: 3 }}>
+      <Box sx={pageContentSx}>
         <Typography>No dashboard configured.</Typography>
       </Box>
     );

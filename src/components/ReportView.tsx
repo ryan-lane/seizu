@@ -32,9 +32,9 @@ import {
   DASHBOARD_NAVBAR_HEIGHT,
   DASHBOARD_SIDEBAR_WIDTH_VAR
 } from 'src/components/dashboardLayoutConstants';
+import { contentContainerSx } from 'src/theme/layout';
 
 const EMPTY_QUERY_CAPABILITIES: Record<string, string> = {};
-const REPORT_CONTENT_PX = { xs: 1.5, sm: 2 } as const;
 
 function MarkdownTable({ children }: { children?: React.ReactNode }) {
   return (
@@ -422,7 +422,7 @@ function ReportView({
         borderBottom: 1,
         borderColor: 'divider',
         boxShadow: stickyToolbar ? 1 : 'none',
-        px: REPORT_CONTENT_PX,
+        ...contentContainerSx,
         py: 2,
         mb: stickyToolbar ? 0 : 2,
         display: 'flex',
@@ -492,7 +492,7 @@ function ReportView({
       />
     ));
     rows.push(
-      <Container key={row.name} maxWidth={false} sx={{ px: REPORT_CONTENT_PX, pb: 1.5 }}>
+      <Container key={row.name} maxWidth={false} sx={{ ...contentContainerSx, pb: 1.5 }}>
         <Paper elevation={1} sx={{ p: 1.5 }}>
           <Typography gutterBottom variant="h2">
             {row.name}
@@ -528,7 +528,7 @@ function ReportView({
             <Container
               maxWidth={false}
               sx={{
-                px: REPORT_CONTENT_PX,
+                ...contentContainerSx,
                 py: 1.75
               }}
             >

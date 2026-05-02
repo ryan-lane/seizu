@@ -51,6 +51,7 @@ import ListTable, {
 } from 'src/components/ListTable';
 import UserDisplay from 'src/components/UserDisplay';
 import type { BackState } from 'src/navigation';
+import { pageContentSx } from 'src/theme/layout';
 
 // ---------------------------------------------------------------------------
 // Per-row overflow menu
@@ -440,7 +441,7 @@ function ReportsList() {
       <Helmet>
         <title>Reports | Seizu</title>
       </Helmet>
-      <Box sx={{ p: 3 }}>
+      <Box sx={pageContentSx}>
         <Box
           sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}
         >

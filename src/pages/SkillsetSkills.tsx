@@ -33,6 +33,7 @@ import MarkdownEditor from 'src/components/MarkdownEditor';
 import UserDisplay from 'src/components/UserDisplay';
 import { usePermissions } from 'src/hooks/usePermissions';
 import type { BackState } from 'src/navigation';
+import { pageContentSx } from 'src/theme/layout';
 
 const LOWER_SNAKE_ID = /^[a-z][a-z0-9]*(?:_[a-z0-9]+)*$/;
 const RAW_PLACEHOLDER_RE = /{{\s*([^{}]+?)\s*}}/g;
@@ -603,7 +604,7 @@ function SkillsetSkills() {
 
   return (
     <>
-      <Box sx={{ p: 3 }}>
+      <Box sx={pageContentSx}>
         <Button startIcon={<ArrowBackIcon />} onClick={() => navigate('/app/skillsets')} sx={{ mb: 2 }}>Back to skillsets</Button>
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
           <Typography variant="h1">Skills</Typography>

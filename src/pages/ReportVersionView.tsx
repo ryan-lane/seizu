@@ -22,6 +22,7 @@ import { useReportVersion, useReportVersionsList, useReportsMutations } from 'sr
 import { Report } from 'src/config.context';
 import { usePermissionState } from 'src/hooks/usePermissions';
 import type { BackState } from 'src/navigation';
+import { contentContainerSx, pageContentSx } from 'src/theme/layout';
 
 function ReportVersionView() {
   const { id, version } = useParams();
@@ -78,7 +79,7 @@ function ReportVersionView() {
 
   if (error || !reportVersion) {
     return (
-      <Box sx={{ p: 3, display: 'flex', alignItems: 'center', gap: 1 }}>
+      <Box sx={{ ...pageContentSx, display: 'flex', alignItems: 'center', gap: 1 }}>
         <Error />
         <Typography>Failed to load this version</Typography>
       </Box>
@@ -100,7 +101,7 @@ function ReportVersionView() {
           bgcolor: 'background.paper',
           borderBottom: 1,
           borderColor: 'divider',
-          px: 3,
+          ...contentContainerSx,
           py: 1.5,
           display: 'flex',
           alignItems: 'center',

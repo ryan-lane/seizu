@@ -62,6 +62,7 @@ import ListTable, {
   listTableTruncateSx
 } from 'src/components/ListTable';
 import type { BackState } from 'src/navigation';
+import { pageContentSx } from 'src/theme/layout';
 
 const EMPTY_FORM: ScheduledQueryRequest = {
   name: '',
@@ -889,7 +890,7 @@ function ScheduledQueries() {
 
   return (
     <>
-      <Box sx={{ p: 3 }}>
+      <Box sx={pageContentSx}>
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
           <Typography variant="h1">Scheduled Queries</Typography>
           {hasPermission('scheduled_queries:write') && (

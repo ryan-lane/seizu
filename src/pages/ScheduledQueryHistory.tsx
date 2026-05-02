@@ -37,6 +37,7 @@ import ScheduledQueryDetailDialog, {
 } from 'src/components/ScheduledQueryDetailDialog';
 import { usePermissions } from 'src/hooks/usePermissions';
 import type { BackState } from 'src/navigation';
+import { pageContentSx } from 'src/theme/layout';
 
 // ---------------------------------------------------------------------------
 // Per-row overflow menu
@@ -133,7 +134,7 @@ function ScheduledQueryHistory() {
       <Helmet>
         <title>{queryName ? `History – ${queryName} | Seizu` : `History | Seizu`}</title>
       </Helmet>
-      <Box sx={{ p: 3 }}>
+      <Box sx={pageContentSx}>
         {fromLabel && (
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
             <Button
