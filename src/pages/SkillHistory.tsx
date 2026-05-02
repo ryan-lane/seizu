@@ -35,6 +35,7 @@ import {
   useSkillMutations,
   useSkillVersionsList
 } from 'src/hooks/useSkillsetsApi';
+import { useToolCatalog } from 'src/hooks/useToolsetsApi';
 import UserDisplay from 'src/components/UserDisplay';
 import { usePermissions } from 'src/hooks/usePermissions';
 import type { BackState } from 'src/navigation';
@@ -171,12 +172,27 @@ function SkillHistory() {
   const { fromLabel } = (location.state ?? {}) as BackState;
   const { versions, loading, error } = useSkillVersionsList(skillsetId ?? null, skillId ?? null);
   const { updateSkill } = useSkillMutations(skillsetId ?? '');
+  const { tools: catalog } = useToolCatalog();
   const [detailVersion, setDetailVersion] = useState<SkillVersion | null>(null);
+  const [missingToolsTarget, setMissingToolsTarget] = useState<SkillVersion | null>(null);
+  const [missingToolNames, setMissingToolNames] = useState<string[]>([]);
+  const [restoreError, setRestoreError] = useState<string | null>(null);
   const sorted = [...versions].sort((a, b) => b.version - a.version);
   const latestVersion = sorted[0]?.version;
   const name = sorted[0]?.name;
 
-  async function handleRestore(version: SkillVersion) {
+  const handleRestoreClick = (version: SkillVersion) => {
+    const catalogSet = new Set(catalog.map((tool) => tool.mcp_name));
+    const missing = (version.tools_required ?? []).filter((tool) => !catalogSet.has(tool));
+    if (missing.length > 0) {
+      setMissingToolsTarget(version);
+      setMissingToolNames(missing);
+      return;
+    }
+    void handleRestore(version).catch((err: Error) => setRestoreError(err.message));
+  };
+
+  async function handleRestore(version: SkillVersion, toolsRequired: string[] = version.tools_required ?? []) {
     if (!skillId) return;
     await updateSkill(skillId, {
       name: version.name,
@@ -184,12 +200,21 @@ function SkillHistory() {
       template: version.template,
       parameters: version.parameters,
       triggers: version.triggers,
-      tools_required: version.tools_required,
+      tools_required: toolsRequired,
       enabled: version.enabled,
       comment: `Restored from version ${version.version}`
     });
     navigate(`/app/skillsets/${skillsetId}/skills`);
   }
+
+  const handleMissingToolsConfirm = () => {
+    if (!missingToolsTarget) return;
+    const catalogSet = new Set(catalog.map((tool) => tool.mcp_name));
+    const filtered = (missingToolsTarget.tools_required ?? []).filter((tool) => catalogSet.has(tool));
+    setMissingToolsTarget(null);
+    setMissingToolNames([]);
+    void handleRestore(missingToolsTarget, filtered).catch((err: Error) => setRestoreError(err.message));
+  };
 
   return (
     <Box sx={{ p: 3 }}>
@@ -200,6 +225,7 @@ function SkillHistory() {
       </Box>
       {loading && <CircularProgress />}
       {error && <Typography color="error">Failed to load history</Typography>}
+      {restoreError && <Typography color="error">{restoreError}</Typography>}
       {!loading && !error && (
         <TableContainer component={Paper} variant="outlined">
           <Table>
@@ -245,7 +271,7 @@ function SkillHistory() {
                     <TableCell align="right" sx={{ width: 48, pr: 1 }}>
                       <RowMenu
                         isCurrent={isCurrent}
-                        onRestore={() => handleRestore(v)}
+                        onRestore={() => handleRestoreClick(v)}
                       />
                     </TableCell>
                   </TableRow>
@@ -259,6 +285,25 @@ function SkillHistory() {
         version={detailVersion}
         onClose={() => setDetailVersion(null)}
       />
+      <Dialog open={!!missingToolsTarget} onClose={() => { setMissingToolsTarget(null); setMissingToolNames([]); }} maxWidth="sm" fullWidth>
+        <DialogTitle>Remove missing tool references?</DialogTitle>
+        <DialogContent>
+          <Typography color="text.secondary">
+            The following tools are no longer available and will be removed before restore:
+          </Typography>
+          <Box component="ul" sx={{ mt: 1, mb: 0, pl: 2 }}>
+            {missingToolNames.map((tool) => (
+              <Box component="li" key={tool} sx={{ fontFamily: 'monospace', fontSize: 13 }}>
+                {tool}
+              </Box>
+            ))}
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => { setMissingToolsTarget(null); setMissingToolNames([]); }}>Cancel</Button>
+          <Button variant="contained" onClick={handleMissingToolsConfirm}>Restore anyway</Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 }

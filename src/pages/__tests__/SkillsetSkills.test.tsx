@@ -166,6 +166,63 @@ describe('SkillsetSkills', () => {
     expect(within(dialog).getByLabelText('Template')).toHaveValue('Summarize {{incident_id}}');
   });
 
+  it('warns before editing a skill with missing tool references and strips them on save', async () => {
+    useSkillsList.mockReturnValue({
+      skills: [
+        {
+          skill_id: 'triage',
+          skillset_id: 'responders',
+          name: 'Triage',
+          description: 'Summarize an incident.',
+          template: 'Summarize {{incident_id}}',
+          parameters: [
+            { name: 'incident_id', type: 'string', description: 'Incident identifier', required: true, default: null },
+          ],
+          tools_required: ['graph__query', 'graph_tools__missing'],
+          enabled: true,
+          current_version: 1,
+          created_at: '2026-01-01T00:00:00Z',
+          updated_at: '2026-01-01T00:00:00Z',
+          created_by: 'alice@example.com',
+          updated_by: null,
+        },
+      ],
+      loading: false,
+      error: null,
+      refresh: jest.fn(),
+    });
+    useToolCatalog.mockReturnValue({
+      tools: [
+        {
+          mcp_name: 'graph__query',
+          toolset_id: 'graph',
+          tool_id: 'query',
+          toolset_name: 'Graph',
+          name: 'Query',
+          enabled: true,
+        },
+      ],
+      loading: false,
+      error: null,
+    });
+    render(<SkillsetSkills />, { wrapper: Wrapper });
+
+    fireEvent.click(screen.getByRole('button', { name: /more actions/i }));
+    fireEvent.click(screen.getByRole('menuitem', { name: /edit/i }));
+
+    const confirmDialog = screen.getByRole('dialog', { name: 'Remove missing tool references?' });
+    expect(within(confirmDialog).getByText('graph_tools__missing')).toBeInTheDocument();
+
+    fireEvent.click(within(confirmDialog).getByRole('button', { name: /continue editing/i }));
+
+    const editDialog = screen.getByRole('dialog', { name: 'Edit Skill' });
+    fireEvent.click(within(editDialog).getByRole('button', { name: 'Save' }));
+
+    await waitFor(() => expect(mockUpdateSkill).toHaveBeenCalledWith('triage', expect.objectContaining({
+      tools_required: ['graph__query'],
+    })));
+  });
+
   it('saves the raw markdown template string for a new skill', async () => {
     render(<SkillsetSkills />, { wrapper: Wrapper });
 

@@ -372,17 +372,16 @@ function Roles() {
   const [detailTarget, setDetailTarget] = useState<RoleItem | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<RoleItem | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [missingPermsTarget, setMissingPermsTarget] = useState<RoleItem | null>(null);
+  const [missingPermNames, setMissingPermNames] = useState<string[]>([]);
 
   const allRows = useMemo(
     () => [...builtinRoles, ...roles],
     [builtinRoles, roles]
   );
   const availablePermissions = useMemo(
-    () => Array.from(new Set([
-      ...builtinRoles.flatMap((role) => role.permissions),
-      ...(editTarget?.permissions ?? [])
-    ])).sort(),
-    [builtinRoles, editTarget]
+    () => Array.from(new Set(builtinRoles.flatMap((role) => role.permissions))).sort(),
+    [builtinRoles]
   );
 
   const handleSave = async (req: CreateRoleRequest | UpdateRoleRequest) => {
@@ -392,6 +391,29 @@ function Roles() {
       await createRole(req as CreateRoleRequest);
     }
     refresh();
+  };
+
+  const handleEditClick = (role: RoleItem) => {
+    const knownSet = new Set(builtinRoles.flatMap((r) => r.permissions));
+    const missing = role.permissions.filter((p) => !knownSet.has(p));
+    if (missing.length > 0) {
+      setEditTarget(null);
+      setMissingPermsTarget(role);
+      setMissingPermNames(missing);
+    } else {
+      setEditTarget(role);
+      setDialogOpen(true);
+    }
+  };
+
+  const handleMissingPermsConfirm = () => {
+    if (!missingPermsTarget) return;
+    const knownSet = new Set(builtinRoles.flatMap((r) => r.permissions));
+    const filtered = { ...missingPermsTarget, permissions: missingPermsTarget.permissions.filter((p) => knownSet.has(p)) };
+    setEditTarget(filtered);
+    setDialogOpen(true);
+    setMissingPermsTarget(null);
+    setMissingPermNames([]);
   };
 
   const handleDeleteConfirm = async () => {
@@ -541,7 +563,7 @@ function Roles() {
             isBuiltin={builtin}
             hasPermission={hasPermission}
             onView={() => setDetailTarget(item)}
-            onEdit={() => { setEditTarget(item); setDialogOpen(true); }}
+            onEdit={() => handleEditClick(item)}
             onHistory={() => navigate(`/app/roles/${item.role_id}/history`, { state: { fromLabel: 'Roles' } satisfies BackState })}
             onDelete={() => setDeleteTarget(item)}
           />
@@ -599,6 +621,27 @@ function Roles() {
       />
 
       <RoleDetailDialog role={detailTarget} onClose={() => setDetailTarget(null)} />
+
+      <Dialog open={!!missingPermsTarget} onClose={() => { setMissingPermsTarget(null); setMissingPermNames([]); }} maxWidth="sm" fullWidth>
+        <DialogTitle>Remove unrecognized permissions?</DialogTitle>
+        <DialogContent>
+          <DialogContentText>
+            The following permissions in this role are no longer recognized:
+          </DialogContentText>
+          <Box component="ul" sx={{ mt: 1, mb: 1, pl: 2 }}>
+            {missingPermNames.map((p) => (
+              <Box component="li" key={p} sx={{ fontFamily: 'monospace', fontSize: 13 }}>{p}</Box>
+            ))}
+          </Box>
+          <DialogContentText>
+            They will be removed when you save. Continue editing?
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => { setMissingPermsTarget(null); setMissingPermNames([]); }}>Cancel</Button>
+          <Button variant="contained" onClick={handleMissingPermsConfirm}>Continue editing</Button>
+        </DialogActions>
+      </Dialog>
 
       <Dialog open={!!deleteTarget} onClose={() => setDeleteTarget(null)} maxWidth="xs" fullWidth>
         <DialogTitle>Delete role?</DialogTitle>

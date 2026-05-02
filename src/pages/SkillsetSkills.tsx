@@ -20,7 +20,7 @@ import Error from '@mui/icons-material/Error';
 import {
   useSkillsList, useSkillMutations, SkillItem, CreateSkillRequest, UpdateSkillRequest
 } from 'src/hooks/useSkillsetsApi';
-import { ToolParamDef, useToolCatalog } from 'src/hooks/useToolsetsApi';
+import { ToolCatalogItem, ToolParamDef, useToolCatalog } from 'src/hooks/useToolsetsApi';
 import ListTable, {
   ListTableColumn,
   listTableActionColumnSx,
@@ -79,9 +79,10 @@ interface SkillDialogProps {
   onClose: () => void;
   onSave: (req: CreateSkillRequest | UpdateSkillRequest) => Promise<void>;
   initial: SkillItem | null;
+  catalog: ToolCatalogItem[];
 }
 
-function SkillDialog({ open, onClose, onSave, initial }: SkillDialogProps) {
+function SkillDialog({ open, onClose, onSave, initial, catalog }: SkillDialogProps) {
   const [skillId, setSkillId] = useState(initial?.skill_id ?? '');
   const [name, setName] = useState(initial?.name ?? '');
   const [description, setDescription] = useState(initial?.description ?? '');
@@ -182,7 +183,7 @@ function SkillDialog({ open, onClose, onSave, initial }: SkillDialogProps) {
               ))}
             </Box>
           </Box>
-          <ToolRequirementsSelect value={toolsRequired} onChange={setToolsRequired} />
+          <ToolRequirementsSelect value={toolsRequired} onChange={setToolsRequired} catalog={catalog} />
           <FormControlLabel control={<Switch checked={enabled} onChange={(e) => setEnabled(e.target.checked)} />} label="Enabled" />
           <Divider />
           <Box>
@@ -222,11 +223,11 @@ function SkillDialog({ open, onClose, onSave, initial }: SkillDialogProps) {
   );
 }
 
-function ToolRequirementsSelect({ value, onChange }: {
+function ToolRequirementsSelect({ value, onChange, catalog }: {
   value: string[];
   onChange: (value: string[]) => void;
+  catalog: ToolCatalogItem[];
 }) {
-  const { tools } = useToolCatalog();
   return (
     <FormControl fullWidth size="small">
       <InputLabel>Tools Required</InputLabel>
@@ -237,7 +238,7 @@ function ToolRequirementsSelect({ value, onChange }: {
         onChange={(e) => onChange(typeof e.target.value === 'string' ? e.target.value.split(',') : e.target.value)}
         renderValue={(selected) => (selected as string[]).join(', ')}
       >
-        {tools.map((tool) => (
+        {catalog.map((tool) => (
           <MenuItem key={tool.mcp_name} value={tool.mcp_name}>
             <Checkbox checked={value.includes(tool.mcp_name)} size="small" />
             <ListItemText primary={tool.mcp_name} secondary={`${tool.toolset_name} / ${tool.name}`} />
@@ -469,17 +470,47 @@ function SkillsetSkills() {
   const { skills, loading, error, refresh } = useSkillsList(skillsetId ?? null);
   const { createSkill, updateSkill, deleteSkill, renderSkill } = useSkillMutations(skillsetId ?? '');
   const hasPermission = usePermissions();
+  const { tools: catalog } = useToolCatalog();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editTarget, setEditTarget] = useState<SkillItem | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<SkillItem | null>(null);
   const [renderTarget, setRenderTarget] = useState<SkillItem | null>(null);
   const [detailTarget, setDetailTarget] = useState<SkillItem | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [missingToolsTarget, setMissingToolsTarget] = useState<SkillItem | null>(null);
+  const [missingToolNames, setMissingToolNames] = useState<string[]>([]);
 
   const handleSave = async (req: CreateSkillRequest | UpdateSkillRequest) => {
     if (editTarget) await updateSkill(editTarget.skill_id, req as UpdateSkillRequest);
     else await createSkill(req as CreateSkillRequest);
     refresh();
+  };
+
+  const handleEditClick = (skill: SkillItem) => {
+    const catalogSet = new Set(catalog.map((t) => t.mcp_name));
+    const requiredTools = skill.tools_required ?? [];
+    const missing = requiredTools.filter((t) => !catalogSet.has(t));
+    if (missing.length > 0) {
+      setEditTarget(null);
+      setMissingToolsTarget(skill);
+      setMissingToolNames(missing);
+    } else {
+      setEditTarget(skill);
+      setDialogOpen(true);
+    }
+  };
+
+  const handleMissingToolsConfirm = () => {
+    if (!missingToolsTarget) return;
+    const catalogSet = new Set(catalog.map((t) => t.mcp_name));
+    const filtered = {
+      ...missingToolsTarget,
+      tools_required: (missingToolsTarget.tools_required ?? []).filter((t) => catalogSet.has(t))
+    };
+    setEditTarget(filtered);
+    setDialogOpen(true);
+    setMissingToolsTarget(null);
+    setMissingToolNames([]);
   };
 
   const columns: ListTableColumn<SkillItem>[] = [
@@ -561,7 +592,7 @@ function SkillsetSkills() {
           canDelete={hasPermission('skills:delete')}
           canRender={hasPermission('skills:render') && skillStatus(skill).enabled}
           onDetail={() => setDetailTarget(skill)}
-          onEdit={() => { setEditTarget(skill); setDialogOpen(true); }}
+          onEdit={() => handleEditClick(skill)}
           onRender={() => setRenderTarget(skill)}
           onHistory={() => navigate(`/app/skillsets/${skillsetId}/skills/${skill.skill_id}/history`, { state: { fromLabel: 'Skills' } satisfies BackState })}
           onDelete={() => setDeleteTarget(skill)}
@@ -589,7 +620,27 @@ function SkillsetSkills() {
           />
         )}
       </Box>
-      <SkillDialog key={editTarget?.skill_id ?? 'new'} open={dialogOpen} onClose={() => setDialogOpen(false)} onSave={handleSave} initial={editTarget} />
+      <SkillDialog key={editTarget?.skill_id ?? 'new'} open={dialogOpen} onClose={() => setDialogOpen(false)} onSave={handleSave} initial={editTarget} catalog={catalog} />
+      <Dialog open={!!missingToolsTarget} onClose={() => { setMissingToolsTarget(null); setMissingToolNames([]); }} maxWidth="sm" fullWidth>
+        <DialogTitle>Remove missing tool references?</DialogTitle>
+        <DialogContent>
+          <DialogContentText>
+            The following tools required by this skill no longer exist:
+          </DialogContentText>
+          <Box component="ul" sx={{ mt: 1, mb: 1, pl: 2 }}>
+            {missingToolNames.map((t) => (
+              <Box component="li" key={t} sx={{ fontFamily: 'monospace', fontSize: 13 }}>{t}</Box>
+            ))}
+          </Box>
+          <DialogContentText>
+            They will be removed when you save. Continue editing?
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => { setMissingToolsTarget(null); setMissingToolNames([]); }}>Cancel</Button>
+          <Button variant="contained" onClick={handleMissingToolsConfirm}>Continue editing</Button>
+        </DialogActions>
+      </Dialog>
       <Dialog open={!!deleteTarget} onClose={() => setDeleteTarget(null)} maxWidth="xs" fullWidth>
         <DialogTitle>Delete skill?</DialogTitle>
         <DialogContent><DialogContentText>Permanently delete <strong>{deleteTarget?.name}</strong> and all its versions?</DialogContentText></DialogContent>

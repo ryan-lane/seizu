@@ -1,4 +1,4 @@
-import { render, screen, fireEvent, cleanup, within } from '@testing-library/react';
+import { render, screen, fireEvent, cleanup, within, waitFor } from '@testing-library/react';
 import { MemoryRouter, Routes, Route } from 'react-router-dom';
 import { ThemeProvider, createTheme } from '@mui/material/styles';
 import Roles from 'src/pages/Roles';
@@ -74,6 +74,8 @@ function setPermissions(permissions: string[]) {
 }
 
 describe('Roles', () => {
+  let mockUpdateRole: jest.Mock;
+
   beforeEach(() => {
     jest.clearAllMocks();
     setPermissions(['roles:read', 'roles:write', 'roles:delete']);
@@ -89,9 +91,10 @@ describe('Roles', () => {
       error: null,
       refresh: jest.fn(),
     });
+    mockUpdateRole = jest.fn();
     mockUseRoleMutations.mockReturnValue({
       createRole: jest.fn(),
-      updateRole: jest.fn(),
+      updateRole: mockUpdateRole,
       deleteRole: jest.fn(),
     });
   });
@@ -169,5 +172,36 @@ describe('Roles', () => {
 
     expect(screen.getByRole('menuitem', { name: /^edit$/i })).not.toHaveAttribute('aria-disabled', 'true');
     expect(screen.getByRole('menuitem', { name: /^delete$/i })).not.toHaveAttribute('aria-disabled', 'true');
+  });
+
+  it('warns before editing a role with missing permissions and strips them on save', async () => {
+    mockUseRolesList.mockReturnValue({
+      roles: [
+        {
+          ...CUSTOM_ROLE,
+          permissions: ['reports:read', 'custom:manage'],
+        },
+      ],
+      loading: false,
+      error: null,
+      refresh: jest.fn(),
+    });
+
+    render(<Roles />, { wrapper: Wrapper });
+
+    fireEvent.click(screen.getAllByRole('button', { name: 'More actions' })[1]);
+    fireEvent.click(screen.getByRole('menuitem', { name: /^edit$/i }));
+
+    const confirmDialog = screen.getByRole('dialog', { name: 'Remove unrecognized permissions?' });
+    expect(within(confirmDialog).getByText('custom:manage')).toBeInTheDocument();
+
+    fireEvent.click(within(confirmDialog).getByRole('button', { name: /continue editing/i }));
+
+    const editDialog = await screen.findByRole('dialog', { name: 'Edit Role' });
+    fireEvent.click(within(editDialog).getByRole('button', { name: 'Save' }));
+
+    await waitFor(() => expect(mockUpdateRole).toHaveBeenCalledWith('role1', expect.objectContaining({
+      permissions: ['reports:read'],
+    })));
   });
 });

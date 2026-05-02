@@ -1,3 +1,4 @@
+import logging
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -29,6 +30,7 @@ from reporting.services import report_store
 from reporting.services.mcp_builtins import find_builtin
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 
 def _with_effective_skill_state(skill: SkillItem, skillset: SkillsetListItem) -> SkillItem:
@@ -47,16 +49,28 @@ def _with_effective_skill_state(skill: SkillItem, skillset: SkillsetListItem) ->
     )
 
 
-async def _validate_tools_required(tools_required: list[str]) -> list[str]:
-    errors: list[str] = []
+async def _check_tools_required(tools_required: list[str]) -> tuple[list[str], list[str]]:
+    """Check tool references, returning (valid_refs, dropped_refs).
+
+    Missing tools are dropped rather than blocking the save so that deleting a
+    tool does not permanently prevent editing skills that referenced it.
+    """
+    valid: list[str] = []
+    dropped: list[str] = []
     for tool_ref in tools_required:
         if find_builtin(tool_ref) is not None:
+            valid.append(tool_ref)
+            continue
+        if "__" not in tool_ref:
+            dropped.append(tool_ref)
             continue
         toolset_id, tool_id = tool_ref.split("__", 1)
         tool = await report_store.get_tool(tool_id)
-        if not tool or tool.toolset_id != toolset_id:
-            errors.append(f"Required tool '{tool_ref}' does not exist")
-    return errors
+        if tool and tool.toolset_id == toolset_id:
+            valid.append(tool_ref)
+        else:
+            dropped.append(tool_ref)
+    return valid, dropped
 
 
 @router.get("/api/v1/skillsets", response_model=SkillsetListResponse)
@@ -180,9 +194,11 @@ async def create_skill(
     if await report_store.get_skill(body.skill_id):
         raise HTTPException(status_code=409, detail="Skill already exists")
     errors = validate_skill_template(body.parameters, body.template)
-    errors.extend(await _validate_tools_required(body.tools_required))
     if errors:
         return JSONResponse(content={"errors": errors}, status_code=400)
+    valid_tools, dropped_tools = await _check_tools_required(body.tools_required)
+    if dropped_tools:
+        logger.warning("Dropping missing tool references for new skill %s: %s", body.skill_id, dropped_tools)
     skill = await report_store.create_skill(
         skillset_id=skillset_id,
         skill_id=body.skill_id,
@@ -191,7 +207,7 @@ async def create_skill(
         template=body.template,
         parameters=[p.model_dump() for p in body.parameters],
         triggers=body.triggers,
-        tools_required=body.tools_required,
+        tools_required=valid_tools,
         enabled=body.enabled,
         created_by=current.user.user_id,
     )
@@ -235,9 +251,11 @@ async def update_skill(
     if not existing or existing.skillset_id != skillset_id:
         raise HTTPException(status_code=404, detail="Skill not found")
     errors = validate_skill_template(body.parameters, body.template)
-    errors.extend(await _validate_tools_required(body.tools_required))
     if errors:
         return JSONResponse(content={"errors": errors}, status_code=400)
+    valid_tools, dropped_tools = await _check_tools_required(body.tools_required)
+    if dropped_tools:
+        logger.warning("Dropping missing tool references for skill %s: %s", skill_id, dropped_tools)
     skill = await report_store.update_skill(
         skill_id=skill_id,
         name=body.name,
@@ -245,7 +263,7 @@ async def update_skill(
         template=body.template,
         parameters=[p.model_dump() for p in body.parameters],
         triggers=body.triggers,
-        tools_required=body.tools_required,
+        tools_required=valid_tools,
         enabled=body.enabled,
         updated_by=current.user.user_id,
         comment=body.comment,
