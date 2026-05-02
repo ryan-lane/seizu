@@ -6,7 +6,7 @@ import {
 } from 'react-router-dom';
 import ExpandLess from '@mui/icons-material/ExpandLess';
 import ExpandMore from '@mui/icons-material/ExpandMore';
-import { Button, Collapse, List, ListItem, SxProps, Theme, Tooltip } from '@mui/material';
+import { Box, Button, Collapse, List, ListItem, SxProps, Theme, Tooltip } from '@mui/material';
 import { SvgIconComponent } from '@mui/icons-material';
 
 export interface NavItemData {
@@ -38,7 +38,20 @@ function NavItem({ collapsed = false, href, icon: Icon, title, subItems, ...rest
   const buttonContent = (
     <>
       {Icon && <Icon fontSize="small" />}
-      {!collapsed && <span>{title}</span>}
+      {!collapsed && (
+        <Box
+          component="span"
+          sx={{
+            flex: 1,
+            minWidth: 0,
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap'
+          }}
+        >
+          {title}
+        </Box>
+      )}
     </>
   );
 
@@ -49,6 +62,7 @@ function NavItem({ collapsed = false, href, icon: Icon, title, subItems, ...rest
     gap: collapsed ? 0 : 1,
     letterSpacing: 0,
     minWidth: 0,
+    overflow: 'hidden',
     px: collapsed ? 1 : 1.5,
     textTransform: 'none',
     width: '100%',
