@@ -35,6 +35,7 @@ export interface ReportVersion {
 }
 
 const REPORT_QUERY_CAPABILITIES_QUERY = '?include_query_capabilities=true';
+const REPORTS_LIST_PAGE_SIZE = 500;
 
 function getApiHeaders(accessToken: string | null): Record<string, string> {
   const headers: Record<string, string> = {};
@@ -64,7 +65,7 @@ export function useReportsList(): {
   const [reports, setReports] = useState<ReportListItem[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
-  const [perPage, setPerPage] = useState(500);
+  const [perPage, setPerPage] = useState(REPORTS_LIST_PAGE_SIZE);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
   const [tick, setTick] = useState(0);
@@ -78,26 +79,66 @@ export function useReportsList(): {
   const refresh = useCallback(() => broadcastReportsUpdated(), []);
 
   useEffect(() => {
-    if (auth_required && !accessToken) return;
+    let cancelled = false;
 
-    setLoading(true);
-    fetch(`/api/v1/reports?page=${page}&per_page=${perPage}`, { headers: getApiHeaders(accessToken) })
-      .then((res) => {
-        if (!res.ok) throw new Error(`Failed to load reports list: ${res.status}`);
-        return res.json();
-      })
-      .then((data: { reports: ReportListItem[]; total?: number; page?: number; per_page?: number }) => {
-        setReports(data.reports ?? []);
-        setTotal(data.total ?? data.reports?.length ?? 0);
-        setPage(data.page ?? page);
-        setPerPage(data.per_page ?? perPage);
-        setLoading(false);
-      })
-      .catch((err: Error) => {
-        setError(err);
-        setLoading(false);
+    async function loadReportsPage(pageNum: number, perPageNum: number): Promise<{
+      reports: ReportListItem[];
+      total?: number;
+      page?: number;
+      per_page?: number;
+    }> {
+      const res = await fetch(`/api/v1/reports?page=${pageNum}&per_page=${perPageNum}`, {
+        headers: getApiHeaders(accessToken)
       });
-  }, [accessToken, auth_required, page, perPage, tick]);
+      if (!res.ok) throw new Error(`Failed to load reports list: ${res.status}`);
+      return res.json();
+    }
+
+    async function loadAllReports(): Promise<void> {
+      if (auth_required && !accessToken) return;
+
+      setLoading(true);
+      setError(null);
+
+      try {
+        const firstPage = await loadReportsPage(1, REPORTS_LIST_PAGE_SIZE);
+        if (cancelled) return;
+
+        const pageSize = firstPage.per_page ?? REPORTS_LIST_PAGE_SIZE;
+        const totalCount = firstPage.total ?? firstPage.reports?.length ?? 0;
+        const firstReports = firstPage.reports ?? [];
+        const totalPages = Math.max(Math.ceil(totalCount / pageSize), 1);
+
+        let allReports = firstReports;
+        if (totalPages > 1) {
+          const remainingPages = await Promise.all(
+            Array.from({ length: totalPages - 1 }, (_, index) => loadReportsPage(index + 2, pageSize))
+          );
+          if (cancelled) return;
+          allReports = [
+            ...firstReports,
+            ...remainingPages.flatMap((response) => response.reports ?? [])
+          ];
+        }
+
+        setReports(allReports);
+        setTotal(totalCount);
+        setPage(firstPage.page ?? 1);
+        setPerPage(pageSize);
+        setLoading(false);
+      } catch (err) {
+        if (cancelled) return;
+        setError(err as Error);
+        setLoading(false);
+      }
+    }
+
+    void loadAllReports();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [accessToken, auth_required, tick]);
 
   return { reports, total, page, perPage, loading, error, refresh };
 }

@@ -157,12 +157,12 @@ export default function ListTable<T>({
   emptyMessage,
   pagination = true,
   initialRowsPerPage = 10,
-  rowsPerPageOptions = [10, 25, 50]
+  rowsPerPageOptions = [10, 25, 50, 75, 100]
 }: ListTableProps<T>) {
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(initialRowsPerPage);
   const [columnWidths, setColumnWidths] = useState<Record<string, number>>({});
-  const paginationEnabled = pagination && rows.length > rowsPerPage;
+  const paginationEnabled = pagination && rows.length > 0;
   const headerCellRefs = useRef<Record<string, HTMLElement | null>>({});
   const resizeDragRef = useRef<{
     targetIndex: number;

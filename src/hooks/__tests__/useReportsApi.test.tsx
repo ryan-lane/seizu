@@ -303,6 +303,71 @@ describe('useReportsList', () => {
     );
   });
 
+  it('fetches additional report pages when the backend reports more data', async () => {
+    const page1Reports = Array.from({ length: 500 }, (_, index) => ({
+      report_id: `r${index + 1}`,
+      name: `Report ${index + 1}`,
+      description: '',
+      current_version: 1,
+      created_at: '2024-01-01T00:00:00Z',
+      updated_at: '2024-01-02T00:00:00Z',
+      created_by: 'alice@example.com',
+      updated_by: 'alice@example.com',
+      access: { scope: 'public' as const },
+      pinned: false
+    }));
+    const page2Reports = [
+      {
+        report_id: 'r501',
+        name: 'Report 501',
+        description: '',
+        current_version: 1,
+        created_at: '2024-01-03T00:00:00Z',
+        updated_at: '2024-01-03T00:00:00Z',
+        created_by: 'bob@example.com',
+        updated_by: 'bob@example.com',
+        access: { scope: 'private' as const },
+        pinned: true
+      }
+    ];
+    const page1 = {
+      reports: page1Reports,
+      total: 501,
+      page: 1,
+      per_page: 500
+    };
+    const page2 = {
+      reports: page2Reports,
+      total: 501,
+      page: 2,
+      per_page: 500
+    };
+
+    mockFetch
+      .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(page1) })
+      .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(page2) });
+
+    const { result } = renderHook(() => useReportsList(), {
+      wrapper: makeWrapper(false, null)
+    });
+
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.reports).toEqual([...page1.reports, ...page2.reports]);
+    expect(result.current.total).toBe(501);
+    expect(result.current.page).toBe(1);
+    expect(result.current.perPage).toBe(500);
+    expect(mockFetch).toHaveBeenNthCalledWith(
+      1,
+      '/api/v1/reports?page=1&per_page=500',
+      expect.any(Object)
+    );
+    expect(mockFetch).toHaveBeenNthCalledWith(
+      2,
+      '/api/v1/reports?page=2&per_page=500',
+      expect.any(Object)
+    );
+  });
+
   it('includes pinned field in returned items', async () => {
     mockFetch.mockResolvedValue({
       ok: true,
