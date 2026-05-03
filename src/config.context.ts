@@ -10,6 +10,12 @@ export interface Panel {
   details_cypher?: string;
   caption?: string;
   size?: number;
+  w?: number;
+  h?: number;
+  x?: number;
+  y?: number;
+  min_h?: number;
+  auto_height?: boolean;
   threshold?: number;
   params?: PanelParam[];
   pie_settings?: PieSettings;

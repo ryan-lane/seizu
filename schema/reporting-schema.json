@@ -278,11 +278,107 @@
                         }
                     ],
                     "default": 2,
-                    "description": "The size of the panel.",
+                    "description": "The legacy width of the panel as MUI grid columns (1-12). When ``w`` is set, ``w`` takes precedence. Retained for back-compat with reports authored before per-panel height support.",
                     "examples": [
                         "2"
                     ],
                     "title": "Size"
+                },
+                "w": {
+                    "anyOf": [
+                        {
+                            "type": "integer"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "description": "The width of the panel in grid columns (1-12). Supersedes ``size`` when set. Used by react-grid-layout.",
+                    "examples": [
+                        "3"
+                    ],
+                    "title": "W"
+                },
+                "h": {
+                    "anyOf": [
+                        {
+                            "type": "integer"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "description": "The height of the panel in grid row units (each row is 48px). When unset, the frontend derives a sensible default per panel type.",
+                    "examples": [
+                        "8"
+                    ],
+                    "title": "H"
+                },
+                "x": {
+                    "anyOf": [
+                        {
+                            "type": "integer"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "description": "The column index (0-based) within the row's grid. When unset, the frontend packs panels left-to-right automatically.",
+                    "examples": [
+                        "0"
+                    ],
+                    "title": "X"
+                },
+                "y": {
+                    "anyOf": [
+                        {
+                            "type": "integer"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "description": "The row index within the row's grid. Always 0 for single-row layouts; reserved for future multi-row use.",
+                    "examples": [
+                        "0"
+                    ],
+                    "title": "Y"
+                },
+                "min_h": {
+                    "anyOf": [
+                        {
+                            "type": "integer"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "description": "Optional minimum height in grid row units. Enforced by react-grid-layout when the user resizes the panel.",
+                    "examples": [
+                        "4"
+                    ],
+                    "title": "Min H"
+                },
+                "auto_height": {
+                    "anyOf": [
+                        {
+                            "type": "boolean"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "description": "When ``True``, the panel renders at its natural content height instead of filling its grid cell. Only meaningful for ``markdown`` and ``vertical-table`` panel types; ignored elsewhere.",
+                    "examples": [
+                        "true"
+                    ],
+                    "title": "Auto Height"
                 },
                 "threshold": {
                     "anyOf": [
@@ -344,22 +440,6 @@
                     "examples": [
                         "\n            .. code-block:: yaml\n\n              graph_settings:\n                node_label: label\n                node_color_by: group\n            "
                     ]
-                },
-                "metric": {
-                    "anyOf": [
-                        {
-                            "type": "string"
-                        },
-                        {
-                            "type": "null"
-                        }
-                    ],
-                    "default": null,
-                    "description": "The statsd metric to send from the panel data. Only used for ``count`` and ``progress`` panels.",
-                    "examples": [
-                        "cves.severity"
-                    ],
-                    "title": "Metric"
                 }
             },
             "required": [

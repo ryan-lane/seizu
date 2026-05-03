@@ -224,8 +224,66 @@ class Panel(BaseModel):
 
     size: int | None = Field(
         default=2,
-        description="The size of the panel.",
+        description=(
+            "The legacy width of the panel as MUI grid columns (1-12). When"
+            " ``w`` is set, ``w`` takes precedence. Retained for back-compat"
+            " with reports authored before per-panel height support."
+        ),
         examples=["2"],
+    )
+
+    w: int | None = Field(
+        default=None,
+        description=(
+            "The width of the panel in grid columns (1-12). Supersedes ``size`` when set. Used by react-grid-layout."
+        ),
+        examples=["3"],
+    )
+
+    h: int | None = Field(
+        default=None,
+        description=(
+            "The height of the panel in grid row units (each row is 48px)."
+            " When unset, the frontend derives a sensible default per panel"
+            " type."
+        ),
+        examples=["8"],
+    )
+
+    x: int | None = Field(
+        default=None,
+        description=(
+            "The column index (0-based) within the row's grid. When unset,"
+            " the frontend packs panels left-to-right automatically."
+        ),
+        examples=["0"],
+    )
+
+    y: int | None = Field(
+        default=None,
+        description=(
+            "The row index within the row's grid. Always 0 for single-row layouts; reserved for future multi-row use."
+        ),
+        examples=["0"],
+    )
+
+    min_h: int | None = Field(
+        default=None,
+        description=(
+            "Optional minimum height in grid row units. Enforced by react-grid-layout when the user resizes the panel."
+        ),
+        examples=["4"],
+    )
+
+    auto_height: bool | None = Field(
+        default=None,
+        description=(
+            "When ``True``, the panel renders at its natural content height"
+            " instead of filling its grid cell. Only meaningful for"
+            " ``markdown`` and ``vertical-table`` panel types; ignored"
+            " elsewhere."
+        ),
+        examples=["true"],
     )
 
     threshold: float | None = Field(
