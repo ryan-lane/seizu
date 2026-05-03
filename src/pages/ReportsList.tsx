@@ -327,17 +327,18 @@ function ReportsList() {
     {
       key: 'name',
       label: 'Name',
-      cellSx: listTablePrimaryCellSx,
+      cellSx: { ...listTablePrimaryCellSx, width: '36%' },
       render: (report) => {
         const isDashboard = report.report_id === dashboardReportId;
         return (
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minWidth: 0, flexWrap: 'wrap' }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minWidth: 0, flexWrap: 'nowrap', overflow: 'hidden' }}>
             <Link
               component={RouterLink}
               to={`/app/reports/${report.report_id}`}
               underline="hover"
               color="inherit"
               fontWeight="medium"
+              sx={{ flex: '1 1 auto', minWidth: 0, maxWidth: '100%', display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
             >
               {report.name}
             </Link>
@@ -372,7 +373,7 @@ function ReportsList() {
     {
       key: 'visibility',
       label: 'Visibility',
-      cellSx: { width: 120 },
+      cellSx: { width: 104 },
       render: (report) => (
         <Tooltip title={report.access.scope === 'public' ? 'Visible to report readers' : 'Private to the owner'}>
           <Chip

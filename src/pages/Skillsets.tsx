@@ -32,9 +32,10 @@ import { pageContentSx } from 'src/theme/layout';
 const LOWER_SNAKE_ID = /^[a-z][a-z0-9]*(?:_[a-z0-9]+)*$/;
 
 const descriptionColumnSx = { ...listTableSecondaryCellSx, width: '24%' };
-const versionColumnSx = { ...listTableSecondaryCellSx, width: 88 };
+const versionColumnSx = { ...listTableSecondaryCellSx, width: 96 };
 const updatedAtColumnSx = { ...listTableSecondaryCellSx, width: 180 };
 const updatedByColumnSx = { ...listTableSecondaryCellSx, width: 150 };
+const statusColumnSx = { width: 128 };
 
 interface SkillsetDialogProps {
   open: boolean;
@@ -230,6 +231,7 @@ function Skillsets() {
     {
       key: 'status',
       label: 'Status',
+      cellSx: statusColumnSx,
       render: (item) => <Chip label={item.enabled ? 'Enabled' : 'Disabled'} color={item.enabled ? 'success' : 'default'} size="small" />
     },
     {

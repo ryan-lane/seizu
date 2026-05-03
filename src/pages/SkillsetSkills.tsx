@@ -39,9 +39,10 @@ const LOWER_SNAKE_ID = /^[a-z][a-z0-9]*(?:_[a-z0-9]+)*$/;
 const RAW_PLACEHOLDER_RE = /{{\s*([^{}]+?)\s*}}/g;
 
 const descriptionColumnSx = { ...listTableSecondaryCellSx, width: '26%' };
-const versionColumnSx = { ...listTableSecondaryCellSx, width: 88 };
+const versionColumnSx = { ...listTableSecondaryCellSx, width: 96 };
 const updatedAtColumnSx = { ...listTableSecondaryCellSx, width: 180 };
 const updatedByColumnSx = { ...listTableSecondaryCellSx, width: 150 };
+const statusColumnSx = { width: 176 };
 
 function skillStatus(skill: SkillItem): { enabled: boolean; label: string } {
   const effectiveEnabled = skill.effective_enabled ?? skill.enabled;
@@ -554,6 +555,7 @@ function SkillsetSkills() {
     {
       key: 'status',
       label: 'Status',
+      cellSx: statusColumnSx,
       render: (skill) => (
         <Chip
           label={skillStatus(skill).label}

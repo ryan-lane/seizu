@@ -65,7 +65,9 @@ const isBuiltinToolset = (id: string): boolean =>
 const LOWER_SNAKE_ID = /^[a-z][a-z0-9]*(?:_[a-z0-9]+)*$/;
 
 const descriptionColumnSx = { ...listTableSecondaryCellSx, width: '24%' };
-const versionColumnSx = { ...listTableSecondaryCellSx, width: 88 };
+const typeColumnSx = { width: 144 };
+const statusColumnSx = { width: 136 };
+const versionColumnSx = { ...listTableSecondaryCellSx, width: 96 };
 const updatedAtColumnSx = { ...listTableSecondaryCellSx, width: 180 };
 const updatedByColumnSx = { ...listTableSecondaryCellSx, width: 150 };
 
@@ -333,7 +335,7 @@ function Toolsets() {
     {
       key: 'type',
       label: 'Type',
-      cellSx: { width: 130 },
+      cellSx: typeColumnSx,
       render: (item) => {
         const isBuiltin = isBuiltinToolset(item.toolset_id);
         return (
@@ -371,6 +373,7 @@ function Toolsets() {
     {
       key: 'status',
       label: 'Status',
+      cellSx: statusColumnSx,
       render: (item) => (
         <Chip
           label={item.enabled ? 'Enabled' : 'Disabled'}

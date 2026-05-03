@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Alert,
@@ -54,7 +54,8 @@ import { pageContentSx } from 'src/theme/layout';
 
 const descriptionColumnSx = { ...listTableSecondaryCellSx, width: '22%' };
 const permissionsColumnSx = { width: '24%' };
-const versionColumnSx = { ...listTableSecondaryCellSx, width: 88 };
+const roleTypeColumnSx = { width: 144 };
+const versionColumnSx = { ...listTableSecondaryCellSx, width: 96 };
 const updatedAtColumnSx = { ...listTableSecondaryCellSx, width: 180 };
 const updatedByColumnSx = { ...listTableSecondaryCellSx, width: 150 };
 
@@ -75,6 +76,132 @@ function groupedPermissions(permissions: string[]): Record<string, string[]> {
 
 function permissionLabel(group: string): string {
   return group.replace(/_/g, ' ');
+}
+
+interface PermissionChipsSummaryProps {
+  permissions: string[];
+}
+
+function PermissionChipsSummary({ permissions }: PermissionChipsSummaryProps) {
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const permissionRefs = useRef<Record<string, HTMLDivElement | null>>({});
+  const overflowRefs = useRef<Record<number, HTMLDivElement | null>>({});
+  const [availableWidth, setAvailableWidth] = useState(0);
+  const [visibleCount, setVisibleCount] = useState(permissions.length);
+  const gapPx = 4;
+
+  useLayoutEffect(() => {
+    setVisibleCount(permissions.length);
+  }, [permissions]);
+
+  useLayoutEffect(() => {
+    const updateWidth = () => {
+      const width = containerRef.current?.getBoundingClientRect().width ?? 0;
+      setAvailableWidth(width);
+    };
+
+    updateWidth();
+
+    if (!containerRef.current || typeof ResizeObserver === 'undefined') return undefined;
+
+    const observer = new ResizeObserver(updateWidth);
+    observer.observe(containerRef.current);
+    return () => observer.disconnect();
+  }, []);
+
+  useLayoutEffect(() => {
+    if (availableWidth <= 0) return;
+
+    const permissionWidths = permissions.map((permission) => permissionRefs.current[permission]?.getBoundingClientRect().width ?? 0);
+    const overflowWidths = Array.from({ length: permissions.length + 1 }, (_, index) =>
+      overflowRefs.current[index]?.getBoundingClientRect().width ?? 0
+    );
+
+    let nextVisibleCount = 0;
+    for (let count = permissions.length; count >= 0; count -= 1) {
+      const remaining = permissions.length - count;
+      const chipCount = count + (remaining > 0 ? 1 : 0);
+      const totalWidth =
+        permissionWidths.slice(0, count).reduce((sum, width) => sum + width, 0) +
+        (chipCount > 0 ? gapPx * (chipCount - 1) : 0) +
+        (remaining > 0 ? (overflowWidths[remaining] ?? 0) : 0);
+      if (totalWidth <= availableWidth) {
+        nextVisibleCount = count;
+        break;
+      }
+    }
+
+    if (nextVisibleCount !== visibleCount) {
+      setVisibleCount(nextVisibleCount);
+    }
+  }, [availableWidth, permissions, visibleCount]);
+
+  const visiblePermissions = permissions.slice(0, visibleCount);
+  const remaining = permissions.length - visibleCount;
+  const hiddenPermissions = permissions.slice(visibleCount);
+
+  return (
+    <Box ref={containerRef} sx={{ position: 'relative', minWidth: 0, overflow: 'hidden' }}>
+      <Box sx={{ display: 'flex', flexWrap: 'nowrap', gap: 0.5, overflow: 'hidden', minWidth: 0 }}>
+        {visiblePermissions.map((permission) => (
+          <Chip key={permission} label={permission} size="small" variant="outlined" />
+        ))}
+        {remaining > 0 && (
+          <Tooltip
+            title={
+              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5, py: 0.5 }}>
+                {hiddenPermissions.map((permission) => (
+                  <Typography key={permission} variant="body2">
+                    {permission}
+                  </Typography>
+                ))}
+              </Box>
+            }
+            placement="top"
+          >
+            <Chip label={`+${remaining}`} size="small" variant="outlined" />
+          </Tooltip>
+        )}
+      </Box>
+      <Box
+        aria-hidden
+        sx={{
+          position: 'absolute',
+          inset: 0,
+          visibility: 'hidden',
+          pointerEvents: 'none',
+          overflow: 'hidden',
+          display: 'flex',
+          flexWrap: 'nowrap',
+          gap: 0.5,
+          minWidth: 0
+        }}
+      >
+        {permissions.map((permission) => (
+          <Chip
+            key={`measure-${permission}`}
+            label={permission}
+            size="small"
+            variant="outlined"
+            ref={(node) => {
+              permissionRefs.current[permission] = node as HTMLDivElement | null;
+            }}
+          />
+        ))}
+        {Array.from({ length: permissions.length + 1 }, (_, index) => (
+          <Chip
+            key={`overflow-${index}`}
+            label={`+${index}`}
+            size="small"
+            variant="outlined"
+            ref={(node) => {
+              overflowRefs.current[index] = node as HTMLDivElement | null;
+            }}
+          />
+        ))}
+      </Box>
+    </Box>
+  );
 }
 
 interface RoleDetailDialogProps {
@@ -484,7 +611,7 @@ function Roles() {
     {
       key: 'type',
       label: 'Type',
-      cellSx: { width: 130 },
+      cellSx: roleTypeColumnSx,
       render: (item) => {
         const builtin = isBuiltinRole(item.role_id);
         return (
@@ -514,18 +641,7 @@ function Roles() {
       hideBelow: 'lg',
       cellSx: permissionsColumnSx,
       render: (item) => {
-        const visiblePermissions = item.permissions.slice(0, 3);
-        const remaining = item.permissions.length - visiblePermissions.length;
-        return (
-          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
-            {visiblePermissions.map((permission) => (
-              <Chip key={permission} label={permission} size="small" variant="outlined" />
-            ))}
-            {remaining > 0 && (
-              <Chip label={`+${remaining}`} size="small" variant="outlined" />
-            )}
-          </Box>
-        );
+        return <PermissionChipsSummary permissions={item.permissions} />;
       }
     },
     {

@@ -64,6 +64,9 @@ import ListTable, {
 import type { BackState } from 'src/navigation';
 import { pageContentSx } from 'src/theme/layout';
 
+const actionsColumnSx = { width: '18%' };
+const statusColumnSx = { width: 128 };
+
 const EMPTY_FORM: ScheduledQueryRequest = {
   name: '',
   cypher: '',
@@ -803,12 +806,12 @@ function ScheduledQueries() {
       key: 'configured_actions',
       label: 'Actions',
       hideBelow: 'lg',
-      cellSx: { width: '18%' },
+      cellSx: actionsColumnSx,
       render: (item) => (
         item.actions.length === 0 ? (
           <Typography variant="body2" color="text.secondary">None</Typography>
         ) : (
-          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+          <Box sx={{ display: 'flex', flexWrap: 'nowrap', gap: 0.5, overflow: 'hidden' }}>
             {item.actions.map((action, index) => (
               <Chip key={`${action.action_type}-${index}`} label={action.action_type} size="small" />
             ))}
@@ -819,7 +822,7 @@ function ScheduledQueries() {
     {
       key: 'status',
       label: 'Status',
-      cellSx: { width: 140 },
+      cellSx: statusColumnSx,
       render: (item) => (
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
           <Chip
@@ -852,7 +855,7 @@ function ScheduledQueries() {
       key: 'version',
       label: 'Version',
       hideBelow: 'sm',
-      cellSx: { ...listTableSecondaryCellSx, width: 88 },
+      cellSx: { ...listTableSecondaryCellSx, width: 96 },
       render: (item) => `v${item.current_version}`
     },
     {

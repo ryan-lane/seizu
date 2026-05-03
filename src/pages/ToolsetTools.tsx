@@ -74,9 +74,10 @@ const LOWER_SNAKE_ID = /^[a-z][a-z0-9]*(?:_[a-z0-9]+)*$/;
 
 const descriptionColumnSx = { ...listTableSecondaryCellSx, width: '22%' };
 const paramsColumnSx = { ...listTableSecondaryCellSx, width: 96 };
-const versionColumnSx = { ...listTableSecondaryCellSx, width: 88 };
+const versionColumnSx = { ...listTableSecondaryCellSx, width: 96 };
 const updatedAtColumnSx = { ...listTableSecondaryCellSx, width: 180 };
 const updatedByColumnSx = { ...listTableSecondaryCellSx, width: 150 };
+const statusColumnSx = { width: 176 };
 
 function toolStatus(item: ToolItem): { enabled: boolean; label: string } {
   const effectiveEnabled = item.effective_enabled ?? item.enabled;
@@ -560,6 +561,7 @@ function ToolsetTools() {
     {
       key: 'status',
       label: 'Status',
+      cellSx: statusColumnSx,
       render: (item) => (
         <Chip
           label={toolStatus(item).label}
