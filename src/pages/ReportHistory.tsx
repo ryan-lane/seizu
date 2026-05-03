@@ -12,13 +12,6 @@ import {
   ListItemText,
   Menu,
   MenuItem,
-  Paper,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
   Tooltip,
   Typography
 } from '@mui/material';
@@ -31,10 +24,19 @@ import Error from '@mui/icons-material/Error';
 
 import { ReportVersion, useReportVersionsList, useReportsMutations } from 'src/hooks/useReportsApi';
 import { Report } from 'src/config.context';
+import ListTable, {
+  ListTableColumn,
+  listTableActionColumnSx,
+  listTableSecondaryCellSx
+} from 'src/components/ListTable';
 import UserDisplay from 'src/components/UserDisplay';
 import { usePermissions } from 'src/hooks/usePermissions';
 import type { BackState } from 'src/navigation';
 import { pageContentSx } from 'src/theme/layout';
+
+const savedColumnSx = { ...listTableSecondaryCellSx, width: 180 };
+const authorColumnSx = { ...listTableSecondaryCellSx, width: 150 };
+const commentColumnSx = { ...listTableSecondaryCellSx, width: '34%' };
 
 // ---------------------------------------------------------------------------
 // Per-row overflow menu
@@ -109,7 +111,7 @@ function ReportHistory() {
   const { id } = useParams();
   const navigate = useNavigate();
   const location = useLocation();
-  const { fromLabel } = (location.state ?? {}) as BackState;
+  const { fromLabel, originReturnTo } = (location.state ?? {}) as BackState;
 
   const { versions, loading, error } = useReportVersionsList(id);
   const { saveReportVersion } = useReportsMutations();
@@ -117,6 +119,75 @@ function ReportHistory() {
   const sorted = [...versions].sort((a, b) => b.version - a.version);
   const latestVersion = sorted[0]?.version;
   const reportName = sorted[0]?.name;
+  const historyBackTarget = originReturnTo ?? `/app/reports/${id}`;
+  const versionBackState = {
+    fromLabel: reportName ? `History – ${reportName}` : 'history',
+    returnTo: `/app/reports/${id}/history`,
+    originReturnTo: historyBackTarget
+  } satisfies BackState;
+  const columns: ListTableColumn<ReportVersion>[] = [
+    {
+      key: 'version',
+      label: 'Version',
+      cellSx: { width: 120 },
+      render: (version) => {
+        const isCurrent = version.version === latestVersion;
+        return (
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+          <Link
+            component={RouterLink}
+            to={`/app/reports/${id}/versions/${version.version}`}
+            state={versionBackState}
+            underline="hover"
+            color="inherit"
+            fontWeight={isCurrent ? 'bold' : 'medium'}
+          >
+              v{version.version}
+            </Link>
+            {isCurrent && (
+              <Typography component="span" variant="caption" color="primary">
+                current
+              </Typography>
+            )}
+          </Box>
+        );
+      }
+    },
+    {
+      key: 'saved',
+      label: 'Saved',
+      hideBelow: 'sm',
+      cellSx: savedColumnSx,
+      render: (version) => new Date(version.created_at).toLocaleString()
+    },
+    {
+      key: 'author',
+      label: 'Author',
+      hideBelow: 'md',
+      cellSx: authorColumnSx,
+      render: (version) => <UserDisplay userId={version.created_by} />
+    },
+    {
+      key: 'comment',
+      label: 'Comment',
+      hideBelow: 'lg',
+      cellSx: commentColumnSx,
+      render: (version) => version.comment || '—'
+    },
+    {
+      key: 'actions',
+      align: 'right',
+      cellSx: listTableActionColumnSx,
+      render: (version) => (
+        <RowMenu
+          version={version}
+          isCurrent={version.version === latestVersion}
+          onView={() => navigate(`/app/reports/${id}/versions/${version.version}`, { state: versionBackState })}
+          onRestore={() => handleRestore(version)}
+        />
+      )
+    }
+  ];
 
   async function handleRestore(version: ReportVersion) {
     if (!id) return;
@@ -139,7 +210,7 @@ function ReportHistory() {
             <Button
               size="small"
               startIcon={<ArrowBackIcon />}
-              onClick={() => navigate(-1)}
+              onClick={() => navigate(historyBackTarget)}
             >
               Back to {fromLabel}
             </Button>
@@ -167,84 +238,13 @@ function ReportHistory() {
         )}
 
         {!loading && !error && (
-          <TableContainer component={Paper} variant="outlined">
-            <Table>
-              <TableHead>
-                <TableRow>
-                  <TableCell>Version</TableCell>
-                  <TableCell>Saved</TableCell>
-                  <TableCell>Author</TableCell>
-                  <TableCell>Comment</TableCell>
-                  <TableCell />
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {sorted.length === 0 && (
-                  <TableRow>
-                    <TableCell colSpan={5}>
-                      <Typography color="text.secondary" sx={{ py: 1 }}>
-                        No versions found.
-                      </Typography>
-                    </TableCell>
-                  </TableRow>
-                )}
-                {sorted.map((v) => {
-                  const isCurrent = v.version === latestVersion;
-                  return (
-                    <TableRow key={v.version} hover>
-                      <TableCell sx={{ fontWeight: isCurrent ? 'bold' : undefined }}>
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                          <Link
-                            component={RouterLink}
-                            to={`/app/reports/${id}/versions/${v.version}`}
-                            underline="hover"
-                            color="inherit"
-                            fontWeight={isCurrent ? 'bold' : 'medium'}
-                          >
-                            v{v.version}
-                          </Link>
-                          {isCurrent && (
-                            <Typography
-                              component="span"
-                              variant="caption"
-                              color="primary"
-                            >
-                              current
-                            </Typography>
-                          )}
-                        </Box>
-                      </TableCell>
-                      <TableCell sx={{ color: 'text.secondary', whiteSpace: 'nowrap' }}>
-                        {new Date(v.created_at).toLocaleString()}
-                      </TableCell>
-                      <TableCell sx={{ color: 'text.secondary' }}><UserDisplay userId={v.created_by} /></TableCell>
-                      <TableCell sx={{ color: 'text.secondary' }}>
-                        {v.comment ? (
-                          <Tooltip title={v.comment}>
-                            <span>
-                              {v.comment.length > 60 ? `${v.comment.slice(0, 60)}…` : v.comment}
-                            </span>
-                          </Tooltip>
-                        ) : (
-                          <Typography component="span" color="text.disabled" variant="body2">
-                            —
-                          </Typography>
-                        )}
-                      </TableCell>
-                      <TableCell align="right" sx={{ width: 48, pr: 1 }}>
-                        <RowMenu
-                          version={v}
-                          isCurrent={isCurrent}
-                          onView={() => navigate(`/app/reports/${id}/versions/${v.version}`, { state: { fromLabel: reportName ? `History – ${reportName}` : 'history' } satisfies BackState })}
-                          onRestore={() => handleRestore(v)}
-                        />
-                      </TableCell>
-                    </TableRow>
-                  );
-                })}
-              </TableBody>
-            </Table>
-          </TableContainer>
+          <ListTable
+            rows={sorted}
+            columns={columns}
+            getRowKey={(version) => version.version}
+            emptyMessage="No versions found."
+            pagination={false}
+          />
         )}
       </Box>
     </>

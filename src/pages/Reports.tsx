@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
+import { useParams, useNavigate, useSearchParams, useLocation } from 'react-router-dom';
 import {
   Box,
   Button,
@@ -37,6 +37,7 @@ import { pageContentSx } from 'src/theme/layout';
 function Reports() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
   const { hasPermission, loading: permissionsLoading, currentUser } = usePermissionState();
 
@@ -175,7 +176,12 @@ function Reports() {
       label: 'History',
       icon: <HistoryIcon fontSize="small" />,
       disabled: false,
-      onClick: () => navigate(`/app/reports/${id}/history`, { state: { fromLabel: displayedName ?? 'report' } satisfies BackState })
+      onClick: () => navigate(`/app/reports/${id}/history`, {
+        state: {
+          fromLabel: displayedName ?? 'report',
+          originReturnTo: `${location.pathname}${location.search}`
+        } satisfies BackState
+      })
     },
     ...(canWriteReports
       ? [

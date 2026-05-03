@@ -10,13 +10,6 @@ import {
   ListItemText,
   Menu,
   MenuItem,
-  Paper,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
   Tooltip,
   Typography
 } from '@mui/material';
@@ -30,11 +23,20 @@ import {
   useToolVersionsList,
   useToolMutations
 } from 'src/hooks/useToolsetsApi';
+import ListTable, {
+  ListTableColumn,
+  listTableActionColumnSx,
+  listTableSecondaryCellSx
+} from 'src/components/ListTable';
 import ToolDetailDialog, { ToolViewData } from 'src/components/ToolDetailDialog';
 import UserDisplay from 'src/components/UserDisplay';
 import { usePermissions } from 'src/hooks/usePermissions';
 import type { BackState } from 'src/navigation';
 import { pageContentSx } from 'src/theme/layout';
+
+const savedColumnSx = { ...listTableSecondaryCellSx, width: 180 };
+const authorColumnSx = { ...listTableSecondaryCellSx, width: 150 };
+const commentColumnSx = { ...listTableSecondaryCellSx, width: '28%' };
 
 // ---------------------------------------------------------------------------
 // Per-row overflow menu
@@ -113,6 +115,84 @@ function ToolHistory() {
   const sorted = [...versions].sort((a, b) => b.version - a.version);
   const latestVersion = sorted[0]?.version;
   const toolName = sorted[0]?.name;
+  const columns: ListTableColumn<ToolVersion>[] = [
+    {
+      key: 'version',
+      label: 'Version',
+      cellSx: { width: 120 },
+      render: (version) => {
+        const isCurrent = version.version === latestVersion;
+        return (
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <Typography
+              fontWeight={isCurrent ? 'bold' : 'medium'}
+              sx={{ cursor: 'pointer', '&:hover': { textDecoration: 'underline' } }}
+              onClick={() =>
+                setDetailData({
+                  name: version.name,
+                  version: version.version,
+                  description: version.description,
+                  cypher: version.cypher,
+                  parameters: version.parameters,
+                  enabled: version.enabled
+                })
+              }
+            >
+              v{version.version}
+            </Typography>
+            {isCurrent && (
+              <Typography component="span" variant="caption" color="primary">
+                current
+              </Typography>
+            )}
+          </Box>
+        );
+      }
+    },
+    {
+      key: 'saved',
+      label: 'Saved',
+      hideBelow: 'sm',
+      cellSx: savedColumnSx,
+      render: (version) => new Date(version.created_at).toLocaleString()
+    },
+    {
+      key: 'created_by',
+      label: 'Created by',
+      hideBelow: 'md',
+      cellSx: authorColumnSx,
+      render: (version) => <UserDisplay userId={version.created_by} />
+    },
+    {
+      key: 'comment',
+      label: 'Comment',
+      hideBelow: 'lg',
+      cellSx: commentColumnSx,
+      render: (version) => version.comment || '—'
+    },
+    {
+      key: 'actions',
+      align: 'right',
+      cellSx: listTableActionColumnSx,
+      render: (version) => (
+        <RowMenu
+          version={version}
+          isCurrent={version.version === latestVersion}
+          onRestore={() => handleRestore(version)}
+          onDetail={() =>
+            setDetailData({
+              name: version.name,
+              version: version.version,
+              description: version.description,
+              cypher: version.cypher,
+              parameters: version.parameters,
+              enabled: version.enabled
+            })
+          }
+        />
+      )
+    }
+  ];
 
   async function handleRestore(version: ToolVersion) {
     if (!toolId) return;
@@ -166,98 +246,13 @@ function ToolHistory() {
         )}
 
         {!loading && !error && (
-          <TableContainer component={Paper} variant="outlined">
-            <Table>
-              <TableHead>
-                <TableRow>
-                  <TableCell>Version</TableCell>
-                  <TableCell>Saved</TableCell>
-                  <TableCell>Created by</TableCell>
-                  <TableCell>Comment</TableCell>
-                  <TableCell />
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {sorted.length === 0 && (
-                  <TableRow>
-                    <TableCell colSpan={5}>
-                      <Typography color="text.secondary" sx={{ py: 1 }}>
-                        No versions found.
-                      </Typography>
-                    </TableCell>
-                  </TableRow>
-                )}
-                {sorted.map((v) => {
-                  const isCurrent = v.version === latestVersion;
-                  return (
-                    <TableRow key={v.version} hover>
-                      <TableCell>
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                          <Typography
-                            fontWeight={isCurrent ? 'bold' : 'medium'}
-                            sx={{ cursor: 'pointer', '&:hover': { textDecoration: 'underline' } }}
-                            onClick={() =>
-                              setDetailData({
-                                name: v.name,
-                                version: v.version,
-                                description: v.description,
-                                cypher: v.cypher,
-                                parameters: v.parameters,
-                                enabled: v.enabled
-                              })
-                            }
-                          >
-                            v{v.version}
-                          </Typography>
-                          {isCurrent && (
-                            <Typography component="span" variant="caption" color="primary">
-                              current
-                            </Typography>
-                          )}
-                        </Box>
-                      </TableCell>
-                      <TableCell sx={{ color: 'text.secondary', whiteSpace: 'nowrap' }}>
-                        {new Date(v.created_at).toLocaleString()}
-                      </TableCell>
-                      <TableCell sx={{ color: 'text.secondary' }}>
-                        <UserDisplay userId={v.created_by} />
-                      </TableCell>
-                      <TableCell sx={{ color: 'text.secondary' }}>
-                        {v.comment ? (
-                          <Tooltip title={v.comment}>
-                            <span>
-                              {v.comment.length > 60 ? `${v.comment.slice(0, 60)}…` : v.comment}
-                            </span>
-                          </Tooltip>
-                        ) : (
-                          <Typography component="span" color="text.disabled" variant="body2">
-                            —
-                          </Typography>
-                        )}
-                      </TableCell>
-                      <TableCell align="right" sx={{ width: 48, pr: 1 }}>
-                        <RowMenu
-                          version={v}
-                          isCurrent={isCurrent}
-                          onRestore={() => handleRestore(v)}
-                          onDetail={() =>
-                            setDetailData({
-                              name: v.name,
-                              version: v.version,
-                              description: v.description,
-                              cypher: v.cypher,
-                              parameters: v.parameters,
-                              enabled: v.enabled
-                            })
-                          }
-                        />
-                      </TableCell>
-                    </TableRow>
-                  );
-                })}
-              </TableBody>
-            </Table>
-          </TableContainer>
+          <ListTable
+            rows={sorted}
+            columns={columns}
+            getRowKey={(version) => version.version}
+            emptyMessage="No versions found."
+            pagination={false}
+          />
         )}
       </Box>
 

@@ -9,7 +9,6 @@ import {
   DialogContent,
   DialogTitle,
   IconButton,
-  Link,
   ListItemIcon,
   ListItemText,
   Menu,
@@ -36,10 +35,19 @@ import {
   useSkillVersionsList
 } from 'src/hooks/useSkillsetsApi';
 import { useToolCatalog } from 'src/hooks/useToolsetsApi';
+import ListTable, {
+  ListTableColumn,
+  listTableActionColumnSx,
+  listTableSecondaryCellSx
+} from 'src/components/ListTable';
 import UserDisplay from 'src/components/UserDisplay';
 import { usePermissions } from 'src/hooks/usePermissions';
 import type { BackState } from 'src/navigation';
 import { pageContentSx } from 'src/theme/layout';
+
+const savedColumnSx = { ...listTableSecondaryCellSx, width: 180 };
+const authorColumnSx = { ...listTableSecondaryCellSx, width: 150 };
+const commentColumnSx = { ...listTableSecondaryCellSx, width: '28%' };
 
 interface RowMenuProps {
   isCurrent: boolean;
@@ -141,20 +149,32 @@ function SkillVersionDetailDialog({
             {version.parameters.length === 0 ? (
               <Typography variant="body2" color="text.secondary">No parameters.</Typography>
             ) : (
-              <Table size="small">
-                <TableHead><TableRow><TableCell>Name</TableCell><TableCell>Type</TableCell><TableCell>Required</TableCell><TableCell>Default</TableCell><TableCell>Description</TableCell></TableRow></TableHead>
-                <TableBody>
-                  {version.parameters.map((param) => (
-                    <TableRow key={param.name}>
-                      <TableCell sx={{ fontFamily: 'monospace', fontWeight: 600 }}>{param.name}</TableCell>
-                      <TableCell>{param.type}</TableCell>
-                      <TableCell sx={{ color: 'text.secondary' }}>{param.required ? 'Yes' : 'No'}</TableCell>
-                      <TableCell sx={{ color: 'text.secondary', fontFamily: 'monospace' }}>{param.default !== null && param.default !== undefined ? String(param.default) : '-'}</TableCell>
-                      <TableCell sx={{ color: 'text.secondary' }}>{param.description || '-'}</TableCell>
+              <TableContainer component={Paper} variant="outlined">
+                <Table size="small">
+                  <TableHead>
+                    <TableRow>
+                      <TableCell>Name</TableCell>
+                      <TableCell>Type</TableCell>
+                      <TableCell>Required</TableCell>
+                      <TableCell>Default</TableCell>
+                      <TableCell>Description</TableCell>
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+                  </TableHead>
+                  <TableBody>
+                    {version.parameters.map((param) => (
+                      <TableRow key={param.name}>
+                        <TableCell sx={{ fontFamily: 'monospace', fontWeight: 600 }}>{param.name}</TableCell>
+                        <TableCell>{param.type}</TableCell>
+                        <TableCell sx={{ color: 'text.secondary' }}>{param.required ? 'Yes' : 'No'}</TableCell>
+                        <TableCell sx={{ color: 'text.secondary', fontFamily: 'monospace' }}>
+                          {param.default !== null && param.default !== undefined ? String(param.default) : '-'}
+                        </TableCell>
+                        <TableCell sx={{ color: 'text.secondary' }}>{param.description || '-'}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </TableContainer>
             )}
           </Box>
         </Box>
@@ -181,6 +201,64 @@ function SkillHistory() {
   const sorted = [...versions].sort((a, b) => b.version - a.version);
   const latestVersion = sorted[0]?.version;
   const name = sorted[0]?.name;
+  const columns: ListTableColumn<SkillVersion>[] = [
+    {
+      key: 'version',
+      label: 'Version',
+      cellSx: { width: 120 },
+      render: (version) => {
+        const isCurrent = version.version === latestVersion;
+        return (
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <Typography
+              fontWeight={isCurrent ? 'bold' : 'medium'}
+              sx={{ cursor: 'pointer', '&:hover': { textDecoration: 'underline' } }}
+              onClick={() => setDetailVersion(version)}
+            >
+              v{version.version}
+            </Typography>
+            {isCurrent && (
+              <Typography component="span" variant="caption" color="primary">
+                current
+              </Typography>
+            )}
+          </Box>
+        );
+      }
+    },
+    {
+      key: 'saved',
+      label: 'Saved',
+      hideBelow: 'sm',
+      cellSx: savedColumnSx,
+      render: (version) => new Date(version.created_at).toLocaleString()
+    },
+    {
+      key: 'created_by',
+      label: 'Created by',
+      hideBelow: 'md',
+      cellSx: authorColumnSx,
+      render: (version) => <UserDisplay userId={version.created_by} />
+    },
+    {
+      key: 'comment',
+      label: 'Comment',
+      hideBelow: 'lg',
+      cellSx: commentColumnSx,
+      render: (version) => version.comment || '—'
+    },
+    {
+      key: 'actions',
+      align: 'right',
+      cellSx: listTableActionColumnSx,
+      render: (version) => (
+        <RowMenu
+          isCurrent={version.version === latestVersion}
+          onRestore={() => handleRestoreClick(version)}
+        />
+      )
+    }
+  ];
 
   const handleRestoreClick = (version: SkillVersion) => {
     const catalogSet = new Set(catalog.map((tool) => tool.mcp_name));
@@ -228,59 +306,13 @@ function SkillHistory() {
       {error && <Typography color="error">Failed to load history</Typography>}
       {restoreError && <Typography color="error">{restoreError}</Typography>}
       {!loading && !error && (
-        <TableContainer component={Paper} variant="outlined">
-          <Table>
-            <TableHead><TableRow><TableCell>Version</TableCell><TableCell>Saved</TableCell><TableCell>Created By</TableCell><TableCell>Comment</TableCell><TableCell /></TableRow></TableHead>
-            <TableBody>
-              {sorted.length === 0 && (
-                <TableRow>
-                  <TableCell colSpan={5}>
-                    <Typography color="text.secondary" sx={{ py: 1 }}>
-                      No versions found.
-                    </Typography>
-                  </TableCell>
-                </TableRow>
-              )}
-              {sorted.map((v) => {
-                const isCurrent = v.version === latestVersion;
-                return (
-                  <TableRow key={v.version} hover>
-                    <TableCell>
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                        <Link
-                          href={`#skill-version-${v.version}`}
-                          underline="hover"
-                          color="inherit"
-                          fontWeight={isCurrent ? 'bold' : 'medium'}
-                          onClick={(event) => {
-                            event.preventDefault();
-                            setDetailVersion(v);
-                          }}
-                        >
-                          v{v.version}
-                        </Link>
-                        {isCurrent && (
-                          <Typography component="span" variant="caption" color="primary">
-                            current
-                          </Typography>
-                        )}
-                      </Box>
-                    </TableCell>
-                    <TableCell sx={{ color: 'text.secondary' }}>{new Date(v.created_at).toLocaleString()}</TableCell>
-                    <TableCell sx={{ color: 'text.secondary' }}><UserDisplay userId={v.created_by} /></TableCell>
-                    <TableCell sx={{ color: 'text.secondary' }}>{v.comment || '-'}</TableCell>
-                    <TableCell align="right" sx={{ width: 48, pr: 1 }}>
-                      <RowMenu
-                        isCurrent={isCurrent}
-                        onRestore={() => handleRestoreClick(v)}
-                      />
-                    </TableCell>
-                  </TableRow>
-                );
-              })}
-            </TableBody>
-          </Table>
-        </TableContainer>
+        <ListTable
+          rows={sorted}
+          columns={columns}
+          getRowKey={(version) => version.version}
+          emptyMessage="No versions found."
+          pagination={false}
+        />
       )}
       <SkillVersionDetailDialog
         version={detailVersion}
