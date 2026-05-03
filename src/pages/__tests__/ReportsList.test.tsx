@@ -161,6 +161,8 @@ describe('ReportsList', () => {
       expect(cloneReport).toHaveBeenCalledWith('r1', 'Copy of Executive Risk');
     });
     expect(refreshReports).toHaveBeenCalledTimes(1);
-    expect(screen.getByTestId('location')).toHaveTextContent('/app/reports/clone1?edit=true');
+    await waitFor(() => {
+      expect(screen.getByTestId('location')).toHaveTextContent('/app/reports/clone1?edit=true');
+    });
   });
 });

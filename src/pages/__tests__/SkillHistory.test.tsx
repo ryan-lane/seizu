@@ -127,7 +127,7 @@ describe('SkillHistory', () => {
   it('opens version details from the version link', () => {
     render(<SkillHistory />, { wrapper: Wrapper });
 
-    fireEvent.click(screen.getByRole('link', { name: 'v1' }));
+    fireEvent.click(screen.getByRole('button', { name: 'v1' }));
 
     expect(screen.getByRole('dialog', { name: 'Summarize Findings' })).toBeInTheDocument();
     expect(screen.getByText('Older template')).toBeInTheDocument();

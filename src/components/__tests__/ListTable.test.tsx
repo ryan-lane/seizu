@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import ListTable, { ListTableColumn, ListTableFilterGroup } from 'src/components/ListTable';
 
 interface Row {
@@ -36,6 +36,10 @@ const filterGroups: ListTableFilterGroup<Row>[] = [
 describe('ListTable', () => {
   beforeEach(() => {
     window.localStorage.clear();
+  });
+
+  afterEach(() => {
+    cleanup();
   });
 
   it('paginates rows on the client', () => {

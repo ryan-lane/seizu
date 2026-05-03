@@ -2,6 +2,7 @@ import { useState } from 'react';
 import {
   Box,
   Button,
+  ButtonBase,
   Chip,
   CircularProgress,
   Dialog,
@@ -210,13 +211,21 @@ function SkillHistory() {
         const isCurrent = version.version === latestVersion;
         return (
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-            <Typography
-              fontWeight={isCurrent ? 'bold' : 'medium'}
-              sx={{ cursor: 'pointer', '&:hover': { textDecoration: 'underline' } }}
+            <ButtonBase
               onClick={() => setDetailVersion(version)}
+              sx={{
+                font: 'inherit',
+                fontWeight: isCurrent ? 'bold' : 'medium',
+                color: 'inherit',
+                borderRadius: 0,
+                textAlign: 'left',
+                '&:hover': { textDecoration: 'underline' }
+              }}
             >
-              v{version.version}
-            </Typography>
+              <Typography component="span" sx={{ lineHeight: 1.4 }}>
+                v{version.version}
+              </Typography>
+            </ButtonBase>
             {isCurrent && (
               <Typography component="span" variant="caption" color="primary">
                 current
