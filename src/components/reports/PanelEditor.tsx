@@ -2,12 +2,14 @@ import { useState, useEffect } from 'react';
 import {
   Box,
   Button,
+  Checkbox,
   Dialog,
   DialogActions,
   DialogContent,
   DialogTitle,
   Divider,
   FormControl,
+  FormControlLabel,
   IconButton,
   InputLabel,
   MenuItem,
@@ -22,6 +24,10 @@ import Add from '@mui/icons-material/Add';
 import DeleteIcon from '@mui/icons-material/Delete';
 import { Panel, PanelParam, ColumnDef } from 'src/config.context';
 import MarkdownPanelEditor from 'src/components/reports/MarkdownPanelEditor';
+import { defaultPanelHeight } from 'src/components/reports/panelLayout';
+
+const MAX_HEIGHT_ROWS = 24;
+const TYPES_WITH_AUTO_HEIGHT = new Set(['markdown', 'vertical-table']);
 
 const PANEL_TYPES = [
   { value: 'table', label: 'Table' },
@@ -45,7 +51,7 @@ export interface EditablePanel extends Panel {
 }
 
 function emptyPanel(type: string): Panel {
-  return { type, size: 3 };
+  return { type, w: 3 };
 }
 
 interface PanelEditorProps {
@@ -150,11 +156,18 @@ function PanelEditor({ open, panel, onClose, onSave }: PanelEditorProps) {
   }
 
   function handleTypeChange(newType: string) {
-    // Keep common fields, reset type-specific ones
+    // Keep layout/caption fields, reset type-specific ones. Drop auto_height
+    // if the new type doesn't support it (table, charts, etc.).
     setForm({
       type: newType,
       caption: form.caption,
       size: form.size,
+      w: form.w,
+      h: form.h,
+      x: form.x,
+      y: form.y,
+      min_h: form.min_h,
+      auto_height: TYPES_WITH_AUTO_HEIGHT.has(newType) ? form.auto_height : undefined,
       cypher: newType === 'markdown' ? undefined : form.cypher
     });
   }
@@ -221,20 +234,48 @@ function PanelEditor({ open, panel, onClose, onSave }: PanelEditorProps) {
             onChange={(e) => set('caption', e.target.value || undefined)}
           />
 
-          {/* Size */}
+          {/* Width */}
           <Box>
             <Typography gutterBottom variant="body2">
-              Size (Grid columns: {form.size ?? 3})
+              Width (grid columns: {form.w ?? form.size ?? 3})
             </Typography>
             <Slider
               min={1}
               max={12}
               step={1}
               marks
-              value={form.size ?? 3}
-              onChange={(_, v) => set('size', v as number)}
+              value={form.w ?? form.size ?? 3}
+              onChange={(_, v) => set('w', v as number)}
               valueLabelDisplay="auto"
             />
+          </Box>
+
+          {/* Height */}
+          <Box>
+            <Typography gutterBottom variant="body2">
+              Height (grid rows: {form.h ?? defaultPanelHeight(form.type)})
+            </Typography>
+            <Slider
+              min={1}
+              max={MAX_HEIGHT_ROWS}
+              step={1}
+              value={form.h ?? defaultPanelHeight(form.type)}
+              onChange={(_, v) => set('h', v as number)}
+              valueLabelDisplay="auto"
+              disabled={form.auto_height === true}
+            />
+            {TYPES_WITH_AUTO_HEIGHT.has(form.type) && (
+              <FormControlLabel
+                control={
+                  <Checkbox
+                    size="small"
+                    checked={form.auto_height === true}
+                    onChange={(e) => set('auto_height', e.target.checked || undefined)}
+                  />
+                }
+                label="Fit content (auto-height)"
+              />
+            )}
           </Box>
 
           {/* Cypher (all except markdown) */}
@@ -450,6 +491,14 @@ function cleanPanel(panel: Panel): Panel {
   const result: Panel = { type: panel.type };
   if (panel.caption) result.caption = panel.caption;
   if (panel.size != null) result.size = Math.max(1, Math.min(12, panel.size));
+  if (panel.w != null) result.w = Math.max(1, Math.min(12, panel.w));
+  if (panel.h != null) result.h = Math.max(1, Math.min(MAX_HEIGHT_ROWS, panel.h));
+  if (panel.x != null) result.x = Math.max(0, panel.x);
+  if (panel.y != null) result.y = Math.max(0, panel.y);
+  if (panel.min_h != null) result.min_h = Math.max(1, panel.min_h);
+  if (panel.auto_height && TYPES_WITH_AUTO_HEIGHT.has(panel.type)) {
+    result.auto_height = true;
+  }
   if (panel.cypher) result.cypher = panel.cypher;
   if (panel.details_cypher) result.details_cypher = panel.details_cypher;
   if (panel.markdown) result.markdown = panel.markdown;
