@@ -22,12 +22,15 @@ import { useReportVersion, useReportVersionsList, useReportsMutations } from 'sr
 import { Report } from 'src/config.context';
 import { usePermissionState } from 'src/hooks/usePermissions';
 import type { BackState } from 'src/navigation';
+import { contentContainerSx, pageContentSx } from 'src/theme/layout';
 
 function ReportVersionView() {
   const { id, version } = useParams();
   const navigate = useNavigate();
   const location = useLocation();
   const { fromLabel } = (location.state ?? {}) as BackState;
+  const backState = (location.state ?? {}) as BackState;
+  const returnTo = backState.returnTo;
 
   const { reportVersion, loading, error } = useReportVersion(id, version);
   const { versions } = useReportVersionsList(id);
@@ -78,7 +81,7 @@ function ReportVersionView() {
 
   if (error || !reportVersion) {
     return (
-      <Box sx={{ p: 3, display: 'flex', alignItems: 'center', gap: 1 }}>
+      <Box sx={{ ...pageContentSx, display: 'flex', alignItems: 'center', gap: 1 }}>
         <Error />
         <Typography>Failed to load this version</Typography>
       </Box>
@@ -100,7 +103,7 @@ function ReportVersionView() {
           bgcolor: 'background.paper',
           borderBottom: 1,
           borderColor: 'divider',
-          px: 3,
+          ...contentContainerSx,
           py: 1.5,
           display: 'flex',
           alignItems: 'center',
@@ -112,7 +115,13 @@ function ReportVersionView() {
             <Button
               size="small"
               startIcon={<ArrowBackIcon />}
-              onClick={() => navigate(-1)}
+              onClick={() => {
+                if (returnTo) {
+                  navigate(returnTo, { state: backState });
+                  return;
+                }
+                navigate(-1);
+              }}
             >
               Back to {fromLabel}
             </Button>
@@ -126,7 +135,7 @@ function ReportVersionView() {
               size="small"
               startIcon={<NavigateBeforeIcon />}
               disabled={prevVersion === null}
-              onClick={() => navigate(`/app/reports/${id}/versions/${prevVersion}`)}
+              onClick={() => navigate(`/app/reports/${id}/versions/${prevVersion}`, { state: backState })}
             >
               {prevVersion !== null ? `v${prevVersion}` : 'Older'}
             </Button>
@@ -138,7 +147,7 @@ function ReportVersionView() {
               size="small"
               endIcon={<NavigateNextIcon />}
               disabled={nextVersion === null}
-              onClick={() => navigate(`/app/reports/${id}/versions/${nextVersion}`)}
+              onClick={() => navigate(`/app/reports/${id}/versions/${nextVersion}`, { state: backState })}
             >
               {nextVersion !== null ? `v${nextVersion}` : 'Newer'}
             </Button>

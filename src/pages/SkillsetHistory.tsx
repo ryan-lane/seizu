@@ -2,6 +2,7 @@ import { useState } from 'react';
 import {
   Box,
   Button,
+  ButtonBase,
   Chip,
   CircularProgress,
   Dialog,
@@ -9,18 +10,10 @@ import {
   DialogContent,
   DialogTitle,
   IconButton,
-  Link,
   ListItemIcon,
   ListItemText,
   Menu,
   MenuItem,
-  Paper,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
   Tooltip,
   Typography
 } from '@mui/material';
@@ -35,9 +28,19 @@ import {
   useSkillsetMutations,
   useSkillsetVersionsList
 } from 'src/hooks/useSkillsetsApi';
+import ListTable, {
+  ListTableColumn,
+  listTableActionColumnSx,
+  listTableSecondaryCellSx
+} from 'src/components/ListTable';
 import UserDisplay from 'src/components/UserDisplay';
 import { usePermissions } from 'src/hooks/usePermissions';
 import type { BackState } from 'src/navigation';
+import { pageContentSx } from 'src/theme/layout';
+
+const savedColumnSx = { ...listTableSecondaryCellSx, width: 180 };
+const authorColumnSx = { ...listTableSecondaryCellSx, width: 150 };
+const commentColumnSx = { ...listTableSecondaryCellSx, width: '28%' };
 
 interface RowMenuProps {
   isCurrent: boolean;
@@ -134,6 +137,78 @@ function SkillsetHistory() {
   const sorted = [...versions].sort((a, b) => b.version - a.version);
   const latestVersion = sorted[0]?.version;
   const name = sorted[0]?.name;
+  const columns: ListTableColumn<SkillsetVersion>[] = [
+    {
+      key: 'version',
+      label: 'Version',
+      cellSx: { width: 120 },
+      render: (version) => {
+        const isCurrent = version.version === latestVersion;
+        return (
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <ButtonBase
+              onClick={() => setDetailVersion(version)}
+              sx={{
+                font: 'inherit',
+                fontWeight: isCurrent ? 'bold' : 'medium',
+                color: 'inherit',
+                borderRadius: 0,
+                textAlign: 'left',
+                '&:hover': { textDecoration: 'underline' }
+              }}
+            >
+              <Typography component="span" sx={{ lineHeight: 1.4 }}>
+                v{version.version}
+              </Typography>
+            </ButtonBase>
+            {isCurrent && (
+              <Typography component="span" variant="caption" color="primary">
+                current
+              </Typography>
+            )}
+          </Box>
+        );
+      }
+    },
+    {
+      key: 'name',
+      label: 'Name',
+      cellSx: { width: '24%' },
+      render: (version) => version.name
+    },
+    {
+      key: 'saved',
+      label: 'Saved',
+      hideBelow: 'sm',
+      cellSx: savedColumnSx,
+      render: (version) => new Date(version.created_at).toLocaleString()
+    },
+    {
+      key: 'created_by',
+      label: 'Created By',
+      hideBelow: 'md',
+      cellSx: authorColumnSx,
+      render: (version) => <UserDisplay userId={version.created_by} />
+    },
+    {
+      key: 'comment',
+      label: 'Comment',
+      hideBelow: 'lg',
+      cellSx: commentColumnSx,
+      render: (version) => version.comment || '—'
+    },
+    {
+      key: 'actions',
+      align: 'right',
+      cellSx: listTableActionColumnSx,
+      render: (version) => (
+        <RowMenu
+          isCurrent={version.version === latestVersion}
+          onRestore={() => handleRestore(version)}
+        />
+      )
+    }
+  ];
 
   async function handleRestore(version: SkillsetVersion) {
     if (!skillsetId) return;
@@ -147,7 +222,7 @@ function SkillsetHistory() {
   }
 
   return (
-    <Box sx={{ p: 3 }}>
+    <Box sx={pageContentSx}>
       <Helmet><title>{name ? `History - ${name} | Seizu` : 'History | Seizu'}</title></Helmet>
       {fromLabel && <Button startIcon={<ArrowBackIcon />} onClick={() => navigate(-1)} sx={{ mb: 2 }}>Back to {fromLabel}</Button>}
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 3 }}>
@@ -156,59 +231,13 @@ function SkillsetHistory() {
       {loading && <CircularProgress />}
       {error && <Typography color="error">Failed to load history</Typography>}
       {!loading && !error && (
-        <TableContainer component={Paper} variant="outlined">
-          <Table>
-            <TableHead><TableRow><TableCell>Version</TableCell><TableCell>Saved</TableCell><TableCell>Created By</TableCell><TableCell>Comment</TableCell><TableCell /></TableRow></TableHead>
-            <TableBody>
-              {sorted.length === 0 && (
-                <TableRow>
-                  <TableCell colSpan={5}>
-                    <Typography color="text.secondary" sx={{ py: 1 }}>
-                      No versions found.
-                    </Typography>
-                  </TableCell>
-                </TableRow>
-              )}
-              {sorted.map((v) => {
-                const isCurrent = v.version === latestVersion;
-                return (
-                  <TableRow key={v.version} hover>
-                    <TableCell>
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                        <Link
-                          href={`#skillset-version-${v.version}`}
-                          underline="hover"
-                          color="inherit"
-                          fontWeight={isCurrent ? 'bold' : 'medium'}
-                          onClick={(event) => {
-                            event.preventDefault();
-                            setDetailVersion(v);
-                          }}
-                        >
-                          v{v.version}
-                        </Link>
-                        {isCurrent && (
-                          <Typography component="span" variant="caption" color="primary">
-                            current
-                          </Typography>
-                        )}
-                      </Box>
-                    </TableCell>
-                    <TableCell sx={{ color: 'text.secondary' }}>{new Date(v.created_at).toLocaleString()}</TableCell>
-                    <TableCell sx={{ color: 'text.secondary' }}><UserDisplay userId={v.created_by} /></TableCell>
-                    <TableCell sx={{ color: 'text.secondary' }}>{v.comment || '-'}</TableCell>
-                    <TableCell align="right" sx={{ width: 48, pr: 1 }}>
-                      <RowMenu
-                        isCurrent={isCurrent}
-                        onRestore={() => handleRestore(v)}
-                      />
-                    </TableCell>
-                  </TableRow>
-                );
-              })}
-            </TableBody>
-          </Table>
-        </TableContainer>
+        <ListTable
+          rows={sorted}
+          columns={columns}
+          getRowKey={(version) => version.version}
+          emptyMessage="No versions found."
+          pagination={false}
+        />
       )}
       <SkillsetVersionDetailDialog
         version={detailVersion}

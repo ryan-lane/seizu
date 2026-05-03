@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Alert,
@@ -25,10 +25,12 @@ import {
   Typography
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
+import BadgeIcon from '@mui/icons-material/Badge';
 import DeleteIcon from '@mui/icons-material/Delete';
 import EditIcon from '@mui/icons-material/Edit';
 import HistoryIcon from '@mui/icons-material/History';
 import MoreVertIcon from '@mui/icons-material/MoreVert';
+import PersonOutlineIcon from '@mui/icons-material/PersonOutline';
 import VisibilityIcon from '@mui/icons-material/Visibility';
 import Error from '@mui/icons-material/Error';
 import {
@@ -44,18 +46,32 @@ import UserDisplay from 'src/components/UserDisplay';
 import { usePermissionState } from 'src/hooks/usePermissions';
 import ListTable, {
   ListTableColumn,
+  ListTableFilterGroup,
   listTableActionColumnSx,
   listTablePrimaryCellSx,
   listTableSecondaryCellSx,
   listTableTruncateSx
 } from 'src/components/ListTable';
 import type { BackState } from 'src/navigation';
+import { pageContentSx } from 'src/theme/layout';
 
 const descriptionColumnSx = { ...listTableSecondaryCellSx, width: '22%' };
-const permissionsColumnSx = { width: '24%' };
-const versionColumnSx = { ...listTableSecondaryCellSx, width: 88 };
+const permissionsColumnSx = { width: '18%' };
+const roleTypeColumnSx = { width: 144 };
+const versionColumnSx = { ...listTableSecondaryCellSx, width: 96 };
 const updatedAtColumnSx = { ...listTableSecondaryCellSx, width: 180 };
 const updatedByColumnSx = { ...listTableSecondaryCellSx, width: 150 };
+const srOnlySx = {
+  position: 'absolute',
+  width: 1,
+  height: 1,
+  p: 0,
+  m: -1,
+  overflow: 'hidden',
+  clip: 'rect(0, 0, 0, 0)',
+  whiteSpace: 'nowrap',
+  border: 0
+} as const;
 
 function permissionGroup(permission: string): string {
   return permission.split(':')[0] || 'other';
@@ -74,6 +90,118 @@ function groupedPermissions(permissions: string[]): Record<string, string[]> {
 
 function permissionLabel(group: string): string {
   return group.replace(/_/g, ' ');
+}
+
+interface PermissionChipsSummaryProps {
+  permissions: string[];
+}
+
+function PermissionChipsSummary({ permissions }: PermissionChipsSummaryProps) {
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const permissionRefs = useRef<Record<string, HTMLDivElement | null>>({});
+  const overflowRefs = useRef<Record<number, HTMLDivElement | null>>({});
+  const [availableWidth, setAvailableWidth] = useState(0);
+  const [visibleCount, setVisibleCount] = useState(permissions.length);
+  const gapPx = 4;
+
+  useLayoutEffect(() => {
+    setVisibleCount(permissions.length);
+  }, [permissions]);
+
+  useLayoutEffect(() => {
+    const updateWidth = () => {
+      const width = containerRef.current?.getBoundingClientRect().width ?? 0;
+      setAvailableWidth(width);
+    };
+
+    updateWidth();
+
+    if (!containerRef.current || typeof ResizeObserver === 'undefined') return undefined;
+
+    const observer = new ResizeObserver(updateWidth);
+    observer.observe(containerRef.current);
+    return () => observer.disconnect();
+  }, []);
+
+  useLayoutEffect(() => {
+    if (availableWidth <= 0) return;
+
+    const permissionWidths = permissions.map((permission) => permissionRefs.current[permission]?.getBoundingClientRect().width ?? 0);
+    const overflowWidths = Array.from({ length: permissions.length + 1 }, (_, index) =>
+      overflowRefs.current[index]?.getBoundingClientRect().width ?? 0
+    );
+
+    let nextVisibleCount = 0;
+    for (let count = permissions.length; count >= 0; count -= 1) {
+      const remaining = permissions.length - count;
+      const chipCount = count + (remaining > 0 ? 1 : 0);
+      const totalWidth =
+        permissionWidths.slice(0, count).reduce((sum, width) => sum + width, 0) +
+        (chipCount > 0 ? gapPx * (chipCount - 1) : 0) +
+        (remaining > 0 ? (overflowWidths[remaining] ?? 0) : 0);
+      if (totalWidth <= availableWidth) {
+        nextVisibleCount = count;
+        break;
+      }
+    }
+
+    if (nextVisibleCount !== visibleCount) {
+      setVisibleCount(nextVisibleCount);
+    }
+  }, [availableWidth, permissions, visibleCount]);
+
+  const visiblePermissions = permissions.slice(0, visibleCount);
+  const remaining = permissions.length - visibleCount;
+
+  return (
+    <Box ref={containerRef} sx={{ position: 'relative', minWidth: 0, overflow: 'hidden' }}>
+      <Box sx={{ display: 'flex', flexWrap: 'nowrap', gap: 0.5, overflow: 'hidden', minWidth: 0 }}>
+        {visiblePermissions.map((permission) => (
+          <Chip key={permission} label={permission} size="small" variant="outlined" />
+        ))}
+        {remaining > 0 && (
+          <Chip label={`+${remaining}`} size="small" variant="outlined" />
+        )}
+      </Box>
+      <Box
+        aria-hidden
+        sx={{
+          position: 'absolute',
+          inset: 0,
+          visibility: 'hidden',
+          pointerEvents: 'none',
+          overflow: 'hidden',
+          display: 'flex',
+          flexWrap: 'nowrap',
+          gap: 0.5,
+          minWidth: 0
+        }}
+      >
+        {permissions.map((permission) => (
+          <Chip
+            key={`measure-${permission}`}
+            label={permission}
+            size="small"
+            variant="outlined"
+            ref={(node) => {
+              permissionRefs.current[permission] = node as HTMLDivElement | null;
+            }}
+          />
+        ))}
+        {Array.from({ length: permissions.length + 1 }, (_, index) => (
+          <Chip
+            key={`overflow-${index}`}
+            label={`+${index}`}
+            size="small"
+            variant="outlined"
+            ref={(node) => {
+              overflowRefs.current[index] = node as HTMLDivElement | null;
+            }}
+          />
+        ))}
+      </Box>
+    </Box>
+  );
 }
 
 interface RoleDetailDialogProps {
@@ -372,17 +500,16 @@ function Roles() {
   const [detailTarget, setDetailTarget] = useState<RoleItem | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<RoleItem | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [missingPermsTarget, setMissingPermsTarget] = useState<RoleItem | null>(null);
+  const [missingPermNames, setMissingPermNames] = useState<string[]>([]);
 
   const allRows = useMemo(
     () => [...builtinRoles, ...roles],
     [builtinRoles, roles]
   );
   const availablePermissions = useMemo(
-    () => Array.from(new Set([
-      ...builtinRoles.flatMap((role) => role.permissions),
-      ...(editTarget?.permissions ?? [])
-    ])).sort(),
-    [builtinRoles, editTarget]
+    () => Array.from(new Set(builtinRoles.flatMap((role) => role.permissions))).sort(),
+    [builtinRoles]
   );
 
   const handleSave = async (req: CreateRoleRequest | UpdateRoleRequest) => {
@@ -392,6 +519,29 @@ function Roles() {
       await createRole(req as CreateRoleRequest);
     }
     refresh();
+  };
+
+  const handleEditClick = (role: RoleItem) => {
+    const knownSet = new Set(builtinRoles.flatMap((r) => r.permissions));
+    const missing = role.permissions.filter((p) => !knownSet.has(p));
+    if (missing.length > 0) {
+      setEditTarget(null);
+      setMissingPermsTarget(role);
+      setMissingPermNames(missing);
+    } else {
+      setEditTarget(role);
+      setDialogOpen(true);
+    }
+  };
+
+  const handleMissingPermsConfirm = () => {
+    if (!missingPermsTarget) return;
+    const knownSet = new Set(builtinRoles.flatMap((r) => r.permissions));
+    const filtered = { ...missingPermsTarget, permissions: missingPermsTarget.permissions.filter((p) => knownSet.has(p)) };
+    setEditTarget(filtered);
+    setDialogOpen(true);
+    setMissingPermsTarget(null);
+    setMissingPermNames([]);
   };
 
   const handleDeleteConfirm = async () => {
@@ -416,7 +566,7 @@ function Roles() {
 
   if (!canRead) {
     return (
-      <Box sx={{ p: 3 }}>
+      <Box sx={pageContentSx}>
         <Typography>You do not have access to role management.</Typography>
       </Box>
     );
@@ -428,7 +578,7 @@ function Roles() {
     {
       key: 'name',
       label: 'Name',
-      cellSx: listTablePrimaryCellSx,
+      cellSx: { ...listTablePrimaryCellSx, width: '24%' },
       render: (item) => (
         <Button
           variant="text"
@@ -461,7 +611,7 @@ function Roles() {
     {
       key: 'type',
       label: 'Type',
-      cellSx: { width: 130 },
+      cellSx: roleTypeColumnSx,
       render: (item) => {
         const builtin = isBuiltinRole(item.role_id);
         return (
@@ -491,16 +641,10 @@ function Roles() {
       hideBelow: 'lg',
       cellSx: permissionsColumnSx,
       render: (item) => {
-        const visiblePermissions = item.permissions.slice(0, 3);
-        const remaining = item.permissions.length - visiblePermissions.length;
         return (
-          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
-            {visiblePermissions.map((permission) => (
-              <Chip key={permission} label={permission} size="small" variant="outlined" />
-            ))}
-            {remaining > 0 && (
-              <Chip label={`+${remaining}`} size="small" variant="outlined" />
-            )}
+          <Box sx={{ position: 'relative', minWidth: 0 }}>
+            <Box sx={srOnlySx}>{item.permissions.join(' ')}</Box>
+            <PermissionChipsSummary permissions={item.permissions} />
           </Box>
         );
       }
@@ -541,7 +685,7 @@ function Roles() {
             isBuiltin={builtin}
             hasPermission={hasPermission}
             onView={() => setDetailTarget(item)}
-            onEdit={() => { setEditTarget(item); setDialogOpen(true); }}
+            onEdit={() => handleEditClick(item)}
             onHistory={() => navigate(`/app/roles/${item.role_id}/history`, { state: { fromLabel: 'Roles' } satisfies BackState })}
             onDelete={() => setDeleteTarget(item)}
           />
@@ -549,10 +693,31 @@ function Roles() {
       }
     }
   ];
+  const filterGroups: ListTableFilterGroup<RoleItem>[] = [
+    {
+      key: 'role_type',
+      label: 'Role type',
+      icon: <BadgeIcon fontSize="small" />,
+      options: [
+        {
+          key: 'builtin',
+          label: 'Built-in',
+          icon: <BadgeIcon fontSize="small" />,
+          matches: (item) => isBuiltinRole(item.role_id)
+        },
+        {
+          key: 'user_defined',
+          label: 'User-defined',
+          icon: <PersonOutlineIcon fontSize="small" />,
+          matches: (item) => !isBuiltinRole(item.role_id)
+        }
+      ]
+    }
+  ];
 
   return (
     <>
-      <Box sx={{ p: 3 }}>
+      <Box sx={pageContentSx}>
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
           <Typography variant="h1">Roles</Typography>
           {hasPermission('roles:write') && (
@@ -585,6 +750,7 @@ function Roles() {
             columns={columns}
             getRowKey={(item) => item.role_id}
             emptyMessage="No roles found."
+            filterGroups={filterGroups}
           />
         )}
       </Box>
@@ -599,6 +765,27 @@ function Roles() {
       />
 
       <RoleDetailDialog role={detailTarget} onClose={() => setDetailTarget(null)} />
+
+      <Dialog open={!!missingPermsTarget} onClose={() => { setMissingPermsTarget(null); setMissingPermNames([]); }} maxWidth="sm" fullWidth>
+        <DialogTitle>Remove unrecognized permissions?</DialogTitle>
+        <DialogContent>
+          <DialogContentText>
+            The following permissions in this role are no longer recognized:
+          </DialogContentText>
+          <Box component="ul" sx={{ mt: 1, mb: 1, pl: 2 }}>
+            {missingPermNames.map((p) => (
+              <Box component="li" key={p} sx={{ fontFamily: 'monospace', fontSize: 13 }}>{p}</Box>
+            ))}
+          </Box>
+          <DialogContentText>
+            They will be removed when you save. Continue editing?
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => { setMissingPermsTarget(null); setMissingPermNames([]); }}>Cancel</Button>
+          <Button variant="contained" onClick={handleMissingPermsConfirm}>Continue editing</Button>
+        </DialogActions>
+      </Dialog>
 
       <Dialog open={!!deleteTarget} onClose={() => setDeleteTarget(null)} maxWidth="xs" fullWidth>
         <DialogTitle>Delete role?</DialogTitle>

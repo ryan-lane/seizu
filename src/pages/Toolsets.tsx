@@ -25,10 +25,14 @@ import {
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import BuildIcon from '@mui/icons-material/Build';
+import BadgeIcon from '@mui/icons-material/Badge';
 import DeleteIcon from '@mui/icons-material/Delete';
 import EditIcon from '@mui/icons-material/Edit';
 import HistoryIcon from '@mui/icons-material/History';
 import MoreVertIcon from '@mui/icons-material/MoreVert';
+import PersonOutlineIcon from '@mui/icons-material/PersonOutline';
+import ToggleOnIcon from '@mui/icons-material/ToggleOn';
+import ToggleOffIcon from '@mui/icons-material/ToggleOff';
 import Error from '@mui/icons-material/Error';
 import {
   useToolsetsList,
@@ -39,6 +43,7 @@ import {
 } from 'src/hooks/useToolsetsApi';
 import ListTable, {
   ListTableColumn,
+  ListTableFilterGroup,
   listTableActionColumnSx,
   listTableMonoCellSx,
   listTablePrimaryCellSx,
@@ -48,6 +53,7 @@ import ListTable, {
 import UserDisplay from 'src/components/UserDisplay';
 import { usePermissions } from 'src/hooks/usePermissions';
 import type { BackState } from 'src/navigation';
+import { pageContentSx } from 'src/theme/layout';
 
 // ---------------------------------------------------------------------------
 // Built-in synthetic toolsets
@@ -64,7 +70,9 @@ const isBuiltinToolset = (id: string): boolean =>
 const LOWER_SNAKE_ID = /^[a-z][a-z0-9]*(?:_[a-z0-9]+)*$/;
 
 const descriptionColumnSx = { ...listTableSecondaryCellSx, width: '24%' };
-const versionColumnSx = { ...listTableSecondaryCellSx, width: 88 };
+const typeColumnSx = { width: 144 };
+const statusColumnSx = { width: 136 };
+const versionColumnSx = { ...listTableSecondaryCellSx, width: 96 };
 const updatedAtColumnSx = { ...listTableSecondaryCellSx, width: 180 };
 const updatedByColumnSx = { ...listTableSecondaryCellSx, width: 150 };
 
@@ -332,7 +340,7 @@ function Toolsets() {
     {
       key: 'type',
       label: 'Type',
-      cellSx: { width: 130 },
+      cellSx: typeColumnSx,
       render: (item) => {
         const isBuiltin = isBuiltinToolset(item.toolset_id);
         return (
@@ -370,6 +378,7 @@ function Toolsets() {
     {
       key: 'status',
       label: 'Status',
+      cellSx: statusColumnSx,
       render: (item) => (
         <Chip
           label={item.enabled ? 'Enabled' : 'Disabled'}
@@ -422,10 +431,50 @@ function Toolsets() {
       }
     }
   ];
+  const filterGroups: ListTableFilterGroup<ToolsetListItem>[] = [
+    {
+      key: 'type',
+      label: 'Type',
+      icon: <BadgeIcon fontSize="small" />,
+      options: [
+        {
+          key: 'builtin',
+          label: 'Built-in',
+          icon: <BadgeIcon fontSize="small" />,
+          matches: (item) => isBuiltinToolset(item.toolset_id)
+        },
+        {
+          key: 'user_defined',
+          label: 'User-defined',
+          icon: <PersonOutlineIcon fontSize="small" />,
+          matches: (item) => !isBuiltinToolset(item.toolset_id)
+        }
+      ]
+    },
+    {
+      key: 'enabled',
+      label: 'Enabled',
+      icon: <ToggleOnIcon fontSize="small" />,
+      options: [
+        {
+          key: 'enabled',
+          label: 'Enabled',
+          icon: <ToggleOnIcon fontSize="small" />,
+          matches: (item) => item.enabled
+        },
+        {
+          key: 'disabled',
+          label: 'Disabled',
+          icon: <ToggleOffIcon fontSize="small" />,
+          matches: (item) => !item.enabled
+        }
+      ]
+    }
+  ];
 
   return (
     <>
-      <Box sx={{ p: 3 }}>
+      <Box sx={pageContentSx}>
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
           <Typography variant="h1">MCP Toolsets</Typography>
           {hasPermission('toolsets:write') && (
@@ -454,6 +503,7 @@ function Toolsets() {
             columns={columns}
             getRowKey={(item) => item.toolset_id}
             emptyMessage="No toolsets yet. Create one above."
+            filterGroups={filterGroups}
           />
         )}
       </Box>

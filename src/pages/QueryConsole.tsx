@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Box,
   Button,
@@ -12,6 +12,9 @@ import PlayArrow from '@mui/icons-material/PlayArrow';
 import CypherGraph from 'src/components/reports/CypherGraph';
 import QueryConsoleSchemaPanel from 'src/components/QueryConsoleSchemaPanel';
 import { usePermissionState } from 'src/hooks/usePermissions';
+import { pageContentSx } from 'src/theme/layout';
+
+const QUERY_CONSOLE_SCHEMA_PANEL_STORAGE_KEY = 'seizu:query-console:schema-panel-open';
 
 export default function QueryConsole() {
   const { hasPermission, loading: permissionsLoading } = usePermissionState();
@@ -19,7 +22,11 @@ export default function QueryConsole() {
   const [submittedQuery, setSubmittedQuery] = useState<string | undefined>(
     undefined
   );
-  const [schemaPanelOpen, setSchemaPanelOpen] = useState(true);
+  const [schemaPanelOpen, setSchemaPanelOpen] = useState(() => {
+    if (typeof window === 'undefined') return true;
+    const storedValue = window.localStorage.getItem(QUERY_CONSOLE_SCHEMA_PANEL_STORAGE_KEY);
+    return storedValue === null ? true : storedValue === 'true';
+  });
   const [historyRefreshTrigger, setHistoryRefreshTrigger] = useState(0);
   const [queryHeight, setQueryHeight] = useState(220);
   const dragStartY = useRef(0);
@@ -51,6 +58,21 @@ export default function QueryConsole() {
   const handleHistorySelect = (query: string) => {
     setQueryText(query);
   };
+
+  const handleSchemaPanelToggle = (tab?: 'schema' | 'history') => {
+    if (tab) {
+      setSchemaPanelOpen(true);
+      return;
+    }
+    setSchemaPanelOpen((value) => !value);
+  };
+
+  useEffect(() => {
+    window.localStorage.setItem(
+      QUERY_CONSOLE_SCHEMA_PANEL_STORAGE_KEY,
+      String(schemaPanelOpen)
+    );
+  }, [schemaPanelOpen]);
 
   const handleDragStart = useCallback(
     (e: React.MouseEvent) => {
@@ -90,7 +112,7 @@ export default function QueryConsole() {
 
   if (!hasPermission('query:execute')) {
     return (
-      <Box sx={{ p: 3 }}>
+      <Box sx={pageContentSx}>
         <Typography>You do not have access to the query console.</Typography>
       </Box>
     );
@@ -103,7 +125,7 @@ export default function QueryConsole() {
       {/* Side panel (schema / history) */}
       <QueryConsoleSchemaPanel
         open={schemaPanelOpen}
-        onToggle={() => setSchemaPanelOpen((v) => !v)}
+        onToggle={handleSchemaPanelToggle}
         onQuerySelect={handleQuerySelect}
         onHistorySelect={handleHistorySelect}
         historyRefreshTrigger={historyRefreshTrigger}
@@ -115,7 +137,7 @@ export default function QueryConsole() {
           flex: 1,
           display: 'flex',
           flexDirection: 'column',
-          p: 3,
+          ...pageContentSx,
           boxSizing: 'border-box',
           minWidth: 0,
           overflow: 'hidden'

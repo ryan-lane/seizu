@@ -37,6 +37,24 @@ describe('NavItem', () => {
     expect(screen.getByTestId('mock-icon')).toBeInTheDocument();
   });
 
+  it('truncates long labels instead of wrapping them', () => {
+    const longTitle = 'A very long pinned report name that should not wrap in the sidebar';
+
+    render(
+      <Wrapper>
+        <NavItem title="Parent" subItems={[{ href: '/sub1', title: longTitle }]} />
+      </Wrapper>
+    );
+
+    const label = screen.getByText(longTitle);
+    const styles = window.getComputedStyle(label);
+
+    expect(styles.overflow).toBe('hidden');
+    expect(styles.textOverflow).toBe('ellipsis');
+    expect(styles.whiteSpace).toBe('nowrap');
+    expect(styles.minWidth).toBe('0');
+  });
+
   it('renders sub-items when subItems prop is provided', () => {
     const subItems = [
       { href: '/sub1', title: 'Sub Item 1' },

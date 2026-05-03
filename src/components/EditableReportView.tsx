@@ -58,8 +58,7 @@ import {
   DASHBOARD_NAVBAR_HEIGHT,
   DASHBOARD_SIDEBAR_WIDTH_VAR
 } from 'src/components/dashboardLayoutConstants';
-
-const EDIT_CONTENT_PX = { xs: 1.5, sm: 2 } as const;
+import { contentContainerSx } from 'src/theme/layout';
 
 // ---------------------------------------------------------------------------
 // Edit-state types (panels/rows get stable _id for DnD keys)
@@ -572,7 +571,7 @@ const EditToolbar = memo(function EditToolbar({
         borderBottom: '1px solid',
         borderColor: 'divider',
         boxShadow: 1,
-        px: EDIT_CONTENT_PX,
+        ...contentContainerSx,
         py: 2,
         display: 'flex',
         alignItems: 'center',
@@ -664,7 +663,7 @@ const EditableRowCard = memo(function EditableRowCard({
   return (
     <Container
       maxWidth={false}
-      sx={{ px: EDIT_CONTENT_PX, pt: rowIndex === 0 ? 0.75 : 0, pb: 1.5 }}
+      sx={{ ...contentContainerSx, pt: rowIndex === 0 ? 0.75 : 0, pb: 1.5 }}
     >
       <Paper elevation={1} sx={{ p: 1.5 }}>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
@@ -1121,7 +1120,7 @@ function EditableReportView({ report, reportId: _reportId, onSave, onCancel }: E
       <Box sx={{ height: toolbarHeight }} />
 
       {/* Named queries section */}
-      <Container maxWidth={false} sx={{ px: EDIT_CONTENT_PX, pt: 1.5, pb: 1 }}>
+      <Container maxWidth={false} sx={{ ...contentContainerSx, pt: 1.5, pb: 1 }}>
         <Accordion variant="outlined" disableGutters defaultExpanded>
           <AccordionSummary expandIcon={<ExpandMoreIcon />}>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -1148,7 +1147,7 @@ function EditableReportView({ report, reportId: _reportId, onSave, onCancel }: E
       </Container>
 
       {/* Inputs section */}
-      <Container maxWidth={false} sx={{ px: EDIT_CONTENT_PX, pt: 0, pb: 1 }}>
+      <Container maxWidth={false} sx={{ ...contentContainerSx, pt: 0, pb: 1 }}>
         <Accordion variant="outlined" disableGutters defaultExpanded>
           <AccordionSummary expandIcon={<ExpandMoreIcon />}>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -1212,7 +1211,7 @@ function EditableReportView({ report, reportId: _reportId, onSave, onCancel }: E
       </DndContext>
 
       {/* Add row */}
-      <Container maxWidth={false} sx={{ px: EDIT_CONTENT_PX, pb: 2.5 }}>
+      <Container maxWidth={false} sx={{ ...contentContainerSx, pb: 2.5 }}>
         <Button variant="outlined" startIcon={<Add />} onClick={addRow} fullWidth>
           Add Row
         </Button>

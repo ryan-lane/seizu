@@ -2,6 +2,7 @@ import { useState } from 'react';
 import {
   Box,
   Button,
+  ButtonBase,
   Chip,
   CircularProgress,
   Dialog,
@@ -9,7 +10,6 @@ import {
   DialogContent,
   DialogTitle,
   IconButton,
-  Link,
   ListItemIcon,
   ListItemText,
   Menu,
@@ -35,9 +35,20 @@ import {
   useSkillMutations,
   useSkillVersionsList
 } from 'src/hooks/useSkillsetsApi';
+import { useToolCatalog } from 'src/hooks/useToolsetsApi';
+import ListTable, {
+  ListTableColumn,
+  listTableActionColumnSx,
+  listTableSecondaryCellSx
+} from 'src/components/ListTable';
 import UserDisplay from 'src/components/UserDisplay';
 import { usePermissions } from 'src/hooks/usePermissions';
 import type { BackState } from 'src/navigation';
+import { pageContentSx } from 'src/theme/layout';
+
+const savedColumnSx = { ...listTableSecondaryCellSx, width: 180 };
+const authorColumnSx = { ...listTableSecondaryCellSx, width: 150 };
+const commentColumnSx = { ...listTableSecondaryCellSx, width: '28%' };
 
 interface RowMenuProps {
   isCurrent: boolean;
@@ -139,20 +150,32 @@ function SkillVersionDetailDialog({
             {version.parameters.length === 0 ? (
               <Typography variant="body2" color="text.secondary">No parameters.</Typography>
             ) : (
-              <Table size="small">
-                <TableHead><TableRow><TableCell>Name</TableCell><TableCell>Type</TableCell><TableCell>Required</TableCell><TableCell>Default</TableCell><TableCell>Description</TableCell></TableRow></TableHead>
-                <TableBody>
-                  {version.parameters.map((param) => (
-                    <TableRow key={param.name}>
-                      <TableCell sx={{ fontFamily: 'monospace', fontWeight: 600 }}>{param.name}</TableCell>
-                      <TableCell>{param.type}</TableCell>
-                      <TableCell sx={{ color: 'text.secondary' }}>{param.required ? 'Yes' : 'No'}</TableCell>
-                      <TableCell sx={{ color: 'text.secondary', fontFamily: 'monospace' }}>{param.default !== null && param.default !== undefined ? String(param.default) : '-'}</TableCell>
-                      <TableCell sx={{ color: 'text.secondary' }}>{param.description || '-'}</TableCell>
+              <TableContainer component={Paper} variant="outlined">
+                <Table size="small">
+                  <TableHead>
+                    <TableRow>
+                      <TableCell>Name</TableCell>
+                      <TableCell>Type</TableCell>
+                      <TableCell>Required</TableCell>
+                      <TableCell>Default</TableCell>
+                      <TableCell>Description</TableCell>
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+                  </TableHead>
+                  <TableBody>
+                    {version.parameters.map((param) => (
+                      <TableRow key={param.name}>
+                        <TableCell sx={{ fontFamily: 'monospace', fontWeight: 600 }}>{param.name}</TableCell>
+                        <TableCell>{param.type}</TableCell>
+                        <TableCell sx={{ color: 'text.secondary' }}>{param.required ? 'Yes' : 'No'}</TableCell>
+                        <TableCell sx={{ color: 'text.secondary', fontFamily: 'monospace' }}>
+                          {param.default !== null && param.default !== undefined ? String(param.default) : '-'}
+                        </TableCell>
+                        <TableCell sx={{ color: 'text.secondary' }}>{param.description || '-'}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </TableContainer>
             )}
           </Box>
         </Box>
@@ -171,12 +194,99 @@ function SkillHistory() {
   const { fromLabel } = (location.state ?? {}) as BackState;
   const { versions, loading, error } = useSkillVersionsList(skillsetId ?? null, skillId ?? null);
   const { updateSkill } = useSkillMutations(skillsetId ?? '');
+  const { tools: catalog } = useToolCatalog();
   const [detailVersion, setDetailVersion] = useState<SkillVersion | null>(null);
+  const [missingToolsTarget, setMissingToolsTarget] = useState<SkillVersion | null>(null);
+  const [missingToolNames, setMissingToolNames] = useState<string[]>([]);
+  const [restoreError, setRestoreError] = useState<string | null>(null);
   const sorted = [...versions].sort((a, b) => b.version - a.version);
   const latestVersion = sorted[0]?.version;
   const name = sorted[0]?.name;
+  const columns: ListTableColumn<SkillVersion>[] = [
+    {
+      key: 'version',
+      label: 'Version',
+      cellSx: { width: 120 },
+      render: (version) => {
+        const isCurrent = version.version === latestVersion;
+        return (
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <ButtonBase
+              onClick={() => setDetailVersion(version)}
+              sx={{
+                font: 'inherit',
+                fontWeight: isCurrent ? 'bold' : 'medium',
+                color: 'inherit',
+                borderRadius: 0,
+                textAlign: 'left',
+                '&:hover': { textDecoration: 'underline' }
+              }}
+            >
+              <Typography component="span" sx={{ lineHeight: 1.4 }}>
+                v{version.version}
+              </Typography>
+            </ButtonBase>
+            {isCurrent && (
+              <Typography component="span" variant="caption" color="primary">
+                current
+              </Typography>
+            )}
+          </Box>
+        );
+      }
+    },
+    {
+      key: 'name',
+      label: 'Name',
+      cellSx: { width: '24%' },
+      render: (version) => version.name
+    },
+    {
+      key: 'saved',
+      label: 'Saved',
+      hideBelow: 'sm',
+      cellSx: savedColumnSx,
+      render: (version) => new Date(version.created_at).toLocaleString()
+    },
+    {
+      key: 'created_by',
+      label: 'Created by',
+      hideBelow: 'md',
+      cellSx: authorColumnSx,
+      render: (version) => <UserDisplay userId={version.created_by} />
+    },
+    {
+      key: 'comment',
+      label: 'Comment',
+      hideBelow: 'lg',
+      cellSx: commentColumnSx,
+      render: (version) => version.comment || '—'
+    },
+    {
+      key: 'actions',
+      align: 'right',
+      cellSx: listTableActionColumnSx,
+      render: (version) => (
+        <RowMenu
+          isCurrent={version.version === latestVersion}
+          onRestore={() => handleRestoreClick(version)}
+        />
+      )
+    }
+  ];
 
-  async function handleRestore(version: SkillVersion) {
+  const handleRestoreClick = (version: SkillVersion) => {
+    const catalogSet = new Set(catalog.map((tool) => tool.mcp_name));
+    const missing = (version.tools_required ?? []).filter((tool) => !catalogSet.has(tool));
+    if (missing.length > 0) {
+      setMissingToolsTarget(version);
+      setMissingToolNames(missing);
+      return;
+    }
+    void handleRestore(version).catch((err: Error) => setRestoreError(err.message));
+  };
+
+  async function handleRestore(version: SkillVersion, toolsRequired: string[] = version.tools_required ?? []) {
     if (!skillId) return;
     await updateSkill(skillId, {
       name: version.name,
@@ -184,15 +294,24 @@ function SkillHistory() {
       template: version.template,
       parameters: version.parameters,
       triggers: version.triggers,
-      tools_required: version.tools_required,
+      tools_required: toolsRequired,
       enabled: version.enabled,
       comment: `Restored from version ${version.version}`
     });
     navigate(`/app/skillsets/${skillsetId}/skills`);
   }
 
+  const handleMissingToolsConfirm = () => {
+    if (!missingToolsTarget) return;
+    const catalogSet = new Set(catalog.map((tool) => tool.mcp_name));
+    const filtered = (missingToolsTarget.tools_required ?? []).filter((tool) => catalogSet.has(tool));
+    setMissingToolsTarget(null);
+    setMissingToolNames([]);
+    void handleRestore(missingToolsTarget, filtered).catch((err: Error) => setRestoreError(err.message));
+  };
+
   return (
-    <Box sx={{ p: 3 }}>
+    <Box sx={pageContentSx}>
       <Helmet><title>{name ? `History - ${name} | Seizu` : 'History | Seizu'}</title></Helmet>
       {fromLabel && <Button startIcon={<ArrowBackIcon />} onClick={() => navigate(-1)} sx={{ mb: 2 }}>Back to {fromLabel}</Button>}
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 3 }}>
@@ -200,65 +319,39 @@ function SkillHistory() {
       </Box>
       {loading && <CircularProgress />}
       {error && <Typography color="error">Failed to load history</Typography>}
+      {restoreError && <Typography color="error">{restoreError}</Typography>}
       {!loading && !error && (
-        <TableContainer component={Paper} variant="outlined">
-          <Table>
-            <TableHead><TableRow><TableCell>Version</TableCell><TableCell>Saved</TableCell><TableCell>Created By</TableCell><TableCell>Comment</TableCell><TableCell /></TableRow></TableHead>
-            <TableBody>
-              {sorted.length === 0 && (
-                <TableRow>
-                  <TableCell colSpan={5}>
-                    <Typography color="text.secondary" sx={{ py: 1 }}>
-                      No versions found.
-                    </Typography>
-                  </TableCell>
-                </TableRow>
-              )}
-              {sorted.map((v) => {
-                const isCurrent = v.version === latestVersion;
-                return (
-                  <TableRow key={v.version} hover>
-                    <TableCell>
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                        <Link
-                          href={`#skill-version-${v.version}`}
-                          underline="hover"
-                          color="inherit"
-                          fontWeight={isCurrent ? 'bold' : 'medium'}
-                          onClick={(event) => {
-                            event.preventDefault();
-                            setDetailVersion(v);
-                          }}
-                        >
-                          v{v.version}
-                        </Link>
-                        {isCurrent && (
-                          <Typography component="span" variant="caption" color="primary">
-                            current
-                          </Typography>
-                        )}
-                      </Box>
-                    </TableCell>
-                    <TableCell sx={{ color: 'text.secondary' }}>{new Date(v.created_at).toLocaleString()}</TableCell>
-                    <TableCell sx={{ color: 'text.secondary' }}><UserDisplay userId={v.created_by} /></TableCell>
-                    <TableCell sx={{ color: 'text.secondary' }}>{v.comment || '-'}</TableCell>
-                    <TableCell align="right" sx={{ width: 48, pr: 1 }}>
-                      <RowMenu
-                        isCurrent={isCurrent}
-                        onRestore={() => handleRestore(v)}
-                      />
-                    </TableCell>
-                  </TableRow>
-                );
-              })}
-            </TableBody>
-          </Table>
-        </TableContainer>
+        <ListTable
+          rows={sorted}
+          columns={columns}
+          getRowKey={(version) => version.version}
+          emptyMessage="No versions found."
+          pagination={false}
+        />
       )}
       <SkillVersionDetailDialog
         version={detailVersion}
         onClose={() => setDetailVersion(null)}
       />
+      <Dialog open={!!missingToolsTarget} onClose={() => { setMissingToolsTarget(null); setMissingToolNames([]); }} maxWidth="sm" fullWidth>
+        <DialogTitle>Remove missing tool references?</DialogTitle>
+        <DialogContent>
+          <Typography color="text.secondary">
+            The following tools are no longer available and will be removed before restore:
+          </Typography>
+          <Box component="ul" sx={{ mt: 1, mb: 0, pl: 2 }}>
+            {missingToolNames.map((tool) => (
+              <Box component="li" key={tool} sx={{ fontFamily: 'monospace', fontSize: 13 }}>
+                {tool}
+              </Box>
+            ))}
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => { setMissingToolsTarget(null); setMissingToolNames([]); }}>Cancel</Button>
+          <Button variant="contained" onClick={handleMissingToolsConfirm}>Restore anyway</Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 }

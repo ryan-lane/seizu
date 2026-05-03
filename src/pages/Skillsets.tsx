@@ -11,6 +11,8 @@ import DeleteIcon from '@mui/icons-material/Delete';
 import EditIcon from '@mui/icons-material/Edit';
 import HistoryIcon from '@mui/icons-material/History';
 import MoreVertIcon from '@mui/icons-material/MoreVert';
+import ToggleOnIcon from '@mui/icons-material/ToggleOn';
+import ToggleOffIcon from '@mui/icons-material/ToggleOff';
 import Error from '@mui/icons-material/Error';
 import {
   useSkillsetsList, useSkillsetMutations, SkillsetListItem,
@@ -18,6 +20,7 @@ import {
 } from 'src/hooks/useSkillsetsApi';
 import ListTable, {
   ListTableColumn,
+  ListTableFilterGroup,
   listTableActionColumnSx,
   listTableMonoCellSx,
   listTablePrimaryCellSx,
@@ -27,13 +30,15 @@ import ListTable, {
 import UserDisplay from 'src/components/UserDisplay';
 import { usePermissions } from 'src/hooks/usePermissions';
 import type { BackState } from 'src/navigation';
+import { pageContentSx } from 'src/theme/layout';
 
 const LOWER_SNAKE_ID = /^[a-z][a-z0-9]*(?:_[a-z0-9]+)*$/;
 
 const descriptionColumnSx = { ...listTableSecondaryCellSx, width: '24%' };
-const versionColumnSx = { ...listTableSecondaryCellSx, width: 88 };
+const versionColumnSx = { ...listTableSecondaryCellSx, width: 96 };
 const updatedAtColumnSx = { ...listTableSecondaryCellSx, width: 180 };
 const updatedByColumnSx = { ...listTableSecondaryCellSx, width: 150 };
+const statusColumnSx = { width: 128 };
 
 interface SkillsetDialogProps {
   open: boolean;
@@ -229,6 +234,7 @@ function Skillsets() {
     {
       key: 'status',
       label: 'Status',
+      cellSx: statusColumnSx,
       render: (item) => <Chip label={item.enabled ? 'Enabled' : 'Disabled'} color={item.enabled ? 'success' : 'default'} size="small" />
     },
     {
@@ -267,10 +273,31 @@ function Skillsets() {
       )
     }
   ];
+  const filterGroups: ListTableFilterGroup<SkillsetListItem>[] = [
+    {
+      key: 'enabled',
+      label: 'Enabled',
+      icon: <ToggleOnIcon fontSize="small" />,
+      options: [
+        {
+          key: 'enabled',
+          label: 'Enabled',
+          icon: <ToggleOnIcon fontSize="small" />,
+          matches: (item) => item.enabled
+        },
+        {
+          key: 'disabled',
+          label: 'Disabled',
+          icon: <ToggleOffIcon fontSize="small" />,
+          matches: (item) => !item.enabled
+        }
+      ]
+    }
+  ];
 
   return (
     <>
-      <Box sx={{ p: 3 }}>
+      <Box sx={pageContentSx}>
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
           <Typography variant="h1">MCP Skillsets</Typography>
           {hasPermission('skillsets:write') && (
@@ -285,6 +312,7 @@ function Skillsets() {
             columns={columns}
             getRowKey={(item) => item.skillset_id}
             emptyMessage="No skillsets yet. Create one above."
+            filterGroups={filterGroups}
           />
         )}
       </Box>

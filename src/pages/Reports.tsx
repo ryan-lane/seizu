@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
+import { useParams, useNavigate, useSearchParams, useLocation } from 'react-router-dom';
 import {
   Box,
   Button,
@@ -32,10 +32,12 @@ import { useReport, useReportsMutations } from 'src/hooks/useReportsApi';
 import { Report } from 'src/config.context';
 import { usePermissionState } from 'src/hooks/usePermissions';
 import type { BackState } from 'src/navigation';
+import { pageContentSx } from 'src/theme/layout';
 
 function Reports() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
   const { hasPermission, loading: permissionsLoading, currentUser } = usePermissionState();
 
@@ -142,7 +144,7 @@ function Reports() {
 
   if ((error || !displayedReport) && !loading) {
     return (
-      <Box sx={{ p: 3, display: 'flex', alignItems: 'center', gap: 1 }}>
+      <Box sx={{ ...pageContentSx, display: 'flex', alignItems: 'center', gap: 1 }}>
         <Error />
         <Typography>Failed to load report</Typography>
       </Box>
@@ -174,7 +176,12 @@ function Reports() {
       label: 'History',
       icon: <HistoryIcon fontSize="small" />,
       disabled: false,
-      onClick: () => navigate(`/app/reports/${id}/history`, { state: { fromLabel: displayedName ?? 'report' } satisfies BackState })
+      onClick: () => navigate(`/app/reports/${id}/history`, {
+        state: {
+          fromLabel: displayedName ?? 'report',
+          originReturnTo: `${location.pathname}${location.search}`
+        } satisfies BackState
+      })
     },
     ...(canWriteReports
       ? [

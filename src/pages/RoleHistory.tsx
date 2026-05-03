@@ -11,13 +11,6 @@ import {
   ListItemText,
   Menu,
   MenuItem,
-  Paper,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
   Tooltip,
   Typography
 } from '@mui/material';
@@ -32,9 +25,20 @@ import {
   useRoleMutations,
   useRoleVersionsList
 } from 'src/hooks/useRolesApi';
+import ListTable, {
+  ListTableColumn,
+  listTableActionColumnSx,
+  listTableSecondaryCellSx
+} from 'src/components/ListTable';
 import UserDisplay from 'src/components/UserDisplay';
 import { usePermissionState } from 'src/hooks/usePermissions';
 import type { BackState } from 'src/navigation';
+import { pageContentSx } from 'src/theme/layout';
+
+const savedColumnSx = { ...listTableSecondaryCellSx, width: 180 };
+const authorColumnSx = { ...listTableSecondaryCellSx, width: 150 };
+const permissionsColumnSx = { width: '28%' };
+const commentColumnSx = { ...listTableSecondaryCellSx, width: '24%' };
 
 interface RowMenuProps {
   isCurrent: boolean;
@@ -87,12 +91,28 @@ function RowMenu({ isCurrent, hasPermission, onRestore }: RowMenuProps) {
 function permissionSummary(version: RoleVersion) {
   const visible = version.permissions.slice(0, 4);
   const remaining = version.permissions.length - visible.length;
+  const hidden = version.permissions.slice(visible.length);
   return (
-    <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+    <Box sx={{ display: 'flex', flexWrap: 'nowrap', gap: 0.5, overflow: 'hidden' }}>
       {visible.map((permission) => (
         <Chip key={permission} label={permission} size="small" variant="outlined" />
       ))}
-      {remaining > 0 && <Chip label={`+${remaining}`} size="small" variant="outlined" />}
+      {remaining > 0 && (
+        <Tooltip
+          title={
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5, py: 0.5 }}>
+              {hidden.map((permission) => (
+                <Typography key={permission} variant="body2">
+                  {permission}
+                </Typography>
+              ))}
+            </Box>
+          }
+          placement="top"
+        >
+          <Chip label={`+${remaining}`} size="small" variant="outlined" />
+        </Tooltip>
+      )}
     </Box>
   );
 }
@@ -112,6 +132,74 @@ function RoleHistory() {
   const sorted = [...versions].sort((a, b) => b.version - a.version);
   const latestVersion = sorted[0]?.version;
   const roleName = sorted[0]?.name;
+  const columns: ListTableColumn<RoleVersion>[] = [
+    {
+      key: 'version',
+      label: 'Version',
+      cellSx: { width: 120 },
+      render: (version) => {
+        const isCurrent = version.version === latestVersion;
+        return (
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <Typography fontWeight={isCurrent ? 'bold' : 'medium'}>
+              v{version.version}
+            </Typography>
+            {isCurrent && (
+              <Typography component="span" variant="caption" color="primary">
+                current
+              </Typography>
+            )}
+          </Box>
+        );
+      }
+    },
+    {
+      key: 'name',
+      label: 'Name',
+      cellSx: { width: '24%' },
+      render: (version) => version.name
+    },
+    {
+      key: 'saved',
+      label: 'Saved',
+      hideBelow: 'sm',
+      cellSx: savedColumnSx,
+      render: (version) => new Date(version.created_at).toLocaleString()
+    },
+    {
+      key: 'created_by',
+      label: 'Created by',
+      hideBelow: 'md',
+      cellSx: authorColumnSx,
+      render: (version) => <UserDisplay userId={version.created_by} />
+    },
+    {
+      key: 'permissions',
+      label: 'Permissions',
+      hideBelow: 'lg',
+      cellSx: permissionsColumnSx,
+      render: (version) => permissionSummary(version)
+    },
+    {
+      key: 'comment',
+      label: 'Comment',
+      hideBelow: 'xl',
+      cellSx: commentColumnSx,
+      render: (version) => version.comment || '—'
+    },
+    {
+      key: 'actions',
+      align: 'right',
+      cellSx: listTableActionColumnSx,
+      render: (version) => (
+        <RowMenu
+          isCurrent={version.version === latestVersion}
+          hasPermission={hasPermission}
+          onRestore={() => handleRestore(version)}
+        />
+      )
+    }
+  ];
 
   async function handleRestore(version: RoleVersion) {
     if (!roleId) return;
@@ -134,7 +222,7 @@ function RoleHistory() {
 
   if (!canRead) {
     return (
-      <Box sx={{ p: 3 }}>
+      <Box sx={pageContentSx}>
         <Typography>You do not have access to role management.</Typography>
       </Box>
     );
@@ -142,7 +230,7 @@ function RoleHistory() {
 
   if (builtin) {
     return (
-      <Box sx={{ p: 3 }}>
+      <Box sx={pageContentSx}>
         <Button
           size="small"
           startIcon={<ArrowBackIcon />}
@@ -161,7 +249,7 @@ function RoleHistory() {
       <Helmet>
         <title>{roleName ? `History - ${roleName} | Seizu` : 'History | Seizu'}</title>
       </Helmet>
-      <Box sx={{ p: 3 }}>
+      <Box sx={pageContentSx}>
         {fromLabel && (
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
             <Button
@@ -195,79 +283,13 @@ function RoleHistory() {
         )}
 
         {!loading && !error && (
-          <TableContainer component={Paper} variant="outlined">
-            <Table>
-              <TableHead>
-                <TableRow>
-                  <TableCell>Version</TableCell>
-                  <TableCell>Saved</TableCell>
-                  <TableCell>Created by</TableCell>
-                  <TableCell>Permissions</TableCell>
-                  <TableCell>Comment</TableCell>
-                  <TableCell />
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {sorted.length === 0 && (
-                  <TableRow>
-                    <TableCell colSpan={6}>
-                      <Typography color="text.secondary" sx={{ py: 1 }}>
-                        No versions found.
-                      </Typography>
-                    </TableCell>
-                  </TableRow>
-                )}
-                {sorted.map((v) => {
-                  const isCurrent = v.version === latestVersion;
-                  return (
-                    <TableRow key={v.version} hover>
-                      <TableCell>
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                          <Typography fontWeight={isCurrent ? 'bold' : 'medium'}>
-                            v{v.version}
-                          </Typography>
-                          {isCurrent && (
-                            <Typography component="span" variant="caption" color="primary">
-                              current
-                            </Typography>
-                          )}
-                        </Box>
-                      </TableCell>
-                      <TableCell sx={{ color: 'text.secondary', whiteSpace: 'nowrap' }}>
-                        {new Date(v.created_at).toLocaleString()}
-                      </TableCell>
-                      <TableCell sx={{ color: 'text.secondary' }}>
-                        <UserDisplay userId={v.created_by} />
-                      </TableCell>
-                      <TableCell sx={{ minWidth: 260 }}>
-                        {permissionSummary(v)}
-                      </TableCell>
-                      <TableCell sx={{ color: 'text.secondary' }}>
-                        {v.comment ? (
-                          <Tooltip title={v.comment}>
-                            <span>
-                              {v.comment.length > 60 ? `${v.comment.slice(0, 60)}...` : v.comment}
-                            </span>
-                          </Tooltip>
-                        ) : (
-                          <Typography component="span" color="text.disabled" variant="body2">
-                            -
-                          </Typography>
-                        )}
-                      </TableCell>
-                      <TableCell align="right" sx={{ width: 48, pr: 1 }}>
-                        <RowMenu
-                          isCurrent={isCurrent}
-                          hasPermission={hasPermission}
-                          onRestore={() => handleRestore(v)}
-                        />
-                      </TableCell>
-                    </TableRow>
-                  );
-                })}
-              </TableBody>
-            </Table>
-          </TableContainer>
+          <ListTable
+            rows={sorted}
+            columns={columns}
+            getRowKey={(version) => version.version}
+            emptyMessage="No versions found."
+            pagination={false}
+          />
         )}
       </Box>
     </>

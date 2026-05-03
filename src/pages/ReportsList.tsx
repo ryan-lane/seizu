@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Link as RouterLink, useNavigate, useSearchParams } from 'react-router-dom';
 import { Helmet } from 'react-helmet';
 import {
@@ -23,6 +23,7 @@ import {
   Typography
 } from '@mui/material';
 import Add from '@mui/icons-material/Add';
+import BadgeIcon from '@mui/icons-material/Badge';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import DeleteIcon from '@mui/icons-material/Delete';
 import EditIcon from '@mui/icons-material/Edit';
@@ -30,10 +31,12 @@ import HistoryIcon from '@mui/icons-material/History';
 import DashboardIcon from '@mui/icons-material/Dashboard';
 import DashboardOutlinedIcon from '@mui/icons-material/DashboardOutlined';
 import LockIcon from '@mui/icons-material/Lock';
+import PinIcon from '@mui/icons-material/PushPin';
 import PushPinIcon from '@mui/icons-material/PushPin';
 import PushPinOutlinedIcon from '@mui/icons-material/PushPinOutlined';
 import MoreVertIcon from '@mui/icons-material/MoreVert';
 import PublicIcon from '@mui/icons-material/Public';
+import DraftsIcon from '@mui/icons-material/Drafts';
 import Error from '@mui/icons-material/Error';
 
 import {
@@ -45,12 +48,14 @@ import {
 import { usePermissionState } from 'src/hooks/usePermissions';
 import ListTable, {
   ListTableColumn,
+  ListTableFilterGroup,
   listTableActionColumnSx,
   listTablePrimaryCellSx,
   listTableSecondaryCellSx
 } from 'src/components/ListTable';
 import UserDisplay from 'src/components/UserDisplay';
 import type { BackState } from 'src/navigation';
+import { pageContentSx } from 'src/theme/layout';
 
 // ---------------------------------------------------------------------------
 // Per-row overflow menu
@@ -326,17 +331,18 @@ function ReportsList() {
     {
       key: 'name',
       label: 'Name',
-      cellSx: listTablePrimaryCellSx,
+      cellSx: { ...listTablePrimaryCellSx, width: '36%' },
       render: (report) => {
         const isDashboard = report.report_id === dashboardReportId;
         return (
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minWidth: 0, flexWrap: 'wrap' }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minWidth: 0, flexWrap: 'nowrap', overflow: 'hidden' }}>
             <Link
               component={RouterLink}
               to={`/app/reports/${report.report_id}`}
               underline="hover"
               color="inherit"
               fontWeight="medium"
+              sx={{ flex: '1 1 auto', minWidth: 0, maxWidth: '100%', display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
             >
               {report.name}
             </Link>
@@ -371,7 +377,7 @@ function ReportsList() {
     {
       key: 'visibility',
       label: 'Visibility',
-      cellSx: { width: 120 },
+      cellSx: { width: 104 },
       render: (report) => (
         <Tooltip title={report.access.scope === 'public' ? 'Visible to report readers' : 'Private to the owner'}>
           <Chip
@@ -434,13 +440,59 @@ function ReportsList() {
       }
     }
   ];
+  const filterGroups: ListTableFilterGroup<ReportListItem>[] = useMemo(() => [
+    {
+      key: 'visibility',
+      label: 'Visibility',
+      icon: <PublicIcon fontSize="small" />,
+      options: [
+        {
+          key: 'draft',
+          label: 'Draft',
+          icon: <DraftsIcon fontSize="small" />,
+          matches: (report) => report.access.scope === 'private'
+        },
+        {
+          key: 'public',
+          label: 'Public',
+          icon: <PublicIcon fontSize="small" />,
+          matches: (report) => report.access.scope === 'public'
+        }
+      ]
+    },
+    {
+      key: 'state',
+      label: 'State',
+      icon: <BadgeIcon fontSize="small" />,
+      options: [
+        {
+          key: 'pinned',
+          label: 'Pinned',
+          icon: <PinIcon fontSize="small" />,
+          matches: (report) => report.pinned
+        },
+        {
+          key: 'dashboard',
+          label: 'Dashboard',
+          icon: <DashboardIcon fontSize="small" />,
+          matches: (report) => report.report_id === dashboardReportId
+        },
+        {
+          key: 'unpinned',
+          label: 'Not pinned',
+          icon: <PushPinOutlinedIcon fontSize="small" />,
+          matches: (report) => !report.pinned
+        }
+      ]
+    }
+  ], [dashboardReportId]);
 
   return (
     <>
       <Helmet>
         <title>Reports | Seizu</title>
       </Helmet>
-      <Box sx={{ p: 3 }}>
+      <Box sx={pageContentSx}>
         <Box
           sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}
         >
@@ -471,6 +523,7 @@ function ReportsList() {
             columns={columns}
             getRowKey={(report) => report.report_id}
             emptyMessage="No reports yet. Create one above."
+            filterGroups={filterGroups}
           />
         )}
       </Box>

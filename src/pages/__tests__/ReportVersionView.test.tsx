@@ -154,7 +154,14 @@ describe('ReportVersionView', () => {
         <MemoryRouter
           initialEntries={[
             { pathname: '/app/reports/r1/history', state: {} },
-            { pathname: '/app/reports/r1/versions/1', state: { fromLabel: 'History – My Report' } }
+            {
+              pathname: '/app/reports/r1/versions/1',
+              state: {
+                fromLabel: 'History – My Report',
+                returnTo: '/app/reports/r1/history',
+                originReturnTo: '/app/reports/r1'
+              }
+            }
           ]}
           initialIndex={1}
         >
@@ -170,6 +177,51 @@ describe('ReportVersionView', () => {
     }
 
     render(<ReportVersionView />, { wrapper: BackWrapper });
+
+    fireEvent.click(screen.getByRole('button', { name: /back to history – my report/i }));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('nav-location')).toHaveTextContent('/app/reports/r1/history');
+    });
+  });
+
+  it('preserves the back breadcrumb when navigating to another version', async () => {
+    function BackWrapper({ children }: { children: React.ReactNode }) {
+      return (
+        <MemoryRouter
+          initialEntries={[
+            { pathname: '/app/reports/r1/history', state: {} },
+            {
+              pathname: '/app/reports/r1/versions/1',
+              state: {
+                fromLabel: 'History – My Report',
+                returnTo: '/app/reports/r1/history',
+                originReturnTo: '/app/reports/r1'
+              }
+            }
+          ]}
+          initialIndex={1}
+        >
+          <ThemeProvider theme={theme}>
+            <TestLocation />
+            <Routes>
+              <Route path="/app/reports/:id/history" element={<div>history</div>} />
+              <Route path="/app/reports/:id/versions/:version" element={<>{children}</>} />
+            </Routes>
+          </ThemeProvider>
+        </MemoryRouter>
+      );
+    }
+
+    render(<ReportVersionView />, { wrapper: BackWrapper });
+
+    fireEvent.click(screen.getByRole('button', { name: /v2/i }));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('nav-location')).toHaveTextContent('/app/reports/r1/versions/2');
+    });
+
+    expect(screen.getByRole('button', { name: /back to history – my report/i })).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: /back to history – my report/i }));
 

@@ -2,13 +2,16 @@ import { render, screen, fireEvent, waitFor, cleanup } from '@testing-library/re
 import { MemoryRouter, Routes, Route, useLocation } from 'react-router-dom';
 import { ThemeProvider, createTheme } from '@mui/material/styles';
 import ReportHistory from 'src/pages/ReportHistory';
+import ReportVersionView from 'src/pages/ReportVersionView';
 import * as reportsApiModule from 'src/hooks/useReportsApi';
 import * as usePermissionsModule from 'src/hooks/usePermissions';
 
 jest.mock('src/hooks/usePermissions', () => ({
+  usePermissionState: jest.fn(),
   usePermissions: jest.fn(),
 }));
 
+const mockUsePermissionState = usePermissionsModule.usePermissionState as jest.MockedFunction<typeof usePermissionsModule.usePermissionState>;
 const mockUsePermissions = usePermissionsModule.usePermissions as jest.MockedFunction<typeof usePermissionsModule.usePermissions>;
 
 jest.mock('react-helmet', () => ({
@@ -43,7 +46,8 @@ const VERSION_1 = {
   config: { rows: [] },
   created_at: '2024-01-01T00:00:00Z',
   created_by: 'alice@example.com',
-  comment: 'Initial version'
+  comment: 'Initial version',
+  query_capabilities: {}
 };
 
 const VERSION_2 = {
@@ -53,12 +57,14 @@ const VERSION_2 = {
   config: { rows: [] },
   created_at: '2024-01-02T00:00:00Z',
   created_by: 'bob@example.com',
-  comment: null
+  comment: null,
+  query_capabilities: {}
 };
 
 describe('ReportHistory', () => {
   const mockSaveReportVersion = jest.fn();
   let useReportVersionsList: jest.Mock;
+  let useReportVersion: jest.Mock;
   let useReportsMutations: jest.Mock;
 
   // Restore spies after all tests so other test files get the real module.
@@ -69,10 +75,17 @@ describe('ReportHistory', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     // Default: user has reports:write permission.
+    mockUsePermissionState.mockReturnValue({ hasPermission: () => true, loading: false, currentUser: null });
     mockUsePermissions.mockReturnValue(() => true);
     useReportVersionsList = jest.spyOn(reportsApiModule, 'useReportVersionsList') as unknown as jest.Mock;
     useReportVersionsList.mockReturnValue({
       versions: [VERSION_1, VERSION_2],
+      loading: false,
+      error: null
+    });
+    useReportVersion = jest.spyOn(reportsApiModule, 'useReportVersion') as unknown as jest.Mock;
+    useReportVersion.mockReturnValue({
+      reportVersion: VERSION_2,
       loading: false,
       error: null
     });
@@ -113,6 +126,36 @@ describe('ReportHistory', () => {
     );
   });
 
+  it('passes breadcrumb state through the version link', async () => {
+    function VersionWrapper({ children }: { children: React.ReactNode }) {
+      return (
+        <MemoryRouter initialEntries={['/app/reports/r1/history']}>
+          <ThemeProvider theme={theme}>
+            <TestLocation />
+            <Routes>
+              <Route path="/app/reports/:id/history" element={<>{children}</>} />
+              <Route path="/app/reports/:id/versions/:version" element={<ReportVersionView />} />
+            </Routes>
+          </ThemeProvider>
+        </MemoryRouter>
+      );
+    }
+
+    render(<ReportHistory />, { wrapper: VersionWrapper });
+
+    fireEvent.click(screen.getByRole('link', { name: 'v2' }));
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /back to history – my report/i })).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: /back to history – my report/i }));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('nav-location')).toHaveTextContent('/app/reports/r1/history');
+    });
+  });
+
   it('shows comment text in the row', () => {
     render(<ReportHistory />, { wrapper: Wrapper });
 
@@ -139,7 +182,10 @@ describe('ReportHistory', () => {
         <MemoryRouter
           initialEntries={[
             { pathname: '/app/reports/r1', state: {} },
-            { pathname: '/app/reports/r1/history', state: { fromLabel: 'My Report' } }
+            {
+              pathname: '/app/reports/r1/history',
+              state: { fromLabel: 'My Report', originReturnTo: '/app/reports/r1' }
+            }
           ]}
           initialIndex={1}
         >
@@ -156,6 +202,39 @@ describe('ReportHistory', () => {
     render(<ReportHistory />, { wrapper: StatefulWrapper });
 
     expect(screen.getByRole('button', { name: /back to my report/i })).toBeInTheDocument();
+  });
+
+  it('returns to the original report path when the back button is clicked', async () => {
+    function StatefulWrapper({ children }: { children: React.ReactNode }) {
+      return (
+        <MemoryRouter
+          initialEntries={[
+            { pathname: '/app/reports/r1', state: {} },
+            {
+              pathname: '/app/reports/r1/history',
+              state: { fromLabel: 'My Report', originReturnTo: '/app/reports/r1' }
+            }
+          ]}
+          initialIndex={1}
+        >
+          <ThemeProvider theme={theme}>
+            <TestLocation />
+            <Routes>
+              <Route path="/app/reports/:id" element={<div>report</div>} />
+              <Route path="/app/reports/:id/history" element={<>{children}</>} />
+            </Routes>
+          </ThemeProvider>
+        </MemoryRouter>
+      );
+    }
+
+    render(<ReportHistory />, { wrapper: StatefulWrapper });
+
+    fireEvent.click(screen.getByRole('button', { name: /back to my report/i }));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('nav-location')).toHaveTextContent('/app/reports/r1');
+    });
   });
 
   it('hides back button when navigated directly (no fromLabel in state)', () => {

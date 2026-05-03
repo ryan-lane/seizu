@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Box,
@@ -31,13 +31,20 @@ import {
   Alert
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
+import BadgeIcon from '@mui/icons-material/Badge';
+import CancelOutlinedIcon from '@mui/icons-material/CancelOutlined';
 import DeleteIcon from '@mui/icons-material/Delete';
 import EditIcon from '@mui/icons-material/Edit';
+import ErrorOutlineIcon from '@mui/icons-material/ErrorOutline';
+import HelpOutlineIcon from '@mui/icons-material/HelpOutline';
+import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline';
 import FiberManualRecordIcon from '@mui/icons-material/FiberManualRecord';
 import HistoryIcon from '@mui/icons-material/History';
 import MoreVertIcon from '@mui/icons-material/MoreVert';
 import AddCircleOutlineIcon from '@mui/icons-material/AddCircleOutline';
 import RemoveCircleOutlineIcon from '@mui/icons-material/RemoveCircleOutline';
+import ToggleOnIcon from '@mui/icons-material/ToggleOn';
+import ToggleOffIcon from '@mui/icons-material/ToggleOff';
 import Error from '@mui/icons-material/Error';
 import {
   useScheduledQueriesList,
@@ -56,12 +63,17 @@ import UserDisplay from 'src/components/UserDisplay';
 import { usePermissions } from 'src/hooks/usePermissions';
 import ListTable, {
   ListTableColumn,
+  ListTableFilterGroup,
   listTableActionColumnSx,
   listTablePrimaryCellSx,
   listTableSecondaryCellSx,
   listTableTruncateSx
 } from 'src/components/ListTable';
 import type { BackState } from 'src/navigation';
+import { pageContentSx } from 'src/theme/layout';
+
+const actionsColumnSx = { width: '18%' };
+const statusColumnSx = { width: 128 };
 
 const EMPTY_FORM: ScheduledQueryRequest = {
   name: '',
@@ -610,6 +622,13 @@ function triggerSummary(item: ScheduledQueryItem): string {
   return 'Not configured';
 }
 
+function statusSummary(item: ScheduledQueryItem): string {
+  if (!item.enabled) return 'Disabled';
+  if (item.last_run_status === 'success') return 'Enabled, last run succeeded';
+  if (item.last_run_status === 'failure') return 'Enabled, last run failed';
+  return 'Enabled, no runs yet';
+}
+
 // ---------------------------------------------------------------------------
 // Per-row overflow menu
 // ---------------------------------------------------------------------------
@@ -802,12 +821,12 @@ function ScheduledQueries() {
       key: 'configured_actions',
       label: 'Actions',
       hideBelow: 'lg',
-      cellSx: { width: '18%' },
+      cellSx: actionsColumnSx,
       render: (item) => (
         item.actions.length === 0 ? (
           <Typography variant="body2" color="text.secondary">None</Typography>
         ) : (
-          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+          <Box sx={{ display: 'flex', flexWrap: 'nowrap', gap: 0.5, overflow: 'hidden' }}>
             {item.actions.map((action, index) => (
               <Chip key={`${action.action_type}-${index}`} label={action.action_type} size="small" />
             ))}
@@ -818,7 +837,7 @@ function ScheduledQueries() {
     {
       key: 'status',
       label: 'Status',
-      cellSx: { width: 140 },
+      cellSx: statusColumnSx,
       render: (item) => (
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
           <Chip
@@ -851,7 +870,7 @@ function ScheduledQueries() {
       key: 'version',
       label: 'Version',
       hideBelow: 'sm',
-      cellSx: { ...listTableSecondaryCellSx, width: 88 },
+      cellSx: { ...listTableSecondaryCellSx, width: 96 },
       render: (item) => `v${item.current_version}`
     },
     {
@@ -886,10 +905,72 @@ function ScheduledQueries() {
       )
     }
   ];
+  const actionTypes = useMemo(
+    () => Array.from(new Set(scheduledQueries.flatMap((item) => item.actions.map((action) => action.action_type)).filter(Boolean))).sort(),
+    [scheduledQueries]
+  );
+  const filterGroups: ListTableFilterGroup<ScheduledQueryItem>[] = useMemo(() => [
+    {
+      key: 'actions',
+      label: 'Actions',
+      icon: <BadgeIcon fontSize="small" />,
+      options: [
+        {
+          key: 'none',
+          label: 'No actions',
+          icon: <HelpOutlineIcon fontSize="small" />,
+          matches: (item) => item.actions.length === 0
+        },
+        ...actionTypes.map((actionType) => ({
+          key: actionType,
+          label: actionType,
+          icon: <BadgeIcon fontSize="small" />,
+          matches: (item) => item.actions.some((action) => action.action_type === actionType)
+        }))
+      ]
+    },
+    {
+      key: 'status',
+      label: 'Status',
+      icon: <ToggleOnIcon fontSize="small" />,
+      options: [
+        {
+          key: 'enabled',
+          label: 'Enabled',
+          icon: <ToggleOnIcon fontSize="small" />,
+          matches: (item) => item.enabled
+        },
+        {
+          key: 'disabled',
+          label: 'Disabled',
+          icon: <ToggleOffIcon fontSize="small" />,
+          matches: (item) => !item.enabled
+        },
+        {
+          key: 'success',
+          label: 'Last run succeeded',
+          icon: <CheckCircleOutlineIcon fontSize="small" />,
+          matches: (item) => item.last_run_status === 'success'
+        },
+        {
+          key: 'failure',
+          label: 'Last run failed',
+          icon: <ErrorOutlineIcon fontSize="small" />,
+          matches: (item) => item.last_run_status === 'failure'
+        },
+        {
+          key: 'none',
+          label: 'No runs yet',
+          icon: <CancelOutlinedIcon fontSize="small" />,
+          matches: (item) => item.last_run_status === null
+        }
+      ]
+    }
+  ], [actionTypes]);
 
   return (
     <>
-      <Box sx={{ p: 3 }}>
+      <Box sx={pageContentSx}>
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
           <Typography variant="h1">Scheduled Queries</Typography>
           {hasPermission('scheduled_queries:write') && (
@@ -918,6 +999,7 @@ function ScheduledQueries() {
             columns={columns}
             getRowKey={(item) => item.scheduled_query_id}
             emptyMessage="No scheduled queries yet. Create one above."
+            filterGroups={filterGroups}
           />
         )}
       </Box>

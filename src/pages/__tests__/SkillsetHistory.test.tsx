@@ -97,7 +97,7 @@ describe('SkillsetHistory', () => {
   it('opens version details from the version link', () => {
     render(<SkillsetHistory />, { wrapper: Wrapper });
 
-    fireEvent.click(screen.getByRole('link', { name: 'v1' }));
+    fireEvent.click(screen.getByRole('button', { name: 'v1' }));
 
     expect(screen.getByRole('dialog', { name: 'Agent Skills' })).toBeInTheDocument();
     expect(screen.getByText('Older description')).toBeInTheDocument();

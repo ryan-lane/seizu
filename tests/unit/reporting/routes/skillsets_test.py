@@ -309,7 +309,7 @@ async def test_create_skill_accepts_structured_metadata_and_valid_tool_refs(mock
     assert create_skill.await_args.kwargs["tools_required"] == ["graph_tools__lookup_alerts"]
 
 
-async def test_create_skill_rejects_missing_required_tool(mocker):
+async def test_create_skill_drops_missing_required_tool_refs(mocker):
     mocker.patch(
         "reporting.routes.skillsets.report_store.get_skill",
         new=AsyncMock(return_value=None),
@@ -318,9 +318,13 @@ async def test_create_skill_rejects_missing_required_tool(mocker):
         "reporting.routes.skillsets.report_store.get_tool",
         new=AsyncMock(return_value=None),
     )
+    mocker.patch(
+        "reporting.routes.skillsets.report_store.get_skillset",
+        new=AsyncMock(return_value=_skillset_item()),
+    )
     create_skill = mocker.patch(
         "reporting.routes.skillsets.report_store.create_skill",
-        new=AsyncMock(),
+        new=AsyncMock(return_value=_skill_item().model_copy(update={"tools_required": []})),
     )
     app = _make_app()
     body = {
@@ -335,9 +339,46 @@ async def test_create_skill_rejects_missing_required_tool(mocker):
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         ret = await client.post(f"/api/v1/skillsets/{_SKILLSET_ID}/skills", json=body)
 
-    assert ret.status_code == 400
-    assert "graph_tools__missing" in ret.text
-    create_skill.assert_not_called()
+    assert ret.status_code == 201
+    assert ret.json()["tools_required"] == []
+    create_skill.assert_awaited_once()
+    assert create_skill.await_args.kwargs["tools_required"] == []
+
+
+async def test_create_skill_keeps_builtin_tool_refs_even_when_catalog_lookup_missing(mocker):
+    mocker.patch(
+        "reporting.routes.skillsets.report_store.get_skill",
+        new=AsyncMock(return_value=None),
+    )
+    mocker.patch(
+        "reporting.routes.skillsets.report_store.get_tool",
+        new=AsyncMock(return_value=None),
+    )
+    mocker.patch(
+        "reporting.routes.skillsets.report_store.get_skillset",
+        new=AsyncMock(return_value=_skillset_item()),
+    )
+    create_skill = mocker.patch(
+        "reporting.routes.skillsets.report_store.create_skill",
+        new=AsyncMock(return_value=_skill_item().model_copy(update={"tools_required": ["graph__query"]})),
+    )
+    app = _make_app()
+    body = {
+        "skill_id": _SKILL_ID,
+        "name": "Summarize Findings",
+        "description": "",
+        "template": "Summarize {{topic}}",
+        "parameters": [{"name": "topic", "type": "string", "required": True}],
+        "tools_required": ["graph__query"],
+        "enabled": True,
+    }
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        ret = await client.post(f"/api/v1/skillsets/{_SKILLSET_ID}/skills", json=body)
+
+    assert ret.status_code == 201
+    assert ret.json()["tools_required"] == ["graph__query"]
+    create_skill.assert_awaited_once()
+    assert create_skill.await_args.kwargs["tools_required"] == ["graph__query"]
 
 
 async def test_list_skills_marks_parent_disabled_skills_effectively_disabled(mocker):
