@@ -17,6 +17,18 @@ import CypherDetails from 'src/components/reports/CypherDetails';
 import { ProgressPanelSkeleton } from 'src/components/reports/PanelLoadingSkeletons';
 import QueryValidationBadge from 'src/components/reports/QueryValidationBadge';
 
+const fillCardSx = {
+  height: '100%',
+  display: 'flex',
+  flexDirection: 'column' as const
+};
+
+const fillBodySx = {
+  flex: 1,
+  minHeight: 0,
+  justifyContent: 'center'
+};
+
 interface CypherProgressProps {
   cypher?: string;
   params?: Record<string, unknown>;
@@ -52,12 +64,12 @@ export default function CypherProgress({
 
   if (cypher === undefined) {
     return (
-      <Card>
+      <Card sx={fillCardSx}>
         <Grid container spacing={0} direction="column" alignItems="center">
           <CardHeader title={caption} />
         </Grid>
         <Divider />
-        <Grid container spacing={0} direction="column" alignItems="center">
+        <Grid container spacing={0} direction="column" alignItems="center" sx={fillBodySx}>
           <CardContent>
             <Error />
             <Typography variant="body2">Missing cypher query</Typography>
@@ -69,12 +81,12 @@ export default function CypherProgress({
 
   if (needInputs !== undefined && needInputs.length > 0) {
     return (
-      <Card>
+      <Card sx={fillCardSx}>
         <Grid container spacing={0} direction="column" alignItems="center">
           <CardHeader title={caption} />
         </Grid>
         <Divider />
-        <Grid container spacing={0} direction="column" alignItems="center">
+        <Grid container spacing={0} direction="column" alignItems="center" sx={fillBodySx}>
           <CardContent>
             <Typography variant="h4" align="center">
               N/A
@@ -99,13 +111,13 @@ export default function CypherProgress({
 
   if (queryErrors.length > 0) {
     return (
-      <Card>
+      <Card sx={fillCardSx}>
         <Grid container direction="column" alignItems="center">
           <CardHeader title={caption} />
         </Grid>
         <Divider />
         <QueryValidationBadge errors={queryErrors} warnings={warnings} />
-        <Grid container spacing={0} direction="column" alignItems="center">
+        <Grid container spacing={0} direction="column" alignItems="center" sx={fillBodySx}>
           <CardContent>
             <Typography variant="h4" align="center">N/A</Typography>
             <Typography variant="body2" align="center">Query validation failed</Typography>
@@ -121,12 +133,12 @@ export default function CypherProgress({
 
   if (first === undefined) {
     return (
-      <Card>
+      <Card sx={fillCardSx}>
         <Grid container spacing={0} direction="column" alignItems="center">
           <CardHeader title={caption} />
         </Grid>
         <Divider />
-        <Grid container spacing={0} direction="column" alignItems="center">
+        <Grid container spacing={0} direction="column" alignItems="center" sx={fillBodySx}>
           <CardContent>
             <Typography variant="h4">N/A</Typography>
           </CardContent>
@@ -159,7 +171,7 @@ export default function CypherProgress({
 
   return (
     <>
-      <Card style={{ height: '100%' }} sx={{ position: 'relative', '&:hover .panel-info-btn': { opacity: 1 } }}>
+      <Card sx={{ ...fillCardSx, position: 'relative', '&:hover .panel-info-btn': { opacity: 1 } }}>
         <IconButton
           className="panel-info-btn"
           size="small"
@@ -174,7 +186,7 @@ export default function CypherProgress({
         <Divider />
         <QueryValidationBadge errors={queryErrors} warnings={warnings} />
 
-        <Grid container spacing={0} direction="column" alignItems="center">
+        <Grid container spacing={0} direction="column" alignItems="center" sx={fillBodySx}>
           <CardContent>
             <span>
               <Typography variant="h3" component="span" color={textColor}>

@@ -4,7 +4,6 @@ import {
   Box,
   Container,
   Divider,
-  Grid,
   Paper,
   Table,
   TableBody,
@@ -28,6 +27,7 @@ import CypherProgress from 'src/components/reports/CypherProgress';
 import CypherTable from 'src/components/reports/CypherTable';
 import CypherVerticalTable from 'src/components/reports/CypherVerticalTable';
 import FreeTextInput from 'src/components/reports/FreeTextInput';
+import PanelGridRow from 'src/components/reports/PanelGridRow';
 import {
   DASHBOARD_NAVBAR_HEIGHT,
   DASHBOARD_SIDEBAR_WIDTH_VAR
@@ -176,6 +176,7 @@ const PanelItem = memo(function PanelItem({ item, rowIndex, index, varData, allI
           caption={item.caption}
           graphSettings={item.graph_settings}
           needInputs={needInputs}
+          fillHeight
           reportQueryToken={resolveCapability(`rows.${rowIndex}.panels.${index}.cypher`)}
         />
       );
@@ -210,12 +211,16 @@ const PanelItem = memo(function PanelItem({ item, rowIndex, index, varData, allI
           id={item.table_id}
           details={details}
           needInputs={needInputs}
+          autoHeight={item.auto_height ?? false}
           reportQueryToken={resolveCapability(`rows.${rowIndex}.panels.${index}.cypher`)}
         />
       );
   } else if (item.type === 'markdown') {
     itemComponent = (
       <Box sx={{
+        height: '100%',
+        minHeight: 0,
+        overflow: item.auto_height ? 'visible' : 'auto',
         '& p': { mb: 1 },
         '& h2, & h3, & h4, & h5, & h6': { mb: 1 },
         '& ul, & ol': { mb: 1 },
@@ -236,27 +241,11 @@ const PanelItem = memo(function PanelItem({ item, rowIndex, index, varData, allI
     );
   }
 
-  let size;
-  let xsSize;
-  if (item.size === undefined) {
-    size = 3;
-    xsSize = 6;
-  } else if (item.size < 7) {
-    size = item.size;
-    xsSize = item.size * 2;
-  } else {
-    size = item.size;
-    xsSize = item.size;
-  }
-
   return (
-    // We allow index in keys here because the config isn't reloaded, and as such elements
-    // in the config will never change.
-      // eslint-disable-next-line react/no-array-index-key
-      <Grid key={index} size={{ lg: size, md: size, xl: size, xs: xsSize }}>
-        {itemComponent}
-      </Grid>
-    );
+    <Box sx={{ height: '100%', minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+      {itemComponent}
+    </Box>
+  );
 }, function areEqual(prevProps, nextProps) {
   if (prevProps.resolveQuery !== nextProps.resolveQuery) return false;
   if (prevProps.resolveCapability !== nextProps.resolveCapability) return false;
@@ -476,21 +465,6 @@ function ReportView({
 
   const rows = [];
   report.rows.forEach((row, rowIndex) => {
-    const items = row.panels.map((item, index) => (
-      // We allow index in keys here because the config isn't reloaded, and as such elements
-      // in the config will never change.
-      // eslint-disable-next-line react/no-array-index-key
-      <PanelItem
-        key={index}
-        rowIndex={rowIndex}
-        index={index}
-        item={item}
-        varData={varData}
-        allInputs={report.inputs ?? []}
-        resolveQuery={resolveQuery}
-        resolveCapability={resolveCapability}
-      />
-    ));
     rows.push(
       <Container key={row.name} maxWidth={false} sx={{ ...contentContainerSx, pb: 1.5 }}>
         <Paper elevation={1} sx={{ p: 1.5 }}>
@@ -498,9 +472,22 @@ function ReportView({
             {row.name}
           </Typography>
           <Divider />
-          <Grid container spacing={1.5} sx={{ py: 1.5 }}>
-            {items}
-          </Grid>
+          <Box sx={{ py: 1.5 }}>
+            <PanelGridRow
+              panels={row.panels}
+              renderPanel={(item, index) => (
+                <PanelItem
+                  rowIndex={rowIndex}
+                  index={index}
+                  item={item}
+                  varData={varData}
+                  allInputs={report.inputs ?? []}
+                  resolveQuery={resolveQuery}
+                  resolveCapability={resolveCapability}
+                />
+              )}
+            />
+          </Box>
         </Paper>
       </Container>
     );

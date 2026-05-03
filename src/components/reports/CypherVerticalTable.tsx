@@ -40,12 +40,30 @@ import CypherDetails from 'src/components/reports/CypherDetails';
 import { VerticalTableSkeleton } from 'src/components/reports/PanelLoadingSkeletons';
 import QueryValidationBadge from 'src/components/reports/QueryValidationBadge';
 
+const fillSx = {
+  height: '100%',
+  display: 'flex',
+  flexDirection: 'column' as const,
+  minHeight: 0
+};
+
+const scrollBodySx = {
+  flex: 1,
+  minHeight: 0,
+  overflow: 'auto'
+};
+
+const autoBodySx = {
+  flex: 'none'
+};
+
 interface CypherVerticalTableProps {
   cypher?: string;
   params?: Record<string, unknown>;
   id?: string;
   details?: Record<string, unknown>;
   needInputs?: string[];
+  autoHeight?: boolean;
   reportQueryToken?: string;
 }
 
@@ -55,6 +73,7 @@ export default function CypherVerticalTable({
   id,
   details,
   needInputs,
+  autoHeight = false,
   reportQueryToken
 }: CypherVerticalTableProps) {
   const [open, setOpen] = useState(false);
@@ -72,49 +91,59 @@ export default function CypherVerticalTable({
 
   if (cypher === undefined) {
     return (
-      <>
+      <Box sx={fillSx}>
         <Error />
         <Typography variant="body2">Missing cypher query</Typography>
-      </>
+      </Box>
     );
   }
 
   if (needInputs !== undefined && needInputs.length > 0) {
     return (
-      <div style={{ height: 400, width: '100%' }}>
+      <Box sx={fillSx}>
         <Typography variant="body2">
           Please set {needInputs.join(', ')}
         </Typography>
-      </div>
+      </Box>
     );
   }
 
   if (error) {
     console.log(error);
     return (
-      <Typography variant="body2">
-        Failed to load requested data, please reload.
-      </Typography>
+      <Box sx={fillSx}>
+        <Typography variant="body2">
+          Failed to load requested data, please reload.
+        </Typography>
+      </Box>
     );
   }
 
   if (queryErrors.length > 0) {
     return (
-      <>
+      <Box sx={fillSx}>
         <Typography gutterBottom variant="h4" component="div">
           <QueryValidationBadge errors={queryErrors} warnings={warnings} />
         </Typography>
         <Typography variant="body2">Query validation failed.</Typography>
-      </>
+      </Box>
     );
   }
 
   if (loading || records === undefined) {
-    return <VerticalTableSkeleton />;
+    return (
+      <Box sx={fillSx}>
+        <VerticalTableSkeleton />
+      </Box>
+    );
   }
 
   if (records === null || records.length === 0) {
-    return <Typography variant="body2">No records found.</Typography>;
+    return (
+      <Box sx={fillSx}>
+        <Typography variant="body2">No records found.</Typography>
+      </Box>
+    );
   }
 
   function makeTable(data: Record<string, unknown>) {
@@ -221,9 +250,9 @@ export default function CypherVerticalTable({
   }
 
   return (
-    <>
-      {tables}
+    <Box sx={fillSx}>
+      <Box sx={autoHeight ? autoBodySx : scrollBodySx}>{tables}</Box>
       <CypherDetails details={details} open={open} setOpen={setOpen} />
-    </>
+    </Box>
   );
 }

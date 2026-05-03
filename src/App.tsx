@@ -13,6 +13,8 @@ import routes from 'src/routes';
 import { AuthConfigContext, type AuthConfig, type OidcConfig } from 'src/authConfig.context';
 import { createUserManager } from 'src/userManager';
 import { CurrentUserProvider } from 'src/hooks/useCurrentUser';
+import 'react-grid-layout/css/styles.css';
+import 'react-resizable/css/styles.css';
 
 function App() {
   const prefersDarkMode = useMediaQuery('(prefers-color-scheme: dark)');

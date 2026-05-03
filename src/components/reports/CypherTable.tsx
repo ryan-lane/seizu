@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Error from '@mui/icons-material/Error';
 import {
   Box,
@@ -124,6 +124,18 @@ function TableLoadingSkeleton({ height }: { height?: string }) {
   );
 }
 
+// Approximate height consumed by the table toolbar, column headers, and pagination
+// footer combined. Used to derive ``tableBodyHeight`` from the parent cell height.
+const TABLE_CHROME_HEIGHT = 180;
+const MIN_TABLE_BODY_HEIGHT = 160;
+
+const fillSx = {
+  height: '100%',
+  display: 'flex',
+  flexDirection: 'column' as const,
+  minHeight: 0
+};
+
 interface CypherTableProps {
   cypher?: string;
   params?: Record<string, unknown>;
@@ -148,6 +160,8 @@ export default function CypherTable({
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [expandOpen, setExpandOpen] = useState(false);
   const [expandSize, setExpandSize] = useState(window.innerHeight);
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const [containerHeight, setContainerHeight] = useState<number | null>(null);
   const [runQuery, { loading, error, records, first, warnings, queryErrors }] =
     useLazyCypherQuery(cypher, reportQueryToken);
 
@@ -160,6 +174,18 @@ export default function CypherTable({
   }, []);
 
   useEffect(() => {
+    const node = containerRef.current;
+    if (!node || typeof ResizeObserver === 'undefined') return;
+    const observer = new ResizeObserver((entries) => {
+      const entry = entries[0];
+      if (!entry) return;
+      setContainerHeight(entry.contentRect.height);
+    });
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, []);
+
+  useEffect(() => {
     if (needInputs === undefined || needInputs.length === 0) {
       runQuery(params);
     }
@@ -167,41 +193,43 @@ export default function CypherTable({
 
   if (needInputs !== undefined && needInputs.length > 0) {
     return (
-      <div>
+      <Box sx={fillSx}>
         <Typography variant="body2">
           Please set {needInputs.join(', ')}
         </Typography>
-      </div>
+      </Box>
     );
   }
 
   if (error) {
     console.log(error);
     return (
-      <Typography variant="body2">
-        Failed to load requested data, please reload.
-      </Typography>
+      <Box sx={fillSx}>
+        <Typography variant="body2">
+          Failed to load requested data, please reload.
+        </Typography>
+      </Box>
     );
   }
 
   if (cypher === undefined) {
     return (
-      <>
+      <Box sx={fillSx}>
         <Error />
         <Typography variant="body2">Missing cypher query</Typography>
-      </>
+      </Box>
     );
   }
 
   if (queryErrors.length > 0) {
     return (
-      <>
+      <Box sx={fillSx}>
         <Typography gutterBottom variant="h4" component="div">
           {caption}
           <QueryValidationBadge errors={queryErrors} warnings={warnings} />
         </Typography>
         <Typography variant="body2">Query validation failed.</Typography>
-      </>
+      </Box>
     );
   }
 
@@ -271,35 +299,47 @@ export default function CypherTable({
     tableBodyHeight = height;
     tableBodySkeletonHeight = height;
     options.tableBodyHeight = height;
-  } else {
-    // window height minus the size of the table header and footer, and the caption
-    const defaultBodyHeight = Math.max(expandSize - 275, 160);
-    tableBodyHeight = `${defaultBodyHeight}px`;
-    tableBodySkeletonHeight = `${Math.min(defaultBodyHeight, 750)}px`;
+  } else if (containerHeight !== null) {
+    // Fill the parent cell, leaving room for the toolbar, column header, and
+    // pagination footer.
+    const bodyPx = Math.max(containerHeight - TABLE_CHROME_HEIGHT, MIN_TABLE_BODY_HEIGHT);
+    tableBodyHeight = `${bodyPx}px`;
+    tableBodySkeletonHeight = tableBodyHeight;
     options.tableBodyHeight = tableBodyHeight;
-    // Set the maximum height for normal views, to avoid expanding forever
-    options.tableBodyMaxHeight = '750px';
+  } else {
+    // First render before ResizeObserver fires — use a sensible default.
+    tableBodyHeight = `${MIN_TABLE_BODY_HEIGHT}px`;
+    tableBodySkeletonHeight = tableBodyHeight;
+    options.tableBodyHeight = tableBodyHeight;
   }
 
   if (loading || records === undefined) {
     return (
-      <>
+      <Box ref={containerRef} sx={fillSx}>
         {caption && (
           <Typography gutterBottom variant="h4">
             {caption}
           </Typography>
         )}
         <TableLoadingSkeleton height={tableBodySkeletonHeight} />
-      </>
+      </Box>
     );
   }
 
   if (records === null || records.length === 0) {
-    return <Typography variant="body2">No records found.</Typography>;
+    return (
+      <Box ref={containerRef} sx={fillSx}>
+        <Typography variant="body2">No records found.</Typography>
+      </Box>
+    );
   }
 
   if (first === undefined) {
-    return <MUIDataTable data={[]} columns={[]} options={options} />;
+    return (
+      <Box ref={containerRef} sx={fillSx}>
+        <MUIDataTable data={[]} columns={[]} options={options} />
+      </Box>
+    );
   }
 
   const mungedColumns = [];
@@ -324,7 +364,7 @@ export default function CypherTable({
   }
 
   return (
-    <>
+    <Box ref={containerRef} sx={fillSx}>
       <Typography gutterBottom variant="h4">
         {caption}
       </Typography>
@@ -354,6 +394,6 @@ export default function CypherTable({
           </Button>
         </DialogActions>
       </Dialog>
-    </>
+    </Box>
   );
 }
