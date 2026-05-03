@@ -1,7 +1,17 @@
 import { isValidElement, type MouseEvent as ReactMouseEvent, ReactNode, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  Badge,
   Box,
+  Divider,
+  IconButton,
+  InputAdornment,
+  ListItemIcon,
+  ListItemText,
+  Menu,
+  MenuItem,
   Paper,
+  Stack,
+  TextField,
   Tooltip,
   Table,
   TableBody,
@@ -12,6 +22,11 @@ import {
   TableRow,
   Typography
 } from '@mui/material';
+import AllInclusiveIcon from '@mui/icons-material/AllInclusive';
+import CheckIcon from '@mui/icons-material/Check';
+import FilterAltIcon from '@mui/icons-material/FilterAlt';
+import SearchIcon from '@mui/icons-material/Search';
+import Clear from '@mui/icons-material/Clear';
 import type { Breakpoint, SxProps, Theme } from '@mui/material/styles';
 
 type ColumnAlign = 'inherit' | 'left' | 'center' | 'right' | 'justify';
@@ -30,11 +45,28 @@ export interface ListTableColumn<T> {
   render: (row: T) => ReactNode;
 }
 
+export interface ListTableFilterOption<T> {
+  key: string;
+  label: ReactNode;
+  icon?: ReactNode;
+  matches: (row: T) => boolean;
+}
+
+export interface ListTableFilterGroup<T> {
+  key: string;
+  label: ReactNode;
+  icon?: ReactNode;
+  options: ListTableFilterOption<T>[];
+}
+
 interface ListTableProps<T> {
   rows: T[];
   columns: ListTableColumn<T>[];
   getRowKey: (row: T) => string | number;
   emptyMessage: ReactNode;
+  searchLabel?: string;
+  searchPlaceholder?: string;
+  filterGroups?: ListTableFilterGroup<T>[];
   pagination?: boolean;
   initialRowsPerPage?: number;
   rowsPerPageOptions?: number[];
@@ -85,6 +117,10 @@ function getNodeTextContent(node: ReactNode): string {
     ].filter(Boolean).join(' ');
   }
   return '';
+}
+
+function normalizeFilterText(text: string): string {
+  return text.trim().toLowerCase();
 }
 
 function isResizingDisabled(column: ListTableColumn<unknown>): boolean {
@@ -155,6 +191,9 @@ export default function ListTable<T>({
   columns,
   getRowKey,
   emptyMessage,
+  searchLabel = 'Search',
+  searchPlaceholder = 'Search rows',
+  filterGroups = [],
   pagination = true,
   initialRowsPerPage = 10,
   rowsPerPageOptions = [10, 25, 50, 75, 100]
@@ -162,8 +201,13 @@ export default function ListTable<T>({
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(initialRowsPerPage);
   const [columnWidths, setColumnWidths] = useState<Record<string, number>>({});
+  const [filterText, setFilterText] = useState('');
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [filterAnchorEl, setFilterAnchorEl] = useState<HTMLElement | null>(null);
+  const [selectedFilterKeys, setSelectedFilterKeys] = useState<Record<string, string[]>>({});
   const paginationEnabled = pagination && rows.length > 0;
   const headerCellRefs = useRef<Record<string, HTMLElement | null>>({});
+  const searchInputRef = useRef<HTMLInputElement | null>(null);
   const resizeDragRef = useRef<{
     targetIndex: number;
     startX: number;
@@ -181,6 +225,19 @@ export default function ListTable<T>({
     }
   }, [page, rows.length, rowsPerPage]);
 
+  useEffect(() => {
+    setPage(0);
+  }, [filterText, selectedFilterKeys]);
+
+  useEffect(() => {
+    if (searchOpen) {
+      window.setTimeout(() => {
+        searchInputRef.current?.focus();
+        searchInputRef.current?.select();
+      }, 0);
+    }
+  }, [searchOpen]);
+
   useEffect(() => () => {
     if (resizeListenersRef.current) {
       const { handleMouseMove, handleMouseUp } = resizeListenersRef.current;
@@ -191,11 +248,36 @@ export default function ListTable<T>({
     resizeDragRef.current = null;
   }, []);
 
+  const filteredRows = useMemo(() => {
+    const normalizedFilter = normalizeFilterText(filterText);
+    const activeFilterEntries = Object.entries(selectedFilterKeys).filter(([, value]) => value.length > 0);
+    if (!normalizedFilter && activeFilterEntries.length === 0) return rows;
+
+    return rows.filter((row) => {
+      const matchesSearch = !normalizedFilter || columns
+        .map((column) => getNodeTextContent(column.render(row)))
+        .join(' ')
+        .toLowerCase()
+        .includes(normalizedFilter);
+
+      if (!matchesSearch) return false;
+
+      return filterGroups.every((group) => {
+        const selectedKeys = selectedFilterKeys[group.key] ?? [];
+        if (selectedKeys.length === 0) return true;
+        return selectedKeys.some((selectedKey) => {
+          const option = group.options.find((candidate) => candidate.key === selectedKey);
+          return option ? option.matches(row) : false;
+        });
+      });
+    });
+  }, [columns, filterGroups, filterText, rows, selectedFilterKeys]);
+
   const visibleRows = useMemo(() => {
-    if (!pagination) return rows;
+    if (!pagination) return filteredRows;
     const start = page * rowsPerPage;
-    return rows.slice(start, start + rowsPerPage);
-  }, [page, pagination, rows, rowsPerPage]);
+    return filteredRows.slice(start, start + rowsPerPage);
+  }, [filteredRows, page, pagination, rowsPerPage]);
 
   const getColumnMinWidth = (column: ListTableColumn<T>): number => Math.max(48, column.minWidth ?? 48);
 
@@ -330,8 +412,180 @@ export default function ListTable<T>({
     };
   };
 
+  const activeFilterOptionCount = Object.values(selectedFilterKeys).reduce((sum, values) => sum + values.length, 0);
+  const hasSearch = normalizeFilterText(filterText).length > 0;
+  const hasActiveFilters = activeFilterOptionCount > 0;
+
+  const closeSearch = () => {
+    setSearchOpen(false);
+    setFilterText('');
+  };
+
+  const toggleSearch = () => {
+    if (searchOpen) {
+      closeSearch();
+      return;
+    }
+    setSearchOpen(true);
+  };
+
+  const openFilterMenu = (event: ReactMouseEvent<HTMLButtonElement>) => {
+    setFilterAnchorEl(event.currentTarget);
+  };
+
+  const closeFilterMenu = () => {
+    setFilterAnchorEl(null);
+  };
+
+  const clearFilterGroup = (groupKey: string) => {
+    setSelectedFilterKeys((prev) => ({ ...prev, [groupKey]: [] }));
+    closeFilterMenu();
+  };
+
+  const selectFilterOption = (groupKey: string, optionKey: string) => {
+    setSelectedFilterKeys((prev) => ({
+      ...prev,
+      [groupKey]: prev[groupKey]?.includes(optionKey)
+        ? prev[groupKey].filter((value) => value !== optionKey)
+        : [...(prev[groupKey] ?? []), optionKey]
+    }));
+  };
+
   return (
     <Paper variant="outlined">
+      <Box
+        sx={{
+          px: 2,
+          pt: searchOpen ? 2.25 : 0,
+          pb: searchOpen ? 1.25 : 0,
+          transition: 'padding 180ms ease'
+        }}
+      >
+        <Stack
+          direction="row"
+          spacing={1}
+          alignItems={searchOpen ? 'flex-start' : 'center'}
+          sx={{ minWidth: 0 }}
+        >
+          <Tooltip title={searchLabel} placement="top" arrow>
+            <IconButton
+              aria-label={searchLabel}
+              onClick={toggleSearch}
+              color={searchOpen || hasSearch ? 'primary' : 'default'}
+              size="small"
+            >
+              <SearchIcon fontSize="small" />
+            </IconButton>
+          </Tooltip>
+          <Box
+            sx={{
+              overflow: 'visible',
+              flex: searchOpen ? '0 0 360px' : '0 0 0px',
+              width: searchOpen ? 360 : 0,
+              opacity: searchOpen ? 1 : 0,
+              transition: 'width 180ms ease, opacity 180ms ease, flex-basis 180ms ease',
+              minWidth: 0,
+              position: 'relative',
+              mt: searchOpen ? 0.25 : 0
+            }}
+          >
+            <Tooltip title={searchPlaceholder} placement="top" arrow>
+              <Box component="span" sx={{ display: 'block' }}>
+                <TextField
+                  inputRef={searchInputRef}
+                  fullWidth
+                  size="small"
+                  label={searchPlaceholder}
+                  value={filterText}
+                  onChange={(event) => setFilterText(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Escape') {
+                      closeSearch();
+                    }
+                  }}
+                  InputProps={{
+                    endAdornment: filterText ? (
+                      <InputAdornment position="end">
+                        <IconButton
+                          aria-label="Clear search"
+                          edge="end"
+                          onClick={() => setFilterText('')}
+                          size="small"
+                        >
+                          <Clear fontSize="small" />
+                        </IconButton>
+                      </InputAdornment>
+                    ) : undefined
+                  }}
+                />
+              </Box>
+            </Tooltip>
+          </Box>
+          {filterGroups.length > 0 && (
+            <>
+              <Badge color="primary" badgeContent={activeFilterOptionCount} invisible={activeFilterOptionCount === 0}>
+                <Tooltip title="Filters" placement="top" arrow>
+                  <IconButton
+                    aria-label="Filters"
+                    onClick={openFilterMenu}
+                    color={hasActiveFilters ? 'primary' : 'default'}
+                    size="small"
+                  >
+                    <FilterAltIcon fontSize="small" />
+                  </IconButton>
+                </Tooltip>
+              </Badge>
+              <Menu
+                anchorEl={filterAnchorEl}
+                open={Boolean(filterAnchorEl)}
+                onClose={closeFilterMenu}
+                slotProps={{ paper: { sx: { minWidth: 240 } } }}
+              >
+                {filterGroups.map((group, groupIndex) => {
+                  const selectedKeys = selectedFilterKeys[group.key] ?? [];
+                  const allSelected = selectedKeys.length === 0;
+                  return (
+                    <Box key={group.key}>
+                      {groupIndex > 0 && <Divider />}
+                      <Box sx={{ px: 2, pt: 1.25, pb: 0.5 }}>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
+                          {group.icon}
+                          <Typography variant="overline" color="text.secondary" sx={{ lineHeight: 1 }}>
+                            {group.label}
+                          </Typography>
+                        </Box>
+                      </Box>
+                      <MenuItem
+                        onClick={() => clearFilterGroup(group.key)}
+                        selected={allSelected}
+                      >
+                        <ListItemIcon>
+                          {allSelected ? <CheckIcon fontSize="small" /> : <AllInclusiveIcon fontSize="small" />}
+                        </ListItemIcon>
+                        <ListItemText primary="All" />
+                      </MenuItem>
+                      {group.options.map((option) => (
+                        <MenuItem
+                          key={option.key}
+                          onClick={() => selectFilterOption(group.key, option.key)}
+                          selected={selectedKeys.includes(option.key)}
+                        >
+                          <ListItemIcon>
+                            {selectedKeys.includes(option.key)
+                              ? <CheckIcon fontSize="small" />
+                              : (option.icon ?? <Box sx={{ width: 20, height: 20 }} />)}
+                          </ListItemIcon>
+                          <ListItemText primary={option.label} />
+                        </MenuItem>
+                      ))}
+                    </Box>
+                  );
+                })}
+              </Menu>
+            </>
+          )}
+        </Stack>
+      </Box>
       <TableContainer sx={{ overflowX: 'auto' }}>
         <Table sx={{ tableLayout: 'fixed', width: '100%' }}>
           <TableHead>
@@ -404,12 +658,12 @@ export default function ListTable<T>({
             </TableRow>
           </TableHead>
           <TableBody>
-            {rows.length === 0 && (
+            {filteredRows.length === 0 && (
               <TableRow>
                 <TableCell colSpan={columns.length}>
                   <Box component="div" sx={listTableCellContentSx}>
                     <Typography color="text.secondary" sx={{ py: 1 }}>
-                      {emptyMessage}
+                      {hasSearch || hasActiveFilters ? 'No rows match your filters.' : emptyMessage}
                     </Typography>
                   </Box>
                 </TableCell>
@@ -447,11 +701,11 @@ export default function ListTable<T>({
           </TableBody>
         </Table>
       </TableContainer>
-      {paginationEnabled && (
+      {paginationEnabled && filteredRows.length > 0 && (
         <Box sx={{ borderTop: 1, borderColor: 'divider' }}>
           <TablePagination
             component="div"
-            count={rows.length}
+            count={filteredRows.length}
             page={page}
             rowsPerPage={rowsPerPage}
             rowsPerPageOptions={rowsPerPageOptions}

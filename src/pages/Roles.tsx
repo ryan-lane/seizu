@@ -25,10 +25,12 @@ import {
   Typography
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
+import BadgeIcon from '@mui/icons-material/Badge';
 import DeleteIcon from '@mui/icons-material/Delete';
 import EditIcon from '@mui/icons-material/Edit';
 import HistoryIcon from '@mui/icons-material/History';
 import MoreVertIcon from '@mui/icons-material/MoreVert';
+import PersonOutlineIcon from '@mui/icons-material/PersonOutline';
 import VisibilityIcon from '@mui/icons-material/Visibility';
 import Error from '@mui/icons-material/Error';
 import {
@@ -44,6 +46,7 @@ import UserDisplay from 'src/components/UserDisplay';
 import { usePermissionState } from 'src/hooks/usePermissions';
 import ListTable, {
   ListTableColumn,
+  ListTableFilterGroup,
   listTableActionColumnSx,
   listTablePrimaryCellSx,
   listTableSecondaryCellSx,
@@ -53,11 +56,22 @@ import type { BackState } from 'src/navigation';
 import { pageContentSx } from 'src/theme/layout';
 
 const descriptionColumnSx = { ...listTableSecondaryCellSx, width: '22%' };
-const permissionsColumnSx = { width: '24%' };
+const permissionsColumnSx = { width: '18%' };
 const roleTypeColumnSx = { width: 144 };
 const versionColumnSx = { ...listTableSecondaryCellSx, width: 96 };
 const updatedAtColumnSx = { ...listTableSecondaryCellSx, width: 180 };
 const updatedByColumnSx = { ...listTableSecondaryCellSx, width: 150 };
+const srOnlySx = {
+  position: 'absolute',
+  width: 1,
+  height: 1,
+  p: 0,
+  m: -1,
+  overflow: 'hidden',
+  clip: 'rect(0, 0, 0, 0)',
+  whiteSpace: 'nowrap',
+  border: 0
+} as const;
 
 function permissionGroup(permission: string): string {
   return permission.split(':')[0] || 'other';
@@ -138,7 +152,6 @@ function PermissionChipsSummary({ permissions }: PermissionChipsSummaryProps) {
 
   const visiblePermissions = permissions.slice(0, visibleCount);
   const remaining = permissions.length - visibleCount;
-  const hiddenPermissions = permissions.slice(visibleCount);
 
   return (
     <Box ref={containerRef} sx={{ position: 'relative', minWidth: 0, overflow: 'hidden' }}>
@@ -147,20 +160,7 @@ function PermissionChipsSummary({ permissions }: PermissionChipsSummaryProps) {
           <Chip key={permission} label={permission} size="small" variant="outlined" />
         ))}
         {remaining > 0 && (
-          <Tooltip
-            title={
-              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5, py: 0.5 }}>
-                {hiddenPermissions.map((permission) => (
-                  <Typography key={permission} variant="body2">
-                    {permission}
-                  </Typography>
-                ))}
-              </Box>
-            }
-            placement="top"
-          >
-            <Chip label={`+${remaining}`} size="small" variant="outlined" />
-          </Tooltip>
+          <Chip label={`+${remaining}`} size="small" variant="outlined" />
         )}
       </Box>
       <Box
@@ -578,7 +578,7 @@ function Roles() {
     {
       key: 'name',
       label: 'Name',
-      cellSx: listTablePrimaryCellSx,
+      cellSx: { ...listTablePrimaryCellSx, width: '24%' },
       render: (item) => (
         <Button
           variant="text"
@@ -641,7 +641,12 @@ function Roles() {
       hideBelow: 'lg',
       cellSx: permissionsColumnSx,
       render: (item) => {
-        return <PermissionChipsSummary permissions={item.permissions} />;
+        return (
+          <Box sx={{ position: 'relative', minWidth: 0 }}>
+            <Box sx={srOnlySx}>{item.permissions.join(' ')}</Box>
+            <PermissionChipsSummary permissions={item.permissions} />
+          </Box>
+        );
       }
     },
     {
@@ -688,6 +693,27 @@ function Roles() {
       }
     }
   ];
+  const filterGroups: ListTableFilterGroup<RoleItem>[] = [
+    {
+      key: 'role_type',
+      label: 'Role type',
+      icon: <BadgeIcon fontSize="small" />,
+      options: [
+        {
+          key: 'builtin',
+          label: 'Built-in',
+          icon: <BadgeIcon fontSize="small" />,
+          matches: (item) => isBuiltinRole(item.role_id)
+        },
+        {
+          key: 'user_defined',
+          label: 'User-defined',
+          icon: <PersonOutlineIcon fontSize="small" />,
+          matches: (item) => !isBuiltinRole(item.role_id)
+        }
+      ]
+    }
+  ];
 
   return (
     <>
@@ -724,6 +750,7 @@ function Roles() {
             columns={columns}
             getRowKey={(item) => item.role_id}
             emptyMessage="No roles found."
+            filterGroups={filterGroups}
           />
         )}
       </Box>

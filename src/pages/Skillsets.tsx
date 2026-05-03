@@ -11,6 +11,8 @@ import DeleteIcon from '@mui/icons-material/Delete';
 import EditIcon from '@mui/icons-material/Edit';
 import HistoryIcon from '@mui/icons-material/History';
 import MoreVertIcon from '@mui/icons-material/MoreVert';
+import ToggleOnIcon from '@mui/icons-material/ToggleOn';
+import ToggleOffIcon from '@mui/icons-material/ToggleOff';
 import Error from '@mui/icons-material/Error';
 import {
   useSkillsetsList, useSkillsetMutations, SkillsetListItem,
@@ -18,6 +20,7 @@ import {
 } from 'src/hooks/useSkillsetsApi';
 import ListTable, {
   ListTableColumn,
+  ListTableFilterGroup,
   listTableActionColumnSx,
   listTableMonoCellSx,
   listTablePrimaryCellSx,
@@ -270,6 +273,27 @@ function Skillsets() {
       )
     }
   ];
+  const filterGroups: ListTableFilterGroup<SkillsetListItem>[] = [
+    {
+      key: 'enabled',
+      label: 'Enabled',
+      icon: <ToggleOnIcon fontSize="small" />,
+      options: [
+        {
+          key: 'enabled',
+          label: 'Enabled',
+          icon: <ToggleOnIcon fontSize="small" />,
+          matches: (item) => item.enabled
+        },
+        {
+          key: 'disabled',
+          label: 'Disabled',
+          icon: <ToggleOffIcon fontSize="small" />,
+          matches: (item) => !item.enabled
+        }
+      ]
+    }
+  ];
 
   return (
     <>
@@ -288,6 +312,7 @@ function Skillsets() {
             columns={columns}
             getRowKey={(item) => item.skillset_id}
             emptyMessage="No skillsets yet. Create one above."
+            filterGroups={filterGroups}
           />
         )}
       </Box>

@@ -16,6 +16,8 @@ import HistoryIcon from '@mui/icons-material/History';
 import MoreVertIcon from '@mui/icons-material/MoreVert';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import RemoveCircleOutlineIcon from '@mui/icons-material/RemoveCircleOutline';
+import ToggleOnIcon from '@mui/icons-material/ToggleOn';
+import ToggleOffIcon from '@mui/icons-material/ToggleOff';
 import Error from '@mui/icons-material/Error';
 import {
   useSkillsList, useSkillMutations, SkillItem, CreateSkillRequest, UpdateSkillRequest
@@ -23,6 +25,7 @@ import {
 import { ToolCatalogItem, ToolParamDef, useToolCatalog } from 'src/hooks/useToolsetsApi';
 import ListTable, {
   ListTableColumn,
+  ListTableFilterGroup,
   listTableActionColumnSx,
   listTableMonoCellSx,
   listTablePrimaryCellSx,
@@ -603,6 +606,27 @@ function SkillsetSkills() {
       )
     }
   ];
+  const filterGroups: ListTableFilterGroup<SkillItem>[] = [
+    {
+      key: 'enabled',
+      label: 'Enabled',
+      icon: <ToggleOnIcon fontSize="small" />,
+      options: [
+        {
+          key: 'enabled',
+          label: 'Enabled',
+          icon: <ToggleOnIcon fontSize="small" />,
+          matches: (skill) => skillStatus(skill).enabled
+        },
+        {
+          key: 'disabled',
+          label: 'Disabled',
+          icon: <ToggleOffIcon fontSize="small" />,
+          matches: (skill) => !skillStatus(skill).enabled
+        }
+      ]
+    }
+  ];
 
   return (
     <>
@@ -620,6 +644,7 @@ function SkillsetSkills() {
             columns={columns}
             getRowKey={(skill) => skill.skill_id}
             emptyMessage="No skills yet. Create one above."
+            filterGroups={filterGroups}
           />
         )}
       </Box>

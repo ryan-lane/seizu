@@ -30,11 +30,15 @@ import {
 import AddIcon from '@mui/icons-material/Add';
 import AddCircleOutlineIcon from '@mui/icons-material/AddCircleOutline';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
+import BadgeIcon from '@mui/icons-material/Badge';
 import DeleteIcon from '@mui/icons-material/Delete';
 import EditIcon from '@mui/icons-material/Edit';
 import HistoryIcon from '@mui/icons-material/History';
 import MoreVertIcon from '@mui/icons-material/MoreVert';
 import RemoveCircleOutlineIcon from '@mui/icons-material/RemoveCircleOutline';
+import PersonOutlineIcon from '@mui/icons-material/PersonOutline';
+import ToggleOnIcon from '@mui/icons-material/ToggleOn';
+import ToggleOffIcon from '@mui/icons-material/ToggleOff';
 import Error from '@mui/icons-material/Error';
 import {
   useToolsList,
@@ -46,6 +50,7 @@ import {
 } from 'src/hooks/useToolsetsApi';
 import ListTable, {
   ListTableColumn,
+  ListTableFilterGroup,
   listTableActionColumnSx,
   listTableMonoCellSx,
   listTablePrimaryCellSx,
@@ -633,6 +638,46 @@ function ToolsetTools() {
       }
     }
   ];
+  const filterGroups: ListTableFilterGroup<ToolItem>[] = [
+    {
+      key: 'type',
+      label: 'Type',
+      icon: <BadgeIcon fontSize="small" />,
+      options: [
+        {
+          key: 'builtin',
+          label: 'Built-in',
+          icon: <BadgeIcon fontSize="small" />,
+          matches: (item) => isBuiltinToolset(item.toolset_id)
+        },
+        {
+          key: 'user_defined',
+          label: 'User-defined',
+          icon: <PersonOutlineIcon fontSize="small" />,
+          matches: (item) => !isBuiltinToolset(item.toolset_id)
+        }
+      ]
+    },
+    {
+      key: 'enabled',
+      label: 'Enabled',
+      icon: <ToggleOnIcon fontSize="small" />,
+      options: [
+        {
+          key: 'enabled',
+          label: 'Enabled',
+          icon: <ToggleOnIcon fontSize="small" />,
+          matches: (item) => toolStatus(item).enabled
+        },
+        {
+          key: 'disabled',
+          label: 'Disabled',
+          icon: <ToggleOffIcon fontSize="small" />,
+          matches: (item) => !toolStatus(item).enabled
+        }
+      ]
+    }
+  ];
 
   return (
     <>
@@ -680,6 +725,7 @@ function ToolsetTools() {
             columns={columns}
             getRowKey={(item) => item.tool_id}
             emptyMessage="No tools yet. Create one above."
+            filterGroups={filterGroups}
           />
         )}
       </Box>

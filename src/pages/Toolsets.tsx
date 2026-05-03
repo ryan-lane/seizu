@@ -25,10 +25,14 @@ import {
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import BuildIcon from '@mui/icons-material/Build';
+import BadgeIcon from '@mui/icons-material/Badge';
 import DeleteIcon from '@mui/icons-material/Delete';
 import EditIcon from '@mui/icons-material/Edit';
 import HistoryIcon from '@mui/icons-material/History';
 import MoreVertIcon from '@mui/icons-material/MoreVert';
+import PersonOutlineIcon from '@mui/icons-material/PersonOutline';
+import ToggleOnIcon from '@mui/icons-material/ToggleOn';
+import ToggleOffIcon from '@mui/icons-material/ToggleOff';
 import Error from '@mui/icons-material/Error';
 import {
   useToolsetsList,
@@ -39,6 +43,7 @@ import {
 } from 'src/hooks/useToolsetsApi';
 import ListTable, {
   ListTableColumn,
+  ListTableFilterGroup,
   listTableActionColumnSx,
   listTableMonoCellSx,
   listTablePrimaryCellSx,
@@ -426,6 +431,46 @@ function Toolsets() {
       }
     }
   ];
+  const filterGroups: ListTableFilterGroup<ToolsetListItem>[] = [
+    {
+      key: 'type',
+      label: 'Type',
+      icon: <BadgeIcon fontSize="small" />,
+      options: [
+        {
+          key: 'builtin',
+          label: 'Built-in',
+          icon: <BadgeIcon fontSize="small" />,
+          matches: (item) => isBuiltinToolset(item.toolset_id)
+        },
+        {
+          key: 'user_defined',
+          label: 'User-defined',
+          icon: <PersonOutlineIcon fontSize="small" />,
+          matches: (item) => !isBuiltinToolset(item.toolset_id)
+        }
+      ]
+    },
+    {
+      key: 'enabled',
+      label: 'Enabled',
+      icon: <ToggleOnIcon fontSize="small" />,
+      options: [
+        {
+          key: 'enabled',
+          label: 'Enabled',
+          icon: <ToggleOnIcon fontSize="small" />,
+          matches: (item) => item.enabled
+        },
+        {
+          key: 'disabled',
+          label: 'Disabled',
+          icon: <ToggleOffIcon fontSize="small" />,
+          matches: (item) => !item.enabled
+        }
+      ]
+    }
+  ];
 
   return (
     <>
@@ -458,6 +503,7 @@ function Toolsets() {
             columns={columns}
             getRowKey={(item) => item.toolset_id}
             emptyMessage="No toolsets yet. Create one above."
+            filterGroups={filterGroups}
           />
         )}
       </Box>

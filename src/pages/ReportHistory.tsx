@@ -154,6 +154,12 @@ function ReportHistory() {
       }
     },
     {
+      key: 'name',
+      label: 'Name',
+      cellSx: { width: '24%' },
+      render: (version) => version.name
+    },
+    {
       key: 'saved',
       label: 'Saved',
       hideBelow: 'sm',

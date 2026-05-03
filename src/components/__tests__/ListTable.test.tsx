@@ -1,14 +1,16 @@
 import { fireEvent, render, screen } from '@testing-library/react';
-import ListTable, { ListTableColumn } from 'src/components/ListTable';
+import ListTable, { ListTableColumn, ListTableFilterGroup } from 'src/components/ListTable';
 
 interface Row {
   id: string;
   name: string;
+  status: 'draft' | 'public' | 'user-defined';
 }
 
 const rows: Row[] = Array.from({ length: 12 }, (_, index) => ({
   id: `row-${index + 1}`,
   name: `Row ${index + 1}`,
+  status: index % 3 === 0 ? 'draft' : index % 3 === 1 ? 'public' : 'user-defined'
 }));
 
 const columns: ListTableColumn<Row>[] = [
@@ -17,6 +19,18 @@ const columns: ListTableColumn<Row>[] = [
     label: 'Name',
     render: (row) => row.name,
   },
+];
+
+const filterGroups: ListTableFilterGroup<Row>[] = [
+  {
+    key: 'status',
+    label: 'Status',
+    options: [
+      { key: 'draft', label: 'Draft', matches: (row) => row.status === 'draft' },
+      { key: 'public', label: 'Public', matches: (row) => row.status === 'public' },
+      { key: 'user-defined', label: 'User-defined', matches: (row) => row.status === 'user-defined' }
+    ]
+  }
 ];
 
 describe('ListTable', () => {
@@ -69,5 +83,70 @@ describe('ListTable', () => {
     );
 
     expect(screen.getByText('No rows.')).toBeInTheDocument();
+  });
+
+  it('filters rows by text input', () => {
+    render(
+      <ListTable
+        rows={rows}
+        columns={columns}
+        getRowKey={(row) => row.id}
+        emptyMessage="No rows."
+      />
+    );
+
+    fireEvent.click(screen.getByLabelText('Search'));
+
+    fireEvent.change(screen.getByLabelText('Search rows'), {
+      target: { value: 'Row 11' }
+    });
+
+    expect(screen.getByText('Row 11')).toBeInTheDocument();
+    expect(screen.queryByText('Row 1')).not.toBeInTheDocument();
+    expect(screen.queryByText('Row 12')).not.toBeInTheDocument();
+  });
+
+  it('filters rows by selecting a filter option', () => {
+    render(
+      <ListTable
+        rows={rows}
+        columns={columns}
+        getRowKey={(row) => row.id}
+        emptyMessage="No rows."
+        filterGroups={filterGroups}
+      />
+    );
+
+    fireEvent.click(screen.getByLabelText('Filters'));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Draft' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Public' }));
+
+    expect(screen.getByText('Row 1')).toBeInTheDocument();
+    expect(screen.getByText('Row 2')).toBeInTheDocument();
+    expect(screen.queryByText('Row 3')).not.toBeInTheDocument();
+  });
+
+  it('clears a filter group by selecting All', () => {
+    render(
+      <ListTable
+        rows={rows}
+        columns={columns}
+        getRowKey={(row) => row.id}
+        emptyMessage="No rows."
+        filterGroups={filterGroups}
+      />
+    );
+
+    fireEvent.click(screen.getByLabelText('Filters'));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Draft' }));
+
+    expect(screen.getByText('Row 1')).toBeInTheDocument();
+    expect(screen.queryByText('Row 2')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByLabelText('Filters'));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'All' }));
+
+    expect(screen.getByText('Row 1')).toBeInTheDocument();
+    expect(screen.getByText('Row 2')).toBeInTheDocument();
   });
 });
