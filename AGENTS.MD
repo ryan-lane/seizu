@@ -50,6 +50,10 @@ pre-commit run --all-files
 make lint   # same thing
 ```
 
+### Git Workflow
+
+Do not attempt to push directly to `master`. Push feature branches only and open a pull request for integration.
+
 ### Makefile shortcuts
 
 ```bash
