@@ -34,6 +34,10 @@ const filterGroups: ListTableFilterGroup<Row>[] = [
 ];
 
 describe('ListTable', () => {
+  beforeEach(() => {
+    window.localStorage.clear();
+  });
+
   it('paginates rows on the client', () => {
     render(
       <ListTable
@@ -53,6 +57,23 @@ describe('ListTable', () => {
     expect(screen.queryByText('Row 1')).not.toBeInTheDocument();
   });
 
+  it('restores the rows per page selection from localStorage', () => {
+    window.localStorage.setItem(`seizu:list-table:rows-per-page:${window.location.pathname}`, '25');
+
+    render(
+      <ListTable
+        rows={rows}
+        columns={columns}
+        getRowKey={(row) => row.id}
+        emptyMessage="No rows."
+      />
+    );
+
+    expect(screen.getByRole('combobox')).toHaveTextContent('25');
+    expect(screen.getByText('Row 12')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Go to next page' })).toBeDisabled();
+  });
+
   it('keeps pagination controls visible when rows per page exceeds the row count', () => {
     render(
       <ListTable
@@ -70,6 +91,22 @@ describe('ListTable', () => {
     expect(screen.getByRole('combobox')).toBeInTheDocument();
     expect(screen.getByText('Row 1')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Go to next page' })).toBeDisabled();
+  });
+
+  it('persists rows per page selection to localStorage', () => {
+    render(
+      <ListTable
+        rows={rows}
+        columns={columns}
+        getRowKey={(row) => row.id}
+        emptyMessage="No rows."
+      />
+    );
+
+    fireEvent.mouseDown(screen.getByRole('combobox'));
+    fireEvent.click(screen.getByRole('option', { name: '25' }));
+
+    expect(window.localStorage.getItem(`seizu:list-table:rows-per-page:${window.location.pathname}`)).toBe('25');
   });
 
   it('shows an empty row when there are no rows', () => {
@@ -97,7 +134,7 @@ describe('ListTable', () => {
 
     fireEvent.click(screen.getByLabelText('Search'));
 
-    fireEvent.change(screen.getByLabelText('Search rows'), {
+    fireEvent.change(screen.getByRole('textbox', { name: 'Search rows' }), {
       target: { value: 'Row 11' }
     });
 

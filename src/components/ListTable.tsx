@@ -72,6 +72,8 @@ interface ListTableProps<T> {
   rowsPerPageOptions?: number[];
 }
 
+const LIST_TABLE_ROWS_PER_PAGE_STORAGE_PREFIX = 'seizu:list-table:rows-per-page';
+
 function hideBelowSx(hideBelow: ListTableColumn<unknown>['hideBelow']): SxProps<Theme> {
   if (!hideBelow) return {};
   return {
@@ -121,6 +123,25 @@ function getNodeTextContent(node: ReactNode): string {
 
 function normalizeFilterText(text: string): string {
   return text.trim().toLowerCase();
+}
+
+function getRowsPerPageStorageKey(): string {
+  return `${LIST_TABLE_ROWS_PER_PAGE_STORAGE_PREFIX}:${window.location.pathname}`;
+}
+
+function getStoredRowsPerPage(
+  storageKey: string,
+  fallback: number,
+  allowedValues: number[]
+): number {
+  const storedValue = window.localStorage.getItem(storageKey);
+  if (!storedValue) return fallback;
+
+  const parsedValue = Number.parseInt(storedValue, 10);
+  if (!Number.isFinite(parsedValue) || parsedValue <= 0) return fallback;
+  if (allowedValues.length > 0 && !allowedValues.includes(parsedValue)) return fallback;
+
+  return parsedValue;
 }
 
 function isResizingDisabled(column: ListTableColumn<unknown>): boolean {
@@ -199,7 +220,11 @@ export default function ListTable<T>({
   rowsPerPageOptions = [10, 25, 50, 75, 100]
 }: ListTableProps<T>) {
   const [page, setPage] = useState(0);
-  const [rowsPerPage, setRowsPerPage] = useState(initialRowsPerPage);
+  const rowsPerPageStorageKey = useMemo(getRowsPerPageStorageKey, []);
+  const [rowsPerPage, setRowsPerPage] = useState(() => {
+    if (typeof window === 'undefined') return initialRowsPerPage;
+    return getStoredRowsPerPage(rowsPerPageStorageKey, initialRowsPerPage, rowsPerPageOptions);
+  });
   const [columnWidths, setColumnWidths] = useState<Record<string, number>>({});
   const [filterText, setFilterText] = useState('');
   const [searchOpen, setSearchOpen] = useState(false);
@@ -237,6 +262,10 @@ export default function ListTable<T>({
       }, 0);
     }
   }, [searchOpen]);
+
+  useEffect(() => {
+    window.localStorage.setItem(rowsPerPageStorageKey, String(rowsPerPage));
+  }, [rowsPerPage, rowsPerPageStorageKey]);
 
   useEffect(() => () => {
     if (resizeListenersRef.current) {
