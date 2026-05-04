@@ -256,16 +256,18 @@ export default function CypherProgress({
               variant="determinate"
               value={percent}
               color={circleColor}
-              size={Math.max(
-                MIN_WHEEL,
-                Math.min(
-                  MAX_WHEEL,
-                  Math.min(
-                    bodySize.w - BODY_PADDING,
-                    bodySize.h - BODY_PADDING - (progressSettings?.show_label !== false ? TEXT_RESERVE : 0)
-                  )
-                )
-              )}
+              size={(() => {
+                const showLabel = progressSettings?.show_label !== false;
+                const wAvail = bodySize.w - BODY_PADDING;
+                const hAvail = bodySize.h - BODY_PADDING - (showLabel ? TEXT_RESERVE : 0);
+                const fit = Math.min(wAvail, hAvail);
+                // When the label is shown the wheel is a secondary element
+                // and stays at most 100 px to avoid dwarfing the text. When
+                // the label is hidden the wheel IS the panel, so let it
+                // fill the available space.
+                const cap = showLabel ? MAX_WHEEL : Number.POSITIVE_INFINITY;
+                return Math.max(MIN_WHEEL, Math.min(cap, fit));
+              })()}
             />
             <Box
               sx={{
