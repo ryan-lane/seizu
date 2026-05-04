@@ -92,50 +92,73 @@ function TableLoadingSkeleton({ height }: { height?: string }) {
 
   return (
     <Paper data-testid="cypher-table-loading-skeleton" variant="outlined" sx={{ overflow: 'hidden' }}>
-      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', minHeight: 64, px: 2 }}>
-        <Skeleton variant="text" width={200} height={30} />
-        <Box sx={{ display: 'flex', gap: 1 }}>
-          <Skeleton variant="circular" width={32} height={32} />
-          <Skeleton variant="circular" width={32} height={32} />
-          <Skeleton variant="circular" width={32} height={32} />
-          <Skeleton variant="circular" width={32} height={32} />
+      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', minHeight: 44, px: 1 }}>
+        <Skeleton variant="text" width={180} height={22} />
+        <Box sx={{ display: 'flex', gap: 0.5 }}>
+          <Skeleton variant="circular" width={24} height={24} />
+          <Skeleton variant="circular" width={24} height={24} />
+          <Skeleton variant="circular" width={24} height={24} />
+          <Skeleton variant="circular" width={24} height={24} />
         </Box>
       </Box>
-      <Box sx={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr 1fr', alignItems: 'center', minHeight: 56, gap: 2, px: 2, borderTop: 1, borderBottom: 1, borderColor: 'divider' }}>
-        <Skeleton variant="text" height={24} />
-        <Skeleton variant="text" height={24} />
-        <Skeleton variant="text" height={24} />
+      <Box sx={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr 1fr', alignItems: 'center', minHeight: 40, gap: 2, px: 1.5, borderTop: 1, borderBottom: 1, borderColor: 'divider' }}>
+        <Skeleton variant="text" height={20} />
+        <Skeleton variant="text" height={20} />
+        <Skeleton variant="text" height={20} />
       </Box>
-      <Box sx={{ height: bodyHeight, px: 2, py: 1.5 }}>
+      <Box sx={{ height: bodyHeight, px: 1.5, py: 1 }}>
         {Array.from({ length: 8 }).map((_, index) => (
           // eslint-disable-next-line react/no-array-index-key
-          <Box key={index} sx={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr 1fr', gap: 2, py: 1 }}>
-            <Skeleton variant="text" height={22} />
-            <Skeleton variant="text" height={22} />
-            <Skeleton variant="text" height={22} />
+          <Box key={index} sx={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr 1fr', gap: 2, py: 0.75 }}>
+            <Skeleton variant="text" height={20} />
+            <Skeleton variant="text" height={20} />
+            <Skeleton variant="text" height={20} />
           </Box>
         ))}
       </Box>
-      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', minHeight: 52, gap: 2, px: 2, borderTop: 1, borderColor: 'divider' }}>
-        <Skeleton variant="text" width={90} height={24} />
-        <Skeleton variant="text" width={120} height={24} />
+      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', minHeight: 40, gap: 2, px: 1.5, borderTop: 1, borderColor: 'divider' }}>
+        <Skeleton variant="text" width={90} height={20} />
+        <Skeleton variant="text" width={120} height={20} />
       </Box>
     </Paper>
   );
 }
 
-// Approximate height consumed by the mui-datatables chrome (toolbar ~64,
-// column header ~56, pagination footer ~52). The optional caption above the
-// table is added on top of this when present.
-const TABLE_CHROME_HEIGHT = 172;
-const CAPTION_HEIGHT = 36;
-const MIN_TABLE_BODY_HEIGHT = 160;
+// Approximate height consumed by the (compact) mui-datatables chrome:
+// toolbar ~44, column header ~40, pagination footer ~40. The optional
+// caption above the table is added on top of this when present.
+const TABLE_CHROME_HEIGHT = 124;
+const CAPTION_HEIGHT = 28;
+const MIN_TABLE_BODY_HEIGHT = 120;
 
+// Override MUI Toolbar / Table / Pagination defaults to a tighter density so
+// the table body has more vertical room inside the panel cell.
 const fillSx = {
   height: '100%',
   display: 'flex',
   flexDirection: 'column' as const,
-  minHeight: 0
+  minHeight: 0,
+  '& .MuiToolbar-root': {
+    minHeight: 44,
+    paddingLeft: 1,
+    paddingRight: 1
+  },
+  '& .MuiTableCell-head': {
+    paddingTop: 0.5,
+    paddingBottom: 0.5,
+    lineHeight: 1.2
+  },
+  '& .MuiTablePagination-root': {
+    minHeight: 40
+  },
+  '& .MuiTablePagination-toolbar': {
+    minHeight: 40,
+    paddingLeft: 1,
+    paddingRight: 1
+  },
+  '& .MuiIconButton-root': {
+    padding: 0.5
+  }
 };
 
 interface CypherTableProps {
@@ -241,7 +264,7 @@ export default function CypherTable({
   if (queryErrors.length > 0) {
     return (
       <Box ref={containerRef} sx={fillSx}>
-        <Typography gutterBottom variant="h4" component="div">
+        <Typography variant="subtitle1" component="div" sx={{ fontWeight: 500, mb: 0.5 }}>
           {caption}
           <QueryValidationBadge errors={queryErrors} warnings={warnings} />
         </Typography>
@@ -279,8 +302,8 @@ export default function CypherTable({
       if (details !== undefined) {
         icons.push(
           <Tooltip key="info" title="Show query details">
-            <IconButton onClick={setOpenDetails}>
-              <Info />
+            <IconButton size="small" onClick={setOpenDetails}>
+              <Info fontSize="small" />
             </IconButton>
           </Tooltip>
         );
@@ -288,16 +311,16 @@ export default function CypherTable({
       if (expandOpen === false) {
         icons.push(
           <Tooltip key="fullscreen" title="Fullscreen">
-            <IconButton onClick={setOpenExpand}>
-              <Fullscreen />
+            <IconButton size="small" onClick={setOpenExpand}>
+              <Fullscreen fontSize="small" />
             </IconButton>
           </Tooltip>
         );
       } else {
         icons.push(
           <Tooltip key="fullscreen" title="Close Fullscreen">
-            <IconButton onClick={setClosedExpand}>
-              <CloseFullscreen />
+            <IconButton size="small" onClick={setClosedExpand}>
+              <CloseFullscreen fontSize="small" />
             </IconButton>
           </Tooltip>
         );
@@ -335,7 +358,7 @@ export default function CypherTable({
     return (
       <Box ref={containerRef} sx={fillSx}>
         {caption && (
-          <Typography gutterBottom variant="h4">
+          <Typography variant="subtitle1" sx={{ fontWeight: 500, mb: 0.5 }}>
             {caption}
           </Typography>
         )}
