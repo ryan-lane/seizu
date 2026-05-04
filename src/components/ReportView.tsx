@@ -218,9 +218,9 @@ const PanelItem = memo(function PanelItem({ item, rowIndex, index, varData, allI
   } else if (item.type === 'markdown') {
     itemComponent = (
       <Box sx={{
-        height: '100%',
-        minHeight: 0,
-        overflow: item.auto_height ? 'visible' : 'auto',
+        ...(item.auto_height
+          ? { height: 'auto' }
+          : { height: '100%', minHeight: 0, overflow: 'auto' }),
         '& p': { mb: 1 },
         '& h2, & h3, & h4, & h5, & h6': { mb: 1 },
         '& ul, & ol': { mb: 1 },
@@ -241,6 +241,11 @@ const PanelItem = memo(function PanelItem({ item, rowIndex, index, varData, allI
     );
   }
 
+  // ``auto_height`` panels render at content height; the parent grid grows
+  // the cell to match. Other panels flex-fill their assigned cell.
+  if (item.auto_height) {
+    return <Box sx={{ width: '100%' }}>{itemComponent}</Box>;
+  }
   return (
     <Box sx={{ height: '100%', minHeight: 0, display: 'flex', flexDirection: 'column' }}>
       {itemComponent}
