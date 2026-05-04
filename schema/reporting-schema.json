@@ -390,11 +390,30 @@
                         }
                     ],
                     "default": null,
-                    "description": "The threshold value for progress panels.",
+                    "description": "(Legacy) Single threshold value for ``count`` / ``progress`` panels. New configs should use ``thresholds``; this field is retained as a fallback when ``thresholds`` is unset.",
                     "examples": [
                         "70"
                     ],
                     "title": "Threshold"
+                },
+                "thresholds": {
+                    "anyOf": [
+                        {
+                            "items": {
+                                "$ref": "#/$defs/PanelThreshold"
+                            },
+                            "type": "array"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "description": "Ordered list of ``{value, color}`` pairs for ``count`` and ``progress`` panels. The applicable color is the color of the threshold with the highest ``value`` that is less than or equal to the metric (raw total for ``count``, completion percentage for ``progress``). When unset, falls back to the legacy ``threshold`` field.",
+                    "examples": [
+                        "\n            .. code-block:: yaml\n\n              thresholds:\n                - value: 0\n                  color: \"#F44336\"\n                - value: 70\n                  color: \"#4CAF50\"\n            "
+                    ],
+                    "title": "Thresholds"
                 },
                 "bar_settings": {
                     "anyOf": [
@@ -508,6 +527,32 @@
                 "name"
             ],
             "title": "PanelParam",
+            "type": "object"
+        },
+        "PanelThreshold": {
+            "properties": {
+                "value": {
+                    "description": "The threshold trigger value. For ``count`` panels, the metric is the raw total. For ``progress`` panels, the metric is the completion percentage (0-100).",
+                    "examples": [
+                        70
+                    ],
+                    "title": "Value",
+                    "type": "number"
+                },
+                "color": {
+                    "description": "The color to apply when the metric matches this threshold. A CSS color string (e.g. ``#F44336``, ``red``).",
+                    "examples": [
+                        "#F44336"
+                    ],
+                    "title": "Color",
+                    "type": "string"
+                }
+            },
+            "required": [
+                "value",
+                "color"
+            ],
+            "title": "PanelThreshold",
             "type": "object"
         },
         "PiePanelSettings": {

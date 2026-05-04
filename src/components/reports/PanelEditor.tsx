@@ -22,9 +22,11 @@ import {
 } from '@mui/material';
 import Add from '@mui/icons-material/Add';
 import DeleteIcon from '@mui/icons-material/Delete';
-import { Panel, PanelParam, ColumnDef } from 'src/config.context';
+import { Panel, PanelParam, PanelThreshold, ColumnDef } from 'src/config.context';
 import MarkdownPanelEditor from 'src/components/reports/MarkdownPanelEditor';
+import ThresholdsEditor from 'src/components/reports/ThresholdsEditor';
 import { defaultPanelHeight } from 'src/components/reports/panelLayout';
+import { migrateLegacyThreshold } from 'src/components/reports/thresholds';
 
 const MAX_HEIGHT_ROWS = 24;
 const TYPES_WITH_AUTO_HEIGHT = new Set(['markdown', 'vertical-table']);
@@ -143,7 +145,21 @@ function PanelEditor({ open, panel, onClose, onSave }: PanelEditorProps) {
   useEffect(() => {
     if (panel) {
       const { _id, ...rest } = panel;
-      setForm({ ...rest });
+      // Migrate legacy ``threshold`` into the ``thresholds`` list on first
+      // open so the new editor displays equivalent rows. The legacy field
+      // is dropped on save (see cleanPanel).
+      const migrated: Panel = { ...rest };
+      if (
+        (migrated.thresholds === undefined || migrated.thresholds.length === 0) &&
+        migrated.threshold != null &&
+        (migrated.type === 'count' || migrated.type === 'progress')
+      ) {
+        const list = migrateLegacyThreshold(migrated);
+        if (list.length > 0) {
+          migrated.thresholds = list;
+        }
+      }
+      setForm(migrated);
       setId(_id);
     } else {
       setForm(emptyPanel('count'));
@@ -170,6 +186,8 @@ function PanelEditor({ open, panel, onClose, onSave }: PanelEditorProps) {
       min_h: form.min_h,
       auto_height: TYPES_WITH_AUTO_HEIGHT.has(newType) ? form.auto_height : undefined,
       progress_settings: newType === 'progress' ? form.progress_settings : undefined,
+      thresholds:
+        newType === 'count' || newType === 'progress' ? form.thresholds : undefined,
       cypher: newType === 'markdown' ? undefined : form.cypher
     });
   }
@@ -323,18 +341,16 @@ function PanelEditor({ open, panel, onClose, onSave }: PanelEditorProps) {
             </>
           )}
 
-          {/* Threshold for count/progress */}
+          {/* Thresholds for count/progress */}
           {hasThreshold && (
-            <TextField
-              size="small"
-              label="Threshold"
-              type="number"
-              value={form.threshold ?? ''}
-              onChange={(e) =>
-                set('threshold', e.target.value ? Number(e.target.value) : undefined)
+            <ThresholdsEditor
+              thresholds={form.thresholds ?? []}
+              onChange={(next: PanelThreshold[]) => set('thresholds', next)}
+              helperText={
+                form.type === 'progress'
+                  ? 'Each threshold applies when the completion percentage is at or above its value. The highest matching threshold wins.'
+                  : 'Each threshold applies when the count is at or above its value. The highest matching threshold wins.'
               }
-              helperText="Color the panel red when the value exceeds this threshold (count) or is below it (progress)."
-              sx={{ width: 200 }}
             />
           )}
 
@@ -526,7 +542,16 @@ function cleanPanel(panel: Panel): Panel {
   if (panel.cypher) result.cypher = panel.cypher;
   if (panel.details_cypher) result.details_cypher = panel.details_cypher;
   if (panel.markdown) result.markdown = panel.markdown;
-  if (panel.threshold != null) result.threshold = panel.threshold;
+  if (panel.thresholds && panel.thresholds.length > 0) {
+    result.thresholds = panel.thresholds.map((t) => ({
+      value: Number(t.value),
+      color: t.color
+    }));
+    // Drop the legacy single ``threshold`` field once a list is set; the
+    // renderer prefers ``thresholds`` so keeping both around is just noise.
+  } else if (panel.threshold != null) {
+    result.threshold = panel.threshold;
+  }
   if (panel.table_id) result.table_id = panel.table_id;
   if (panel.bar_settings) result.bar_settings = panel.bar_settings;
   if (panel.pie_settings) result.pie_settings = panel.pie_settings;

@@ -16,6 +16,8 @@ import { useLazyCypherQuery } from 'src/hooks/useCypherQuery';
 import CypherDetails from 'src/components/reports/CypherDetails';
 import { ProgressPanelSkeleton } from 'src/components/reports/PanelLoadingSkeletons';
 import QueryValidationBadge from 'src/components/reports/QueryValidationBadge';
+import type { PanelThreshold } from 'src/config.context';
+import { resolveThresholdColor } from 'src/components/reports/thresholds';
 
 const fillCardSx = {
   height: '100%',
@@ -45,6 +47,7 @@ interface CypherProgressProps {
   params?: Record<string, unknown>;
   caption?: string;
   threshold?: number;
+  thresholds?: PanelThreshold[];
   progressSettings?: ProgressSettings;
   details?: Record<string, unknown>;
   needInputs?: string[];
@@ -56,6 +59,7 @@ export default function CypherProgress({
   params,
   caption,
   threshold,
+  thresholds,
   progressSettings,
   details,
   needInputs,
@@ -192,23 +196,38 @@ export default function CypherProgress({
   const numerator = first['numerator'] as number;
   const denominator = first['denominator'] as number;
   const percent = Math.floor((numerator / denominator) * 100);
+
   type CircularProgressColor = 'inherit' | 'primary' | 'secondary' | 'success' | 'error' | 'info' | 'warning';
-  let circleColor: CircularProgressColor = 'primary';
-  let textColor = 'textPrimary';
-  if (threshold === undefined) {
-    if (percent < 70) {
+  // Use the multi-threshold list when configured; otherwise fall back to
+  // the legacy single-threshold semantics (below threshold = red,
+  // 100% = green, otherwise primary; with no threshold the cutoff is 70%).
+  const hexColor = resolveThresholdColor(percent, thresholds);
+  let circleColor: CircularProgressColor | undefined;
+  let textColor: string | undefined;
+  if (hexColor === undefined) {
+    circleColor = 'primary';
+    textColor = 'textPrimary';
+    if (threshold === undefined) {
+      if (percent < 70) {
+        circleColor = 'error';
+        textColor = 'error';
+      } else if (percent === 100) {
+        circleColor = 'success';
+        textColor = 'success.main';
+      }
+    } else if (percent < threshold) {
       circleColor = 'error';
       textColor = 'error';
     } else if (percent === 100) {
       circleColor = 'success';
       textColor = 'success.main';
     }
-  } else if (percent < threshold) {
-    circleColor = 'error';
-    textColor = 'error';
-  } else if (percent === 100) {
-    circleColor = 'success';
-    textColor = 'success.main';
+  } else {
+    // Custom hex from a threshold rule. ``CircularProgress`` expects a
+    // palette token; pass ``inherit`` and let the parent ``Box``'s
+    // ``color`` style propagate via ``currentColor``.
+    circleColor = 'inherit';
+    textColor = hexColor;
   }
 
   return (
@@ -251,7 +270,14 @@ export default function CypherProgress({
               {denominator}
             </Typography>
           )}
-          <Box sx={{ position: 'relative', display: 'inline-flex', flexShrink: 1 }}>
+          <Box
+            sx={{
+              position: 'relative',
+              display: 'inline-flex',
+              flexShrink: 1,
+              ...(hexColor ? { color: hexColor } : {})
+            }}
+          >
             <CircularProgress
               variant="determinate"
               value={percent}

@@ -17,6 +17,7 @@ export interface Panel {
   min_h?: number;
   auto_height?: boolean;
   threshold?: number;
+  thresholds?: PanelThreshold[];
   params?: PanelParam[];
   pie_settings?: PieSettings;
   bar_settings?: BarSettings;
@@ -43,6 +44,11 @@ export interface GraphSettings {
 
 export interface ProgressSettings {
   show_label?: boolean;
+}
+
+export interface PanelThreshold {
+  value: number;
+  color: string;
 }
 
 export interface ColumnDef {

@@ -15,6 +15,8 @@ import { useLazyCypherQuery } from 'src/hooks/useCypherQuery';
 import CypherDetails from 'src/components/reports/CypherDetails';
 import { CountPanelSkeleton } from 'src/components/reports/PanelLoadingSkeletons';
 import QueryValidationBadge from 'src/components/reports/QueryValidationBadge';
+import type { PanelThreshold } from 'src/config.context';
+import { resolveThresholdColor } from 'src/components/reports/thresholds';
 
 const fillCardSx = {
   height: '100%',
@@ -45,6 +47,7 @@ interface CypherCountProps {
   params?: Record<string, unknown>;
   caption?: string;
   threshold?: number;
+  thresholds?: PanelThreshold[];
   details?: Record<string, unknown>;
   needInputs?: string[];
   reportQueryToken?: string;
@@ -55,6 +58,7 @@ export default function CypherCount({
   params,
   caption,
   threshold,
+  thresholds,
   details,
   needInputs,
   reportQueryToken
@@ -188,12 +192,16 @@ export default function CypherCount({
   }
 
   const total = first['total'] as number;
-  let color;
-  if (threshold === undefined) {
-    color = 'textPrimary';
-  } else if (total > threshold) {
-    color = 'error';
+  // Pick the active color from the multi-threshold list when set, otherwise
+  // fall back to the legacy single-threshold logic.
+  const thresholdColor = resolveThresholdColor(total, thresholds);
+  let legacyColor: string | undefined;
+  if (thresholdColor === undefined) {
+    if (threshold !== undefined && total > threshold) {
+      legacyColor = 'error.main';
+    }
   }
+  const totalColor = thresholdColor ?? legacyColor;
 
   return (
     <>
@@ -225,8 +233,8 @@ export default function CypherCount({
         >
           <Typography
             component="span"
-            color={color}
             sx={{
+              ...(totalColor ? { color: totalColor } : {}),
               fontWeight: 500,
               lineHeight: 1,
               fontSize: `${(() => {

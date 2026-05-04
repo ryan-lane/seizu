@@ -121,6 +121,24 @@ class ProgressPanelSettings(BaseModel):
     )
 
 
+class PanelThreshold(BaseModel):
+    value: float = Field(
+        description=(
+            "The threshold trigger value. For ``count`` panels, the metric"
+            " is the raw total. For ``progress`` panels, the metric is the"
+            " completion percentage (0-100)."
+        ),
+        examples=[70],
+    )
+
+    color: str = Field(
+        description=(
+            "The color to apply when the metric matches this threshold. A CSS color string (e.g. ``#F44336``, ``red``)."
+        ),
+        examples=["#F44336"],
+    )
+
+
 class PanelParam(BaseModel):
     name: str = Field(
         description="The parameter name to use when passing this input into the query.",
@@ -300,8 +318,35 @@ class Panel(BaseModel):
 
     threshold: float | None = Field(
         default=None,
-        description="The threshold value for progress panels.",
+        description=(
+            "(Legacy) Single threshold value for ``count`` / ``progress``"
+            " panels. New configs should use ``thresholds``; this field is"
+            " retained as a fallback when ``thresholds`` is unset."
+        ),
         examples=["70"],
+    )
+
+    thresholds: list[PanelThreshold] | None = Field(
+        default=None,
+        description=(
+            "Ordered list of ``{value, color}`` pairs for ``count`` and"
+            " ``progress`` panels. The applicable color is the color of the"
+            " threshold with the highest ``value`` that is less than or"
+            " equal to the metric (raw total for ``count``, completion"
+            " percentage for ``progress``). When unset, falls back to the"
+            " legacy ``threshold`` field."
+        ),
+        examples=[
+            """
+            .. code-block:: yaml
+
+              thresholds:
+                - value: 0
+                  color: "#F44336"
+                - value: 70
+                  color: "#4CAF50"
+            """
+        ],
     )
 
     bar_settings: BarPanelSettings | None = Field(
