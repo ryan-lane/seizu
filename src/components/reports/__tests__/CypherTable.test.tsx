@@ -49,21 +49,22 @@ describe('CypherTable', () => {
     expect(screen.getByText('Missing cypher query')).toBeInTheDocument();
   });
 
-  it('shows needInputs message when needInputs is provided', () => {
+  it('shows table with needInputs message when needInputs is provided', () => {
     useLazyCypherQuery.mockReturnValue([
       mockRunQuery,
-      { ...defaultState, records: [], first: undefined }
+      { ...defaultState }
     ]);
     render(
       <Wrapper>
         <CypherTable
           cypher="MATCH (n) RETURN n"
           needInputs={['environment', 'team']}
+          columns={[{ name: 'name', label: 'Name' }]}
         />
       </Wrapper>
     );
     expect(
-      screen.getByText(/please set environment, team/i)
+      screen.getByText(/select environment, team to load results/i)
     ).toBeInTheDocument();
   });
 
