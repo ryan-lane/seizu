@@ -157,7 +157,8 @@ function PanelEditor({ open, panel, onClose, onSave }: PanelEditorProps) {
 
   function handleTypeChange(newType: string) {
     // Keep layout/caption fields, reset type-specific ones. Drop auto_height
-    // if the new type doesn't support it (table, charts, etc.).
+    // if the new type doesn't support it (table, charts, etc.) and drop
+    // progress_settings unless the new type is also progress.
     setForm({
       type: newType,
       caption: form.caption,
@@ -168,6 +169,7 @@ function PanelEditor({ open, panel, onClose, onSave }: PanelEditorProps) {
       y: form.y,
       min_h: form.min_h,
       auto_height: TYPES_WITH_AUTO_HEIGHT.has(newType) ? form.auto_height : undefined,
+      progress_settings: newType === 'progress' ? form.progress_settings : undefined,
       cypher: newType === 'markdown' ? undefined : form.cypher
     });
   }
@@ -181,6 +183,7 @@ function PanelEditor({ open, panel, onClose, onSave }: PanelEditorProps) {
   const hasLegend = form.type === 'bar' || form.type === 'pie';
   const hasGraphSettings = form.type === 'graph';
   const hasThreshold = form.type === 'count' || form.type === 'progress';
+  const hasProgressSettings = form.type === 'progress';
   const hasColumns = form.type === 'table';
   const hasTableId = form.type === 'vertical-table';
   const hasDetailsQuery = form.type === 'table' || form.type === 'vertical-table';
@@ -332,6 +335,27 @@ function PanelEditor({ open, panel, onClose, onSave }: PanelEditorProps) {
               }
               helperText="Color the panel red when the value exceeds this threshold (count) or is below it (progress)."
               sx={{ width: 200 }}
+            />
+          )}
+
+          {/* Progress-specific settings */}
+          {hasProgressSettings && (
+            <FormControlLabel
+              control={
+                <Checkbox
+                  size="small"
+                  checked={form.progress_settings?.show_label !== false}
+                  onChange={(e) =>
+                    set(
+                      'progress_settings',
+                      e.target.checked
+                        ? { ...form.progress_settings, show_label: undefined }
+                        : { ...form.progress_settings, show_label: false }
+                    )
+                  }
+                />
+              }
+              label="Show numerator / denominator label"
             />
           )}
 
@@ -507,6 +531,9 @@ function cleanPanel(panel: Panel): Panel {
   if (panel.bar_settings) result.bar_settings = panel.bar_settings;
   if (panel.pie_settings) result.pie_settings = panel.pie_settings;
   if (panel.graph_settings) result.graph_settings = panel.graph_settings;
+  if (panel.progress_settings && panel.progress_settings.show_label === false) {
+    result.progress_settings = { show_label: false };
+  }
   if (panel.params?.length) result.params = panel.params;
   if (panel.columns?.length) result.columns = panel.columns;
   return result;

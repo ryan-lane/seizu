@@ -440,6 +440,21 @@
                     "examples": [
                         "\n            .. code-block:: yaml\n\n              graph_settings:\n                node_label: label\n                node_color_by: group\n            "
                     ]
+                },
+                "progress_settings": {
+                    "anyOf": [
+                        {
+                            "$ref": "#/$defs/ProgressPanelSettings"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "description": "Settings specific to progress panels.",
+                    "examples": [
+                        "\n            .. code-block:: yaml\n\n              progress_settings:\n                show_label: false\n            "
+                    ]
                 }
             },
             "required": [
@@ -512,6 +527,25 @@
                 }
             },
             "title": "PiePanelSettings",
+            "type": "object"
+        },
+        "ProgressPanelSettings": {
+            "properties": {
+                "show_label": {
+                    "anyOf": [
+                        {
+                            "type": "boolean"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "description": "Whether to render the ``numerator / denominator`` label above the progress wheel. Defaults to ``True`` when unset; pass ``False`` to hide the label and show only the wheel and percentage.",
+                    "title": "Show Label"
+                }
+            },
+            "title": "ProgressPanelSettings",
             "type": "object"
         },
         "Report": {

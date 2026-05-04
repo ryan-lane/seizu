@@ -141,6 +141,7 @@ const PanelItem = memo(function PanelItem({ item, rowIndex, index, varData, allI
           params={params}
           caption={item.caption}
           threshold={item.threshold}
+          progressSettings={item.progress_settings}
           details={details}
           needInputs={needInputs}
           reportQueryToken={resolveCapability(`rows.${rowIndex}.panels.${index}.cypher`)}

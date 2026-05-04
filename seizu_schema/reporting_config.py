@@ -109,6 +109,18 @@ class GraphPanelSettings(BaseModel):
     )
 
 
+class ProgressPanelSettings(BaseModel):
+    show_label: bool | None = Field(
+        default=None,
+        description=(
+            "Whether to render the ``numerator / denominator`` label above"
+            " the progress wheel. Defaults to ``True`` when unset; pass"
+            " ``False`` to hide the label and show only the wheel and"
+            " percentage."
+        ),
+    )
+
+
 class PanelParam(BaseModel):
     name: str = Field(
         description="The parameter name to use when passing this input into the query.",
@@ -328,6 +340,19 @@ class Panel(BaseModel):
               graph_settings:
                 node_label: label
                 node_color_by: group
+            """
+        ],
+    )
+
+    progress_settings: ProgressPanelSettings | None = Field(
+        default=None,
+        description="Settings specific to progress panels.",
+        examples=[
+            """
+            .. code-block:: yaml
+
+              progress_settings:
+                show_label: false
             """
         ],
     )

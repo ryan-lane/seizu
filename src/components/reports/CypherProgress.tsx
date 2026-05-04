@@ -36,11 +36,16 @@ const BODY_PADDING = 16;
 const MIN_WHEEL = 40;
 const MAX_WHEEL = 100;
 
+interface ProgressSettings {
+  show_label?: boolean;
+}
+
 interface CypherProgressProps {
   cypher?: string;
   params?: Record<string, unknown>;
   caption?: string;
   threshold?: number;
+  progressSettings?: ProgressSettings;
   details?: Record<string, unknown>;
   needInputs?: string[];
   reportQueryToken?: string;
@@ -51,6 +56,7 @@ export default function CypherProgress({
   params,
   caption,
   threshold,
+  progressSettings,
   details,
   needInputs,
   reportQueryToken
@@ -236,13 +242,15 @@ export default function CypherProgress({
             overflow: 'hidden'
           }}
         >
-          <Typography component="div" variant="h5" sx={{ textAlign: 'center', flexShrink: 0 }}>
-            <Box component="span" color={textColor} sx={{ fontWeight: 500 }}>
-              {numerator}
-            </Box>
-            {' / '}
-            {denominator}
-          </Typography>
+          {progressSettings?.show_label !== false && (
+            <Typography component="div" variant="h5" sx={{ textAlign: 'center', flexShrink: 0 }}>
+              <Box component="span" color={textColor} sx={{ fontWeight: 500 }}>
+                {numerator}
+              </Box>
+              {' / '}
+              {denominator}
+            </Typography>
+          )}
           <Box sx={{ position: 'relative', display: 'inline-flex', flexShrink: 1 }}>
             <CircularProgress
               variant="determinate"
@@ -254,7 +262,7 @@ export default function CypherProgress({
                   MAX_WHEEL,
                   Math.min(
                     bodySize.w - BODY_PADDING,
-                    bodySize.h - TEXT_RESERVE - BODY_PADDING
+                    bodySize.h - BODY_PADDING - (progressSettings?.show_label !== false ? TEXT_RESERVE : 0)
                   )
                 )
               )}
