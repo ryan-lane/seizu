@@ -231,16 +231,6 @@ export default function CypherTable({
     }
   }, [cypher, params, runQuery]);
 
-  if (needInputs !== undefined && needInputs.length > 0) {
-    return (
-      <Box ref={containerRef} sx={fillSx}>
-        <Typography variant="body2">
-          Please set {needInputs.join(', ')}
-        </Typography>
-      </Box>
-    );
-  }
-
   if (error) {
     console.log(error);
     return (
@@ -352,6 +342,28 @@ export default function CypherTable({
     tableBodyHeight = `${MIN_TABLE_BODY_HEIGHT}px`;
     tableBodySkeletonHeight = tableBodyHeight;
     options.tableBodyHeight = tableBodyHeight;
+  }
+
+  if (needInputs !== undefined && needInputs.length > 0) {
+    const noMatchMessage = `Select ${needInputs.join(', ')} to load results`;
+    const needInputsOptions = {
+      ...options,
+      textLabels: { body: { noMatch: noMatchMessage } }
+    };
+    return (
+      <Box ref={containerRef} sx={fillSx}>
+        {caption && (
+          <Typography variant="subtitle1" sx={{ fontWeight: 500, mb: 0.5 }}>
+            {caption}
+          </Typography>
+        )}
+        <MUIDataTable
+          data={[]}
+          columns={columns ?? []}
+          options={needInputsOptions}
+        />
+      </Box>
+    );
   }
 
   if (loading || records === undefined) {
