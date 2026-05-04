@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   Box,
   Button,
@@ -109,6 +109,74 @@ function ColorSwatchPicker({ color, onChange }: ColorSwatchPickerProps) {
   );
 }
 
+interface ThresholdRowProps {
+  threshold: PanelThreshold;
+  onChange: (next: PanelThreshold) => void;
+  onDelete: () => void;
+}
+
+/**
+ * One row of the thresholds editor. Holds local string state for the value
+ * input so the user can type freely (clear the field, retype with a leading
+ * zero, etc.) without snapping to ``0`` or being blocked by ``type=number``
+ * controlled-input quirks. The parent only sees a parsed ``value`` —
+ * non-finite values stay in local state and are filtered out at save time.
+ */
+function ThresholdRow({ threshold, onChange, onDelete }: ThresholdRowProps) {
+  const [valueText, setValueText] = useState<string>(
+    Number.isFinite(threshold.value) ? String(threshold.value) : ''
+  );
+
+  // If the parent sets a different finite value (e.g. via legacy-threshold
+  // migration on first open), reflect that in the local buffer. Don't
+  // overwrite a draft string that would parse to the same number.
+  useEffect(() => {
+    if (Number.isFinite(threshold.value)) {
+      const parsed = valueText.trim() === '' ? NaN : Number(valueText);
+      if (!Number.isFinite(parsed) || parsed !== threshold.value) {
+        setValueText(String(threshold.value));
+      }
+    } else if (valueText.trim() !== '' && Number.isFinite(Number(valueText))) {
+      setValueText('');
+    }
+    // We intentionally only want this to fire when the *external* value
+    // changes; ``valueText`` shouldn't trigger a re-sync.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [threshold.value]);
+
+  return (
+    <Stack direction="row" spacing={1} alignItems="center">
+      <TextField
+        size="small"
+        type="text"
+        inputMode="decimal"
+        label="Value"
+        value={valueText}
+        onChange={(e) => {
+          const raw = e.target.value;
+          setValueText(raw);
+          const parsed = raw.trim() === '' ? NaN : Number(raw);
+          // Propagate the parsed number (or NaN) so the resolver sees the
+          // latest committed value. NaN-valued thresholds are skipped by the
+          // resolver and stripped at save time.
+          onChange({ ...threshold, value: parsed });
+        }}
+        sx={{ width: 120 }}
+      />
+      <ColorSwatchPicker
+        color={threshold.color}
+        onChange={(color) => onChange({ ...threshold, color })}
+      />
+      <Box sx={{ flex: 1 }} />
+      <Tooltip title="Remove threshold">
+        <IconButton size="small" aria-label="Remove threshold" onClick={onDelete}>
+          <DeleteIcon fontSize="small" />
+        </IconButton>
+      </Tooltip>
+    </Stack>
+  );
+}
+
 interface ThresholdsEditorProps {
   thresholds: PanelThreshold[];
   onChange: (thresholds: PanelThreshold[]) => void;
@@ -132,7 +200,12 @@ function ThresholdsEditor({ thresholds, onChange, helperText }: ThresholdsEditor
   }
 
   function addRow() {
-    onChange([...thresholds, { value: 0, color: THRESHOLD_PRESET_COLORS[0].hex }]);
+    // Start with no value so the input is empty and the user can type the
+    // intended number directly without first clearing a default.
+    onChange([
+      ...thresholds,
+      { value: Number.NaN, color: THRESHOLD_PRESET_COLORS[0].hex }
+    ]);
   }
 
   return (
@@ -152,34 +225,13 @@ function ThresholdsEditor({ thresholds, onChange, helperText }: ThresholdsEditor
           </Typography>
         )}
         {thresholds.map((t, idx) => (
-          // eslint-disable-next-line react/no-array-index-key
-          <Stack key={idx} direction="row" spacing={1} alignItems="center">
-            <TextField
-              size="small"
-              type="number"
-              label="Value"
-              value={Number.isFinite(t.value) ? t.value : ''}
-              onChange={(e) => {
-                const n = e.target.value === '' ? NaN : Number(e.target.value);
-                setRow(idx, { ...t, value: Number.isFinite(n) ? n : 0 });
-              }}
-              sx={{ width: 120 }}
-            />
-            <ColorSwatchPicker
-              color={t.color}
-              onChange={(color) => setRow(idx, { ...t, color })}
-            />
-            <Box sx={{ flex: 1 }} />
-            <Tooltip title="Remove threshold">
-              <IconButton
-                size="small"
-                aria-label="Remove threshold"
-                onClick={() => deleteRow(idx)}
-              >
-                <DeleteIcon fontSize="small" />
-              </IconButton>
-            </Tooltip>
-          </Stack>
+          <ThresholdRow
+            // eslint-disable-next-line react/no-array-index-key
+            key={idx}
+            threshold={t}
+            onChange={(next) => setRow(idx, next)}
+            onDelete={() => deleteRow(idx)}
+          />
         ))}
         <Box>
           <Button size="small" startIcon={<Add />} onClick={addRow}>

@@ -543,11 +543,18 @@ function cleanPanel(panel: Panel): Panel {
   if (panel.details_cypher) result.details_cypher = panel.details_cypher;
   if (panel.markdown) result.markdown = panel.markdown;
   if (panel.thresholds && panel.thresholds.length > 0) {
-    result.thresholds = panel.thresholds.map((t) => ({
-      value: Number(t.value),
-      color: t.color
-    }));
-    // Drop the legacy single ``threshold`` field once a list is set; the
+    // Drop in-progress rows with non-finite values (the user added a row but
+    // hasn't typed a number yet, or cleared the field). Only persist
+    // thresholds with a finite ``value`` and a non-empty ``color``.
+    const cleanedThresholds = panel.thresholds
+      .map((t) => ({ value: Number(t.value), color: t.color }))
+      .filter((t) => Number.isFinite(t.value) && t.color !== '');
+    if (cleanedThresholds.length > 0) {
+      result.thresholds = cleanedThresholds;
+    } else if (panel.threshold != null) {
+      result.threshold = panel.threshold;
+    }
+    // Drop the legacy single ``threshold`` field when a list is set; the
     // renderer prefers ``thresholds`` so keeping both around is just noise.
   } else if (panel.threshold != null) {
     result.threshold = panel.threshold;
