@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Box,
   Card,
@@ -29,6 +29,13 @@ const fillBodySx = {
   justifyContent: 'center'
 };
 
+// Vertical space the numerator/denominator label consumes inside the body.
+const TEXT_RESERVE = 56;
+// Inner padding around the wheel + label.
+const BODY_PADDING = 16;
+const MIN_WHEEL = 40;
+const MAX_WHEEL = 100;
+
 interface CypherProgressProps {
   cypher?: string;
   params?: Record<string, unknown>;
@@ -52,6 +59,35 @@ export default function CypherProgress({
   const handleClickOpen = () => {
     setOpen(true);
   };
+
+  const observerRef = useRef<ResizeObserver | null>(null);
+  const [bodySize, setBodySize] = useState({ w: 0, h: 0 });
+
+  // Callback ref so the observer is re-attached when the body Box swaps
+  // between loading / loaded states. Picks up the actual rendered size of
+  // the body region so the progress wheel can shrink in small cells.
+  const bodyRef = useCallback((node: HTMLDivElement | null) => {
+    if (typeof ResizeObserver === 'undefined') return;
+    if (observerRef.current) {
+      observerRef.current.disconnect();
+      observerRef.current = null;
+    }
+    if (!node) return;
+    const observer = new ResizeObserver((entries) => {
+      const entry = entries[0];
+      if (!entry) return;
+      setBodySize({ w: entry.contentRect.width, h: entry.contentRect.height });
+    });
+    observer.observe(node);
+    observerRef.current = observer;
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      observerRef.current?.disconnect();
+      observerRef.current = null;
+    };
+  }, []);
 
   const [runQuery, { loading, error, records, first, warnings, queryErrors }] =
     useLazyCypherQuery(cypher, reportQueryToken);
@@ -186,49 +222,65 @@ export default function CypherProgress({
         <Divider />
         <QueryValidationBadge errors={queryErrors} warnings={warnings} />
 
-        <Grid container spacing={0} direction="column" alignItems="center" sx={fillBodySx}>
-          <CardContent>
-            <span>
-              <Typography variant="h3" component="span" color={textColor}>
-                {numerator}
-                <span> </span>
-              </Typography>
-              <Typography variant="h3" component="span">
-                / {denominator}
-              </Typography>
-            </span>
-          </CardContent>
-          <CardContent>
-            <Box sx={{ position: 'relative', display: 'inline-flex' }}>
-              <CircularProgress
-                variant="determinate"
-                value={percent}
-                color={circleColor}
-                size={100}
-              />
-              <Box
-                sx={{
-                  top: 0,
-                  left: 0,
-                  bottom: 0,
-                  right: 0,
-                  position: 'absolute',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center'
-                }}
-              >
-                <Typography
-                  variant="caption"
-                  component="div"
-                  color="text.secondary"
-                >
-                  {percent}%
-                </Typography>
-              </Box>
+        <Box
+          ref={bodyRef}
+          sx={{
+            flex: 1,
+            minHeight: 0,
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: 1,
+            p: 1,
+            overflow: 'hidden'
+          }}
+        >
+          <Typography component="div" variant="h5" sx={{ textAlign: 'center', flexShrink: 0 }}>
+            <Box component="span" color={textColor} sx={{ fontWeight: 500 }}>
+              {numerator}
             </Box>
-          </CardContent>
-        </Grid>
+            {' / '}
+            {denominator}
+          </Typography>
+          <Box sx={{ position: 'relative', display: 'inline-flex', flexShrink: 1 }}>
+            <CircularProgress
+              variant="determinate"
+              value={percent}
+              color={circleColor}
+              size={Math.max(
+                MIN_WHEEL,
+                Math.min(
+                  MAX_WHEEL,
+                  Math.min(
+                    bodySize.w - BODY_PADDING,
+                    bodySize.h - TEXT_RESERVE - BODY_PADDING
+                  )
+                )
+              )}
+            />
+            <Box
+              sx={{
+                top: 0,
+                left: 0,
+                bottom: 0,
+                right: 0,
+                position: 'absolute',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center'
+              }}
+            >
+              <Typography
+                variant="caption"
+                component="div"
+                color="text.secondary"
+              >
+                {percent}%
+              </Typography>
+            </Box>
+          </Box>
+        </Box>
       </Card>
       <CypherDetails
         details={details}
