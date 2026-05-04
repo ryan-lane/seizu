@@ -16,6 +16,7 @@ import {
   FormControl,
   IconButton,
   InputLabel,
+  Menu,
   MenuItem,
   Paper,
   Select,
@@ -26,13 +27,32 @@ import {
   Typography
 } from '@mui/material';
 import Add from '@mui/icons-material/Add';
+import CancelIcon from '@mui/icons-material/Cancel';
 import DeleteIcon from '@mui/icons-material/Delete';
+import DragIndicatorIcon from '@mui/icons-material/DragIndicator';
 import EditIcon from '@mui/icons-material/Edit';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
+import OpenWithIcon from '@mui/icons-material/OpenWith';
 import RemoveIcon from '@mui/icons-material/Remove';
 import SaveIcon from '@mui/icons-material/Save';
-import CancelIcon from '@mui/icons-material/Cancel';
 import type { ResponsiveLayouts, Layout as RglLayout } from 'react-grid-layout';
+import {
+  DndContext,
+  PointerSensor,
+  KeyboardSensor,
+  useSensor,
+  useSensors,
+  closestCenter,
+  type DragEndEvent,
+} from '@dnd-kit/core';
+import {
+  SortableContext,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+  arrayMove,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 
 import { Report, Row, Panel, ReportInput, InputValue } from 'src/config.context';
 import PanelEditor, { EditablePanel } from 'src/components/reports/PanelEditor';
@@ -76,6 +96,46 @@ function fromEditableRows(rows: EditableRow[]): Row[] {
 }
 
 // ---------------------------------------------------------------------------
+// Sortable wrapper for row cards (applies dnd-kit transform to the outer div)
+// ---------------------------------------------------------------------------
+
+type DragHandleProps = Omit<React.ComponentPropsWithRef<'button'>, 'color'>;
+
+interface SortableRowWrapperProps {
+  id: string;
+  children: (dragHandleProps: DragHandleProps) => React.ReactNode;
+}
+
+function SortableRowWrapper({ id, children }: SortableRowWrapperProps) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    setActivatorNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id });
+
+  const wrapperStyle: React.CSSProperties = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.4 : 1,
+  };
+
+  return (
+    <div ref={setNodeRef} style={wrapperStyle}>
+      {children({
+        ref: setActivatorNodeRef as React.Ref<HTMLButtonElement>,
+        style: { touchAction: 'none', cursor: 'grab' },
+        ...attributes,
+        ...listeners,
+      })}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Panel card shown inside the editable view
 // ---------------------------------------------------------------------------
 
@@ -96,9 +156,13 @@ interface EditablePanelCardProps {
   onEdit: () => void;
   onDelete: () => void;
   onResize: (delta: number) => void;
+  moveTargetRows: ReadonlyArray<{ id: string; name: string }>;
+  onMoveToRow: (targetRowId: string) => void;
 }
 
-function EditablePanelCard({ panel, onEdit, onDelete, onResize }: EditablePanelCardProps) {
+function EditablePanelCard({ panel, onEdit, onDelete, onResize, moveTargetRows, onMoveToRow }: EditablePanelCardProps) {
+  const [moveMenuAnchor, setMoveMenuAnchor] = useState<HTMLElement | null>(null);
+  const moveMenuOpen = Boolean(moveMenuAnchor);
   const capped = Math.max(1, Math.min(12, panel.w ?? panel.size ?? 3));
   const cypherPreview = panel.cypher
     ? panel.cypher.split('\n')[0].slice(0, 60) + (panel.cypher.length > 60 ? '…' : '')
@@ -186,6 +250,43 @@ function EditablePanelCard({ panel, onEdit, onDelete, onResize }: EditablePanelC
             <DeleteIcon sx={{ fontSize: 14 }} />
           </IconButton>
         </Tooltip>
+        {moveTargetRows.length > 0 && (
+          <>
+            <Tooltip title="Move to row">
+              <IconButton
+                aria-label="Move to row"
+                aria-controls={moveMenuOpen ? `move-menu-${panel._id}` : undefined}
+                aria-haspopup="true"
+                aria-expanded={moveMenuOpen || undefined}
+                size="small"
+                onClick={(e) => setMoveMenuAnchor(e.currentTarget)}
+              >
+                <OpenWithIcon sx={{ fontSize: 14 }} />
+              </IconButton>
+            </Tooltip>
+            <Menu
+              id={`move-menu-${panel._id}`}
+              anchorEl={moveMenuAnchor}
+              open={moveMenuOpen}
+              onClose={() => setMoveMenuAnchor(null)}
+              anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+              transformOrigin={{ vertical: 'top', horizontal: 'right' }}
+            >
+              {moveTargetRows.map((row) => (
+                <MenuItem
+                  key={row.id}
+                  dense
+                  onClick={() => {
+                    onMoveToRow(row.id);
+                    setMoveMenuAnchor(null);
+                  }}
+                >
+                  {row.name}
+                </MenuItem>
+              ))}
+            </Menu>
+          </>
+        )}
       </Box>
     </Paper>
   );
@@ -568,6 +669,9 @@ interface EditableRowCardProps {
     rowId: string,
     layouts: ResponsiveLayouts<ResponsiveBreakpoint>
   ) => void;
+  dragHandleProps: DragHandleProps;
+  moveTargetRows: ReadonlyArray<{ id: string; name: string }>;
+  onMovePanel: (panelId: string, targetRowId: string) => void;
 }
 
 const EditableRowCard = memo(function EditableRowCard({
@@ -579,7 +683,10 @@ const EditableRowCard = memo(function EditableRowCard({
   onEditPanel,
   onDeletePanel,
   onResizePanel,
-  onLayoutChange
+  onLayoutChange,
+  dragHandleProps,
+  moveTargetRows,
+  onMovePanel,
 }: EditableRowCardProps) {
   const [rowName, setRowName] = useState(row.name);
 
@@ -603,6 +710,16 @@ const EditableRowCard = memo(function EditableRowCard({
     >
       <Paper elevation={1} sx={{ p: 1.5 }}>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+          <Tooltip title="Drag to reorder row">
+            <IconButton
+              {...dragHandleProps}
+              size="small"
+              aria-label="Drag to reorder row"
+              sx={{ cursor: 'grab', color: 'text.secondary', flexShrink: 0 }}
+            >
+              <DragIndicatorIcon fontSize="small" />
+            </IconButton>
+          </Tooltip>
           <TextField
             size="small"
             label="Row name"
@@ -657,6 +774,8 @@ const EditableRowCard = memo(function EditableRowCard({
                   onEdit={() => onEditPanel(row._id, panel._id)}
                   onDelete={() => onDeletePanel(row._id, panel._id)}
                   onResize={(delta) => onResizePanel(row._id, panel._id, delta)}
+                  moveTargetRows={moveTargetRows}
+                  onMoveToRow={(targetRowId) => onMovePanel(panel._id, targetRowId)}
                 />
               );
             }}
@@ -869,6 +988,26 @@ function EditableReportView({ report, reportId: _reportId, onSave, onCancel }: E
   }
 
   // ---------------------------------------------------------------------------
+  // Row reordering via dnd-kit
+  // ---------------------------------------------------------------------------
+
+  const rowSensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
+  );
+
+  const handleRowDragEnd = useCallback((event: DragEndEvent) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+    setEditableRows((prev) => {
+      const oldIndex = prev.findIndex((r) => r._id === active.id);
+      const newIndex = prev.findIndex((r) => r._id === over.id);
+      if (oldIndex === -1 || newIndex === -1) return prev;
+      return arrayMove(prev, oldIndex, newIndex);
+    });
+  }, []);
+
+  // ---------------------------------------------------------------------------
   // Panel operations
   // ---------------------------------------------------------------------------
 
@@ -921,6 +1060,19 @@ function EditableReportView({ report, reportId: _reportId, onSave, onCancel }: E
         r._id === rowId ? { ...r, panels: r.panels.filter((p) => p._id !== panelId) } : r
       )
     );
+  }
+
+  function movePanel(panelId: string, fromRowId: string, targetRowId: string) {
+    setEditableRows((prev) => {
+      const sourceRow = prev.find((r) => r._id === fromRowId);
+      const panel = sourceRow?.panels.find((p) => p._id === panelId);
+      if (!panel) return prev;
+      return prev.map((r) => {
+        if (r._id === fromRowId) return { ...r, panels: r.panels.filter((p) => p._id !== panelId) };
+        if (r._id === targetRowId) return { ...r, panels: [...r.panels, panel] };
+        return r;
+      });
+    });
   }
 
   function resizePanel(rowId: string, panelId: string, delta: number) {
@@ -1091,20 +1243,44 @@ function EditableReportView({ report, reportId: _reportId, onSave, onCancel }: E
       </Container>
 
       {/* Rows with panels */}
-      {editableRows.map((row, rowIndex) => (
-        <EditableRowCard
-          key={row._id}
-          row={row}
-          rowIndex={rowIndex}
-          onRename={renameRow}
-          onAddPanel={openAddPanel}
-          onDeleteRow={deleteRow}
-          onEditPanel={openEditPanel}
-          onDeletePanel={deletePanel}
-          onResizePanel={resizePanel}
-          onLayoutChange={handleLayoutChange}
-        />
-      ))}
+      {(() => {
+        const rowNameMap = editableRows.map((r) => ({ id: r._id, name: r.name }));
+        return (
+          <DndContext
+            sensors={rowSensors}
+            collisionDetection={closestCenter}
+            onDragEnd={handleRowDragEnd}
+          >
+            <SortableContext
+              items={editableRows.map((r) => r._id)}
+              strategy={verticalListSortingStrategy}
+            >
+              {editableRows.map((row, rowIndex) => (
+                <SortableRowWrapper key={row._id} id={row._id}>
+                  {(dragHandleProps) => (
+                    <EditableRowCard
+                      row={row}
+                      rowIndex={rowIndex}
+                      onRename={renameRow}
+                      onAddPanel={openAddPanel}
+                      onDeleteRow={deleteRow}
+                      onEditPanel={openEditPanel}
+                      onDeletePanel={deletePanel}
+                      onResizePanel={resizePanel}
+                      onLayoutChange={handleLayoutChange}
+                      dragHandleProps={dragHandleProps}
+                      moveTargetRows={rowNameMap.filter((r) => r.id !== row._id)}
+                      onMovePanel={(panelId, targetRowId) =>
+                        movePanel(panelId, row._id, targetRowId)
+                      }
+                    />
+                  )}
+                </SortableRowWrapper>
+              ))}
+            </SortableContext>
+          </DndContext>
+        );
+      })()}
 
       {/* Add row */}
       <Container maxWidth={false} sx={{ ...contentContainerSx, pb: 2.5 }}>
