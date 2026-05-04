@@ -28,12 +28,17 @@ const fillBodySx = {
   justifyContent: 'center'
 };
 
-// Bounds for the responsive number font size (px). Roughly mirrors MUI's
-// h6 (~20) at the small end and a display-sized number at the large end.
-const MIN_FONT_PX = 20;
+// Bounds for the responsive number font size (px).
+const MIN_FONT_PX = 12;
 const MAX_FONT_PX = 120;
-// Fraction of the body's smaller dimension to use as the font size.
-const FONT_SCALE = 0.45;
+// Inner padding inside the body wrapper (sx={{ p: 1 }} → 8 px each side).
+const BODY_PADDING_PX = 16;
+// Approximate ratio of digit width to font size in MUI's default sans font.
+// Used to budget the font size against available width per character.
+const DIGIT_WIDTH_RATIO = 0.65;
+// Fraction of the available height the rendered text should occupy. Leaves
+// a little breathing room above and below.
+const HEIGHT_FILL_RATIO = 0.85;
 
 interface CypherCountProps {
   cypher?: string;
@@ -224,10 +229,15 @@ export default function CypherCount({
             sx={{
               fontWeight: 500,
               lineHeight: 1,
-              fontSize: `${Math.max(
-                MIN_FONT_PX,
-                Math.min(MAX_FONT_PX, Math.min(bodySize.w, bodySize.h) * FONT_SCALE)
-              )}px`
+              fontSize: `${(() => {
+                const charCount = Math.max(1, String(total).length);
+                const widthBudget = Math.max(0, bodySize.w - BODY_PADDING_PX);
+                const heightBudget = Math.max(0, bodySize.h - BODY_PADDING_PX);
+                const widthFit = widthBudget / (charCount * DIGIT_WIDTH_RATIO);
+                const heightFit = heightBudget * HEIGHT_FILL_RATIO;
+                const fit = Math.min(widthFit, heightFit);
+                return Math.max(MIN_FONT_PX, Math.min(MAX_FONT_PX, fit));
+              })()}px`
             }}
           >
             {total}
