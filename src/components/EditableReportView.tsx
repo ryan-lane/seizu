@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, memo, type Ref } from 'react';
+import { useState, useRef, useEffect, memo, useCallback, type Ref } from 'react';
 import {
   Accordion,
   AccordionDetails,
@@ -14,7 +14,6 @@ import {
   DialogTitle,
   Divider,
   FormControl,
-  Grid,
   IconButton,
   InputLabel,
   MenuItem,
@@ -30,30 +29,15 @@ import Add from '@mui/icons-material/Add';
 import DeleteIcon from '@mui/icons-material/Delete';
 import EditIcon from '@mui/icons-material/Edit';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
-import DragIndicatorIcon from '@mui/icons-material/DragIndicator';
 import RemoveIcon from '@mui/icons-material/Remove';
 import SaveIcon from '@mui/icons-material/Save';
 import CancelIcon from '@mui/icons-material/Cancel';
-
-import {
-  DndContext,
-  DragEndEvent,
-  DragOverlay,
-  DragStartEvent,
-  PointerSensor,
-  useSensor,
-  useSensors
-} from '@dnd-kit/core';
-import {
-  SortableContext,
-  horizontalListSortingStrategy,
-  useSortable
-} from '@dnd-kit/sortable';
-import { CSS } from '@dnd-kit/utilities';
-import { useDroppable } from '@dnd-kit/core';
+import type { ResponsiveLayouts, Layout as RglLayout } from 'react-grid-layout';
 
 import { Report, Row, Panel, ReportInput, InputValue } from 'src/config.context';
 import PanelEditor, { EditablePanel } from 'src/components/reports/PanelEditor';
+import PanelGridRow from 'src/components/reports/PanelGridRow';
+import type { ResponsiveBreakpoint } from 'src/components/reports/panelLayout';
 import {
   DASHBOARD_NAVBAR_HEIGHT,
   DASHBOARD_SIDEBAR_WIDTH_VAR
@@ -107,30 +91,15 @@ function PanelTypeChip({ type }: { type: string }) {
   );
 }
 
-interface SortablePanelCardProps {
+interface EditablePanelCardProps {
   panel: EditablePanel;
   onEdit: () => void;
   onDelete: () => void;
   onResize: (delta: number) => void;
 }
 
-function SortablePanelCard({ panel, onEdit, onDelete, onResize }: SortablePanelCardProps) {
-  const {
-    attributes,
-    listeners,
-    setNodeRef,
-    transform,
-    transition,
-    isDragging
-  } = useSortable({ id: panel._id });
-
-  const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-    opacity: isDragging ? 0.4 : 1
-  };
-
-  const capped = Math.max(1, Math.min(12, panel.size ?? 3));
+function EditablePanelCard({ panel, onEdit, onDelete, onResize }: EditablePanelCardProps) {
+  const capped = Math.max(1, Math.min(12, panel.w ?? panel.size ?? 3));
   const cypherPreview = panel.cypher
     ? panel.cypher.split('\n')[0].slice(0, 60) + (panel.cypher.length > 60 ? '…' : '')
     : panel.markdown
@@ -138,125 +107,87 @@ function SortablePanelCard({ panel, onEdit, onDelete, onResize }: SortablePanelC
       : '(no query)';
 
   return (
-    <div ref={setNodeRef} style={style}>
-      <Paper
-        variant="outlined"
-        sx={{
-          p: 1,
-          height: '100%',
-          minHeight: 120,
-          display: 'flex',
-          flexDirection: 'column',
-          gap: 0.5,
-          bgcolor: isDragging ? 'action.selected' : 'background.paper'
-        }}
-      >
-        {/* Header row: drag handle + type + caption */}
-        <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 0.5 }}>
-          <Box
-            {...attributes}
-            {...listeners}
-            sx={{ cursor: 'grab', color: 'text.secondary', flexShrink: 0, mt: 0.2 }}
-          >
-            <DragIndicatorIcon fontSize="small" />
-          </Box>
-          <Box sx={{ flex: 1, minWidth: 0 }}>
-            <Stack direction="row" spacing={0.5} alignItems="center" flexWrap="wrap">
-              <PanelTypeChip type={panel.type} />
-              {panel.caption && (
-                <Typography variant="caption" noWrap sx={{ maxWidth: 150 }}>
-                  {panel.caption}
-                </Typography>
-              )}
-            </Stack>
-            <Typography
-              variant="caption"
-              color="text.secondary"
-              sx={{
-                display: 'block',
-                fontFamily: 'monospace',
-                fontSize: '0.65rem',
-                mt: 0.5,
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
-                whiteSpace: 'nowrap'
-              }}
-            >
-              {cypherPreview}
-            </Typography>
-          </Box>
-        </Box>
-
-        {/* Bottom toolbar: size + edit + delete */}
-        <Box sx={{ display: 'flex', alignItems: 'center', mt: 'auto', gap: 0.25 }}>
-          <Tooltip title="Decrease width">
-            <span>
-              <IconButton size="small" disabled={capped <= 1} onClick={() => onResize(-1)}>
-                <RemoveIcon sx={{ fontSize: 14 }} />
-              </IconButton>
-            </span>
-          </Tooltip>
-          <Typography variant="caption" sx={{ minWidth: 16, textAlign: 'center' }}>
-            {capped}
-          </Typography>
-          <Tooltip title="Increase width">
-            <span>
-              <IconButton size="small" disabled={capped >= 12} onClick={() => onResize(1)}>
-                <Add sx={{ fontSize: 14 }} />
-              </IconButton>
-            </span>
-          </Tooltip>
-          <Box sx={{ flex: 1 }} />
-          <Tooltip title="Edit panel">
-            <IconButton size="small" onClick={onEdit}>
-              <EditIcon sx={{ fontSize: 14 }} />
-            </IconButton>
-          </Tooltip>
-          <Tooltip title="Delete panel">
-            <IconButton size="small" color="error" onClick={onDelete}>
-              <DeleteIcon sx={{ fontSize: 14 }} />
-            </IconButton>
-          </Tooltip>
-        </Box>
-      </Paper>
-    </div>
-  );
-}
-
-/** Ghost card shown in DragOverlay while dragging */
-function DragGhostCard({ panel }: { panel: EditablePanel }) {
-  return (
     <Paper
-      elevation={6}
-      sx={{ p: 1, minWidth: 160, opacity: 0.9 }}
-    >
-      <Stack direction="row" spacing={0.5} alignItems="center">
-        <DragIndicatorIcon fontSize="small" color="action" />
-        <PanelTypeChip type={panel.type} />
-        {panel.caption && <Typography variant="caption">{panel.caption}</Typography>}
-      </Stack>
-    </Paper>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Droppable row container
-// ---------------------------------------------------------------------------
-
-function DroppableRowArea({ rowId, children }: { rowId: string; children: React.ReactNode }) {
-  const { setNodeRef, isOver } = useDroppable({ id: rowId });
-  return (
-    <Box
-      ref={setNodeRef}
+      variant="outlined"
       sx={{
-        minHeight: 80,
-        borderRadius: 1,
-        bgcolor: isOver ? 'action.hover' : 'transparent',
-        transition: 'background-color 150ms'
+        p: 1,
+        height: '100%',
+        minHeight: 0,
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 0.5,
+        cursor: 'move',
+        bgcolor: 'background.paper'
       }}
     >
-      {children}
-    </Box>
+      <Box sx={{ flex: 1, minWidth: 0, minHeight: 0, overflow: 'hidden' }}>
+        <Stack direction="row" spacing={0.5} alignItems="center" flexWrap="wrap">
+          <PanelTypeChip type={panel.type} />
+          {panel.caption && (
+            <Typography variant="caption" noWrap sx={{ maxWidth: 150 }}>
+              {panel.caption}
+            </Typography>
+          )}
+        </Stack>
+        <Typography
+          variant="caption"
+          color="text.secondary"
+          sx={{
+            display: 'block',
+            fontFamily: 'monospace',
+            fontSize: '0.65rem',
+            mt: 0.5,
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap'
+          }}
+        >
+          {cypherPreview}
+        </Typography>
+      </Box>
+
+      {/* Width controls + edit + delete. Drag and resize are handled by react-grid-layout. */}
+      <Box sx={{ display: 'flex', alignItems: 'center', mt: 'auto', gap: 0.25 }}>
+        <Tooltip title="Decrease width">
+          <span>
+            <IconButton
+              aria-label="Decrease width"
+              size="small"
+              disabled={capped <= 1}
+              onClick={() => onResize(-1)}
+            >
+              <RemoveIcon sx={{ fontSize: 14 }} />
+            </IconButton>
+          </span>
+        </Tooltip>
+        <Typography variant="caption" sx={{ minWidth: 16, textAlign: 'center' }}>
+          {capped}
+        </Typography>
+        <Tooltip title="Increase width">
+          <span>
+            <IconButton
+              aria-label="Increase width"
+              size="small"
+              disabled={capped >= 12}
+              onClick={() => onResize(1)}
+            >
+              <Add sx={{ fontSize: 14 }} />
+            </IconButton>
+          </span>
+        </Tooltip>
+        <Box sx={{ flex: 1 }} />
+        <Tooltip title="Edit panel">
+          <IconButton aria-label="Edit panel" size="small" onClick={onEdit}>
+            <EditIcon sx={{ fontSize: 14 }} />
+          </IconButton>
+        </Tooltip>
+        <Tooltip title="Delete panel">
+          <IconButton aria-label="Delete panel" size="small" color="error" onClick={onDelete}>
+            <DeleteIcon sx={{ fontSize: 14 }} />
+          </IconButton>
+        </Tooltip>
+      </Box>
+    </Paper>
   );
 }
 
@@ -633,6 +564,10 @@ interface EditableRowCardProps {
   onEditPanel: (rowId: string, panelId: string) => void;
   onDeletePanel: (rowId: string, panelId: string) => void;
   onResizePanel: (rowId: string, panelId: string, delta: number) => void;
+  onLayoutChange: (
+    rowId: string,
+    layouts: ResponsiveLayouts<ResponsiveBreakpoint>
+  ) => void;
 }
 
 const EditableRowCard = memo(function EditableRowCard({
@@ -643,7 +578,8 @@ const EditableRowCard = memo(function EditableRowCard({
   onDeleteRow,
   onEditPanel,
   onDeletePanel,
-  onResizePanel
+  onResizePanel,
+  onLayoutChange
 }: EditableRowCardProps) {
   const [rowName, setRowName] = useState(row.name);
 
@@ -702,35 +638,30 @@ const EditableRowCard = memo(function EditableRowCard({
         </Box>
         <Divider sx={{ mb: 1.5 }} />
 
-        <SortableContext
-          items={row.panels.map((p) => p._id)}
-          strategy={horizontalListSortingStrategy}
-        >
-          <DroppableRowArea rowId={row._id}>
-            <Grid container spacing={1.5}>
-              {row.panels.length === 0 && (
-                <Grid size={12}>
-                  <Typography variant="body2" color="text.secondary" sx={{ py: 2, px: 1 }}>
-                    No panels yet. Click "Add panel" to add one, or drag a panel here.
-                  </Typography>
-                </Grid>
-              )}
-              {row.panels.map((panel) => {
-                const size = Math.max(1, Math.min(12, panel.size ?? 3));
-                return (
-                  <Grid key={panel._id} size={{ lg: size, md: size, xl: size, xs: 12 }}>
-                    <SortablePanelCard
-                      panel={panel}
-                      onEdit={() => onEditPanel(row._id, panel._id)}
-                      onDelete={() => onDeletePanel(row._id, panel._id)}
-                      onResize={(delta) => onResizePanel(row._id, panel._id, delta)}
-                    />
-                  </Grid>
-                );
-              })}
-            </Grid>
-          </DroppableRowArea>
-        </SortableContext>
+        {row.panels.length === 0 ? (
+          <Box sx={{ minHeight: 80, display: 'flex', alignItems: 'center' }}>
+            <Typography variant="body2" color="text.secondary" sx={{ py: 2, px: 1 }}>
+              No panels yet. Click "Add panel" to add one.
+            </Typography>
+          </Box>
+        ) : (
+          <PanelGridRow
+            panels={row.panels}
+            isEditing
+            onLayoutChange={(layouts) => onLayoutChange(row._id, layouts)}
+            renderPanel={(_panel, idx) => {
+              const panel = row.panels[idx];
+              return (
+                <EditablePanelCard
+                  panel={panel}
+                  onEdit={() => onEditPanel(row._id, panel._id)}
+                  onDelete={() => onDeletePanel(row._id, panel._id)}
+                  onResize={(delta) => onResizePanel(row._id, panel._id, delta)}
+                />
+              );
+            }}
+          />
+        )}
       </Paper>
     </Container>
   );
@@ -841,12 +772,6 @@ function EditableReportView({ report, reportId: _reportId, onSave, onCancel }: E
     panelId: string | null; // null = new panel
   } | null>(null);
   const editingPanel = useRef<EditablePanel | null>(null);
-
-  // DnD
-  const [activePanel, setActivePanel] = useState<EditablePanel | null>(null);
-  const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 8 } })
-  );
 
   function updateNamedQueries(next: Record<string, string>) {
     namedQueriesRef.current = next;
@@ -1006,7 +931,7 @@ function EditableReportView({ report, reportId: _reportId, onSave, onCancel }: E
               ...r,
               panels: r.panels.map((p) =>
                 p._id === panelId
-                  ? { ...p, size: Math.max(1, Math.min(12, (p.size ?? 3) + delta)) }
+                  ? { ...p, w: Math.max(1, Math.min(12, (p.w ?? p.size ?? 3) + delta)) }
                   : p
               )
             }
@@ -1016,69 +941,45 @@ function EditableReportView({ report, reportId: _reportId, onSave, onCancel }: E
   }
 
   // ---------------------------------------------------------------------------
-  // DnD handlers
+  // react-grid-layout: persist x/y/w/h after drag/resize
   // ---------------------------------------------------------------------------
 
-  function onDragStart({ active }: DragStartEvent) {
-    for (const row of editableRows) {
-      const found = row.panels.find((p) => p._id === String(active.id));
-      if (found) {
-        setActivePanel(found);
-        return;
-      }
-    }
-  }
-
-  function onDragEnd({ active, over }: DragEndEvent) {
-    setActivePanel(null);
-    if (!over || active.id === over.id) return;
-
-    const activeId = String(active.id);
-    const overId = String(over.id);
-
-    // Find source
-    let sourceRowIdx = -1;
-    let sourcePanelIdx = -1;
-    for (let ri = 0; ri < editableRows.length; ri++) {
-      const pi = editableRows[ri].panels.findIndex((p) => p._id === activeId);
-      if (pi !== -1) {
-        sourceRowIdx = ri;
-        sourcePanelIdx = pi;
-        break;
-      }
-    }
-    if (sourceRowIdx === -1) return;
-
-    const newRows = editableRows.map((r) => ({ ...r, panels: [...r.panels] }));
-    const [movedPanel] = newRows[sourceRowIdx].panels.splice(sourcePanelIdx, 1);
-
-    // Is overId a panel?
-    let targetRowIdx = -1;
-    let targetPanelIdx = -1;
-    for (let ri = 0; ri < newRows.length; ri++) {
-      const pi = newRows[ri].panels.findIndex((p) => p._id === overId);
-      if (pi !== -1) {
-        targetRowIdx = ri;
-        targetPanelIdx = pi;
-        break;
-      }
-    }
-
-    if (targetRowIdx !== -1) {
-      newRows[targetRowIdx].panels.splice(targetPanelIdx, 0, movedPanel);
-    } else {
-      // Is overId a row?
-      const targetRowByIdIdx = newRows.findIndex((r) => r._id === overId);
-      if (targetRowByIdIdx !== -1) {
-        newRows[targetRowByIdIdx].panels.push(movedPanel);
-      } else {
-        // Restore
-        newRows[sourceRowIdx].panels.splice(sourcePanelIdx, 0, movedPanel);
-      }
-    }
-
-    setEditableRows(newRows);
-  }
+  const handleLayoutChange = useCallback(
+    (rowId: string, layouts: ResponsiveLayouts<ResponsiveBreakpoint>) => {
+      // The lg layout is the canonical source of truth; xs is a derived,
+      // mobile-stacked layout that we don't persist back to the panel config.
+      const layout: RglLayout | undefined = layouts.lg;
+      if (!layout) return;
+      setEditableRows((prev) =>
+        prev.map((r) => {
+          if (r._id !== rowId) return r;
+          let dirty = false;
+          const nextPanels = r.panels.map((panel, idx) => {
+            const item = layout.find((l) => l.i === String(idx));
+            if (!item) return panel;
+            if (
+              panel.x === item.x &&
+              panel.y === item.y &&
+              panel.w === item.w &&
+              panel.h === item.h
+            ) {
+              return panel;
+            }
+            dirty = true;
+            return {
+              ...panel,
+              x: item.x,
+              y: item.y,
+              w: item.w,
+              h: item.h
+            };
+          });
+          return dirty ? { ...r, panels: nextPanels } : r;
+        })
+      );
+    },
+    []
+  );
 
   // ---------------------------------------------------------------------------
   // Save
@@ -1190,25 +1091,20 @@ function EditableReportView({ report, reportId: _reportId, onSave, onCancel }: E
       </Container>
 
       {/* Rows with panels */}
-      <DndContext sensors={sensors} onDragStart={onDragStart} onDragEnd={onDragEnd}>
-        {editableRows.map((row, rowIndex) => (
-          <EditableRowCard
-            key={row._id}
-            row={row}
-            rowIndex={rowIndex}
-            onRename={renameRow}
-            onAddPanel={openAddPanel}
-            onDeleteRow={deleteRow}
-            onEditPanel={openEditPanel}
-            onDeletePanel={deletePanel}
-            onResizePanel={resizePanel}
-          />
-        ))}
-
-        <DragOverlay>
-          {activePanel && <DragGhostCard panel={activePanel} />}
-        </DragOverlay>
-      </DndContext>
+      {editableRows.map((row, rowIndex) => (
+        <EditableRowCard
+          key={row._id}
+          row={row}
+          rowIndex={rowIndex}
+          onRename={renameRow}
+          onAddPanel={openAddPanel}
+          onDeleteRow={deleteRow}
+          onEditPanel={openEditPanel}
+          onDeletePanel={deletePanel}
+          onResizePanel={resizePanel}
+          onLayoutChange={handleLayoutChange}
+        />
+      ))}
 
       {/* Add row */}
       <Container maxWidth={false} sx={{ ...contentContainerSx, pb: 2.5 }}>

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import {
+  Box,
   Card,
   CardContent,
   CardHeader,
@@ -17,6 +18,18 @@ import { useLazyCypherQuery, QueryRecord } from 'src/hooks/useCypherQuery';
 import CypherDetails from 'src/components/reports/CypherDetails';
 import { ChartPanelSkeleton } from 'src/components/reports/PanelLoadingSkeletons';
 import QueryValidationBadge from 'src/components/reports/QueryValidationBadge';
+
+const fillCardSx = {
+  height: '100%',
+  display: 'flex',
+  flexDirection: 'column' as const
+};
+
+const chartFillSx = {
+  flex: 1,
+  minHeight: 0,
+  display: 'flex'
+};
 
 interface CypherPieProps {
   cypher?: string;
@@ -51,7 +64,7 @@ export default function CypherPie({
 
   if (cypher === undefined) {
     return (
-      <Card>
+      <Card sx={fillCardSx}>
         <Grid container spacing={0} direction="column" alignItems="center">
           <CardHeader title={caption} />
         </Grid>
@@ -68,7 +81,7 @@ export default function CypherPie({
 
   if (needInputs !== undefined && needInputs.length > 0) {
     return (
-      <Card>
+      <Card sx={fillCardSx}>
         <Grid container spacing={0} direction="column" alignItems="center">
           <CardHeader title={caption} />
         </Grid>
@@ -94,7 +107,7 @@ export default function CypherPie({
 
   if (queryErrors.length > 0) {
     return (
-      <Card>
+      <Card sx={fillCardSx}>
         <Grid container direction="column" alignItems="center">
           <CardHeader title={caption} />
         </Grid>
@@ -116,7 +129,7 @@ export default function CypherPie({
 
   if (first === undefined) {
     return (
-      <Card>
+      <Card sx={fillCardSx}>
         <Grid container spacing={0} direction="column" alignItems="center">
           <CardHeader title={caption} />
         </Grid>
@@ -151,7 +164,7 @@ export default function CypherPie({
 
   return (
     <>
-      <Card sx={{ position: 'relative', '&:hover .panel-info-btn': { opacity: 1 } }}>
+      <Card sx={{ ...fillCardSx, position: 'relative', '&:hover .panel-info-btn': { opacity: 1 } }}>
         <IconButton
           className="panel-info-btn"
           size="small"
@@ -166,52 +179,53 @@ export default function CypherPie({
         <Divider />
         <QueryValidationBadge errors={queryErrors} warnings={warnings} />
 
-        <PieChart
-          series={[{
-            data: pieData,
-            // Donut style — looks cleaner with labels
-            innerRadius: '35%',
-            outerRadius: '80%',
-            paddingAngle: 2,
-            cornerRadius: 4,
-            // Show arc labels only when no legend is configured
-            arcLabel: hasLegend ? undefined : 'label',
-            arcLabelMinAngle: 20,
-            arcLabelRadius: '60%',
-            highlightScope: { fade: 'global', highlight: 'item' },
-            // faded.innerRadius only accepts number, not string
-            faded: { additionalRadius: -4, color: theme.palette.action.disabled },
-            valueFormatter: (item) => String(item.value)
-          }]}
-          colors={chartColorsFor(theme.palette.mode)}
-          hideLegend={!hasLegend}
-          height={350}
-          margin={
-            pieSettings?.legend === 'column'
-              ? { top: 16, right: 160, bottom: 16, left: 16 }
-              : pieSettings?.legend === 'row'
-                ? { top: 16, right: 16, bottom: 80, left: 16 }
-                : { top: 24, right: 24, bottom: 24, left: 24 }
-          }
-          slotProps={{
-            ...(hasLegend && {
-              legend: {
-                position:
-                  pieSettings?.legend === 'column'
-                    ? { vertical: 'middle', horizontal: 'end' }
-                    : { vertical: 'bottom', horizontal: 'center' },
-                direction: pieSettings?.legend === 'column' ? 'vertical' : 'horizontal'
-              }
-            }),
-            pieArcLabel: {
-              style: {
-                fontFamily: theme.typography.fontFamily ?? undefined,
-                fontSize: 12,
-                fontWeight: 500
-              }
+        <Box sx={chartFillSx}>
+          <PieChart
+            series={[{
+              data: pieData,
+              // Donut style — looks cleaner with labels
+              innerRadius: '35%',
+              outerRadius: '80%',
+              paddingAngle: 2,
+              cornerRadius: 4,
+              // Show arc labels only when no legend is configured
+              arcLabel: hasLegend ? undefined : 'label',
+              arcLabelMinAngle: 20,
+              arcLabelRadius: '60%',
+              highlightScope: { fade: 'global', highlight: 'item' },
+              // faded.innerRadius only accepts number, not string
+              faded: { additionalRadius: -4, color: theme.palette.action.disabled },
+              valueFormatter: (item) => String(item.value)
+            }]}
+            colors={chartColorsFor(theme.palette.mode)}
+            hideLegend={!hasLegend}
+            margin={
+              pieSettings?.legend === 'column'
+                ? { top: 16, right: 160, bottom: 16, left: 16 }
+                : pieSettings?.legend === 'row'
+                  ? { top: 16, right: 16, bottom: 80, left: 16 }
+                  : { top: 24, right: 24, bottom: 24, left: 24 }
             }
-          }}
-        />
+            slotProps={{
+              ...(hasLegend && {
+                legend: {
+                  position:
+                    pieSettings?.legend === 'column'
+                      ? { vertical: 'middle', horizontal: 'end' }
+                      : { vertical: 'bottom', horizontal: 'center' },
+                  direction: pieSettings?.legend === 'column' ? 'vertical' : 'horizontal'
+                }
+              }),
+              pieArcLabel: {
+                style: {
+                  fontFamily: theme.typography.fontFamily ?? undefined,
+                  fontSize: 12,
+                  fontWeight: 500
+                }
+              }
+            }}
+          />
+        </Box>
       </Card>
       <CypherDetails details={details} open={open} setOpen={setOpen} />
     </>

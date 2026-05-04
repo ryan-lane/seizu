@@ -278,11 +278,107 @@
                         }
                     ],
                     "default": 2,
-                    "description": "The size of the panel.",
+                    "description": "The legacy width of the panel as MUI grid columns (1-12). When ``w`` is set, ``w`` takes precedence. Retained for back-compat with reports authored before per-panel height support.",
                     "examples": [
                         "2"
                     ],
                     "title": "Size"
+                },
+                "w": {
+                    "anyOf": [
+                        {
+                            "type": "integer"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "description": "The width of the panel in grid columns (1-12). Supersedes ``size`` when set. Used by react-grid-layout.",
+                    "examples": [
+                        "3"
+                    ],
+                    "title": "W"
+                },
+                "h": {
+                    "anyOf": [
+                        {
+                            "type": "integer"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "description": "The height of the panel in grid row units (each row is 48px). When unset, the frontend derives a sensible default per panel type.",
+                    "examples": [
+                        "8"
+                    ],
+                    "title": "H"
+                },
+                "x": {
+                    "anyOf": [
+                        {
+                            "type": "integer"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "description": "The column index (0-based) within the row's grid. When unset, the frontend packs panels left-to-right automatically.",
+                    "examples": [
+                        "0"
+                    ],
+                    "title": "X"
+                },
+                "y": {
+                    "anyOf": [
+                        {
+                            "type": "integer"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "description": "The row index within the row's grid. Always 0 for single-row layouts; reserved for future multi-row use.",
+                    "examples": [
+                        "0"
+                    ],
+                    "title": "Y"
+                },
+                "min_h": {
+                    "anyOf": [
+                        {
+                            "type": "integer"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "description": "Optional minimum height in grid row units. Enforced by react-grid-layout when the user resizes the panel.",
+                    "examples": [
+                        "4"
+                    ],
+                    "title": "Min H"
+                },
+                "auto_height": {
+                    "anyOf": [
+                        {
+                            "type": "boolean"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "description": "When ``True``, the panel renders at its natural content height instead of filling its grid cell. Only meaningful for ``markdown`` and ``vertical-table`` panel types; ignored elsewhere.",
+                    "examples": [
+                        "true"
+                    ],
+                    "title": "Auto Height"
                 },
                 "threshold": {
                     "anyOf": [
@@ -294,11 +390,30 @@
                         }
                     ],
                     "default": null,
-                    "description": "The threshold value for progress panels.",
+                    "description": "(Legacy) Single threshold value for ``count`` / ``progress`` panels. New configs should use ``thresholds``; this field is retained as a fallback when ``thresholds`` is unset.",
                     "examples": [
                         "70"
                     ],
                     "title": "Threshold"
+                },
+                "thresholds": {
+                    "anyOf": [
+                        {
+                            "items": {
+                                "$ref": "#/$defs/PanelThreshold"
+                            },
+                            "type": "array"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "description": "Ordered list of ``{value, color}`` pairs for ``count`` and ``progress`` panels. The applicable color is the color of the threshold with the highest ``value`` that is less than or equal to the metric (raw total for ``count``, completion percentage for ``progress``). When unset, falls back to the legacy ``threshold`` field.",
+                    "examples": [
+                        "\n            .. code-block:: yaml\n\n              thresholds:\n                - value: 0\n                  color: \"#F44336\"\n                - value: 70\n                  color: \"#4CAF50\"\n            "
+                    ],
+                    "title": "Thresholds"
                 },
                 "bar_settings": {
                     "anyOf": [
@@ -345,21 +460,20 @@
                         "\n            .. code-block:: yaml\n\n              graph_settings:\n                node_label: label\n                node_color_by: group\n            "
                     ]
                 },
-                "metric": {
+                "progress_settings": {
                     "anyOf": [
                         {
-                            "type": "string"
+                            "$ref": "#/$defs/ProgressPanelSettings"
                         },
                         {
                             "type": "null"
                         }
                     ],
                     "default": null,
-                    "description": "The statsd metric to send from the panel data. Only used for ``count`` and ``progress`` panels.",
+                    "description": "Settings specific to progress panels.",
                     "examples": [
-                        "cves.severity"
-                    ],
-                    "title": "Metric"
+                        "\n            .. code-block:: yaml\n\n              progress_settings:\n                show_label: false\n            "
+                    ]
                 }
             },
             "required": [
@@ -415,6 +529,32 @@
             "title": "PanelParam",
             "type": "object"
         },
+        "PanelThreshold": {
+            "properties": {
+                "value": {
+                    "description": "The threshold trigger value. For ``count`` panels, the metric is the raw total. For ``progress`` panels, the metric is the completion percentage (0-100).",
+                    "examples": [
+                        70
+                    ],
+                    "title": "Value",
+                    "type": "number"
+                },
+                "color": {
+                    "description": "The color to apply when the metric matches this threshold. A CSS color string (e.g. ``#F44336``, ``red``).",
+                    "examples": [
+                        "#F44336"
+                    ],
+                    "title": "Color",
+                    "type": "string"
+                }
+            },
+            "required": [
+                "value",
+                "color"
+            ],
+            "title": "PanelThreshold",
+            "type": "object"
+        },
         "PiePanelSettings": {
             "properties": {
                 "legend": {
@@ -432,6 +572,25 @@
                 }
             },
             "title": "PiePanelSettings",
+            "type": "object"
+        },
+        "ProgressPanelSettings": {
+            "properties": {
+                "show_label": {
+                    "anyOf": [
+                        {
+                            "type": "boolean"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "description": "Whether to render the ``numerator / denominator`` label above the progress wheel. Defaults to ``True`` when unset; pass ``False`` to hide the label and show only the wheel and percentage.",
+                    "title": "Show Label"
+                }
+            },
+            "title": "ProgressPanelSettings",
             "type": "object"
         },
         "Report": {

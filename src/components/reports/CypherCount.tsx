@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
+  Box,
   Card,
   CardContent,
   CardHeader,
@@ -14,12 +15,39 @@ import { useLazyCypherQuery } from 'src/hooks/useCypherQuery';
 import CypherDetails from 'src/components/reports/CypherDetails';
 import { CountPanelSkeleton } from 'src/components/reports/PanelLoadingSkeletons';
 import QueryValidationBadge from 'src/components/reports/QueryValidationBadge';
+import type { PanelThreshold } from 'src/config.context';
+import { resolveThresholdColor } from 'src/components/reports/thresholds';
+
+const fillCardSx = {
+  height: '100%',
+  display: 'flex',
+  flexDirection: 'column' as const
+};
+
+const fillBodySx = {
+  flex: 1,
+  minHeight: 0,
+  justifyContent: 'center'
+};
+
+// Bounds for the responsive number font size (px).
+const MIN_FONT_PX = 12;
+const MAX_FONT_PX = 120;
+// Inner padding inside the body wrapper (sx={{ p: 1 }} → 8 px each side).
+const BODY_PADDING_PX = 16;
+// Approximate ratio of digit width to font size in MUI's default sans font.
+// Used to budget the font size against available width per character.
+const DIGIT_WIDTH_RATIO = 0.65;
+// Fraction of the available height the rendered text should occupy. Leaves
+// a little breathing room above and below.
+const HEIGHT_FILL_RATIO = 0.85;
 
 interface CypherCountProps {
   cypher?: string;
   params?: Record<string, unknown>;
   caption?: string;
   threshold?: number;
+  thresholds?: PanelThreshold[];
   details?: Record<string, unknown>;
   needInputs?: string[];
   reportQueryToken?: string;
@@ -30,6 +58,7 @@ export default function CypherCount({
   params,
   caption,
   threshold,
+  thresholds,
   details,
   needInputs,
   reportQueryToken
@@ -38,6 +67,35 @@ export default function CypherCount({
   const handleClickOpen = () => {
     setOpen(true);
   };
+
+  const observerRef = useRef<ResizeObserver | null>(null);
+  const [bodySize, setBodySize] = useState({ w: 0, h: 0 });
+
+  // Callback ref re-attaches the observer when the body Box swaps between
+  // states (loading vs loaded). Used to scale the number's font size to
+  // the available area.
+  const bodyRef = useCallback((node: HTMLDivElement | null) => {
+    if (typeof ResizeObserver === 'undefined') return;
+    if (observerRef.current) {
+      observerRef.current.disconnect();
+      observerRef.current = null;
+    }
+    if (!node) return;
+    const observer = new ResizeObserver((entries) => {
+      const entry = entries[0];
+      if (!entry) return;
+      setBodySize({ w: entry.contentRect.width, h: entry.contentRect.height });
+    });
+    observer.observe(node);
+    observerRef.current = observer;
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      observerRef.current?.disconnect();
+      observerRef.current = null;
+    };
+  }, []);
 
   const [runQuery, { loading, error, records, first, warnings, queryErrors }] =
     useLazyCypherQuery(cypher, reportQueryToken);
@@ -50,12 +108,12 @@ export default function CypherCount({
 
   if (cypher === undefined) {
     return (
-      <Card>
+      <Card sx={fillCardSx}>
         <Grid container spacing={0} direction="column" alignItems="center">
           <CardHeader title={caption} />
         </Grid>
         <Divider />
-        <Grid container spacing={0} direction="column" alignItems="center">
+        <Grid container spacing={0} direction="column" alignItems="center" sx={fillBodySx}>
           <CardContent>
             <Error />
             <Typography variant="body2">Missing cypher query</Typography>
@@ -67,12 +125,12 @@ export default function CypherCount({
 
   if (needInputs !== undefined && needInputs.length > 0) {
     return (
-      <Card>
+      <Card sx={fillCardSx}>
         <Grid container spacing={0} direction="column" alignItems="center">
           <CardHeader title={caption} />
         </Grid>
         <Divider />
-        <Grid container spacing={0} direction="column" alignItems="center">
+        <Grid container spacing={0} direction="column" alignItems="center" sx={fillBodySx}>
           <CardContent>
             <Typography variant="h4" align="center">
               N/A
@@ -97,13 +155,13 @@ export default function CypherCount({
 
   if (queryErrors.length > 0) {
     return (
-      <Card>
+      <Card sx={fillCardSx}>
         <Grid container direction="column" alignItems="center">
           <CardHeader title={caption} />
         </Grid>
         <Divider />
         <QueryValidationBadge errors={queryErrors} warnings={warnings} />
-        <Grid container spacing={0} direction="column" alignItems="center">
+        <Grid container spacing={0} direction="column" alignItems="center" sx={fillBodySx}>
           <CardContent>
             <Typography variant="h4" align="center">N/A</Typography>
             <Typography variant="body2" align="center">Query validation failed</Typography>
@@ -119,12 +177,12 @@ export default function CypherCount({
 
   if (first === undefined) {
     return (
-      <Card>
+      <Card sx={fillCardSx}>
         <Grid container spacing={0} direction="column" alignItems="center">
           <CardHeader title={caption} />
         </Grid>
         <Divider />
-        <Grid container spacing={0} direction="column" alignItems="center">
+        <Grid container spacing={0} direction="column" alignItems="center" sx={fillBodySx}>
           <CardContent>
             <Typography variant="h4">N/A</Typography>
           </CardContent>
@@ -134,16 +192,20 @@ export default function CypherCount({
   }
 
   const total = first['total'] as number;
-  let color;
-  if (threshold === undefined) {
-    color = 'textPrimary';
-  } else if (total > threshold) {
-    color = 'error';
+  // Pick the active color from the multi-threshold list when set, otherwise
+  // fall back to the legacy single-threshold logic.
+  const thresholdColor = resolveThresholdColor(total, thresholds);
+  let legacyColor: string | undefined;
+  if (thresholdColor === undefined) {
+    if (threshold !== undefined && total > threshold) {
+      legacyColor = 'error.main';
+    }
   }
+  const totalColor = thresholdColor ?? legacyColor;
 
   return (
     <>
-      <Card style={{ height: '100%' }} sx={{ position: 'relative', '&:hover .panel-info-btn': { opacity: 1 } }}>
+      <Card sx={{ ...fillCardSx, position: 'relative', '&:hover .panel-info-btn': { opacity: 1 } }}>
         <IconButton
           className="panel-info-btn"
           size="small"
@@ -157,15 +219,38 @@ export default function CypherCount({
         </Grid>
         <Divider />
         <QueryValidationBadge errors={queryErrors} warnings={warnings} />
-        <Grid container spacing={0} direction="column" alignItems="center">
-          <CardContent>
-            <span>
-              <Typography variant="h3" component="span" color={color}>
-                {total}
-              </Typography>
-            </span>
-          </CardContent>
-        </Grid>
+        <Box
+          ref={bodyRef}
+          sx={{
+            flex: 1,
+            minHeight: 0,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            p: 1,
+            overflow: 'hidden'
+          }}
+        >
+          <Typography
+            component="span"
+            sx={{
+              ...(totalColor ? { color: totalColor } : {}),
+              fontWeight: 500,
+              lineHeight: 1,
+              fontSize: `${(() => {
+                const charCount = Math.max(1, String(total).length);
+                const widthBudget = Math.max(0, bodySize.w - BODY_PADDING_PX);
+                const heightBudget = Math.max(0, bodySize.h - BODY_PADDING_PX);
+                const widthFit = widthBudget / (charCount * DIGIT_WIDTH_RATIO);
+                const heightFit = heightBudget * HEIGHT_FILL_RATIO;
+                const fit = Math.min(widthFit, heightFit);
+                return Math.max(MIN_FONT_PX, Math.min(MAX_FONT_PX, fit));
+              })()}px`
+            }}
+          >
+            {total}
+          </Typography>
+        </Box>
       </Card>
       <CypherDetails details={details} open={open} setOpen={setOpen} />
     </>

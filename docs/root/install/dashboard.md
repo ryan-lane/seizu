@@ -102,8 +102,10 @@ Click **Edit report** (top-right when viewing a report) or choose **Edit** from 
 
 - **Named Queries** — a collapsible section for defining reusable Cypher strings that panels can reference by key.
 - **Rows** — add, rename, and delete rows. Rows hold panels in a horizontal grid.
-- **Panels** — within each row, panels can be dragged to a new position (within a row or to a different row) and resized using the − / + column controls (1–12 grid columns). Use the pencil icon to open the panel editor, or the trash icon to remove a panel.
-- **Add panel** — opens the panel editor where you select the panel type and fill in the relevant fields. The form adapts to show only the fields applicable to the chosen type.
+- **Panels** — within each row, drag a panel by its body to reposition it, or grab the bottom-right resize handle to change both width and height. The − / + buttons in the panel toolbar adjust width by one grid column at a time, and the pencil / trash icons open the panel editor or remove the panel.
+- **Add panel** — opens the panel editor where you select the panel type and fill in the relevant fields. The form adapts to show only the fields applicable to the chosen type, and exposes Width and Height sliders plus the Cypher / settings specific to that type.
+
+Cross-row panel moves are not supported in the current editor; delete the panel and re-add it in the destination row.
 
 Click **Save version** to commit your changes. Every save creates a new numbered version; existing versions are never overwritten.
 
@@ -115,6 +117,21 @@ Choose **Delete** from the ⋮ menu in the Reports list and confirm. This perman
 
 Seizu supports various panel types that can be used to visualize graph data.
 See [the Panel schema](schema.html#panel) for more detailed info about specific fields.
+
+### Panel layout
+
+Panels are positioned and sized on a 12-column grid (each row of the grid is 48 px tall). Every panel type accepts the same layout fields:
+
+| Field | Description |
+|-------|-------------|
+| w | Width in grid columns (1–12). Supersedes the legacy ``size`` field when both are set. |
+| h | Height in grid rows. When unset, a per-type default is used (e.g. 4 for ``count``, 8 for charts, 10 for tables). |
+| x | Optional column index (0-based). When unset, panels pack left-to-right within the row. |
+| y | Optional row index within the row's grid. Reserved for future multi-row layouts; usually ``0``. |
+| min_h | Optional minimum height in grid rows. Enforced when the user resizes the panel. |
+| size | (Legacy) The original width-only sizing field. Still read as a fallback when ``w`` is unset; new reports should set ``w`` instead. |
+
+The ``markdown`` and ``vertical-table`` panel types also accept ``auto_height`` (boolean). When ``true``, the panel renders at its natural content height instead of filling the assigned grid cell — useful for short, content-driven panels where clipping or scrolling looks wrong.
 
 ### count
 
@@ -129,7 +146,7 @@ To simply display a count of a particular query, use a ``count`` panel.
 | params | A list of parameters to pass into the query. See [the PanelParam schema](schema.html#panelparam) for more info. |
 | caption | The caption to show as the title of this panel. |
 | type | The type of panel. ``count``, for this panel type. |
-| size | The width of this panel. |
+| size, w, h, x, y, min_h | Layout fields. See [Panel layout](#panel-layout). |
 
 #### Example
 
@@ -156,7 +173,7 @@ By default, this panel will color the progress data based on a threshold of <70%
 | caption | The caption to show as the title of this panel. |
 | type | The type of panel. ``progress``, for this panel type. |
 | threshold | The lower threshold percentage to consider this result an error. Set to `0` to disable threshold. Default: ``70`` |
-| size | The width of this panel. |
+| size, w, h, x, y, min_h | Layout fields. See [Panel layout](#panel-layout). |
 
 #### Example
 
@@ -187,7 +204,7 @@ To display a pie graph, use a ``pie`` panel.
 | type | The type of panel. ``pie``, for this panel type. |
 | pie\_settings | An object of settings specific to pie panels. |
 | pie\_settings.legend | Orientation of the legend. ``row`` or ``column``. If legend is not set, no legend will be shown, and arc labels will be shown instead. |
-| size | The width of this panel. |
+| size, w, h, x, y, min_h | Layout fields. See [Panel layout](#panel-layout). |
 
 #### Example
 
@@ -215,7 +232,7 @@ To display a bar graph, use a ``bar`` panel.
 | type | The type of panel. ``bar``, for this panel type. |
 | bar\_settings | An object of settings specific to bar panels. |
 | bar\_settings.legend | Orientation of the legend. ``row`` or ``column``. |
-| size | The width of this panel. |
+| size, w, h, x, y, min_h | Layout fields. See [Panel layout](#panel-layout). |
 
 #### Example
 
@@ -249,7 +266,7 @@ When `columns` is specified in the panel config, those column names are read dir
 | params | A list of parameters to pass into the query. See [the PanelParam schema](schema.html#panelparam) for more info. |
 | caption | The caption to show as the title of this panel. |
 | type | The type of panel. ``table``, for this panel type. |
-| size | The width of this panel. |
+| size, w, h, x, y, min_h | Layout fields. See [Panel layout](#panel-layout). |
 
 #### Example
 
@@ -280,7 +297,8 @@ Supports the same return formats as the ``table`` panel (named columns, map, or 
 | caption | The caption to show as the title of this panel. |
 | type | The type of panel. ``vertical-table``, for this panel type. |
 | table\_id | The attribute in the result row to use as a caption for each row. If not set, row captions will show as ``undefined``. |
-| size | The width of this panel. |
+| size, w, h, x, y, min_h | Layout fields. See [Panel layout](#panel-layout). |
+| auto_height | When ``true``, the panel grows to fit its content rather than scrolling within a fixed grid cell. |
 
 #### Example
 
@@ -340,7 +358,7 @@ If the query does not return graph-compatible data (e.g. ``RETURN n`` or a plain
 | graph\_settings | An object of settings specific to graph panels. |
 | graph\_settings.node\_label | The node property to display as the node label. Defaults to ``label`` (explicit map) or ``name`` then node id (path format). |
 | graph\_settings.node\_color\_by | The node property to use for color grouping. Defaults to ``group`` (explicit map) or the first label (path format). |
-| size | The width of this panel. |
+| size, w, h, x, y, min_h | Layout fields. See [Panel layout](#panel-layout). |
 
 #### Example
 
@@ -368,7 +386,8 @@ Heading levels in the Markdown source are shifted down by one (``##`` renders as
 |-------|-------------|
 | markdown | The markdown content to render. Supports headings, lists, links, code, and tables. |
 | type | The type of panel. ``markdown``, for this panel type. |
-| size | The width of this panel. |
+| size, w, h, x, y, min_h | Layout fields. See [Panel layout](#panel-layout). |
+| auto_height | When ``true``, the panel grows to fit its content rather than scrolling within a fixed grid cell. |
 
 #### Example
 

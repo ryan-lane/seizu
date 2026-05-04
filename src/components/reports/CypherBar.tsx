@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import {
+  Box,
   Card,
   CardContent,
   CardHeader,
@@ -17,6 +18,18 @@ import { useLazyCypherQuery, QueryRecord } from 'src/hooks/useCypherQuery';
 import CypherDetails from 'src/components/reports/CypherDetails';
 import { ChartPanelSkeleton } from 'src/components/reports/PanelLoadingSkeletons';
 import QueryValidationBadge from 'src/components/reports/QueryValidationBadge';
+
+const fillCardSx = {
+  height: '100%',
+  display: 'flex',
+  flexDirection: 'column' as const
+};
+
+const chartFillSx = {
+  flex: 1,
+  minHeight: 0,
+  display: 'flex'
+};
 
 interface BarSettings {
   legend?: string;
@@ -55,7 +68,7 @@ export default function CypherBar({
 
   if (cypher === undefined) {
     return (
-      <Card>
+      <Card sx={fillCardSx}>
         <Grid container spacing={0} direction="column" alignItems="center">
           <CardHeader title={caption} />
         </Grid>
@@ -72,7 +85,7 @@ export default function CypherBar({
 
   if (needInputs !== undefined && needInputs.length > 0) {
     return (
-      <Card>
+      <Card sx={fillCardSx}>
         <Grid container spacing={0} direction="column" alignItems="center">
           <CardHeader title={caption} />
         </Grid>
@@ -98,7 +111,7 @@ export default function CypherBar({
 
   if (queryErrors.length > 0) {
     return (
-      <Card>
+      <Card sx={fillCardSx}>
         <Grid container direction="column" alignItems="center">
           <CardHeader title={caption} />
         </Grid>
@@ -120,7 +133,7 @@ export default function CypherBar({
 
   if (first === undefined) {
     return (
-      <Card>
+      <Card sx={fillCardSx}>
         <Grid container spacing={0} direction="column" alignItems="center">
           <CardHeader title={caption} />
         </Grid>
@@ -168,7 +181,7 @@ export default function CypherBar({
 
   return (
     <>
-      <Card sx={{ position: 'relative', '&:hover .panel-info-btn': { opacity: 1 } }}>
+      <Card sx={{ ...fillCardSx, position: 'relative', '&:hover .panel-info-btn': { opacity: 1 } }}>
         <IconButton
           className="panel-info-btn"
           size="small"
@@ -183,52 +196,53 @@ export default function CypherBar({
         <Divider />
         <QueryValidationBadge errors={queryErrors} warnings={warnings} />
 
-        <BarChart
-          dataset={mungedRecords}
-          xAxis={[{
-            scaleType: 'band',
-            dataKey: 'id',
-            disableLine: true,
-            disableTicks: true,
-            tickLabelStyle
-          }]}
-          yAxis={[{
-            disableLine: true,
-            disableTicks: true,
-            tickLabelStyle
-          }]}
-          series={[{
-            dataKey: 'value',
-            label: caption ?? 'Value'
-          }]}
-          borderRadius={6}
-          colors={chartColorsFor(theme.palette.mode)}
-          grid={{ horizontal: true }}
-          hideLegend={!hasLegend}
-          height={350}
-          margin={
-            barSettings?.legend === 'column'
-              ? { top: 16, right: 150, bottom: 40, left: 48 }
-              : barSettings?.legend === 'row'
-                ? { top: 16, right: 16, bottom: 72, left: 48 }
-                : { top: 16, right: 16, bottom: 40, left: 48 }
-          }
-          slotProps={hasLegend ? {
-            legend: {
-              position:
-                barSettings?.legend === 'column'
-                  ? { vertical: 'middle', horizontal: 'end' }
-                  : { vertical: 'bottom', horizontal: 'center' },
-              direction: barSettings?.legend === 'column' ? 'vertical' : 'horizontal'
+        <Box sx={chartFillSx}>
+          <BarChart
+            dataset={mungedRecords}
+            xAxis={[{
+              scaleType: 'band',
+              dataKey: 'id',
+              disableLine: true,
+              disableTicks: true,
+              tickLabelStyle
+            }]}
+            yAxis={[{
+              disableLine: true,
+              disableTicks: true,
+              tickLabelStyle
+            }]}
+            series={[{
+              dataKey: 'value',
+              label: caption ?? 'Value'
+            }]}
+            borderRadius={6}
+            colors={chartColorsFor(theme.palette.mode)}
+            grid={{ horizontal: true }}
+            hideLegend={!hasLegend}
+            margin={
+              barSettings?.legend === 'column'
+                ? { top: 16, right: 150, bottom: 40, left: 48 }
+                : barSettings?.legend === 'row'
+                  ? { top: 16, right: 16, bottom: 72, left: 48 }
+                  : { top: 16, right: 16, bottom: 40, left: 48 }
             }
-          } : undefined}
-          sx={{
-            '& .MuiChartsGrid-line': {
-              stroke: theme.palette.divider,
-              strokeDasharray: '4 4'
-            }
-          }}
-        />
+            slotProps={hasLegend ? {
+              legend: {
+                position:
+                  barSettings?.legend === 'column'
+                    ? { vertical: 'middle', horizontal: 'end' }
+                    : { vertical: 'bottom', horizontal: 'center' },
+                direction: barSettings?.legend === 'column' ? 'vertical' : 'horizontal'
+              }
+            } : undefined}
+            sx={{
+              '& .MuiChartsGrid-line': {
+                stroke: theme.palette.divider,
+                strokeDasharray: '4 4'
+              }
+            }}
+          />
+        </Box>
       </Card>
       <CypherDetails details={details} open={open} setOpen={setOpen} />
     </>

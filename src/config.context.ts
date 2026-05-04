@@ -10,11 +10,19 @@ export interface Panel {
   details_cypher?: string;
   caption?: string;
   size?: number;
+  w?: number;
+  h?: number;
+  x?: number;
+  y?: number;
+  min_h?: number;
+  auto_height?: boolean;
   threshold?: number;
+  thresholds?: PanelThreshold[];
   params?: PanelParam[];
   pie_settings?: PieSettings;
   bar_settings?: BarSettings;
   graph_settings?: GraphSettings;
+  progress_settings?: ProgressSettings;
   table_id?: string;
   legend?: string;
   markdown?: string;
@@ -32,6 +40,15 @@ export interface BarSettings {
 export interface GraphSettings {
   node_label?: string;
   node_color_by?: string;
+}
+
+export interface ProgressSettings {
+  show_label?: boolean;
+}
+
+export interface PanelThreshold {
+  value: number;
+  color: string;
 }
 
 export interface ColumnDef {

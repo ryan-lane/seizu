@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Box,
   Card,
@@ -16,12 +16,39 @@ import { useLazyCypherQuery } from 'src/hooks/useCypherQuery';
 import CypherDetails from 'src/components/reports/CypherDetails';
 import { ProgressPanelSkeleton } from 'src/components/reports/PanelLoadingSkeletons';
 import QueryValidationBadge from 'src/components/reports/QueryValidationBadge';
+import type { PanelThreshold } from 'src/config.context';
+import { resolveThresholdColor } from 'src/components/reports/thresholds';
+
+const fillCardSx = {
+  height: '100%',
+  display: 'flex',
+  flexDirection: 'column' as const
+};
+
+const fillBodySx = {
+  flex: 1,
+  minHeight: 0,
+  justifyContent: 'center'
+};
+
+// Vertical space the numerator/denominator label consumes inside the body.
+const TEXT_RESERVE = 56;
+// Inner padding around the wheel + label.
+const BODY_PADDING = 16;
+const MIN_WHEEL = 40;
+const MAX_WHEEL = 100;
+
+interface ProgressSettings {
+  show_label?: boolean;
+}
 
 interface CypherProgressProps {
   cypher?: string;
   params?: Record<string, unknown>;
   caption?: string;
   threshold?: number;
+  thresholds?: PanelThreshold[];
+  progressSettings?: ProgressSettings;
   details?: Record<string, unknown>;
   needInputs?: string[];
   reportQueryToken?: string;
@@ -32,6 +59,8 @@ export default function CypherProgress({
   params,
   caption,
   threshold,
+  thresholds,
+  progressSettings,
   details,
   needInputs,
   reportQueryToken
@@ -40,6 +69,35 @@ export default function CypherProgress({
   const handleClickOpen = () => {
     setOpen(true);
   };
+
+  const observerRef = useRef<ResizeObserver | null>(null);
+  const [bodySize, setBodySize] = useState({ w: 0, h: 0 });
+
+  // Callback ref so the observer is re-attached when the body Box swaps
+  // between loading / loaded states. Picks up the actual rendered size of
+  // the body region so the progress wheel can shrink in small cells.
+  const bodyRef = useCallback((node: HTMLDivElement | null) => {
+    if (typeof ResizeObserver === 'undefined') return;
+    if (observerRef.current) {
+      observerRef.current.disconnect();
+      observerRef.current = null;
+    }
+    if (!node) return;
+    const observer = new ResizeObserver((entries) => {
+      const entry = entries[0];
+      if (!entry) return;
+      setBodySize({ w: entry.contentRect.width, h: entry.contentRect.height });
+    });
+    observer.observe(node);
+    observerRef.current = observer;
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      observerRef.current?.disconnect();
+      observerRef.current = null;
+    };
+  }, []);
 
   const [runQuery, { loading, error, records, first, warnings, queryErrors }] =
     useLazyCypherQuery(cypher, reportQueryToken);
@@ -52,12 +110,12 @@ export default function CypherProgress({
 
   if (cypher === undefined) {
     return (
-      <Card>
+      <Card sx={fillCardSx}>
         <Grid container spacing={0} direction="column" alignItems="center">
           <CardHeader title={caption} />
         </Grid>
         <Divider />
-        <Grid container spacing={0} direction="column" alignItems="center">
+        <Grid container spacing={0} direction="column" alignItems="center" sx={fillBodySx}>
           <CardContent>
             <Error />
             <Typography variant="body2">Missing cypher query</Typography>
@@ -69,12 +127,12 @@ export default function CypherProgress({
 
   if (needInputs !== undefined && needInputs.length > 0) {
     return (
-      <Card>
+      <Card sx={fillCardSx}>
         <Grid container spacing={0} direction="column" alignItems="center">
           <CardHeader title={caption} />
         </Grid>
         <Divider />
-        <Grid container spacing={0} direction="column" alignItems="center">
+        <Grid container spacing={0} direction="column" alignItems="center" sx={fillBodySx}>
           <CardContent>
             <Typography variant="h4" align="center">
               N/A
@@ -99,13 +157,13 @@ export default function CypherProgress({
 
   if (queryErrors.length > 0) {
     return (
-      <Card>
+      <Card sx={fillCardSx}>
         <Grid container direction="column" alignItems="center">
           <CardHeader title={caption} />
         </Grid>
         <Divider />
         <QueryValidationBadge errors={queryErrors} warnings={warnings} />
-        <Grid container spacing={0} direction="column" alignItems="center">
+        <Grid container spacing={0} direction="column" alignItems="center" sx={fillBodySx}>
           <CardContent>
             <Typography variant="h4" align="center">N/A</Typography>
             <Typography variant="body2" align="center">Query validation failed</Typography>
@@ -121,12 +179,12 @@ export default function CypherProgress({
 
   if (first === undefined) {
     return (
-      <Card>
+      <Card sx={fillCardSx}>
         <Grid container spacing={0} direction="column" alignItems="center">
           <CardHeader title={caption} />
         </Grid>
         <Divider />
-        <Grid container spacing={0} direction="column" alignItems="center">
+        <Grid container spacing={0} direction="column" alignItems="center" sx={fillBodySx}>
           <CardContent>
             <Typography variant="h4">N/A</Typography>
           </CardContent>
@@ -138,28 +196,43 @@ export default function CypherProgress({
   const numerator = first['numerator'] as number;
   const denominator = first['denominator'] as number;
   const percent = Math.floor((numerator / denominator) * 100);
+
   type CircularProgressColor = 'inherit' | 'primary' | 'secondary' | 'success' | 'error' | 'info' | 'warning';
-  let circleColor: CircularProgressColor = 'primary';
-  let textColor = 'textPrimary';
-  if (threshold === undefined) {
-    if (percent < 70) {
+  // Use the multi-threshold list when configured; otherwise fall back to
+  // the legacy single-threshold semantics (below threshold = red,
+  // 100% = green, otherwise primary; with no threshold the cutoff is 70%).
+  const hexColor = resolveThresholdColor(percent, thresholds);
+  let circleColor: CircularProgressColor | undefined;
+  let textColor: string | undefined;
+  if (hexColor === undefined) {
+    circleColor = 'primary';
+    textColor = 'textPrimary';
+    if (threshold === undefined) {
+      if (percent < 70) {
+        circleColor = 'error';
+        textColor = 'error';
+      } else if (percent === 100) {
+        circleColor = 'success';
+        textColor = 'success.main';
+      }
+    } else if (percent < threshold) {
       circleColor = 'error';
       textColor = 'error';
     } else if (percent === 100) {
       circleColor = 'success';
       textColor = 'success.main';
     }
-  } else if (percent < threshold) {
-    circleColor = 'error';
-    textColor = 'error';
-  } else if (percent === 100) {
-    circleColor = 'success';
-    textColor = 'success.main';
+  } else {
+    // Custom hex from a threshold rule. ``CircularProgress`` expects a
+    // palette token; pass ``inherit`` and let the parent ``Box``'s
+    // ``color`` style propagate via ``currentColor``.
+    circleColor = 'inherit';
+    textColor = hexColor;
   }
 
   return (
     <>
-      <Card style={{ height: '100%' }} sx={{ position: 'relative', '&:hover .panel-info-btn': { opacity: 1 } }}>
+      <Card sx={{ ...fillCardSx, position: 'relative', '&:hover .panel-info-btn': { opacity: 1 } }}>
         <IconButton
           className="panel-info-btn"
           size="small"
@@ -174,49 +247,76 @@ export default function CypherProgress({
         <Divider />
         <QueryValidationBadge errors={queryErrors} warnings={warnings} />
 
-        <Grid container spacing={0} direction="column" alignItems="center">
-          <CardContent>
-            <span>
-              <Typography variant="h3" component="span" color={textColor}>
+        <Box
+          ref={bodyRef}
+          sx={{
+            flex: 1,
+            minHeight: 0,
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: 1,
+            p: 1,
+            overflow: 'hidden'
+          }}
+        >
+          {progressSettings?.show_label !== false && (
+            <Typography component="div" variant="h5" sx={{ textAlign: 'center', flexShrink: 0 }}>
+              <Box component="span" color={textColor} sx={{ fontWeight: 500 }}>
                 {numerator}
-                <span> </span>
-              </Typography>
-              <Typography variant="h3" component="span">
-                / {denominator}
-              </Typography>
-            </span>
-          </CardContent>
-          <CardContent>
-            <Box sx={{ position: 'relative', display: 'inline-flex' }}>
-              <CircularProgress
-                variant="determinate"
-                value={percent}
-                color={circleColor}
-                size={100}
-              />
-              <Box
-                sx={{
-                  top: 0,
-                  left: 0,
-                  bottom: 0,
-                  right: 0,
-                  position: 'absolute',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center'
-                }}
-              >
-                <Typography
-                  variant="caption"
-                  component="div"
-                  color="text.secondary"
-                >
-                  {percent}%
-                </Typography>
               </Box>
+              {' / '}
+              {denominator}
+            </Typography>
+          )}
+          <Box
+            sx={{
+              position: 'relative',
+              display: 'inline-flex',
+              flexShrink: 1,
+              ...(hexColor ? { color: hexColor } : {})
+            }}
+          >
+            <CircularProgress
+              variant="determinate"
+              value={percent}
+              color={circleColor}
+              size={(() => {
+                const showLabel = progressSettings?.show_label !== false;
+                const wAvail = bodySize.w - BODY_PADDING;
+                const hAvail = bodySize.h - BODY_PADDING - (showLabel ? TEXT_RESERVE : 0);
+                const fit = Math.min(wAvail, hAvail);
+                // When the label is shown the wheel is a secondary element
+                // and stays at most 100 px to avoid dwarfing the text. When
+                // the label is hidden the wheel IS the panel, so let it
+                // fill the available space.
+                const cap = showLabel ? MAX_WHEEL : Number.POSITIVE_INFINITY;
+                return Math.max(MIN_WHEEL, Math.min(cap, fit));
+              })()}
+            />
+            <Box
+              sx={{
+                top: 0,
+                left: 0,
+                bottom: 0,
+                right: 0,
+                position: 'absolute',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center'
+              }}
+            >
+              <Typography
+                variant="caption"
+                component="div"
+                color="text.secondary"
+              >
+                {percent}%
+              </Typography>
             </Box>
-          </CardContent>
-        </Grid>
+          </Box>
+        </Box>
       </Card>
       <CypherDetails
         details={details}

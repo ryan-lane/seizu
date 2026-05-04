@@ -2,12 +2,14 @@ import { useState, useEffect } from 'react';
 import {
   Box,
   Button,
+  Checkbox,
   Dialog,
   DialogActions,
   DialogContent,
   DialogTitle,
   Divider,
   FormControl,
+  FormControlLabel,
   IconButton,
   InputLabel,
   MenuItem,
@@ -20,8 +22,14 @@ import {
 } from '@mui/material';
 import Add from '@mui/icons-material/Add';
 import DeleteIcon from '@mui/icons-material/Delete';
-import { Panel, PanelParam, ColumnDef } from 'src/config.context';
+import { Panel, PanelParam, PanelThreshold, ColumnDef } from 'src/config.context';
 import MarkdownPanelEditor from 'src/components/reports/MarkdownPanelEditor';
+import ThresholdsEditor from 'src/components/reports/ThresholdsEditor';
+import { defaultPanelHeight } from 'src/components/reports/panelLayout';
+import { migrateLegacyThreshold } from 'src/components/reports/thresholds';
+
+const MAX_HEIGHT_ROWS = 24;
+const TYPES_WITH_AUTO_HEIGHT = new Set(['markdown', 'vertical-table']);
 
 const PANEL_TYPES = [
   { value: 'table', label: 'Table' },
@@ -45,7 +53,7 @@ export interface EditablePanel extends Panel {
 }
 
 function emptyPanel(type: string): Panel {
-  return { type, size: 3 };
+  return { type, w: 3 };
 }
 
 interface PanelEditorProps {
@@ -137,7 +145,21 @@ function PanelEditor({ open, panel, onClose, onSave }: PanelEditorProps) {
   useEffect(() => {
     if (panel) {
       const { _id, ...rest } = panel;
-      setForm({ ...rest });
+      // Migrate legacy ``threshold`` into the ``thresholds`` list on first
+      // open so the new editor displays equivalent rows. The legacy field
+      // is dropped on save (see cleanPanel).
+      const migrated: Panel = { ...rest };
+      if (
+        (migrated.thresholds === undefined || migrated.thresholds.length === 0) &&
+        migrated.threshold != null &&
+        (migrated.type === 'count' || migrated.type === 'progress')
+      ) {
+        const list = migrateLegacyThreshold(migrated);
+        if (list.length > 0) {
+          migrated.thresholds = list;
+        }
+      }
+      setForm(migrated);
       setId(_id);
     } else {
       setForm(emptyPanel('count'));
@@ -150,11 +172,22 @@ function PanelEditor({ open, panel, onClose, onSave }: PanelEditorProps) {
   }
 
   function handleTypeChange(newType: string) {
-    // Keep common fields, reset type-specific ones
+    // Keep layout/caption fields, reset type-specific ones. Drop auto_height
+    // if the new type doesn't support it (table, charts, etc.) and drop
+    // progress_settings unless the new type is also progress.
     setForm({
       type: newType,
       caption: form.caption,
       size: form.size,
+      w: form.w,
+      h: form.h,
+      x: form.x,
+      y: form.y,
+      min_h: form.min_h,
+      auto_height: TYPES_WITH_AUTO_HEIGHT.has(newType) ? form.auto_height : undefined,
+      progress_settings: newType === 'progress' ? form.progress_settings : undefined,
+      thresholds:
+        newType === 'count' || newType === 'progress' ? form.thresholds : undefined,
       cypher: newType === 'markdown' ? undefined : form.cypher
     });
   }
@@ -168,6 +201,7 @@ function PanelEditor({ open, panel, onClose, onSave }: PanelEditorProps) {
   const hasLegend = form.type === 'bar' || form.type === 'pie';
   const hasGraphSettings = form.type === 'graph';
   const hasThreshold = form.type === 'count' || form.type === 'progress';
+  const hasProgressSettings = form.type === 'progress';
   const hasColumns = form.type === 'table';
   const hasTableId = form.type === 'vertical-table';
   const hasDetailsQuery = form.type === 'table' || form.type === 'vertical-table';
@@ -221,20 +255,48 @@ function PanelEditor({ open, panel, onClose, onSave }: PanelEditorProps) {
             onChange={(e) => set('caption', e.target.value || undefined)}
           />
 
-          {/* Size */}
+          {/* Width */}
           <Box>
             <Typography gutterBottom variant="body2">
-              Size (Grid columns: {form.size ?? 3})
+              Width (grid columns: {form.w ?? form.size ?? 3})
             </Typography>
             <Slider
               min={1}
               max={12}
               step={1}
               marks
-              value={form.size ?? 3}
-              onChange={(_, v) => set('size', v as number)}
+              value={form.w ?? form.size ?? 3}
+              onChange={(_, v) => set('w', v as number)}
               valueLabelDisplay="auto"
             />
+          </Box>
+
+          {/* Height */}
+          <Box>
+            <Typography gutterBottom variant="body2">
+              Height (grid rows: {form.h ?? defaultPanelHeight(form.type)})
+            </Typography>
+            <Slider
+              min={1}
+              max={MAX_HEIGHT_ROWS}
+              step={1}
+              value={form.h ?? defaultPanelHeight(form.type)}
+              onChange={(_, v) => set('h', v as number)}
+              valueLabelDisplay="auto"
+              disabled={form.auto_height === true}
+            />
+            {TYPES_WITH_AUTO_HEIGHT.has(form.type) && (
+              <FormControlLabel
+                control={
+                  <Checkbox
+                    size="small"
+                    checked={form.auto_height === true}
+                    onChange={(e) => set('auto_height', e.target.checked || undefined)}
+                  />
+                }
+                label="Fit content (auto-height)"
+              />
+            )}
           </Box>
 
           {/* Cypher (all except markdown) */}
@@ -279,18 +341,37 @@ function PanelEditor({ open, panel, onClose, onSave }: PanelEditorProps) {
             </>
           )}
 
-          {/* Threshold for count/progress */}
+          {/* Thresholds for count/progress */}
           {hasThreshold && (
-            <TextField
-              size="small"
-              label="Threshold"
-              type="number"
-              value={form.threshold ?? ''}
-              onChange={(e) =>
-                set('threshold', e.target.value ? Number(e.target.value) : undefined)
+            <ThresholdsEditor
+              thresholds={form.thresholds ?? []}
+              onChange={(next: PanelThreshold[]) => set('thresholds', next)}
+              helperText={
+                form.type === 'progress'
+                  ? 'Each threshold applies when the completion percentage is at or above its value. The highest matching threshold wins.'
+                  : 'Each threshold applies when the count is at or above its value. The highest matching threshold wins.'
               }
-              helperText="Color the panel red when the value exceeds this threshold (count) or is below it (progress)."
-              sx={{ width: 200 }}
+            />
+          )}
+
+          {/* Progress-specific settings */}
+          {hasProgressSettings && (
+            <FormControlLabel
+              control={
+                <Checkbox
+                  size="small"
+                  checked={form.progress_settings?.show_label !== false}
+                  onChange={(e) =>
+                    set(
+                      'progress_settings',
+                      e.target.checked
+                        ? { ...form.progress_settings, show_label: undefined }
+                        : { ...form.progress_settings, show_label: false }
+                    )
+                  }
+                />
+              }
+              label="Show numerator / denominator label"
             />
           )}
 
@@ -450,14 +531,41 @@ function cleanPanel(panel: Panel): Panel {
   const result: Panel = { type: panel.type };
   if (panel.caption) result.caption = panel.caption;
   if (panel.size != null) result.size = Math.max(1, Math.min(12, panel.size));
+  if (panel.w != null) result.w = Math.max(1, Math.min(12, panel.w));
+  if (panel.h != null) result.h = Math.max(1, Math.min(MAX_HEIGHT_ROWS, panel.h));
+  if (panel.x != null) result.x = Math.max(0, panel.x);
+  if (panel.y != null) result.y = Math.max(0, panel.y);
+  if (panel.min_h != null) result.min_h = Math.max(1, panel.min_h);
+  if (panel.auto_height && TYPES_WITH_AUTO_HEIGHT.has(panel.type)) {
+    result.auto_height = true;
+  }
   if (panel.cypher) result.cypher = panel.cypher;
   if (panel.details_cypher) result.details_cypher = panel.details_cypher;
   if (panel.markdown) result.markdown = panel.markdown;
-  if (panel.threshold != null) result.threshold = panel.threshold;
+  if (panel.thresholds && panel.thresholds.length > 0) {
+    // Drop in-progress rows with non-finite values (the user added a row but
+    // hasn't typed a number yet, or cleared the field). Only persist
+    // thresholds with a finite ``value`` and a non-empty ``color``.
+    const cleanedThresholds = panel.thresholds
+      .map((t) => ({ value: Number(t.value), color: t.color }))
+      .filter((t) => Number.isFinite(t.value) && t.color !== '');
+    if (cleanedThresholds.length > 0) {
+      result.thresholds = cleanedThresholds;
+    } else if (panel.threshold != null) {
+      result.threshold = panel.threshold;
+    }
+    // Drop the legacy single ``threshold`` field when a list is set; the
+    // renderer prefers ``thresholds`` so keeping both around is just noise.
+  } else if (panel.threshold != null) {
+    result.threshold = panel.threshold;
+  }
   if (panel.table_id) result.table_id = panel.table_id;
   if (panel.bar_settings) result.bar_settings = panel.bar_settings;
   if (panel.pie_settings) result.pie_settings = panel.pie_settings;
   if (panel.graph_settings) result.graph_settings = panel.graph_settings;
+  if (panel.progress_settings && panel.progress_settings.show_label === false) {
+    result.progress_settings = { show_label: false };
+  }
   if (panel.params?.length) result.params = panel.params;
   if (panel.columns?.length) result.columns = panel.columns;
   return result;

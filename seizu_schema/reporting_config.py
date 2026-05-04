@@ -109,6 +109,36 @@ class GraphPanelSettings(BaseModel):
     )
 
 
+class ProgressPanelSettings(BaseModel):
+    show_label: bool | None = Field(
+        default=None,
+        description=(
+            "Whether to render the ``numerator / denominator`` label above"
+            " the progress wheel. Defaults to ``True`` when unset; pass"
+            " ``False`` to hide the label and show only the wheel and"
+            " percentage."
+        ),
+    )
+
+
+class PanelThreshold(BaseModel):
+    value: float = Field(
+        description=(
+            "The threshold trigger value. For ``count`` panels, the metric"
+            " is the raw total. For ``progress`` panels, the metric is the"
+            " completion percentage (0-100)."
+        ),
+        examples=[70],
+    )
+
+    color: str = Field(
+        description=(
+            "The color to apply when the metric matches this threshold. A CSS color string (e.g. ``#F44336``, ``red``)."
+        ),
+        examples=["#F44336"],
+    )
+
+
 class PanelParam(BaseModel):
     name: str = Field(
         description="The parameter name to use when passing this input into the query.",
@@ -224,14 +254,99 @@ class Panel(BaseModel):
 
     size: int | None = Field(
         default=2,
-        description="The size of the panel.",
+        description=(
+            "The legacy width of the panel as MUI grid columns (1-12). When"
+            " ``w`` is set, ``w`` takes precedence. Retained for back-compat"
+            " with reports authored before per-panel height support."
+        ),
         examples=["2"],
+    )
+
+    w: int | None = Field(
+        default=None,
+        description=(
+            "The width of the panel in grid columns (1-12). Supersedes ``size`` when set. Used by react-grid-layout."
+        ),
+        examples=["3"],
+    )
+
+    h: int | None = Field(
+        default=None,
+        description=(
+            "The height of the panel in grid row units (each row is 48px)."
+            " When unset, the frontend derives a sensible default per panel"
+            " type."
+        ),
+        examples=["8"],
+    )
+
+    x: int | None = Field(
+        default=None,
+        description=(
+            "The column index (0-based) within the row's grid. When unset,"
+            " the frontend packs panels left-to-right automatically."
+        ),
+        examples=["0"],
+    )
+
+    y: int | None = Field(
+        default=None,
+        description=(
+            "The row index within the row's grid. Always 0 for single-row layouts; reserved for future multi-row use."
+        ),
+        examples=["0"],
+    )
+
+    min_h: int | None = Field(
+        default=None,
+        description=(
+            "Optional minimum height in grid row units. Enforced by react-grid-layout when the user resizes the panel."
+        ),
+        examples=["4"],
+    )
+
+    auto_height: bool | None = Field(
+        default=None,
+        description=(
+            "When ``True``, the panel renders at its natural content height"
+            " instead of filling its grid cell. Only meaningful for"
+            " ``markdown`` and ``vertical-table`` panel types; ignored"
+            " elsewhere."
+        ),
+        examples=["true"],
     )
 
     threshold: float | None = Field(
         default=None,
-        description="The threshold value for progress panels.",
+        description=(
+            "(Legacy) Single threshold value for ``count`` / ``progress``"
+            " panels. New configs should use ``thresholds``; this field is"
+            " retained as a fallback when ``thresholds`` is unset."
+        ),
         examples=["70"],
+    )
+
+    thresholds: list[PanelThreshold] | None = Field(
+        default=None,
+        description=(
+            "Ordered list of ``{value, color}`` pairs for ``count`` and"
+            " ``progress`` panels. The applicable color is the color of the"
+            " threshold with the highest ``value`` that is less than or"
+            " equal to the metric (raw total for ``count``, completion"
+            " percentage for ``progress``). When unset, falls back to the"
+            " legacy ``threshold`` field."
+        ),
+        examples=[
+            """
+            .. code-block:: yaml
+
+              thresholds:
+                - value: 0
+                  color: "#F44336"
+                - value: 70
+                  color: "#4CAF50"
+            """
+        ],
     )
 
     bar_settings: BarPanelSettings | None = Field(
@@ -270,6 +385,19 @@ class Panel(BaseModel):
               graph_settings:
                 node_label: label
                 node_color_by: group
+            """
+        ],
+    )
+
+    progress_settings: ProgressPanelSettings | None = Field(
+        default=None,
+        description="Settings specific to progress panels.",
+        examples=[
+            """
+            .. code-block:: yaml
+
+              progress_settings:
+                show_label: false
             """
         ],
     )
