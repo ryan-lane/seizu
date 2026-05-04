@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import Error from '@mui/icons-material/Error';
 import {
   Box,
@@ -124,9 +124,11 @@ function TableLoadingSkeleton({ height }: { height?: string }) {
   );
 }
 
-// Approximate height consumed by the table toolbar, column headers, and pagination
-// footer combined. Used to derive ``tableBodyHeight`` from the parent cell height.
-const TABLE_CHROME_HEIGHT = 180;
+// Approximate height consumed by the mui-datatables chrome (toolbar ~64,
+// column header ~56, pagination footer ~52). The optional caption above the
+// table is added on top of this when present.
+const TABLE_CHROME_HEIGHT = 172;
+const CAPTION_HEIGHT = 36;
 const MIN_TABLE_BODY_HEIGHT = 160;
 
 const fillSx = {
@@ -160,10 +162,29 @@ export default function CypherTable({
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [expandOpen, setExpandOpen] = useState(false);
   const [expandSize, setExpandSize] = useState(window.innerHeight);
-  const containerRef = useRef<HTMLDivElement | null>(null);
   const [containerHeight, setContainerHeight] = useState<number | null>(null);
+  const observerRef = useRef<ResizeObserver | null>(null);
   const [runQuery, { loading, error, records, first, warnings, queryErrors }] =
     useLazyCypherQuery(cypher, reportQueryToken);
+
+  // Callback ref so the ResizeObserver re-attaches whenever the container DOM
+  // node swaps — the component renders different outer Boxes for the loading,
+  // empty, and loaded states.
+  const containerRef = useCallback((node: HTMLDivElement | null) => {
+    if (typeof ResizeObserver === 'undefined') return;
+    if (observerRef.current) {
+      observerRef.current.disconnect();
+      observerRef.current = null;
+    }
+    if (!node) return;
+    const observer = new ResizeObserver((entries) => {
+      const entry = entries[0];
+      if (!entry) return;
+      setContainerHeight(entry.contentRect.height);
+    });
+    observer.observe(node);
+    observerRef.current = observer;
+  }, []);
 
   useEffect(() => {
     function handleResize() {
@@ -171,18 +192,14 @@ export default function CypherTable({
     }
 
     window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
   }, []);
 
   useEffect(() => {
-    const node = containerRef.current;
-    if (!node || typeof ResizeObserver === 'undefined') return;
-    const observer = new ResizeObserver((entries) => {
-      const entry = entries[0];
-      if (!entry) return;
-      setContainerHeight(entry.contentRect.height);
-    });
-    observer.observe(node);
-    return () => observer.disconnect();
+    return () => {
+      observerRef.current?.disconnect();
+      observerRef.current = null;
+    };
   }, []);
 
   useEffect(() => {
@@ -193,7 +210,7 @@ export default function CypherTable({
 
   if (needInputs !== undefined && needInputs.length > 0) {
     return (
-      <Box sx={fillSx}>
+      <Box ref={containerRef} sx={fillSx}>
         <Typography variant="body2">
           Please set {needInputs.join(', ')}
         </Typography>
@@ -204,7 +221,7 @@ export default function CypherTable({
   if (error) {
     console.log(error);
     return (
-      <Box sx={fillSx}>
+      <Box ref={containerRef} sx={fillSx}>
         <Typography variant="body2">
           Failed to load requested data, please reload.
         </Typography>
@@ -214,7 +231,7 @@ export default function CypherTable({
 
   if (cypher === undefined) {
     return (
-      <Box sx={fillSx}>
+      <Box ref={containerRef} sx={fillSx}>
         <Error />
         <Typography variant="body2">Missing cypher query</Typography>
       </Box>
@@ -223,7 +240,7 @@ export default function CypherTable({
 
   if (queryErrors.length > 0) {
     return (
-      <Box sx={fillSx}>
+      <Box ref={containerRef} sx={fillSx}>
         <Typography gutterBottom variant="h4" component="div">
           {caption}
           <QueryValidationBadge errors={queryErrors} warnings={warnings} />
@@ -300,9 +317,10 @@ export default function CypherTable({
     tableBodySkeletonHeight = height;
     options.tableBodyHeight = height;
   } else if (containerHeight !== null) {
-    // Fill the parent cell, leaving room for the toolbar, column header, and
-    // pagination footer.
-    const bodyPx = Math.max(containerHeight - TABLE_CHROME_HEIGHT, MIN_TABLE_BODY_HEIGHT);
+    // Fill the parent cell, leaving room for the mui-datatables chrome and
+    // (when present) the caption rendered above the table.
+    const chrome = TABLE_CHROME_HEIGHT + (caption ? CAPTION_HEIGHT : 0);
+    const bodyPx = Math.max(containerHeight - chrome, MIN_TABLE_BODY_HEIGHT);
     tableBodyHeight = `${bodyPx}px`;
     tableBodySkeletonHeight = tableBodyHeight;
     options.tableBodyHeight = tableBodyHeight;
