@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
+  Box,
   Card,
   CardContent,
   CardHeader,
@@ -27,6 +28,13 @@ const fillBodySx = {
   justifyContent: 'center'
 };
 
+// Bounds for the responsive number font size (px). Roughly mirrors MUI's
+// h6 (~20) at the small end and a display-sized number at the large end.
+const MIN_FONT_PX = 20;
+const MAX_FONT_PX = 120;
+// Fraction of the body's smaller dimension to use as the font size.
+const FONT_SCALE = 0.45;
+
 interface CypherCountProps {
   cypher?: string;
   params?: Record<string, unknown>;
@@ -50,6 +58,35 @@ export default function CypherCount({
   const handleClickOpen = () => {
     setOpen(true);
   };
+
+  const observerRef = useRef<ResizeObserver | null>(null);
+  const [bodySize, setBodySize] = useState({ w: 0, h: 0 });
+
+  // Callback ref re-attaches the observer when the body Box swaps between
+  // states (loading vs loaded). Used to scale the number's font size to
+  // the available area.
+  const bodyRef = useCallback((node: HTMLDivElement | null) => {
+    if (typeof ResizeObserver === 'undefined') return;
+    if (observerRef.current) {
+      observerRef.current.disconnect();
+      observerRef.current = null;
+    }
+    if (!node) return;
+    const observer = new ResizeObserver((entries) => {
+      const entry = entries[0];
+      if (!entry) return;
+      setBodySize({ w: entry.contentRect.width, h: entry.contentRect.height });
+    });
+    observer.observe(node);
+    observerRef.current = observer;
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      observerRef.current?.disconnect();
+      observerRef.current = null;
+    };
+  }, []);
 
   const [runQuery, { loading, error, records, first, warnings, queryErrors }] =
     useLazyCypherQuery(cypher, reportQueryToken);
@@ -169,15 +206,33 @@ export default function CypherCount({
         </Grid>
         <Divider />
         <QueryValidationBadge errors={queryErrors} warnings={warnings} />
-        <Grid container spacing={0} direction="column" alignItems="center" sx={fillBodySx}>
-          <CardContent>
-            <span>
-              <Typography variant="h3" component="span" color={color}>
-                {total}
-              </Typography>
-            </span>
-          </CardContent>
-        </Grid>
+        <Box
+          ref={bodyRef}
+          sx={{
+            flex: 1,
+            minHeight: 0,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            p: 1,
+            overflow: 'hidden'
+          }}
+        >
+          <Typography
+            component="span"
+            color={color}
+            sx={{
+              fontWeight: 500,
+              lineHeight: 1,
+              fontSize: `${Math.max(
+                MIN_FONT_PX,
+                Math.min(MAX_FONT_PX, Math.min(bodySize.w, bodySize.h) * FONT_SCALE)
+              )}px`
+            }}
+          >
+            {total}
+          </Typography>
+        </Box>
       </Card>
       <CypherDetails details={details} open={open} setOpen={setOpen} />
     </>
