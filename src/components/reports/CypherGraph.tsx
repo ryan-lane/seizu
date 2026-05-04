@@ -363,6 +363,101 @@ function buildXyEdges(graphLinks: GraphLink[], edgeColor: string): Edge[] {
   });
 }
 
+// ─── Focus/dim helper ────────────────────────────────────────────────────────
+
+export function applyFocusOpacity(
+  nodes: Node[],
+  edges: Edge[],
+  focusedId: string | null,
+  edgeColor: string,
+): { nodes: Node[]; edges: Edge[] } {
+  const transition = 'opacity 0.2s';
+
+  if (focusedId === null) {
+    return {
+      nodes: nodes.map(n => ({ ...n, style: { ...n.style, opacity: FULL_OPACITY, transition } })),
+      edges: edges.map(e => ({
+        ...e,
+        style: { ...e.style, stroke: edgeColor, opacity: FULL_OPACITY, transition },
+        labelStyle: { ...e.labelStyle, opacity: FULL_OPACITY },
+        labelBgStyle: { ...e.labelBgStyle, opacity: FULL_OPACITY },
+      })),
+    };
+  }
+
+  const isNode = nodes.some(n => n.id === focusedId);
+
+  if (isNode) {
+    const connectedEdgeIds = new Set<string>();
+    const neighborNodeIds = new Set<string>([focusedId]);
+    for (const e of edges) {
+      if (e.source === focusedId || e.target === focusedId) {
+        connectedEdgeIds.add(e.id);
+        neighborNodeIds.add(e.source === focusedId ? e.target : e.source);
+      }
+    }
+    return {
+      nodes: nodes.map(n => ({
+        ...n,
+        style: {
+          ...n.style,
+          opacity: neighborNodeIds.has(n.id) ? FULL_OPACITY : DIM_OPACITY,
+          transition,
+        },
+      })),
+      edges: edges.map(e => ({
+        ...e,
+        style: {
+          ...e.style,
+          stroke: edgeColor,
+          opacity: connectedEdgeIds.has(e.id) ? FULL_OPACITY : DIM_OPACITY,
+          transition,
+        },
+        labelStyle: {
+          ...e.labelStyle,
+          opacity: connectedEdgeIds.has(e.id) ? FULL_OPACITY : DIM_OPACITY,
+        },
+        labelBgStyle: {
+          ...e.labelBgStyle,
+          opacity: connectedEdgeIds.has(e.id) ? FULL_OPACITY : DIM_OPACITY,
+        },
+      })),
+    };
+  }
+
+  // Edge focused
+  const focusedEdge = edges.find(e => e.id === focusedId);
+  if (!focusedEdge) return { nodes, edges };
+  const litNodeIds = new Set([focusedEdge.source, focusedEdge.target]);
+  return {
+    nodes: nodes.map(n => ({
+      ...n,
+      style: {
+        ...n.style,
+        opacity: litNodeIds.has(n.id) ? FULL_OPACITY : DIM_OPACITY,
+        transition,
+      },
+    })),
+    edges: edges.map(e => ({
+      ...e,
+      style: {
+        ...e.style,
+        stroke: edgeColor,
+        opacity: e.id === focusedId ? FULL_OPACITY : DIM_OPACITY,
+        transition,
+      },
+      labelStyle: {
+        ...e.labelStyle,
+        opacity: e.id === focusedId ? FULL_OPACITY : DIM_OPACITY,
+      },
+      labelBgStyle: {
+        ...e.labelBgStyle,
+        opacity: e.id === focusedId ? FULL_OPACITY : DIM_OPACITY,
+      },
+    })),
+  };
+}
+
 // ─── Auto-fit helper ─────────────────────────────────────────────────────────
 // Rendered inside <ReactFlow> so useReactFlow() is in context. Calls fitView
 // with a smooth transition whenever `trigger` increments (skipping initial mount).
@@ -390,6 +485,8 @@ const REPULSION_MIN = 0.5;
 const REPULSION_MAX = 4;
 const REPULSION_STEP = 0.25;
 const ICON_SIZE = 20;
+const DIM_OPACITY = 0.15;
+const FULL_OPACITY = 1;
 
 function CtrlBtn({
   title,
@@ -516,6 +613,7 @@ export default function CypherGraph({
   const [detailOpen, setDetailOpen] = useState(defaultDetailOpen);
   const [preferredTab, setPreferredTab] = useState<'graph' | 'table' | 'raw' | null>(null);
   const [repulsion, setRepulsion] = useState(1);
+  const [focusedId, setFocusedId] = useState<string | null>(null);
   const [fitViewTrigger, setFitViewTrigger] = useState(0);
 
   const [nodes, setNodes, onNodesChange] = useNodesState<Node>([]);
@@ -555,6 +653,7 @@ export default function CypherGraph({
   // Clear selection and tab preference when the query changes.
   useEffect(() => {
     setSelectedItem(null);
+    setFocusedId(null);
     setPreferredTab(null);
   }, [cypher]);
 
@@ -563,8 +662,10 @@ export default function CypherGraph({
     if (!graphData?.nodes?.length) {
       setNodes([]);
       setEdges([]);
+      setFocusedId(null);
       return;
     }
+    setFocusedId(null);
     const positions = computeLayout(graphData.nodes, graphData.links, 800, 450, repulsion);
     setNodes(buildXyNodes(graphData.nodes, positions, nodeLabelKey, nodeColorByKey));
     setEdges(buildXyEdges(graphData.links, edgeColor));
@@ -575,16 +676,28 @@ export default function CypherGraph({
     const original = node.data?.['original'] as GraphNode ?? node.data as unknown as GraphNode;
     setSelectedItem({ type: 'node', data: original });
     setDetailOpen(true);
+    setFocusedId(node.id);
+    const updated = applyFocusOpacity(nodes, edges, node.id, edgeColor);
+    setNodes(updated.nodes);
+    setEdges(updated.edges);
   };
 
   const handleEdgeClick = (_: React.MouseEvent, edge: Edge) => {
     const original = edge.data?.['original'] as GraphLink ?? { source: edge.source, target: edge.target };
     setSelectedItem({ type: 'link', data: original as GraphLink });
     setDetailOpen(true);
+    setFocusedId(edge.id);
+    const updated = applyFocusOpacity(nodes, edges, edge.id, edgeColor);
+    setNodes(updated.nodes);
+    setEdges(updated.edges);
   };
 
   const handlePaneClick = () => {
     setSelectedItem(null);
+    setFocusedId(null);
+    const updated = applyFocusOpacity(nodes, edges, null, edgeColor);
+    setNodes(updated.nodes);
+    setEdges(updated.edges);
   };
 
   // ── Error / loading states ────────────────────────────────────────────────
