@@ -5,6 +5,30 @@ import { usePermissionState } from 'src/hooks/usePermissions';
 
 export type QueryRecord = Record<string, unknown>;
 
+// Module-level cache for report query results, keyed by token+params.
+// Survives component remounts (navigation, edit↔view mode switches).
+// Only caches report queries (those with a reportToken); ad-hoc queries are never cached.
+// Evicts oldest entry when the cap is reached; token expiry naturally busts the cache
+// because the new token produces a different key.
+const MAX_CACHE_ENTRIES = 200;
+const queryResultCache = new Map<string, QueryRecord[]>();
+
+function makeCacheKey(token: string, params: Record<string, unknown> | undefined): string {
+  return `${token}|${JSON.stringify(params ?? {})}`;
+}
+
+function readQueryCache(token: string, params: Record<string, unknown> | undefined): QueryRecord[] | undefined {
+  return queryResultCache.get(makeCacheKey(token, params));
+}
+
+function writeQueryCache(token: string, params: Record<string, unknown> | undefined, records: QueryRecord[]): void {
+  if (queryResultCache.size >= MAX_CACHE_ENTRIES) {
+    const oldest = queryResultCache.keys().next().value;
+    if (oldest !== undefined) queryResultCache.delete(oldest);
+  }
+  queryResultCache.set(makeCacheKey(token, params), records);
+}
+
 export interface QueryState {
   loading: boolean;
   error: Error | null;
@@ -15,10 +39,15 @@ export interface QueryState {
   tokenExpired: boolean;
 }
 
+export interface RunOptions {
+  /** When true, skip the cache and always fetch from the server. */
+  force?: boolean;
+}
+
 export function useLazyCypherQuery(
   cypher?: string,
   reportToken?: string
-): [(params?: Record<string, unknown>) => void, QueryState] {
+): [(params?: Record<string, unknown>, options?: RunOptions) => void, QueryState] {
   const { accessToken } = useContext(AuthContext);
   const { auth_required } = useContext(AuthConfigContext);
   const { hasPermission, loading: permissionsLoading } = usePermissionState();
@@ -33,7 +62,7 @@ export function useLazyCypherQuery(
   });
 
   const run = useCallback(
-    (params?: Record<string, unknown>) => {
+    (params?: Record<string, unknown>, options?: RunOptions) => {
       if (!cypher) return;
       // When auth is required, wait until we have a token before querying.
       if (auth_required && !accessToken) return;
@@ -51,6 +80,15 @@ export function useLazyCypherQuery(
           tokenExpired: false,
         });
         return;
+      }
+
+      // Serve from cache for report queries when not force-bypassed.
+      if (reportToken && !options?.force) {
+        const cached = readQueryCache(reportToken, params);
+        if (cached !== undefined) {
+          setState({ loading: false, error: null, records: cached, first: cached[0], warnings: [], queryErrors: [], tokenExpired: false });
+          return;
+        }
       }
 
       setState({ loading: true, error: null, records: undefined, first: undefined, warnings: [], queryErrors: [], tokenExpired: false });
@@ -112,6 +150,9 @@ export function useLazyCypherQuery(
             });
           } else {
             const results = data.results ?? [];
+            if (reportToken) {
+              writeQueryCache(reportToken, params, results);
+            }
             setState({
               loading: false,
               error: null,

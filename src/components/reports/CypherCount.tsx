@@ -112,7 +112,7 @@ export default function CypherCount({
 
   useEffect(() => {
     if (needInputsRef.current === undefined || needInputsRef.current.length === 0) {
-      runQueryRef.current(params);
+      runQueryRef.current(params, { force: (refreshKey ?? 0) > 0 });
     }
   }, [cypher, params, refreshKey]);
 

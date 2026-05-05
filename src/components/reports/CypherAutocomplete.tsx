@@ -41,7 +41,7 @@ export default function CypherAutocomplete({
   runRef.current = run;
 
   useEffect(() => {
-    runRef.current(params);
+    runRef.current(params, { force: (refreshKey ?? 0) > 0 });
   }, [cypher, params, refreshKey]);
 
   useEffect(() => {
