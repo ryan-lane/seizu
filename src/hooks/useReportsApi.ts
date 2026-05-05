@@ -3,6 +3,29 @@ import { AuthContext } from 'src/auth.context';
 import { AuthConfigContext } from 'src/authConfig.context';
 import { Report } from 'src/config.context';
 
+// Module-level capability caches — survive navigation and edit↔view mode switches.
+// Busted on explicit refresh() or token expiry recovery (same call path).
+// After saving a new version, call updateCachedReportCapabilities() to keep it consistent.
+
+interface ReportCacheEntry {
+  report: Report;
+  name: string;
+  reportVersion: ReportVersion;
+  queryCapabilities: Record<string, string> | undefined;
+}
+
+interface DashboardCacheEntry {
+  report: Report;
+  queryCapabilities: Record<string, string> | undefined;
+}
+
+const reportCapabilitiesCache = new Map<string, ReportCacheEntry>();
+let dashboardCacheEntry: DashboardCacheEntry | null = null;
+
+export function updateCachedReportCapabilities(reportId: string, entry: ReportCacheEntry): void {
+  reportCapabilitiesCache.set(reportId, entry);
+}
+
 export interface ReportListItem {
   report_id: string;
   name: string;
@@ -192,44 +215,60 @@ export function useDashboardReport(): {
 } {
   const { accessToken } = useContext(AuthContext);
   const { auth_required } = useContext(AuthConfigContext);
-  const [report, setReport] = useState<Report | undefined>(undefined);
-  const [queryCapabilities, setQueryCapabilities] = useState<Record<string, string> | undefined>(undefined);
-  const [loading, setLoading] = useState(true);
+  // Initialize from cache immediately to skip the loading flash on repeat visits
+  const [report, setReport] = useState<Report | undefined>(dashboardCacheEntry?.report);
+  const [queryCapabilities, setQueryCapabilities] = useState<Record<string, string> | undefined>(dashboardCacheEntry?.queryCapabilities);
+  const [loading, setLoading] = useState(!dashboardCacheEntry);
   const [notConfigured, setNotConfigured] = useState(false);
   const [tick, setTick] = useState(0);
 
-  const refresh = useCallback(() => setTick((t) => t + 1), []);
+  const refresh = useCallback(() => {
+    dashboardCacheEntry = null;
+    setTick((t) => t + 1);
+  }, []);
 
   useEffect(() => {
     if (auth_required && !accessToken) return;
 
+    // Serve from cache if populated
+    if (dashboardCacheEntry) {
+      setReport(dashboardCacheEntry.report);
+      setQueryCapabilities(dashboardCacheEntry.queryCapabilities);
+      setLoading(false);
+      return;
+    }
+
     setLoading(true);
     setQueryCapabilities(undefined);
     setNotConfigured(false);
+
+    let cancelled = false;
 
     fetch(`/api/v1/reports/dashboard${REPORT_QUERY_CAPABILITIES_QUERY}`, {
       headers: getApiHeaders(accessToken)
     })
       .then((res) => {
         if (res.status === 404) {
-          setNotConfigured(true);
-          setLoading(false);
+          if (!cancelled) { setNotConfigured(true); setLoading(false); }
           return null;
         }
         if (!res.ok) throw new Error(`Failed to load dashboard report: ${res.status}`);
         return res.json();
       })
       .then((data: ReportVersion | null) => {
+        if (cancelled) return;
         if (data) {
+          dashboardCacheEntry = { report: data.config, queryCapabilities: data.query_capabilities };
           setReport(data.config);
           setQueryCapabilities(data.query_capabilities);
         }
         setLoading(false);
       })
       .catch(() => {
-        setNotConfigured(true);
-        setLoading(false);
+        if (!cancelled) { setNotConfigured(true); setLoading(false); }
       });
+
+    return () => { cancelled = true; };
   }, [accessToken, auth_required, tick]);
 
   return { report, queryCapabilities, loading, notConfigured, refresh };
@@ -498,19 +537,37 @@ export function useReport(reportId: string | undefined): {
 } {
   const { accessToken } = useContext(AuthContext);
   const { auth_required } = useContext(AuthConfigContext);
-  const [report, setReport] = useState<Report | undefined>(undefined);
-  const [name, setName] = useState<string | undefined>(undefined);
-  const [reportVersion, setReportVersion] = useState<ReportVersion | undefined>(undefined);
-  const [queryCapabilities, setQueryCapabilities] = useState<Record<string, string> | undefined>(undefined);
-  const [loading, setLoading] = useState(true);
+  // Initialize from cache immediately to skip the loading flash on repeat visits
+  const cached = reportId ? reportCapabilitiesCache.get(reportId) : undefined;
+  const [report, setReport] = useState<Report | undefined>(cached?.report);
+  const [name, setName] = useState<string | undefined>(cached?.name);
+  const [reportVersion, setReportVersion] = useState<ReportVersion | undefined>(cached?.reportVersion);
+  const [queryCapabilities, setQueryCapabilities] = useState<Record<string, string> | undefined>(cached?.queryCapabilities);
+  const [loading, setLoading] = useState(!cached);
   const [error, setError] = useState<Error | null>(null);
   const [tick, setTick] = useState(0);
 
-  const refresh = useCallback(() => setTick((t) => t + 1), []);
+  const refresh = useCallback(() => {
+    if (reportId) reportCapabilitiesCache.delete(reportId);
+    setTick((t) => t + 1);
+  }, [reportId]);
 
   useEffect(() => {
     if (!reportId) return;
     if (auth_required && !accessToken) return;
+
+    // Serve from cache if populated (navigating back to a previously-loaded report)
+    const hit = reportCapabilitiesCache.get(reportId);
+    if (hit) {
+      setReport(hit.report);
+      setName(hit.name);
+      setReportVersion(hit.reportVersion);
+      setQueryCapabilities(hit.queryCapabilities);
+      setLoading(false);
+      return;
+    }
+
+    let cancelled = false;
 
     setLoading(true);
     setQueryCapabilities(undefined);
@@ -524,6 +581,14 @@ export function useReport(reportId: string | undefined): {
         return res.json();
       })
       .then((data: ReportVersion) => {
+        if (cancelled) return;
+        const entry: ReportCacheEntry = {
+          report: data.config,
+          name: data.name,
+          reportVersion: data,
+          queryCapabilities: data.query_capabilities,
+        };
+        reportCapabilitiesCache.set(reportId, entry);
         setReport(data.config);
         setName(data.name);
         setReportVersion(data);
@@ -531,9 +596,12 @@ export function useReport(reportId: string | undefined): {
         setLoading(false);
       })
       .catch((err: Error) => {
+        if (cancelled) return;
         setError(err);
         setLoading(false);
       });
+
+    return () => { cancelled = true; };
   }, [reportId, accessToken, auth_required, tick]);
 
   return { report, name, reportVersion, queryCapabilities, loading, error, refresh };

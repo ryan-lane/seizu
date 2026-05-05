@@ -30,7 +30,7 @@ import RefreshIcon from '@mui/icons-material/Refresh';
 
 import ReportView from 'src/components/ReportView';
 import EditableReportView from 'src/components/EditableReportView';
-import { useReport, useReportsMutations } from 'src/hooks/useReportsApi';
+import { useReport, useReportsMutations, updateCachedReportCapabilities } from 'src/hooks/useReportsApi';
 import { Report } from 'src/config.context';
 import { usePermissionState } from 'src/hooks/usePermissions';
 import type { BackState } from 'src/navigation';
@@ -116,6 +116,14 @@ function Reports() {
     if (!id) return;
     const version = await saveReportVersion(id, updatedReport, comment || undefined, true);
     const savedName = updatedReport.name?.trim() || version.name;
+    // Keep the capabilities cache consistent so navigating away and back after save
+    // returns the new version's tokens rather than the pre-save ones.
+    updateCachedReportCapabilities(id, {
+      report: version.config,
+      name: version.name,
+      reportVersion: version,
+      queryCapabilities: version.query_capabilities,
+    });
     setDisplayedReport(savedName ? { ...version.config, name: savedName } : version.config);
     setDisplayedName(savedName);
     setDisplayedQueryCapabilities(version.query_capabilities);
