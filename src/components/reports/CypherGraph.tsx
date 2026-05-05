@@ -882,6 +882,7 @@ export default function CypherGraph({
             needInputs={needInputs}
             height={fillHeight ? '100%' : '400px'}
             reportQueryToken={reportQueryToken}
+            preloadedRecords={records}
           />
         )}
 
