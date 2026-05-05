@@ -159,7 +159,7 @@ describe('ReportView param building', () => {
 
     // useLazyCypherQuery is called once for the panel (autocomplete is mocked).
     // runQuery is called by the panel's useEffect with the built params dict.
-    expect(mockRunQuery).toHaveBeenCalledWith({ base_severity: 'CRITICAL' });
+    expect(mockRunQuery).toHaveBeenCalledWith({ base_severity: 'CRITICAL' }, { force: false });
   });
 
   it('adds to needInputs when value key is absent (as after DynamoDB _strip_none)', () => {
@@ -226,7 +226,7 @@ describe('ReportView param building', () => {
       </Wrapper>
     );
 
-    expect(mockRunQuery).toHaveBeenCalledWith({ base_severity: 'CRITICAL' });
+    expect(mockRunQuery).toHaveBeenCalledWith({ base_severity: 'CRITICAL' }, { force: false });
   });
 
   it('passes empty params when panel has no params defined', () => {
@@ -244,7 +244,7 @@ describe('ReportView param building', () => {
       </Wrapper>
     );
 
-    expect(mockRunQuery).toHaveBeenCalledWith({});
+    expect(mockRunQuery).toHaveBeenCalledWith({}, { force: false });
   });
 
   it('passes multiple static params to panel', () => {
@@ -266,7 +266,7 @@ describe('ReportView param building', () => {
       </Wrapper>
     );
 
-    expect(mockRunQuery).toHaveBeenCalledWith({ base_severity: 'HIGH', limit: '10' });
+    expect(mockRunQuery).toHaveBeenCalledWith({ base_severity: 'HIGH', limit: '10' }, { force: false });
   });
 
   it('resolves named query reference from report.queries', () => {
