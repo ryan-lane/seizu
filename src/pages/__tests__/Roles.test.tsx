@@ -1,4 +1,4 @@
-import { render, screen, fireEvent, cleanup, within, waitFor } from '@testing-library/react';
+import { act, render, screen, fireEvent, cleanup, within } from '@testing-library/react';
 import { MemoryRouter, Routes, Route } from 'react-router-dom';
 import { ThemeProvider, createTheme } from '@mui/material/styles';
 import Roles from 'src/pages/Roles';
@@ -91,7 +91,7 @@ describe('Roles', () => {
       error: null,
       refresh: jest.fn(),
     });
-    mockUpdateRole = jest.fn();
+    mockUpdateRole = jest.fn().mockResolvedValue(undefined);
     mockUseRoleMutations.mockReturnValue({
       createRole: jest.fn(),
       updateRole: mockUpdateRole,
@@ -195,13 +195,18 @@ describe('Roles', () => {
     const confirmDialog = screen.getByRole('dialog', { name: 'Remove unrecognized permissions?' });
     expect(within(confirmDialog).getByText('custom:manage')).toBeInTheDocument();
 
-    fireEvent.click(within(confirmDialog).getByRole('button', { name: /continue editing/i }));
+    await act(async () => {
+      fireEvent.click(within(confirmDialog).getByRole('button', { name: /continue editing/i }));
+    });
 
-    const editDialog = await screen.findByRole('dialog', { name: 'Edit Role' });
-    fireEvent.click(within(editDialog).getByRole('button', { name: 'Save' }));
+    const editDialog = screen.getByRole('dialog', { name: 'Edit Role' });
 
-    await waitFor(() => expect(mockUpdateRole).toHaveBeenCalledWith('role1', expect.objectContaining({
+    await act(async () => {
+      fireEvent.click(within(editDialog).getByRole('button', { name: 'Save' }));
+    });
+
+    expect(mockUpdateRole).toHaveBeenCalledWith('role1', expect.objectContaining({
       permissions: ['reports:read'],
-    })));
+    }));
   });
 });

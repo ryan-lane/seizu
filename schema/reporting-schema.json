@@ -1,3 +1,8 @@
+To activate this project's virtualenv, run pipenv shell.
+Alternatively, run a command inside the virtualenv with pipenv run.
+Installing dependencies from Pipfile.lock (fabdec)...
+Installing dependencies from Pipfile.lock (fabdec)...
+All dependencies are now up-to-date!
 {
     "$defs": {
         "BarPanelSettings": {
@@ -235,6 +240,22 @@
                         "Critical CVEs"
                     ],
                     "title": "Caption"
+                },
+                "hide_caption": {
+                    "anyOf": [
+                        {
+                            "type": "boolean"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "description": "When True, the panel caption is not rendered in view mode.",
+                    "examples": [
+                        "true"
+                    ],
+                    "title": "Hide Caption"
                 },
                 "table_id": {
                     "anyOf": [
@@ -661,6 +682,38 @@
                     ],
                     "title": "Name",
                     "type": "string"
+                },
+                "hide_header": {
+                    "anyOf": [
+                        {
+                            "type": "boolean"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "description": "When True, the row name header is not rendered in view mode.",
+                    "examples": [
+                        "true"
+                    ],
+                    "title": "Hide Header"
+                },
+                "collapsible": {
+                    "anyOf": [
+                        {
+                            "type": "boolean"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "description": "When True, the row can be collapsed by clicking the header in view mode.",
+                    "examples": [
+                        "true"
+                    ],
+                    "title": "Collapsible"
                 },
                 "panels": {
                     "description": "The panels to show in the row.",

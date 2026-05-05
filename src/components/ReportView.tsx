@@ -2,8 +2,10 @@ import { useState, useEffect, useCallback, useMemo, useRef, memo } from 'react';
 import { Helmet } from 'react-helmet';
 import {
   Box,
+  Collapse,
   Container,
   Divider,
+  IconButton,
   Paper,
   Table,
   TableBody,
@@ -14,6 +16,7 @@ import {
   Typography
 } from '@mui/material';
 import Error from '@mui/icons-material/Error';
+import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import MuiMarkdown, { defaultOverrides } from 'mui-markdown';
 
 import { Report, Panel, ReportInput } from 'src/config.context';
@@ -122,12 +125,14 @@ const PanelItem = memo(function PanelItem({ item, rowIndex, index, varData, allI
     });
   }
 
+  const effectiveCaption = item.hide_caption ? undefined : item.caption;
+
   const details = {
     cypher: resolveQuery(item.cypher),
     details_cypher: resolveQuery(item.details_cypher),
     type: item.type,
     columns: item.columns,
-    caption: item.caption,
+    caption: effectiveCaption,
     params,
     reportQueryToken: resolveCapability(`rows.${rowIndex}.panels.${index}.cypher`),
     detailsQueryToken: resolveCapability(`rows.${rowIndex}.panels.${index}.details_cypher`)
@@ -139,7 +144,7 @@ const PanelItem = memo(function PanelItem({ item, rowIndex, index, varData, allI
         <CypherProgress
           cypher={resolveQuery(item.cypher)}
           params={params}
-          caption={item.caption}
+          caption={effectiveCaption}
           threshold={item.threshold}
           thresholds={item.thresholds}
           progressSettings={item.progress_settings}
@@ -153,7 +158,7 @@ const PanelItem = memo(function PanelItem({ item, rowIndex, index, varData, allI
         <CypherPie
           cypher={resolveQuery(item.cypher)}
           params={params}
-          caption={item.caption}
+          caption={effectiveCaption}
           pieSettings={item.pie_settings}
           details={details}
           reportQueryToken={resolveCapability(`rows.${rowIndex}.panels.${index}.cypher`)}
@@ -164,7 +169,7 @@ const PanelItem = memo(function PanelItem({ item, rowIndex, index, varData, allI
         <CypherBar
           cypher={resolveQuery(item.cypher)}
           params={params}
-          caption={item.caption}
+          caption={effectiveCaption}
           barSettings={item.bar_settings}
           details={details}
           reportQueryToken={resolveCapability(`rows.${rowIndex}.panels.${index}.cypher`)}
@@ -175,7 +180,7 @@ const PanelItem = memo(function PanelItem({ item, rowIndex, index, varData, allI
         <CypherGraph
           cypher={resolveQuery(item.cypher)}
           params={params}
-          caption={item.caption}
+          caption={effectiveCaption}
           graphSettings={item.graph_settings}
           needInputs={needInputs}
           fillHeight
@@ -187,7 +192,7 @@ const PanelItem = memo(function PanelItem({ item, rowIndex, index, varData, allI
         <CypherCount
           cypher={resolveQuery(item.cypher)}
           params={params}
-          caption={item.caption}
+          caption={effectiveCaption}
           threshold={item.threshold}
           thresholds={item.thresholds}
           details={details}
@@ -201,7 +206,7 @@ const PanelItem = memo(function PanelItem({ item, rowIndex, index, varData, allI
           cypher={resolveQuery(item.cypher)}
           params={params}
           columns={item.columns}
-          caption={item.caption}
+          caption={effectiveCaption}
           details={details}
           needInputs={needInputs}
           reportQueryToken={resolveCapability(`rows.${rowIndex}.panels.${index}.cypher`)}
@@ -308,6 +313,7 @@ function ReportView({
   const [varData, setVarData] = useState({});
   const toolbarRef = useRef<HTMLDivElement | null>(null);
   const [toolbarHeight, setToolbarHeight] = useState(64);
+  const [collapsedRows, setCollapsedRows] = useState<Record<number, boolean>>({});
 
   useEffect(() => {
     const initialVarState = {};
@@ -472,31 +478,94 @@ function ReportView({
     </Box>
   ) : null;
 
-  const rows = [];
-  report.rows.forEach((row, rowIndex) => {
-    rows.push(
-      <Container key={row.name} maxWidth={false} sx={{ ...contentContainerSx, pb: 1.5 }}>
-        <Paper elevation={1} sx={{ p: 1.5 }}>
-          <Typography gutterBottom variant="h2">
-            {row.name}
-          </Typography>
-          <Divider />
-          <Box sx={{ py: 1.5 }}>
-            <PanelGridRow
-              panels={row.panels}
-              renderPanel={(item, index) => (
-                <PanelItem
-                  rowIndex={rowIndex}
-                  index={index}
-                  item={item}
-                  varData={varData}
-                  allInputs={report.inputs ?? []}
-                  resolveQuery={resolveQuery}
-                  resolveCapability={resolveCapability}
-                />
-              )}
+  const toggleRowCollapsed = useCallback((rowIndex: number) => {
+    setCollapsedRows((prev) => ({ ...prev, [rowIndex]: !prev[rowIndex] }));
+  }, []);
+
+  const rows = report.rows.map((row, rowIndex) => {
+    // collapsible defaults to true; only disabled when explicitly set false
+    const effectiveCollapsible = row.collapsible !== false;
+    const isCollapsed = effectiveCollapsible && collapsedRows[rowIndex] === true;
+    const hideHeader = row.hide_header === true;
+
+    const collapseBtn = effectiveCollapsible ? (
+      <IconButton
+        className="row-collapse-btn"
+        size="small"
+        onClick={() => toggleRowCollapsed(rowIndex)}
+        aria-label={isCollapsed ? `Expand ${row.name}` : `Collapse ${row.name}`}
+        aria-expanded={!isCollapsed}
+        sx={{
+          opacity: isCollapsed ? 1 : 0,
+          transition: 'opacity 0.15s',
+          '&:focus-visible': { opacity: 1 },
+          flexShrink: 0,
+        }}
+      >
+        <ExpandMoreIcon
+          sx={{
+            transition: 'transform 0.2s',
+            transform: isCollapsed ? 'rotate(-90deg)' : 'none',
+          }}
+        />
+      </IconButton>
+    ) : null;
+
+    const panelArea = (
+      <Box sx={{ py: 1.5 }}>
+        <PanelGridRow
+          panels={row.panels}
+          renderPanel={(item, index) => (
+            <PanelItem
+              rowIndex={rowIndex}
+              index={index}
+              item={item}
+              varData={varData}
+              allInputs={report.inputs ?? []}
+              resolveQuery={resolveQuery}
+              resolveCapability={resolveCapability}
             />
-          </Box>
+          )}
+        />
+      </Box>
+    );
+
+    return (
+      <Container key={row.name} maxWidth={false} sx={{ ...contentContainerSx, pb: 1.5 }}>
+        <Paper
+          elevation={1}
+          sx={{
+            p: 1.5,
+            // Remove top padding when header is hidden so the row is visually compact
+            pt: hideHeader ? 0 : 1.5,
+            ...(effectiveCollapsible && {
+              '&:hover .row-collapse-btn': { opacity: 1 },
+            }),
+          }}
+        >
+          {hideHeader ? (
+            // No title — show a minimal right-aligned toggle so the row can still be collapsed
+            effectiveCollapsible && (
+              <Box sx={{ display: 'flex', justifyContent: 'flex-end' }}>
+                {collapseBtn}
+              </Box>
+            )
+          ) : (
+            <>
+              <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                <Typography variant="h2" sx={{ mb: 0, flex: 1 }}>
+                  {row.name}
+                </Typography>
+                {collapseBtn}
+              </Box>
+              <Divider sx={{ mt: 1, mb: 0 }} />
+            </>
+          )}
+          {effectiveCollapsible ? (
+            <Collapse in={!isCollapsed} timeout="auto">
+              {panelArea}
+            </Collapse>
+          ) : panelArea}
         </Paper>
       </Container>
     );

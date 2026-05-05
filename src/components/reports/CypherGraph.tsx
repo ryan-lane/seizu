@@ -705,10 +705,14 @@ export default function CypherGraph({
   if (cypher === undefined) {
     return (
       <Card>
-        <Grid container spacing={0} direction="column" alignItems="center">
-          <CardHeader title={caption} />
-        </Grid>
-        <Divider />
+        {caption && (
+          <>
+            <Grid container spacing={0} direction="column" alignItems="center">
+              <CardHeader title={caption} />
+            </Grid>
+            <Divider />
+          </>
+        )}
         <Grid container spacing={0} direction="column" alignItems="center">
           <CardContent>
             <Error />
@@ -722,10 +726,14 @@ export default function CypherGraph({
   if (needInputs !== undefined && needInputs.length > 0) {
     return (
       <Card>
-        <Grid container spacing={0} direction="column" alignItems="center">
-          <CardHeader title={caption} />
-        </Grid>
-        <Divider />
+        {caption && (
+          <>
+            <Grid container spacing={0} direction="column" alignItems="center">
+              <CardHeader title={caption} />
+            </Grid>
+            <Divider />
+          </>
+        )}
         <Grid container spacing={0} direction="column" alignItems="center">
           <CardContent>
             <Typography variant="body2" align="center">
@@ -748,10 +756,14 @@ export default function CypherGraph({
   if (queryErrors.length > 0) {
     return (
       <Card>
-        <Grid container direction="column" alignItems="center">
-          <CardHeader title={caption} />
-        </Grid>
-        <Divider />
+        {caption && (
+          <>
+            <Grid container direction="column" alignItems="center">
+              <CardHeader title={caption} />
+            </Grid>
+            <Divider />
+          </>
+        )}
         <QueryValidationBadge errors={queryErrors} warnings={warnings} />
         <Grid container spacing={0} direction="column" alignItems="center">
           <CardContent>
@@ -770,10 +782,14 @@ export default function CypherGraph({
   if (records.length === 0) {
     return (
       <Card>
-        <Grid container spacing={0} direction="column" alignItems="center">
-          <CardHeader title={caption} />
-        </Grid>
-        <Divider />
+        {caption && (
+          <>
+            <Grid container spacing={0} direction="column" alignItems="center">
+              <CardHeader title={caption} />
+            </Grid>
+            <Divider />
+          </>
+        )}
         <CardContent>
           <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1, mb: 2 }}>
             <Error color="warning" fontSize="small" sx={{ mt: '2px', flexShrink: 0 }} />

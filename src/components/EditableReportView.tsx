@@ -5,6 +5,7 @@ import {
   AccordionSummary,
   Box,
   Button,
+  Checkbox,
   Chip,
   CircularProgress,
   Container,
@@ -14,6 +15,7 @@ import {
   DialogTitle,
   Divider,
   FormControl,
+  FormControlLabel,
   IconButton,
   InputLabel,
   Menu,
@@ -71,6 +73,8 @@ import { contentContainerSx } from 'src/theme/layout';
 export interface EditableRow {
   _id: string;
   name: string;
+  hide_header?: boolean;
+  collapsible?: boolean;
   panels: EditablePanel[];
 }
 
@@ -83,7 +87,7 @@ function uid() {
 function toEditableRows(rows: Row[]): EditableRow[] {
   return rows.map((row) => ({
     _id: uid(),
-    name: row.name,
+    ...row,
     panels: row.panels.map((p) => ({ ...p, _id: uid() }))
   }));
 }
@@ -660,6 +664,7 @@ interface EditableRowCardProps {
   row: EditableRow;
   rowIndex: number;
   onRename: (rowId: string, name: string) => void;
+  onUpdateRowProps: (rowId: string, updates: Partial<Pick<EditableRow, 'hide_header' | 'collapsible'>>) => void;
   onAddPanel: (rowId: string) => void;
   onDeleteRow: (rowId: string) => void;
   onEditPanel: (rowId: string, panelId: string) => void;
@@ -678,6 +683,7 @@ const EditableRowCard = memo(function EditableRowCard({
   row,
   rowIndex,
   onRename,
+  onUpdateRowProps,
   onAddPanel,
   onDeleteRow,
   onEditPanel,
@@ -752,6 +758,28 @@ const EditableRowCard = memo(function EditableRowCard({
               <DeleteIcon fontSize="small" />
             </IconButton>
           </Tooltip>
+        </Box>
+        <Box sx={{ display: 'flex', gap: 2, ml: 0.5, mb: 1 }}>
+          <FormControlLabel
+            control={
+              <Checkbox
+                size="small"
+                checked={row.hide_header === true}
+                onChange={(e) => onUpdateRowProps(row._id, { hide_header: e.target.checked || undefined })}
+              />
+            }
+            label={<Typography variant="body2">Hide header</Typography>}
+          />
+          <FormControlLabel
+            control={
+              <Checkbox
+                size="small"
+                checked={row.collapsible !== false}
+                onChange={(e) => onUpdateRowProps(row._id, { collapsible: e.target.checked ? undefined : false })}
+              />
+            }
+            label={<Typography variant="body2">Collapsible</Typography>}
+          />
         </Box>
         <Divider sx={{ mb: 1.5 }} />
 
@@ -984,6 +1012,12 @@ function EditableReportView({ report, reportId: _reportId, onSave, onCancel }: E
   function renameRow(rowId: string, name: string) {
     setEditableRows((prev) =>
       prev.map((r) => (r._id === rowId ? { ...r, name } : r))
+    );
+  }
+
+  function updateRowProps(rowId: string, updates: Partial<Pick<EditableRow, 'hide_header' | 'collapsible'>>) {
+    setEditableRows((prev) =>
+      prev.map((r) => (r._id === rowId ? { ...r, ...updates } : r))
     );
   }
 
@@ -1262,6 +1296,7 @@ function EditableReportView({ report, reportId: _reportId, onSave, onCancel }: E
                       row={row}
                       rowIndex={rowIndex}
                       onRename={renameRow}
+                      onUpdateRowProps={updateRowProps}
                       onAddPanel={openAddPanel}
                       onDeleteRow={deleteRow}
                       onEditPanel={openEditPanel}
