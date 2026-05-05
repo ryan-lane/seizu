@@ -8,7 +8,6 @@ import {
   DialogActions,
   IconButton,
   Paper,
-  Skeleton,
   Tooltip,
   Typography
 } from '@mui/material';
@@ -18,6 +17,7 @@ import Fullscreen from '@mui/icons-material/Fullscreen';
 import CloseFullscreen from '@mui/icons-material/CloseFullscreen';
 
 import { useLazyCypherQuery, QueryRecord } from 'src/hooks/useCypherQuery';
+import { TablePanelSkeleton } from 'src/components/reports/PanelLoadingSkeletons';
 
 /**
  * Format any value for display in a table cell.
@@ -87,42 +87,6 @@ function flattenRecord(record: QueryRecord): QueryRecord {
 import CypherDetails from 'src/components/reports/CypherDetails';
 import QueryValidationBadge from 'src/components/reports/QueryValidationBadge';
 
-function TableLoadingSkeleton({ height }: { height?: string }) {
-  const bodyHeight = height ?? '475px';
-
-  return (
-    <Paper data-testid="cypher-table-loading-skeleton" variant="outlined" sx={{ overflow: 'hidden' }}>
-      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', minHeight: 44, px: 1 }}>
-        <Skeleton variant="text" width={180} height={22} />
-        <Box sx={{ display: 'flex', gap: 0.5 }}>
-          <Skeleton variant="circular" width={24} height={24} />
-          <Skeleton variant="circular" width={24} height={24} />
-          <Skeleton variant="circular" width={24} height={24} />
-          <Skeleton variant="circular" width={24} height={24} />
-        </Box>
-      </Box>
-      <Box sx={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr 1fr', alignItems: 'center', minHeight: 40, gap: 2, px: 1.5, borderTop: 1, borderBottom: 1, borderColor: 'divider' }}>
-        <Skeleton variant="text" height={20} />
-        <Skeleton variant="text" height={20} />
-        <Skeleton variant="text" height={20} />
-      </Box>
-      <Box sx={{ height: bodyHeight, px: 1.5, py: 1 }}>
-        {Array.from({ length: 8 }).map((_, index) => (
-          // eslint-disable-next-line react/no-array-index-key
-          <Box key={index} sx={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr 1fr', gap: 2, py: 0.75 }}>
-            <Skeleton variant="text" height={20} />
-            <Skeleton variant="text" height={20} />
-            <Skeleton variant="text" height={20} />
-          </Box>
-        ))}
-      </Box>
-      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', minHeight: 40, gap: 2, px: 1.5, borderTop: 1, borderColor: 'divider' }}>
-        <Skeleton variant="text" width={90} height={20} />
-        <Skeleton variant="text" width={120} height={20} />
-      </Box>
-    </Paper>
-  );
-}
 
 // Approximate height consumed by the (compact) mui-datatables chrome:
 // toolbar ~44, column header ~40, pagination footer ~40. The optional
@@ -374,7 +338,7 @@ export default function CypherTable({
             {caption}
           </Typography>
         )}
-        <TableLoadingSkeleton height={tableBodySkeletonHeight} />
+        <TablePanelSkeleton height={tableBodySkeletonHeight} />
       </Box>
     );
   }
