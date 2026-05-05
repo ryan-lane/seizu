@@ -134,6 +134,10 @@ interface CypherTableProps {
   details?: Record<string, unknown>;
   height?: string;
   reportQueryToken?: string;
+  refreshKey?: number;
+  onTokenExpired?: () => void;
+  /** When provided, skip fetching and render this data directly. Used by CypherGraph to share its already-fetched records across tab switches. */
+  preloadedRecords?: QueryRecord[];
 }
 
 export default function CypherTable({
@@ -144,15 +148,23 @@ export default function CypherTable({
   needInputs,
   details,
   height,
-  reportQueryToken
+  reportQueryToken,
+  refreshKey,
+  onTokenExpired,
+  preloadedRecords,
 }: CypherTableProps) {
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [expandOpen, setExpandOpen] = useState(false);
   const [expandSize, setExpandSize] = useState(window.innerHeight);
   const [containerHeight, setContainerHeight] = useState<number | null>(null);
   const observerRef = useRef<ResizeObserver | null>(null);
-  const [runQuery, { loading, error, records, first, warnings, queryErrors }] =
-    useLazyCypherQuery(cypher, reportQueryToken);
+  // When preloadedRecords is provided, pass undefined cypher so the hook never fetches.
+  const [runQuery, { loading: fetchLoading, error, records: fetchedRecords, warnings, queryErrors, tokenExpired }] =
+    useLazyCypherQuery(preloadedRecords !== undefined ? undefined : cypher, reportQueryToken);
+
+  const records = preloadedRecords ?? fetchedRecords;
+  const first = records?.[0];
+  const loading = preloadedRecords !== undefined ? false : fetchLoading;
 
   // Callback ref so the ResizeObserver re-attaches whenever the container DOM
   // node swaps — the component renders different outer Boxes for the loading,
@@ -189,11 +201,22 @@ export default function CypherTable({
     };
   }, []);
 
+  const runQueryRef = useRef(runQuery);
+  runQueryRef.current = runQuery;
+  const needInputsRef = useRef(needInputs);
+  needInputsRef.current = needInputs;
+
   useEffect(() => {
-    if (needInputs === undefined || needInputs.length === 0) {
-      runQuery(params);
+    if (needInputsRef.current === undefined || needInputsRef.current.length === 0) {
+      runQueryRef.current(params, { force: (refreshKey ?? 0) > 0 });
     }
-  }, [cypher, params, runQuery]);
+  }, [cypher, params, refreshKey]);
+
+  useEffect(() => {
+    if (tokenExpired) {
+      onTokenExpired?.();
+    }
+  }, [tokenExpired, onTokenExpired]);
 
   if (error) {
     console.log(error);
@@ -206,7 +229,7 @@ export default function CypherTable({
     );
   }
 
-  if (cypher === undefined) {
+  if (preloadedRecords === undefined && cypher === undefined) {
     return (
       <Box ref={containerRef} sx={fillSx}>
         <Error />

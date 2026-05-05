@@ -19,9 +19,8 @@ const QUERY_CONSOLE_SCHEMA_PANEL_STORAGE_KEY = 'seizu:query-console:schema-panel
 export default function QueryConsole() {
   const { hasPermission, loading: permissionsLoading } = usePermissionState();
   const [queryText, setQueryText] = useState('');
-  const [submittedQuery, setSubmittedQuery] = useState<string | undefined>(
-    undefined
-  );
+  const [submittedQuery, setSubmittedQuery] = useState<string | undefined>(undefined);
+  const [runKey, setRunKey] = useState(0);
   const [schemaPanelOpen, setSchemaPanelOpen] = useState(() => {
     if (typeof window === 'undefined') return true;
     const storedValue = window.localStorage.getItem(QUERY_CONSOLE_SCHEMA_PANEL_STORAGE_KEY);
@@ -40,6 +39,7 @@ export default function QueryConsole() {
     const trimmed = queryText.trim();
     if (!trimmed) return;
     setSubmittedQuery(trimmed);
+    setRunKey((k) => k + 1);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -52,6 +52,7 @@ export default function QueryConsole() {
   const handleQuerySelect = (query: string) => {
     setQueryText(query);
     setSubmittedQuery(query);
+    setRunKey((k) => k + 1);
   };
 
   /** Load a query from history into the editor without running it. */
@@ -150,6 +151,7 @@ export default function QueryConsole() {
               cypher={submittedQuery}
               defaultDetailOpen
               fillHeight
+              refreshKey={runKey}
               onQueryComplete={handleQueryComplete}
             />
           ) : (

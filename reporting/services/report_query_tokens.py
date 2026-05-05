@@ -19,6 +19,10 @@ _DEV_FALLBACK_SECRET = "seizu-dev-report-query-signing-secret"
 _DEV_FALLBACK_TTL_SECONDS = 15 * 60
 
 
+class QueryTokenExpiredError(ValueError):
+    """Raised when a report query token's expiry timestamp has passed."""
+
+
 def _get_signing_secret() -> bytes:
     secret = settings.REPORT_QUERY_SIGNING_SECRET
     if secret:
@@ -217,7 +221,7 @@ def resolve_report_query_request(
     if not isinstance(exp, int):
         raise ValueError("Invalid report query token expiry")
     if exp < int(time.time()):
-        raise ValueError("Report query token has expired")
+        raise QueryTokenExpiredError("Report query token has expired")
 
     if not isinstance(payload.get("query"), str):
         raise ValueError("Invalid report query token payload")

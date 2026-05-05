@@ -9,6 +9,7 @@ import {
   DialogActions,
   DialogContent,
   DialogTitle,
+  Divider,
   IconButton,
   ListItemIcon,
   ListItemText,
@@ -25,10 +26,11 @@ import HistoryIcon from '@mui/icons-material/History';
 import LockIcon from '@mui/icons-material/Lock';
 import MoreVertIcon from '@mui/icons-material/MoreVert';
 import PublicIcon from '@mui/icons-material/Public';
+import RefreshIcon from '@mui/icons-material/Refresh';
 
 import ReportView from 'src/components/ReportView';
 import EditableReportView from 'src/components/EditableReportView';
-import { useReport, useReportsMutations } from 'src/hooks/useReportsApi';
+import { useReport, useReportsMutations, updateCachedReportCapabilities } from 'src/hooks/useReportsApi';
 import { Report } from 'src/config.context';
 import { usePermissionState } from 'src/hooks/usePermissions';
 import type { BackState } from 'src/navigation';
@@ -48,7 +50,7 @@ function Reports() {
   const [displayedOwnerId, setDisplayedOwnerId] = useState<string | undefined>(undefined);
   const [displayedQueryCapabilities, setDisplayedQueryCapabilities] = useState<Record<string, string> | undefined>(undefined);
 
-  const { report, name, reportVersion, queryCapabilities, loading, error } = useReport(id);
+  const { report, name, reportVersion, queryCapabilities, loading, error, refresh: refreshCapabilities } = useReport(id);
   const { saveReportVersion, cloneReport, updateReportVisibility } = useReportsMutations();
 
   const [cloneOpen, setCloneOpen] = useState(false);
@@ -114,6 +116,14 @@ function Reports() {
     if (!id) return;
     const version = await saveReportVersion(id, updatedReport, comment || undefined, true);
     const savedName = updatedReport.name?.trim() || version.name;
+    // Keep the capabilities cache consistent so navigating away and back after save
+    // returns the new version's tokens rather than the pre-save ones.
+    updateCachedReportCapabilities(id, {
+      report: version.config,
+      name: version.name,
+      reportVersion: version,
+      queryCapabilities: version.query_capabilities,
+    });
     setDisplayedReport(savedName ? { ...version.config, name: savedName } : version.config);
     setDisplayedName(savedName);
     setDisplayedQueryCapabilities(version.query_capabilities);
@@ -170,43 +180,6 @@ function Reports() {
     setActionsAnchor(null);
   };
 
-  const secondaryActions = [
-    {
-      key: 'history',
-      label: 'History',
-      icon: <HistoryIcon fontSize="small" />,
-      disabled: false,
-      onClick: () => navigate(`/app/reports/${id}/history`, {
-        state: {
-          fromLabel: displayedName ?? 'report',
-          originReturnTo: `${location.pathname}${location.search}`
-        } satisfies BackState
-      })
-    },
-    ...(canWriteReports
-      ? [
-          {
-            key: 'visibility',
-            label: displayedAccessScope === 'public' ? 'Unpublish' : 'Publish',
-            icon: updatingAccess
-              ? <CircularProgress size={18} />
-              : displayedAccessScope === 'public'
-                ? <LockIcon fontSize="small" />
-                : <PublicIcon fontSize="small" />,
-            disabled: !canUpdateAccess || updatingAccess,
-            onClick: handleToggleAccess
-          },
-          {
-            key: 'clone',
-            label: 'Clone',
-            icon: <ContentCopyIcon fontSize="small" />,
-            disabled: false,
-            onClick: handleCloneOpen
-          }
-        ]
-      : [])
-  ];
-
   if (editMode) {
     return (
       <EditableReportView
@@ -218,75 +191,6 @@ function Reports() {
     );
   }
 
-  const reportActions = (
-    <>
-      {displayedAccessScope && (
-        <Chip
-          icon={displayedAccessScope === 'public' ? <PublicIcon /> : <LockIcon />}
-          label={displayedAccessScope === 'public' ? 'Public' : 'Draft'}
-          size="small"
-          color={displayedAccessScope === 'public' ? 'success' : 'default'}
-          variant="outlined"
-          sx={{ alignSelf: 'center' }}
-        />
-      )}
-      {canWriteReports && (
-        <Button
-          variant="contained"
-          size="small"
-          startIcon={<EditIcon />}
-          onClick={handleEnterEdit}
-        >
-          Edit Report
-        </Button>
-      )}
-      {secondaryActions.length === 1 ? (
-        <Button
-          variant="outlined"
-          size="small"
-          startIcon={secondaryActions[0].icon}
-          disabled={secondaryActions[0].disabled}
-          onClick={secondaryActions[0].onClick}
-        >
-          {secondaryActions[0].label}
-        </Button>
-      ) : (
-        <>
-          <Tooltip title="More actions">
-            <IconButton
-              aria-label="More actions"
-              size="small"
-              onClick={(event) => setActionsAnchor(event.currentTarget)}
-            >
-              <MoreVertIcon fontSize="small" />
-            </IconButton>
-          </Tooltip>
-          <Menu
-            anchorEl={actionsAnchor}
-            open={actionsMenuOpen}
-            onClose={closeActionsMenu}
-            anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
-            transformOrigin={{ vertical: 'top', horizontal: 'right' }}
-          >
-            {secondaryActions.map((action) => (
-              <MenuItem
-                key={action.key}
-                onClick={() => {
-                  closeActionsMenu();
-                  action.onClick();
-                }}
-                disabled={action.disabled}
-              >
-                <ListItemIcon>{action.icon}</ListItemIcon>
-                <ListItemText>{action.label}</ListItemText>
-              </MenuItem>
-            ))}
-          </Menu>
-        </>
-      )}
-    </>
-  );
-
   return (
     <Box>
       <ReportView
@@ -294,7 +198,111 @@ function Reports() {
         title={displayedName}
         showTitle
         queryCapabilities={displayedQueryCapabilities}
-        toolbarActions={reportActions}
+        toolbarActions={({ onRefresh, refreshedAtLabel }) => {
+          const secondaryActions = [
+            {
+              key: 'history',
+              label: 'History',
+              icon: <HistoryIcon fontSize="small" />,
+              disabled: false,
+              onClick: () => navigate(`/app/reports/${id}/history`, {
+                state: {
+                  fromLabel: displayedName ?? 'report',
+                  originReturnTo: `${location.pathname}${location.search}`
+                } satisfies BackState
+              })
+            },
+            ...(canWriteReports
+              ? [
+                  {
+                    key: 'visibility',
+                    label: displayedAccessScope === 'public' ? 'Unpublish' : 'Publish',
+                    icon: updatingAccess
+                      ? <CircularProgress size={18} />
+                      : displayedAccessScope === 'public'
+                        ? <LockIcon fontSize="small" />
+                        : <PublicIcon fontSize="small" />,
+                    disabled: !canUpdateAccess || updatingAccess,
+                    onClick: handleToggleAccess
+                  },
+                  {
+                    key: 'clone',
+                    label: 'Clone',
+                    icon: <ContentCopyIcon fontSize="small" />,
+                    disabled: false,
+                    onClick: handleCloneOpen
+                  }
+                ]
+              : [])
+          ];
+
+          return (
+            <>
+              {displayedAccessScope && (
+                <Chip
+                  icon={displayedAccessScope === 'public' ? <PublicIcon /> : <LockIcon />}
+                  label={displayedAccessScope === 'public' ? 'Public' : 'Draft'}
+                  size="small"
+                  color={displayedAccessScope === 'public' ? 'success' : 'default'}
+                  variant="outlined"
+                  sx={{ alignSelf: 'center' }}
+                />
+              )}
+              {canWriteReports && (
+                <Button
+                  variant="contained"
+                  size="small"
+                  startIcon={<EditIcon />}
+                  onClick={handleEnterEdit}
+                >
+                  Edit Report
+                </Button>
+              )}
+              <Tooltip title="More actions">
+                <IconButton
+                  aria-label="More actions"
+                  size="small"
+                  onClick={(event) => setActionsAnchor(event.currentTarget)}
+                >
+                  <MoreVertIcon fontSize="small" />
+                </IconButton>
+              </Tooltip>
+              <Menu
+                anchorEl={actionsAnchor}
+                open={actionsMenuOpen}
+                onClose={closeActionsMenu}
+                anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+                transformOrigin={{ vertical: 'top', horizontal: 'right' }}
+                slotProps={{ paper: { sx: { minWidth: 180 } } }}
+              >
+                {refreshedAtLabel && (
+                  <MenuItem disabled sx={{ opacity: '1 !important' }}>
+                    <Typography variant="caption" color="text.secondary">{refreshedAtLabel}</Typography>
+                  </MenuItem>
+                )}
+                <MenuItem onClick={() => { closeActionsMenu(); onRefresh(); }}>
+                  <ListItemIcon><RefreshIcon fontSize="small" /></ListItemIcon>
+                  <ListItemText>Refresh data</ListItemText>
+                </MenuItem>
+                <Divider />
+                {secondaryActions.map((action) => (
+                  <MenuItem
+                    key={action.key}
+                    onClick={() => {
+                      closeActionsMenu();
+                      action.onClick();
+                    }}
+                    disabled={action.disabled}
+                  >
+                    <ListItemIcon>{action.icon}</ListItemIcon>
+                    <ListItemText>{action.label}</ListItemText>
+                  </MenuItem>
+                ))}
+              </Menu>
+            </>
+          );
+        }}
+        onRefreshCapabilities={refreshCapabilities}
       />
 
       <Dialog open={cloneOpen} onClose={() => setCloneOpen(false)} maxWidth="sm" fullWidth>

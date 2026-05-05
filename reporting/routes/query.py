@@ -11,7 +11,7 @@ from reporting.authnz.permissions import Permission
 from reporting.schema.query import QueryRequest, QueryResponse, ReportQueryRequest
 from reporting.services import report_store, reporting_neo4j
 from reporting.services.query_validator import validate_query
-from reporting.services.report_query_tokens import resolve_report_query_request
+from reporting.services.report_query_tokens import QueryTokenExpiredError, resolve_report_query_request
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -127,6 +127,12 @@ async def query_report(
     except PermissionError as exc:
         logger.warning("Rejected report query token", exc_info=exc)
         return JSONResponse(content={"error": "Forbidden"}, status_code=403)
+    except QueryTokenExpiredError as exc:
+        logger.warning("Rejected expired report query token", exc_info=exc)
+        return JSONResponse(
+            content={"error": "Report query token has expired", "code": "token_expired"},
+            status_code=400,
+        )
     except ValueError as exc:
         logger.warning("Rejected report query token", exc_info=exc)
         return JSONResponse(content={"error": "Invalid report query token"}, status_code=400)

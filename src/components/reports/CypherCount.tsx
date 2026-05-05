@@ -51,6 +51,8 @@ interface CypherCountProps {
   details?: Record<string, unknown>;
   needInputs?: string[];
   reportQueryToken?: string;
+  refreshKey?: number;
+  onTokenExpired?: () => void;
 }
 
 export default function CypherCount({
@@ -61,7 +63,9 @@ export default function CypherCount({
   thresholds,
   details,
   needInputs,
-  reportQueryToken
+  reportQueryToken,
+  refreshKey,
+  onTokenExpired,
 }: CypherCountProps) {
   const [open, setOpen] = useState(false);
   const handleClickOpen = () => {
@@ -97,14 +101,26 @@ export default function CypherCount({
     };
   }, []);
 
-  const [runQuery, { loading, error, records, first, warnings, queryErrors }] =
+  const [runQuery, { loading, error, records, first, warnings, queryErrors, tokenExpired }] =
     useLazyCypherQuery(cypher, reportQueryToken);
 
+  // Always call the latest runQuery without re-running when only the token changes.
+  const runQueryRef = useRef(runQuery);
+  runQueryRef.current = runQuery;
+  const needInputsRef = useRef(needInputs);
+  needInputsRef.current = needInputs;
+
   useEffect(() => {
-    if (needInputs === undefined || needInputs.length === 0) {
-      runQuery(params);
+    if (needInputsRef.current === undefined || needInputsRef.current.length === 0) {
+      runQueryRef.current(params, { force: (refreshKey ?? 0) > 0 });
     }
-  }, [cypher, params, runQuery]);
+  }, [cypher, params, refreshKey]);
+
+  useEffect(() => {
+    if (tokenExpired) {
+      onTokenExpired?.();
+    }
+  }, [tokenExpired, onTokenExpired]);
 
   if (cypher === undefined) {
     return (

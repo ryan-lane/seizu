@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { CircularProgress, Typography, TextField, Autocomplete } from '@mui/material';
 import { useLazyCypherQuery } from 'src/hooks/useCypherQuery';
 import { setQueryStringValue } from 'src/components/QueryString';
@@ -17,6 +17,8 @@ interface CypherAutocompleteProps {
   value?: Record<string, AutocompleteOption | undefined>;
   setValue?: (val: Record<string, AutocompleteOption | undefined>) => void;
   reportQueryToken?: string;
+  refreshKey?: number;
+  onTokenExpired?: () => void;
   size?: 'small' | 'medium';
 }
 
@@ -29,13 +31,24 @@ export default function CypherAutocomplete({
   value,
   setValue,
   reportQueryToken,
+  refreshKey,
+  onTokenExpired,
   size = 'medium'
 }: CypherAutocompleteProps) {
-  const [run, { loading, error, records }] = useLazyCypherQuery(cypher, reportQueryToken);
+  const [run, { loading, error, records, tokenExpired }] = useLazyCypherQuery(cypher, reportQueryToken);
+
+  const runRef = useRef(run);
+  runRef.current = run;
 
   useEffect(() => {
-    run(params);
-  }, [cypher, params]);
+    runRef.current(params, { force: (refreshKey ?? 0) > 0 });
+  }, [cypher, params, refreshKey]);
+
+  useEffect(() => {
+    if (tokenExpired) {
+      onTokenExpired?.();
+    }
+  }, [tokenExpired, onTokenExpired]);
 
   if (error) {
     return (
