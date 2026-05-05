@@ -188,6 +188,7 @@ export function useDashboardReport(): {
   queryCapabilities: Record<string, string> | undefined;
   loading: boolean;
   notConfigured: boolean;
+  refresh: () => void;
 } {
   const { accessToken } = useContext(AuthContext);
   const { auth_required } = useContext(AuthConfigContext);
@@ -195,12 +196,14 @@ export function useDashboardReport(): {
   const [queryCapabilities, setQueryCapabilities] = useState<Record<string, string> | undefined>(undefined);
   const [loading, setLoading] = useState(true);
   const [notConfigured, setNotConfigured] = useState(false);
+  const [tick, setTick] = useState(0);
+
+  const refresh = useCallback(() => setTick((t) => t + 1), []);
 
   useEffect(() => {
     if (auth_required && !accessToken) return;
 
     setLoading(true);
-    setReport(undefined);
     setQueryCapabilities(undefined);
     setNotConfigured(false);
 
@@ -227,9 +230,9 @@ export function useDashboardReport(): {
         setNotConfigured(true);
         setLoading(false);
       });
-  }, [accessToken, auth_required]);
+  }, [accessToken, auth_required, tick]);
 
-  return { report, queryCapabilities, loading, notConfigured };
+  return { report, queryCapabilities, loading, notConfigured, refresh };
 }
 
 export function useAllReports(): {
@@ -491,6 +494,7 @@ export function useReport(reportId: string | undefined): {
   queryCapabilities: Record<string, string> | undefined;
   loading: boolean;
   error: Error | null;
+  refresh: () => void;
 } {
   const { accessToken } = useContext(AuthContext);
   const { auth_required } = useContext(AuthConfigContext);
@@ -500,15 +504,15 @@ export function useReport(reportId: string | undefined): {
   const [queryCapabilities, setQueryCapabilities] = useState<Record<string, string> | undefined>(undefined);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
+  const [tick, setTick] = useState(0);
+
+  const refresh = useCallback(() => setTick((t) => t + 1), []);
 
   useEffect(() => {
     if (!reportId) return;
     if (auth_required && !accessToken) return;
 
     setLoading(true);
-    setReport(undefined);
-    setName(undefined);
-    setReportVersion(undefined);
     setQueryCapabilities(undefined);
     setError(null);
 
@@ -530,7 +534,7 @@ export function useReport(reportId: string | undefined): {
         setError(err);
         setLoading(false);
       });
-  }, [reportId, accessToken, auth_required]);
+  }, [reportId, accessToken, auth_required, tick]);
 
-  return { report, name, reportVersion, queryCapabilities, loading, error };
+  return { report, name, reportVersion, queryCapabilities, loading, error, refresh };
 }

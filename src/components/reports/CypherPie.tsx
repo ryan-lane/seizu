@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   Box,
   Card,
@@ -38,6 +38,8 @@ interface CypherPieProps {
   pieSettings?: { legend?: string };
   details?: Record<string, unknown>;
   needInputs?: string[];
+  refreshKey?: number;
+  onTokenExpired?: () => void;
   reportQueryToken?: string;
 }
 
@@ -48,19 +50,32 @@ export default function CypherPie({
   pieSettings,
   details,
   needInputs,
-  reportQueryToken
+  reportQueryToken,
+  refreshKey,
+  onTokenExpired,
 }: CypherPieProps) {
   const theme = useTheme();
   const [open, setOpen] = useState(false);
 
-  const [runQuery, { loading, error, records, first, warnings, queryErrors }] =
+  const [runQuery, { loading, error, records, first, warnings, queryErrors, tokenExpired }] =
     useLazyCypherQuery(cypher, reportQueryToken);
 
+  const runQueryRef = useRef(runQuery);
+  runQueryRef.current = runQuery;
+  const needInputsRef = useRef(needInputs);
+  needInputsRef.current = needInputs;
+
   useEffect(() => {
-    if (needInputs === undefined || needInputs.length === 0) {
-      runQuery(params);
+    if (needInputsRef.current === undefined || needInputsRef.current.length === 0) {
+      runQueryRef.current(params);
     }
-  }, [cypher, params, runQuery]);
+  }, [cypher, params, refreshKey]);
+
+  useEffect(() => {
+    if (tokenExpired) {
+      onTokenExpired?.();
+    }
+  }, [tokenExpired, onTokenExpired]);
 
   if (cypher === undefined) {
     return (

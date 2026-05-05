@@ -134,6 +134,8 @@ interface CypherTableProps {
   details?: Record<string, unknown>;
   height?: string;
   reportQueryToken?: string;
+  refreshKey?: number;
+  onTokenExpired?: () => void;
 }
 
 export default function CypherTable({
@@ -144,14 +146,16 @@ export default function CypherTable({
   needInputs,
   details,
   height,
-  reportQueryToken
+  reportQueryToken,
+  refreshKey,
+  onTokenExpired,
 }: CypherTableProps) {
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [expandOpen, setExpandOpen] = useState(false);
   const [expandSize, setExpandSize] = useState(window.innerHeight);
   const [containerHeight, setContainerHeight] = useState<number | null>(null);
   const observerRef = useRef<ResizeObserver | null>(null);
-  const [runQuery, { loading, error, records, first, warnings, queryErrors }] =
+  const [runQuery, { loading, error, records, first, warnings, queryErrors, tokenExpired }] =
     useLazyCypherQuery(cypher, reportQueryToken);
 
   // Callback ref so the ResizeObserver re-attaches whenever the container DOM
@@ -189,11 +193,22 @@ export default function CypherTable({
     };
   }, []);
 
+  const runQueryRef = useRef(runQuery);
+  runQueryRef.current = runQuery;
+  const needInputsRef = useRef(needInputs);
+  needInputsRef.current = needInputs;
+
   useEffect(() => {
-    if (needInputs === undefined || needInputs.length === 0) {
-      runQuery(params);
+    if (needInputsRef.current === undefined || needInputsRef.current.length === 0) {
+      runQueryRef.current(params);
     }
-  }, [cypher, params, runQuery]);
+  }, [cypher, params, refreshKey]);
+
+  useEffect(() => {
+    if (tokenExpired) {
+      onTokenExpired?.();
+    }
+  }, [tokenExpired, onTokenExpired]);
 
   if (error) {
     console.log(error);

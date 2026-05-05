@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   Box,
   Divider,
@@ -65,6 +65,8 @@ interface CypherVerticalTableProps {
   needInputs?: string[];
   autoHeight?: boolean;
   reportQueryToken?: string;
+  refreshKey?: number;
+  onTokenExpired?: () => void;
 }
 
 export default function CypherVerticalTable({
@@ -74,20 +76,33 @@ export default function CypherVerticalTable({
   details,
   needInputs,
   autoHeight = false,
-  reportQueryToken
+  reportQueryToken,
+  refreshKey,
+  onTokenExpired,
 }: CypherVerticalTableProps) {
   const [open, setOpen] = useState(false);
   const handleClickOpen = () => {
     setOpen(true);
   };
 
-  const [runQuery, { loading, error, records, warnings, queryErrors }] = useLazyCypherQuery(cypher, reportQueryToken);
+  const [runQuery, { loading, error, records, warnings, queryErrors, tokenExpired }] = useLazyCypherQuery(cypher, reportQueryToken);
+
+  const runQueryRef = useRef(runQuery);
+  runQueryRef.current = runQuery;
+  const needInputsRef = useRef(needInputs);
+  needInputsRef.current = needInputs;
 
   useEffect(() => {
-    if (needInputs === undefined || needInputs.length === 0) {
-      runQuery(params);
+    if (needInputsRef.current === undefined || needInputsRef.current.length === 0) {
+      runQueryRef.current(params);
     }
-  }, [cypher, params, runQuery]);
+  }, [cypher, params, refreshKey]);
+
+  useEffect(() => {
+    if (tokenExpired) {
+      onTokenExpired?.();
+    }
+  }, [tokenExpired, onTokenExpired]);
 
   if (cypher === undefined) {
     return (

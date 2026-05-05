@@ -52,6 +52,8 @@ interface CypherProgressProps {
   details?: Record<string, unknown>;
   needInputs?: string[];
   reportQueryToken?: string;
+  refreshKey?: number;
+  onTokenExpired?: () => void;
 }
 
 export default function CypherProgress({
@@ -63,7 +65,9 @@ export default function CypherProgress({
   progressSettings,
   details,
   needInputs,
-  reportQueryToken
+  reportQueryToken,
+  refreshKey,
+  onTokenExpired,
 }: CypherProgressProps) {
   const [open, setOpen] = useState(false);
   const handleClickOpen = () => {
@@ -99,14 +103,25 @@ export default function CypherProgress({
     };
   }, []);
 
-  const [runQuery, { loading, error, records, first, warnings, queryErrors }] =
+  const [runQuery, { loading, error, records, first, warnings, queryErrors, tokenExpired }] =
     useLazyCypherQuery(cypher, reportQueryToken);
 
+  const runQueryRef = useRef(runQuery);
+  runQueryRef.current = runQuery;
+  const needInputsRef = useRef(needInputs);
+  needInputsRef.current = needInputs;
+
   useEffect(() => {
-    if (needInputs === undefined || needInputs.length === 0) {
-      runQuery(params);
+    if (needInputsRef.current === undefined || needInputsRef.current.length === 0) {
+      runQueryRef.current(params);
     }
-  }, [cypher, params, runQuery]);
+  }, [cypher, params, refreshKey]);
+
+  useEffect(() => {
+    if (tokenExpired) {
+      onTokenExpired?.();
+    }
+  }, [tokenExpired, onTokenExpired]);
 
   if (cypher === undefined) {
     return (

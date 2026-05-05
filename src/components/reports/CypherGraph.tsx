@@ -168,6 +168,8 @@ interface CypherGraphProps {
   onQueryComplete?: () => void;
   /** When true, the card fills 100% of its parent height instead of using a fixed 450px canvas. */
   fillHeight?: boolean;
+  refreshKey?: number;
+  onTokenExpired?: () => void;
 }
 
 // ─── Colours ─────────────────────────────────────────────────────────────────
@@ -591,10 +593,12 @@ export default function CypherGraph({
   defaultDetailOpen = false,
   onQueryComplete,
   fillHeight = false,
+  refreshKey,
+  onTokenExpired,
 }: CypherGraphProps) {
   const theme = useTheme();
 
-  const [runQuery, { loading, error, records, warnings, queryErrors }] =
+  const [runQuery, { loading, error, records, warnings, queryErrors, tokenExpired }] =
     useLazyCypherQuery(cypher, reportQueryToken);
 
   // Call onQueryComplete once after each successful query (loading → false with records).
@@ -644,11 +648,22 @@ export default function CypherGraph({
     ? preferredTab
     : availableTabs[0] ?? 'table';
 
+  const runQueryRef = useRef(runQuery);
+  runQueryRef.current = runQuery;
+  const needInputsRef = useRef(needInputs);
+  needInputsRef.current = needInputs;
+
   useEffect(() => {
-    if (needInputs === undefined || needInputs.length === 0) {
-      runQuery(params);
+    if (needInputsRef.current === undefined || needInputsRef.current.length === 0) {
+      runQueryRef.current(params);
     }
-  }, [cypher, params, runQuery]);
+  }, [cypher, params, refreshKey]);
+
+  useEffect(() => {
+    if (tokenExpired) {
+      onTokenExpired?.();
+    }
+  }, [tokenExpired, onTokenExpired]);
 
   // Clear selection and tab preference when the query changes.
   useEffect(() => {

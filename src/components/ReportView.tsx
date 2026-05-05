@@ -13,6 +13,7 @@ import {
   TableContainer,
   TableHead,
   TableRow,
+  Tooltip,
   Typography
 } from '@mui/material';
 import Error from '@mui/icons-material/Error';
@@ -94,9 +95,11 @@ interface PanelItemProps {
   allInputs: ReportInput[];
   resolveQuery: (cypher: string | undefined) => string | undefined;
   resolveCapability: (path: string) => string | undefined;
+  refreshKey: number;
+  onTokenExpired: () => void;
 }
 
-const PanelItem = memo(function PanelItem({ item, rowIndex, index, varData, allInputs, resolveQuery, resolveCapability }: PanelItemProps) {
+const PanelItem = memo(function PanelItem({ item, rowIndex, index, varData, allInputs, resolveQuery, resolveCapability, refreshKey, onTokenExpired }: PanelItemProps) {
   const needInputs: string[] = [];
   const params: Record<string, string | undefined> = {};
   if (item.params !== undefined) {
@@ -151,6 +154,8 @@ const PanelItem = memo(function PanelItem({ item, rowIndex, index, varData, allI
           details={details}
           needInputs={needInputs}
           reportQueryToken={resolveCapability(`rows.${rowIndex}.panels.${index}.cypher`)}
+          refreshKey={refreshKey}
+          onTokenExpired={onTokenExpired}
         />
       );
   } else if (item.type === 'pie') {
@@ -161,7 +166,10 @@ const PanelItem = memo(function PanelItem({ item, rowIndex, index, varData, allI
           caption={effectiveCaption}
           pieSettings={item.pie_settings}
           details={details}
+          needInputs={needInputs}
           reportQueryToken={resolveCapability(`rows.${rowIndex}.panels.${index}.cypher`)}
+          refreshKey={refreshKey}
+          onTokenExpired={onTokenExpired}
         />
       );
   } else if (item.type === 'bar') {
@@ -172,7 +180,10 @@ const PanelItem = memo(function PanelItem({ item, rowIndex, index, varData, allI
           caption={effectiveCaption}
           barSettings={item.bar_settings}
           details={details}
+          needInputs={needInputs}
           reportQueryToken={resolveCapability(`rows.${rowIndex}.panels.${index}.cypher`)}
+          refreshKey={refreshKey}
+          onTokenExpired={onTokenExpired}
         />
       );
   } else if (item.type === 'graph') {
@@ -185,6 +196,8 @@ const PanelItem = memo(function PanelItem({ item, rowIndex, index, varData, allI
           needInputs={needInputs}
           fillHeight
           reportQueryToken={resolveCapability(`rows.${rowIndex}.panels.${index}.cypher`)}
+          refreshKey={refreshKey}
+          onTokenExpired={onTokenExpired}
         />
       );
   } else if (item.type === 'count') {
@@ -198,6 +211,8 @@ const PanelItem = memo(function PanelItem({ item, rowIndex, index, varData, allI
           details={details}
           needInputs={needInputs}
           reportQueryToken={resolveCapability(`rows.${rowIndex}.panels.${index}.cypher`)}
+          refreshKey={refreshKey}
+          onTokenExpired={onTokenExpired}
         />
       );
   } else if (item.type === 'table') {
@@ -210,6 +225,8 @@ const PanelItem = memo(function PanelItem({ item, rowIndex, index, varData, allI
           details={details}
           needInputs={needInputs}
           reportQueryToken={resolveCapability(`rows.${rowIndex}.panels.${index}.cypher`)}
+          refreshKey={refreshKey}
+          onTokenExpired={onTokenExpired}
         />
       );
   } else if (item.type === 'vertical-table') {
@@ -222,6 +239,8 @@ const PanelItem = memo(function PanelItem({ item, rowIndex, index, varData, allI
           needInputs={needInputs}
           autoHeight={item.auto_height ?? false}
           reportQueryToken={resolveCapability(`rows.${rowIndex}.panels.${index}.cypher`)}
+          refreshKey={refreshKey}
+          onTokenExpired={onTokenExpired}
         />
       );
   } else if (item.type === 'markdown') {
@@ -261,8 +280,11 @@ const PanelItem = memo(function PanelItem({ item, rowIndex, index, varData, allI
     </Box>
   );
 }, function areEqual(prevProps, nextProps) {
+  // refreshKey drives explicit re-renders (user refresh, token recovery after expiry).
+  // Capability identity changes alone do not trigger re-renders; refreshKey handles that.
+  if (prevProps.refreshKey !== nextProps.refreshKey) return false;
   if (prevProps.resolveQuery !== nextProps.resolveQuery) return false;
-  if (prevProps.resolveCapability !== nextProps.resolveCapability) return false;
+  if (prevProps.onTokenExpired !== nextProps.onTokenExpired) return false;
   if (prevProps.rowIndex !== nextProps.rowIndex) return false;
   if (prevProps.index !== nextProps.index) return false;
   if (prevProps.item !== nextProps.item) return false;
@@ -278,14 +300,20 @@ const PanelItem = memo(function PanelItem({ item, rowIndex, index, varData, allI
   return true;
 });
 
+export interface RefreshControls {
+  onRefresh: () => void;
+  refreshedAtLabel: string | undefined;
+}
+
 interface ReportViewProps {
   report: Report;
   title?: string;
   showTitle?: boolean;
   boxSx?: object;
   queryCapabilities?: Record<string, string>;
-  toolbarActions?: React.ReactNode;
+  toolbarActions?: (controls: RefreshControls) => React.ReactNode;
   stickyToolbar?: boolean;
+  onRefreshCapabilities?: () => void;
 }
 
 function inputWidth(size?: number) {
@@ -300,7 +328,8 @@ function ReportView({
   boxSx = { minHeight: '100%', pb: 3 },
   queryCapabilities,
   toolbarActions,
-  stickyToolbar = true
+  stickyToolbar = true,
+  onRefreshCapabilities,
 }: ReportViewProps) {
   const displayTitle = title ?? report.name;
   const reportQueries = useMemo(() => report.queries ?? {}, [report]);
@@ -314,6 +343,48 @@ function ReportView({
   const toolbarRef = useRef<HTMLDivElement | null>(null);
   const [toolbarHeight, setToolbarHeight] = useState(64);
   const [collapsedRows, setCollapsedRows] = useState<Record<number, boolean>>({});
+
+  // Track refresh state for decoupled data fetching
+  const [refreshKey, setRefreshKey] = useState(0);
+  const [refreshedAt, setRefreshedAt] = useState<Date | undefined>(undefined);
+  // True while waiting for onRefreshCapabilities to deliver new queryCapabilities
+  const pendingTokenRefreshRef = useRef(false);
+  // Tracks whether queryCapabilities has been seen for the first time on this mount
+  const initializedRef = useRef(false);
+
+  // Watch for queryCapabilities arriving or changing.
+  // On initial arrival: record the load time.
+  // On subsequent changes (token expiry recovery): increment refreshKey so panels
+  // re-render with the new tokens and re-run their queries.
+  useEffect(() => {
+    if (queryCapabilities === undefined) return;
+
+    if (!initializedRef.current) {
+      initializedRef.current = true;
+      setRefreshedAt(new Date());
+      return;
+    }
+
+    if (pendingTokenRefreshRef.current) {
+      pendingTokenRefreshRef.current = false;
+      setRefreshKey((k) => k + 1);
+    }
+    setRefreshedAt(new Date());
+  }, [queryCapabilities]);
+
+  const handleRefresh = useCallback(() => {
+    setRefreshKey((k) => k + 1);
+    setRefreshedAt(new Date());
+  }, []);
+
+  // Called by any panel that receives a token_expired response.
+  // Triggers a capabilities re-fetch; when the new capabilities arrive the
+  // useEffect above will increment refreshKey so all panels retry.
+  const onTokenExpired = useCallback(() => {
+    if (pendingTokenRefreshRef.current) return;
+    pendingTokenRefreshRef.current = true;
+    onRefreshCapabilities?.();
+  }, [onRefreshCapabilities]);
 
   useEffect(() => {
     const initialVarState = {};
@@ -366,6 +437,8 @@ function ReportView({
             value={varData}
             setValue={setVarData}
             reportQueryToken={resolveCapability(`inputs.${index}.cypher`)}
+            refreshKey={refreshKey}
+            onTokenExpired={onTokenExpired}
             size="small"
           />
         );
@@ -397,8 +470,11 @@ function ReportView({
     });
   }
 
+  const hasInputsOrActions = inputControls.length > 0 || toolbarActions !== undefined;
+  const isSticky = stickyToolbar && hasInputsOrActions;
+
   useEffect(() => {
-    if (!stickyToolbar || toolbarRef.current === null) return undefined;
+    if (!isSticky || toolbarRef.current === null) return undefined;
 
     const updateToolbarHeight = () => {
       setToolbarHeight(toolbarRef.current?.offsetHeight ?? 64);
@@ -410,25 +486,43 @@ function ReportView({
     const observer = new ResizeObserver(updateToolbarHeight);
     observer.observe(toolbarRef.current);
     return () => observer.disconnect();
-  }, [stickyToolbar, inputControls.length, toolbarActions]);
+  }, [isSticky, inputControls.length, toolbarActions]);
 
-  const hasToolbar = inputControls.length > 0 || toolbarActions !== undefined;
-  const toolbar = hasToolbar ? (
+  // Tick every 30 s so the relative "Updated X mins ago" label stays accurate.
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 30_000);
+    return () => clearInterval(id);
+  }, []);
+
+  let refreshedAtLabel: string | undefined;
+  if (refreshedAt) {
+    const diffMins = Math.floor((now - refreshedAt.getTime()) / 60_000);
+    if (diffMins < 1) {
+      refreshedAtLabel = 'Updated just now';
+    } else if (diffMins === 1) {
+      refreshedAtLabel = 'Updated 1 min ago';
+    } else {
+      refreshedAtLabel = `Updated ${diffMins} mins ago`;
+    }
+  }
+
+  const toolbar = (
     <Box
       ref={toolbarRef}
       sx={{
-        position: stickyToolbar ? 'fixed' : 'static',
-        top: stickyToolbar ? DASHBOARD_NAVBAR_HEIGHT : 'auto',
-        right: stickyToolbar ? 0 : 'auto',
-        left: stickyToolbar ? { xs: 0, lg: `var(${DASHBOARD_SIDEBAR_WIDTH_VAR})` } : 'auto',
-        zIndex: (theme) => theme.zIndex.appBar - 1,
+        position: isSticky ? 'fixed' : 'static',
+        top: isSticky ? DASHBOARD_NAVBAR_HEIGHT : 'auto',
+        right: isSticky ? 0 : 'auto',
+        left: isSticky ? { xs: 0, lg: `var(${DASHBOARD_SIDEBAR_WIDTH_VAR})` } : 'auto',
+        zIndex: isSticky ? (theme) => theme.zIndex.appBar - 1 : 'auto',
         bgcolor: 'background.paper',
         borderBottom: 1,
         borderColor: 'divider',
-        boxShadow: stickyToolbar ? 1 : 'none',
+        boxShadow: isSticky ? 1 : 'none',
         ...contentContainerSx,
         py: 2,
-        mb: stickyToolbar ? 0 : 2,
+        mb: isSticky ? 0 : 2,
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'space-between',
@@ -459,7 +553,7 @@ function ReportView({
             gap: 1,
             flex: inputControls.length > 0 ? '0 0 auto' : '1 1 auto',
             flexWrap: 'wrap',
-            ml: 'auto',
+            ml: hasInputsOrActions ? 0 : 'auto',
             '& .MuiButton-root': {
               minHeight: 40
             },
@@ -472,11 +566,11 @@ function ReportView({
             }
           }}
         >
-          {toolbarActions}
+          {toolbarActions({ onRefresh: handleRefresh, refreshedAtLabel })}
         </Box>
       )}
     </Box>
-  ) : null;
+  );
 
   const toggleRowCollapsed = useCallback((rowIndex: number) => {
     setCollapsedRows((prev) => ({ ...prev, [rowIndex]: !prev[rowIndex] }));
@@ -524,6 +618,8 @@ function ReportView({
               allInputs={report.inputs ?? []}
               resolveQuery={resolveQuery}
               resolveCapability={resolveCapability}
+              refreshKey={refreshKey}
+              onTokenExpired={onTokenExpired}
             />
           )}
         />
@@ -580,7 +676,7 @@ function ReportView({
       )}
       <Box sx={boxSx}>
         {toolbar}
-        {hasToolbar && stickyToolbar && <Box sx={{ height: toolbarHeight }} />}
+        {isSticky && <Box sx={{ height: toolbarHeight }} />}
         {showTitle && displayTitle && (
           <Box
             sx={{

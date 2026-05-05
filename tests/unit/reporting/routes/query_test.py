@@ -510,3 +510,32 @@ async def test_report_query_rejects_tampered_token(mocker):
 
     assert ret.status_code == 400
     assert ret.json()["error"] == "Invalid report query token"
+
+
+async def test_report_query_rejects_expired_token(mocker):
+    _mock_validate(mocker)
+    expired_user = CurrentUser(
+        user=_FAKE_USER,
+        jwt_claims={"token_exp": datetime.now(tz=UTC) - timedelta(minutes=1)},
+        permissions=ALL_PERMISSIONS,
+    )
+    token = _issue_report_token(
+        mocker,
+        current_user=expired_user,
+        report_id="rid1",
+        report_version=1,
+        path="rows.0.panels.0.cypher",
+        query="MATCH (n) RETURN n",
+        allowed_param_names=[],
+        static_params={},
+    )
+
+    app = create_app()
+    app.dependency_overrides[get_current_user] = lambda: _report_current_user()
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        ret = await client.post("/api/v1/query/report", json={"token": token})
+
+    assert ret.status_code == 400
+    body = ret.json()
+    assert body["error"] == "Report query token has expired"
+    assert body["code"] == "token_expired"

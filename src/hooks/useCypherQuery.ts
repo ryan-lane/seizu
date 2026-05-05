@@ -5,13 +5,14 @@ import { usePermissionState } from 'src/hooks/usePermissions';
 
 export type QueryRecord = Record<string, unknown>;
 
-interface QueryState {
+export interface QueryState {
   loading: boolean;
   error: Error | null;
   records: QueryRecord[] | undefined;
   first: QueryRecord | undefined;
   warnings: string[];
   queryErrors: string[];
+  tokenExpired: boolean;
 }
 
 export function useLazyCypherQuery(
@@ -27,7 +28,8 @@ export function useLazyCypherQuery(
     records: undefined,
     first: undefined,
     warnings: [],
-    queryErrors: []
+    queryErrors: [],
+    tokenExpired: false,
   });
 
   const run = useCallback(
@@ -45,12 +47,13 @@ export function useLazyCypherQuery(
           records: undefined,
           first: undefined,
           warnings: [],
-          queryErrors: []
+          queryErrors: [],
+          tokenExpired: false,
         });
         return;
       }
 
-      setState({ loading: true, error: null, records: undefined, first: undefined, warnings: [], queryErrors: [] });
+      setState({ loading: true, error: null, records: undefined, first: undefined, warnings: [], queryErrors: [], tokenExpired: false });
 
       const headers: Record<string, string> = {
         'Content-Type': 'application/json'
@@ -70,20 +73,32 @@ export function useLazyCypherQuery(
         body: JSON.stringify(body)
       })
         .then((res) => res.json())
-        .then((data: { error?: string; errors?: string[]; warnings?: string[]; results?: QueryRecord[] }) => {
+        .then((data: { error?: string; code?: string; errors?: string[]; warnings?: string[]; results?: QueryRecord[] }) => {
           const validationErrors = data.errors ?? [];
           const validationWarnings = data.warnings ?? [];
 
           if (data.error) {
-            // Server or request-level error (HTTP 500, malformed request, etc.)
-            setState({
-              loading: false,
-              error: new Error(data.error),
-              records: undefined,
-              first: undefined,
-              warnings: [],
-              queryErrors: []
-            });
+            if (data.code === 'token_expired') {
+              // Keep records/first from previous state so panels continue showing stale data
+              // while the token refresh and retry are in flight.
+              setState((prev) => ({
+                ...prev,
+                loading: false,
+                error: null,
+                tokenExpired: true,
+              }));
+            } else {
+              // Server or request-level error (HTTP 500, malformed request, etc.)
+              setState({
+                loading: false,
+                error: new Error(data.error),
+                records: undefined,
+                first: undefined,
+                warnings: [],
+                queryErrors: [],
+                tokenExpired: false,
+              });
+            }
           } else if (validationErrors.length > 0) {
             // Query validation errors — query was not executed
             setState({
@@ -92,7 +107,8 @@ export function useLazyCypherQuery(
               records: undefined,
               first: undefined,
               warnings: validationWarnings,
-              queryErrors: validationErrors
+              queryErrors: validationErrors,
+              tokenExpired: false,
             });
           } else {
             const results = data.results ?? [];
@@ -102,12 +118,13 @@ export function useLazyCypherQuery(
               records: results,
               first: results[0],
               warnings: validationWarnings,
-              queryErrors: []
+              queryErrors: [],
+              tokenExpired: false,
             });
           }
         })
         .catch((err: Error) => {
-          setState({ loading: false, error: err, records: undefined, first: undefined, warnings: [], queryErrors: [] });
+          setState({ loading: false, error: err, records: undefined, first: undefined, warnings: [], queryErrors: [], tokenExpired: false });
         });
     },
     [cypher, reportToken, accessToken, auth_required, permissionsLoading, hasPermission]
