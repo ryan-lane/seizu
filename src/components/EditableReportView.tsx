@@ -58,6 +58,7 @@ import { CSS } from '@dnd-kit/utilities';
 
 import { Report, Row, Panel, ReportInput, InputValue } from 'src/config.context';
 import PanelEditor, { EditablePanel } from 'src/components/reports/PanelEditor';
+import { EditPanelSkeleton } from 'src/components/reports/PanelLoadingSkeletons';
 import PanelGridRow from 'src/components/reports/PanelGridRow';
 import type { ResponsiveBreakpoint } from 'src/components/reports/panelLayout';
 import {
@@ -168,11 +169,6 @@ function EditablePanelCard({ panel, onEdit, onDelete, onResize, moveTargetRows, 
   const [moveMenuAnchor, setMoveMenuAnchor] = useState<HTMLElement | null>(null);
   const moveMenuOpen = Boolean(moveMenuAnchor);
   const capped = Math.max(1, Math.min(12, panel.w ?? panel.size ?? 3));
-  const cypherPreview = panel.cypher
-    ? panel.cypher.split('\n')[0].slice(0, 60) + (panel.cypher.length > 60 ? '…' : '')
-    : panel.markdown
-      ? 'Markdown content'
-      : '(no query)';
 
   return (
     <Paper
@@ -188,34 +184,20 @@ function EditablePanelCard({ panel, onEdit, onDelete, onResize, moveTargetRows, 
         bgcolor: 'background.paper'
       }}
     >
-      <Box sx={{ flex: 1, minWidth: 0, minHeight: 0, overflow: 'hidden' }}>
-        <Stack direction="row" spacing={0.5} alignItems="center" flexWrap="wrap">
-          <PanelTypeChip type={panel.type} />
-          {panel.caption && (
-            <Typography variant="caption" noWrap sx={{ maxWidth: 150 }}>
-              {panel.caption}
-            </Typography>
-          )}
-        </Stack>
-        <Typography
-          variant="caption"
-          color="text.secondary"
-          sx={{
-            display: 'block',
-            fontFamily: 'monospace',
-            fontSize: '0.65rem',
-            mt: 0.5,
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
-            whiteSpace: 'nowrap'
-          }}
-        >
-          {cypherPreview}
-        </Typography>
+      <Stack direction="row" spacing={0.5} alignItems="center" flexWrap="wrap" sx={{ flexShrink: 0 }}>
+        <PanelTypeChip type={panel.type} />
+        {panel.caption && (
+          <Typography variant="caption" noWrap sx={{ maxWidth: 150 }}>
+            {panel.caption}
+          </Typography>
+        )}
+      </Stack>
+      <Box sx={{ flex: 1, minHeight: 0, overflow: 'hidden' }}>
+        <EditPanelSkeleton type={panel.type} />
       </Box>
 
       {/* Width controls + edit + delete. Drag and resize are handled by react-grid-layout. */}
-      <Box sx={{ display: 'flex', alignItems: 'center', mt: 'auto', gap: 0.25 }}>
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.25, flexShrink: 0 }}>
         <Tooltip title="Decrease width">
           <span>
             <IconButton
