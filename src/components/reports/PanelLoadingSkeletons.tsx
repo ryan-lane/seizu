@@ -13,9 +13,10 @@ interface CaptionProps {
 }
 
 function HeaderSkeleton({ caption }: CaptionProps) {
+  if (!caption) return null;
   return (
     <CardHeader
-      title={caption || <Skeleton variant="text" width={180} height={32} />}
+      title={caption}
       sx={{ textAlign: 'center' }}
     />
   );
@@ -24,8 +25,12 @@ function HeaderSkeleton({ caption }: CaptionProps) {
 export function CountPanelSkeleton({ caption }: CaptionProps) {
   return (
     <Card data-testid="count-panel-loading-skeleton" sx={{ minHeight: 150 }}>
-      <HeaderSkeleton caption={caption} />
-      <Divider />
+      {caption && (
+        <>
+          <HeaderSkeleton caption={caption} />
+          <Divider />
+        </>
+      )}
       <CardContent sx={{ display: 'flex', justifyContent: 'center', py: 3 }}>
         <Skeleton variant="text" width={96} height={56} />
       </CardContent>
@@ -36,8 +41,12 @@ export function CountPanelSkeleton({ caption }: CaptionProps) {
 export function ProgressPanelSkeleton({ caption }: CaptionProps) {
   return (
     <Card data-testid="progress-panel-loading-skeleton" sx={{ minHeight: 300 }}>
-      <HeaderSkeleton caption={caption} />
-      <Divider />
+      {caption && (
+        <>
+          <HeaderSkeleton caption={caption} />
+          <Divider />
+        </>
+      )}
       <CardContent sx={{ display: 'flex', justifyContent: 'center', py: 2 }}>
         <Skeleton variant="text" width={150} height={56} />
       </CardContent>
@@ -54,8 +63,12 @@ export function ChartPanelSkeleton({
 }: CaptionProps & { variant: 'bar' | 'pie' }) {
   return (
     <Card data-testid={`${variant}-panel-loading-skeleton`} sx={{ minHeight: 410 }}>
-      <HeaderSkeleton caption={caption} />
-      <Divider />
+      {caption && (
+        <>
+          <HeaderSkeleton caption={caption} />
+          <Divider />
+        </>
+      )}
       <Box sx={{ height: 350, p: 2, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
         {variant === 'pie' ? (
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 4 }}>

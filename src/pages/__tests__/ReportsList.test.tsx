@@ -147,7 +147,7 @@ describe('ReportsList', () => {
   });
 
   it('clones from the list view and navigates to the cloned report in edit mode', async () => {
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
     render(<ReportsList />, { wrapper: Wrapper });
 
     await user.click(screen.getAllByLabelText('More actions')[0]);

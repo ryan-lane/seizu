@@ -223,6 +223,12 @@ class Panel(BaseModel):
         examples=["Critical CVEs"],
     )
 
+    hide_caption: bool | None = Field(
+        default=None,
+        description="When True, the panel caption is not rendered in view mode.",
+        examples=["true"],
+    )
+
     table_id: str | None = Field(
         default=None,
         description=(
@@ -407,6 +413,18 @@ class Row(BaseModel):
     name: str = Field(
         description="The name of the row; shown as title above the row.",
         examples=["CVEs"],
+    )
+
+    hide_header: bool | None = Field(
+        default=None,
+        description="When True, the row name header is not rendered in view mode.",
+        examples=["true"],
+    )
+
+    collapsible: bool | None = Field(
+        default=None,
+        description="When True, the row can be collapsed by clicking the header in view mode.",
+        examples=["true"],
     )
 
     panels: list[Panel] = Field(

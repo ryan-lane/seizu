@@ -9,6 +9,7 @@ export interface Panel {
   cypher?: string;
   details_cypher?: string;
   caption?: string;
+  hide_caption?: boolean;
   size?: number;
   w?: number;
   h?: number;
@@ -58,6 +59,8 @@ export interface ColumnDef {
 
 export interface Row {
   name: string;
+  hide_header?: boolean;
+  collapsible?: boolean;
   panels: Panel[];
 }
 

@@ -254,6 +254,16 @@ function PanelEditor({ open, panel, onClose, onSave }: PanelEditorProps) {
             value={form.caption ?? ''}
             onChange={(e) => set('caption', e.target.value || undefined)}
           />
+          <FormControlLabel
+            control={
+              <Checkbox
+                size="small"
+                checked={form.hide_caption === true}
+                onChange={(e) => set('hide_caption', e.target.checked || undefined)}
+              />
+            }
+            label="Hide caption"
+          />
 
           {/* Width */}
           <Box>
@@ -530,6 +540,7 @@ function PanelEditor({ open, panel, onClose, onSave }: PanelEditorProps) {
 function cleanPanel(panel: Panel): Panel {
   const result: Panel = { type: panel.type };
   if (panel.caption) result.caption = panel.caption;
+  if (panel.hide_caption) result.hide_caption = true;
   if (panel.size != null) result.size = Math.max(1, Math.min(12, panel.size));
   if (panel.w != null) result.w = Math.max(1, Math.min(12, panel.w));
   if (panel.h != null) result.h = Math.max(1, Math.min(MAX_HEIGHT_ROWS, panel.h));
