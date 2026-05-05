@@ -29,6 +29,10 @@ function writeQueryCache(token: string, params: Record<string, unknown> | undefi
   queryResultCache.set(makeCacheKey(token, params), records);
 }
 
+export function clearQueryResultCache(): void {
+  queryResultCache.clear();
+}
+
 export interface QueryState {
   loading: boolean;
   error: Error | null;
@@ -91,7 +95,9 @@ export function useLazyCypherQuery(
         }
       }
 
-      setState({ loading: true, error: null, records: undefined, first: undefined, warnings: [], queryErrors: [], tokenExpired: false });
+      // Keep existing records visible while fetching so panels don't flash to skeleton
+      // while a token refresh / force-retry is in flight.
+      setState((prev) => ({ ...prev, loading: true, error: null, warnings: [], queryErrors: [], tokenExpired: false }));
 
       const headers: Record<string, string> = {
         'Content-Type': 'application/json'

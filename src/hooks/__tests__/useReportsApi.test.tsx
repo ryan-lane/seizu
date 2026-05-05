@@ -2,7 +2,15 @@ import { act, renderHook, waitFor } from '@testing-library/react';
 import { AuthContext } from 'src/auth.context';
 import { AuthConfigContext } from 'src/authConfig.context';
 import type { Report } from 'src/config.context';
-import { useReportVersionsList, useReportVersion, useReportsList, useReportsMutations } from 'src/hooks/useReportsApi';
+import {
+  useReportVersionsList,
+  useReportVersion,
+  useReportsList,
+  useReportsMutations,
+  useReport,
+  useDashboardReport,
+  clearCapabilitiesCache
+} from 'src/hooks/useReportsApi';
 
 const AUTH_CONFIG_NO_OIDC = { auth_required: false, oidc: null, userManager: null };
 
@@ -586,5 +594,224 @@ describe('useReportsMutations (pinReport)', () => {
     await act(async () => {
       await expect(result.current.pinReport('r1', true)).rejects.toThrow();
     });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Shared fixture for useReport / useDashboardReport tests
+// ---------------------------------------------------------------------------
+
+const REPORT_CONFIG: Report = {
+  name: 'My Report',
+  rows: [{ name: 'Row 1', panels: [{ type: 'count', cypher: 'MATCH (n) RETURN count(n) AS total', caption: 'Total' }] }]
+};
+
+const REPORT_VERSION = {
+  report_id: 'r1',
+  name: 'My Report',
+  version: 3,
+  config: REPORT_CONFIG,
+  created_at: '2024-01-01T00:00:00Z',
+  created_by: 'alice@example.com',
+  report_created_by: 'alice@example.com',
+  report_updated_by: 'alice@example.com',
+  access: { scope: 'public' as const },
+  comment: null,
+  query_capabilities: { 'tok-1': 'signed-abc' }
+};
+
+// ---------------------------------------------------------------------------
+// useReport
+// ---------------------------------------------------------------------------
+
+describe('useReport', () => {
+  let mockFetch: jest.Mock;
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    clearCapabilitiesCache();
+    mockFetch = jest.fn();
+    global.fetch = mockFetch;
+  });
+
+  it('fetches and returns report data on first mount', async () => {
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve(REPORT_VERSION)
+    });
+
+    const { result } = renderHook(() => useReport('r1'), {
+      wrapper: makeWrapper(false, null)
+    });
+
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.report).toEqual(REPORT_CONFIG);
+    expect(result.current.name).toBe('My Report');
+    expect(result.current.queryCapabilities).toEqual({ 'tok-1': 'signed-abc' });
+    expect(result.current.error).toBeNull();
+    expect(mockFetch).toHaveBeenCalledWith(
+      '/api/v1/reports/r1?include_query_capabilities=true',
+      expect.any(Object)
+    );
+  });
+
+  it('serves from cache on remount without fetching again', async () => {
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve(REPORT_VERSION)
+    });
+
+    // First mount populates the cache.
+    const { result: first, unmount } = renderHook(() => useReport('r1'), {
+      wrapper: makeWrapper(false, null)
+    });
+    await waitFor(() => expect(first.current.loading).toBe(false));
+    expect(mockFetch).toHaveBeenCalledTimes(1);
+    unmount();
+
+    // Second mount should read from cache: loading starts false, no new fetch.
+    const { result: second } = renderHook(() => useReport('r1'), {
+      wrapper: makeWrapper(false, null)
+    });
+    expect(second.current.loading).toBe(false);
+    expect(second.current.report).toEqual(REPORT_CONFIG);
+    expect(mockFetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('refresh() busts the cache and re-fetches', async () => {
+    const v2 = { ...REPORT_VERSION, version: 4, query_capabilities: { 'tok-2': 'signed-xyz' } };
+    mockFetch
+      .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(REPORT_VERSION) })
+      .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(v2) });
+
+    const { result } = renderHook(() => useReport('r1'), {
+      wrapper: makeWrapper(false, null)
+    });
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.queryCapabilities).toEqual({ 'tok-1': 'signed-abc' });
+
+    act(() => { result.current.refresh(); });
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.queryCapabilities).toEqual({ 'tok-2': 'signed-xyz' });
+    expect(mockFetch).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not fetch when reportId is undefined', () => {
+    renderHook(() => useReport(undefined), {
+      wrapper: makeWrapper(false, null)
+    });
+    expect(mockFetch).not.toHaveBeenCalled();
+  });
+
+  it('does not fetch when auth_required and accessToken is null', () => {
+    renderHook(() => useReport('r1'), {
+      wrapper: makeWrapper(true, null)
+    });
+    expect(mockFetch).not.toHaveBeenCalled();
+  });
+
+  it('sets error when fetch returns non-ok status', async () => {
+    mockFetch.mockResolvedValue({ ok: false, status: 404 });
+
+    const { result } = renderHook(() => useReport('r1'), {
+      wrapper: makeWrapper(false, null)
+    });
+
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.error).not.toBeNull();
+    expect(result.current.report).toBeUndefined();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// useDashboardReport
+// ---------------------------------------------------------------------------
+
+describe('useDashboardReport', () => {
+  let mockFetch: jest.Mock;
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    clearCapabilitiesCache();
+    mockFetch = jest.fn();
+    global.fetch = mockFetch;
+  });
+
+  it('fetches and returns dashboard report on first mount', async () => {
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve(REPORT_VERSION)
+    });
+
+    const { result } = renderHook(() => useDashboardReport(), {
+      wrapper: makeWrapper(false, null)
+    });
+
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.report).toEqual(REPORT_CONFIG);
+    expect(result.current.queryCapabilities).toEqual({ 'tok-1': 'signed-abc' });
+    expect(result.current.notConfigured).toBe(false);
+    expect(mockFetch).toHaveBeenCalledWith(
+      '/api/v1/reports/dashboard?include_query_capabilities=true',
+      expect.any(Object)
+    );
+  });
+
+  it('serves from cache on remount without fetching again', async () => {
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve(REPORT_VERSION)
+    });
+
+    const { result: first, unmount } = renderHook(() => useDashboardReport(), {
+      wrapper: makeWrapper(false, null)
+    });
+    await waitFor(() => expect(first.current.loading).toBe(false));
+    expect(mockFetch).toHaveBeenCalledTimes(1);
+    unmount();
+
+    const { result: second } = renderHook(() => useDashboardReport(), {
+      wrapper: makeWrapper(false, null)
+    });
+    expect(second.current.loading).toBe(false);
+    expect(second.current.report).toEqual(REPORT_CONFIG);
+    expect(mockFetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('refresh() busts the cache and re-fetches', async () => {
+    const v2 = { ...REPORT_VERSION, query_capabilities: { 'tok-new': 'signed-new' } };
+    mockFetch
+      .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(REPORT_VERSION) })
+      .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(v2) });
+
+    const { result } = renderHook(() => useDashboardReport(), {
+      wrapper: makeWrapper(false, null)
+    });
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.queryCapabilities).toEqual({ 'tok-1': 'signed-abc' });
+
+    act(() => { result.current.refresh(); });
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.queryCapabilities).toEqual({ 'tok-new': 'signed-new' });
+    expect(mockFetch).toHaveBeenCalledTimes(2);
+  });
+
+  it('sets notConfigured when dashboard returns 404', async () => {
+    mockFetch.mockResolvedValue({ ok: false, status: 404 });
+
+    const { result } = renderHook(() => useDashboardReport(), {
+      wrapper: makeWrapper(false, null)
+    });
+
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.notConfigured).toBe(true);
+    expect(result.current.report).toBeUndefined();
+  });
+
+  it('does not fetch when auth_required and accessToken is null', () => {
+    renderHook(() => useDashboardReport(), {
+      wrapper: makeWrapper(true, null)
+    });
+    expect(mockFetch).not.toHaveBeenCalled();
   });
 });
