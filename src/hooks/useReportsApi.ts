@@ -26,6 +26,11 @@ export function updateCachedReportCapabilities(reportId: string, entry: ReportCa
   reportCapabilitiesCache.set(reportId, entry);
 }
 
+export function clearCapabilitiesCache(): void {
+  reportCapabilitiesCache.clear();
+  dashboardCacheEntry = null;
+}
+
 export interface ReportListItem {
   report_id: string;
   name: string;

@@ -1,8 +1,8 @@
-import { renderHook, act } from '@testing-library/react';
+import { renderHook, act, waitFor } from '@testing-library/react';
 import { useState } from 'react';
 import { AuthContext } from 'src/auth.context';
 import { AuthConfigContext } from 'src/authConfig.context';
-import { useLazyCypherQuery } from 'src/hooks/useCypherQuery';
+import { useLazyCypherQuery, clearQueryResultCache } from 'src/hooks/useCypherQuery';
 import { CurrentUser, CurrentUserState, CurrentUserStateProvider } from 'src/hooks/useCurrentUser';
 import { usePermissionState } from 'src/hooks/usePermissions';
 
@@ -221,5 +221,133 @@ describe('useLazyCypherQuery', () => {
         body: JSON.stringify({ token: 'signed-token', params: { base_severity: 'HIGH' } })
       })
     );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Query result cache
+// ---------------------------------------------------------------------------
+
+describe('query result cache', () => {
+  const RECORDS = [{ name: 'Alice' }, { name: 'Bob' }];
+  const TOKEN = 'report-token-cache-tests';
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    clearQueryResultCache();
+    mockUsePermissionState.mockReturnValue({
+      hasPermission: () => true,
+      loading: false,
+      currentUser: CURRENT_USER
+    });
+  });
+
+  it('serves cached results on second call without fetching again', async () => {
+    global.fetch = jest.fn().mockResolvedValue({
+      json: () => Promise.resolve({ results: RECORDS })
+    });
+
+    const { result } = renderHook(() => useLazyCypherQuery(CYPHER, TOKEN), {
+      wrapper: makeWrapper(false, null)
+    });
+
+    act(() => { result.current[0]({ severity: 'HIGH' }); });
+    await waitFor(() => expect(result.current[1].loading).toBe(false));
+    expect(result.current[1].records).toEqual(RECORDS);
+    expect(global.fetch).toHaveBeenCalledTimes(1);
+
+    // Second call with same token+params should hit the cache.
+    act(() => { result.current[0]({ severity: 'HIGH' }); });
+    await waitFor(() => expect(result.current[1].records).toEqual(RECORDS));
+    expect(global.fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('bypasses cache and fetches when force: true', async () => {
+    const freshRecords = [{ name: 'Charlie' }];
+    global.fetch = jest.fn()
+      .mockResolvedValueOnce({ json: () => Promise.resolve({ results: RECORDS }) })
+      .mockResolvedValueOnce({ json: () => Promise.resolve({ results: freshRecords }) });
+
+    const { result } = renderHook(() => useLazyCypherQuery(CYPHER, TOKEN + '-force'), {
+      wrapper: makeWrapper(false, null)
+    });
+
+    act(() => { result.current[0](); });
+    await waitFor(() => expect(result.current[1].loading).toBe(false));
+    expect(global.fetch).toHaveBeenCalledTimes(1);
+
+    // force: true should bypass the cache and fetch again.
+    act(() => { result.current[0](undefined, { force: true }); });
+    await waitFor(() => expect(result.current[1].records).toEqual(freshRecords));
+    expect(global.fetch).toHaveBeenCalledTimes(2);
+  });
+
+  it('never caches ad-hoc queries (no reportToken)', async () => {
+    global.fetch = jest.fn().mockResolvedValue({
+      json: () => Promise.resolve({ results: RECORDS })
+    });
+
+    const { result } = renderHook(() => useLazyCypherQuery(CYPHER), {
+      wrapper: makeWrapper(false, null)
+    });
+
+    act(() => { result.current[0](); });
+    await waitFor(() => expect(result.current[1].loading).toBe(false));
+
+    act(() => { result.current[0](); });
+    await waitFor(() => expect(result.current[1].loading).toBe(false));
+
+    // Both calls should have hit the network — no caching without a reportToken.
+    expect(global.fetch).toHaveBeenCalledTimes(2);
+  });
+
+  it('sets tokenExpired and preserves existing records on token_expired response', async () => {
+    global.fetch = jest.fn()
+      .mockResolvedValueOnce({ json: () => Promise.resolve({ results: RECORDS }) })
+      .mockResolvedValueOnce({
+        json: () => Promise.resolve({ error: 'Token has expired', code: 'token_expired' })
+      });
+
+    const { result } = renderHook(() => useLazyCypherQuery(CYPHER, TOKEN + '-expiry'), {
+      wrapper: makeWrapper(false, null)
+    });
+
+    // First call succeeds and populates records.
+    act(() => { result.current[0](); });
+    await waitFor(() => expect(result.current[1].records).toEqual(RECORDS));
+    expect(result.current[1].tokenExpired).toBe(false);
+
+    // Second call (force to bypass cache) receives token_expired.
+    act(() => { result.current[0](undefined, { force: true }); });
+    await waitFor(() => expect(result.current[1].tokenExpired).toBe(true));
+
+    // Records from before the expiry are preserved so panels keep showing data.
+    expect(result.current[1].records).toEqual(RECORDS);
+    expect(result.current[1].loading).toBe(false);
+  });
+
+  it('different params produce separate cache entries', async () => {
+    global.fetch = jest.fn()
+      .mockResolvedValueOnce({ json: () => Promise.resolve({ results: [{ n: 1 }] }) })
+      .mockResolvedValueOnce({ json: () => Promise.resolve({ results: [{ n: 2 }] }) });
+
+    const { result } = renderHook(() => useLazyCypherQuery(CYPHER, TOKEN + '-params'), {
+      wrapper: makeWrapper(false, null)
+    });
+
+    act(() => { result.current[0]({ severity: 'HIGH' }); });
+    await waitFor(() => expect(result.current[1].loading).toBe(false));
+    expect(result.current[1].records).toEqual([{ n: 1 }]);
+
+    act(() => { result.current[0]({ severity: 'LOW' }); });
+    await waitFor(() => expect(result.current[1].records).toEqual([{ n: 2 }]));
+
+    // Both params combinations fetched from network.
+    expect(global.fetch).toHaveBeenCalledTimes(2);
+
+    // Repeat HIGH — served from cache, no third fetch.
+    act(() => { result.current[0]({ severity: 'HIGH' }); });
+    await waitFor(() => expect(result.current[1].records).toEqual([{ n: 1 }]));
+    expect(global.fetch).toHaveBeenCalledTimes(2);
   });
 });

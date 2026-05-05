@@ -145,4 +145,53 @@ describe('CypherTable', () => {
     );
     expect(screen.getByText('Query validation failed.')).toBeInTheDocument();
   });
+
+  // preloadedRecords — used by CypherGraph to share already-fetched data across tab switches.
+
+  it('renders preloaded records without triggering a fetch', () => {
+    const records = [{ name: 'Alice' }, { name: 'Bob' }];
+    render(
+      <Wrapper>
+        <CypherTable
+          cypher="MATCH (n) RETURN n"
+          preloadedRecords={records}
+          columns={[{ name: 'name', label: 'Name' }]}
+        />
+      </Wrapper>
+    );
+
+    // The hook must have been called with undefined cypher so it never fetches.
+    expect(useLazyCypherQuery).toHaveBeenCalledWith(undefined, undefined);
+    // Data from preloadedRecords appears in the table.
+    expect(screen.getByText('Alice')).toBeInTheDocument();
+    expect(screen.getByText('Bob')).toBeInTheDocument();
+  });
+
+  it('does not show "Missing cypher query" when preloadedRecords is provided without cypher', () => {
+    const records = [{ name: 'Alice' }];
+    render(
+      <Wrapper>
+        <CypherTable
+          preloadedRecords={records}
+          columns={[{ name: 'name', label: 'Name' }]}
+        />
+      </Wrapper>
+    );
+
+    expect(screen.queryByText('Missing cypher query')).not.toBeInTheDocument();
+    expect(screen.getByText('Alice')).toBeInTheDocument();
+  });
+
+  it('shows "No records found." when preloadedRecords is an empty array', () => {
+    render(
+      <Wrapper>
+        <CypherTable
+          cypher="MATCH (n) RETURN n"
+          preloadedRecords={[]}
+        />
+      </Wrapper>
+    );
+
+    expect(screen.getByText('No records found.')).toBeInTheDocument();
+  });
 });
