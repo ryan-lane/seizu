@@ -2,6 +2,9 @@ import json
 import logging
 from typing import Any
 
+import botocore.config
+
+from reporting import settings
 from reporting.schema.report_config import ActionConfigFieldDef
 from reporting.schema.reporting_config import ScheduledQueryAction
 from reporting.services import get_boto_client, report_store
@@ -16,10 +19,14 @@ _SQS_URL = str_env("SQS_URL")
 
 
 def _get_client() -> Any:
+    config = botocore.config.Config(
+        connect_timeout=settings.AWS_CONNECT_TIMEOUT,
+        read_timeout=settings.AWS_READ_TIMEOUT,
+    )
     if _SQS_URL:
-        return get_boto_client("sqs", endpoint_url=_SQS_URL)
+        return get_boto_client("sqs", endpoint_url=_SQS_URL, config=config)
     else:
-        return get_boto_client("sqs")
+        return get_boto_client("sqs", config=config)
 
 
 def action_name() -> str:

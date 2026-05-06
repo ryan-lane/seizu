@@ -40,7 +40,8 @@ def get_boto_client(
     aws_secret_access_key: str | None = None,
     aws_session_token: str | None = None,
     endpoint_url: str | None = None,
+    config: Any = None,
 ) -> Any:
     """Return a boto3 client."""
     session = get_boto_session(region, aws_access_key_id, aws_secret_access_key, aws_session_token)
-    return session.client(client, endpoint_url=endpoint_url)
+    return session.client(client, endpoint_url=endpoint_url, config=config)
