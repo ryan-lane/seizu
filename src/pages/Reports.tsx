@@ -152,7 +152,7 @@ function Reports() {
     );
   }
 
-  if ((error || !displayedReport) && !loading) {
+  if ((error || (!displayedReport && !report)) && !loading) {
     return (
       <Box sx={{ ...pageContentSx, display: 'flex', alignItems: 'center', gap: 1 }}>
         <Error />

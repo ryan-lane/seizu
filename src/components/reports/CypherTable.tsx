@@ -349,6 +349,20 @@ export default function CypherTable({
           columns={columns ?? []}
           options={needInputsOptions}
         />
+        <Dialog fullScreen open={expandOpen} onClose={setClosedExpand}>
+          <DialogContent>
+            <MUIDataTable
+              data={[]}
+              columns={columns ?? []}
+              options={needInputsOptions}
+            />
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={setClosedExpand} color="primary" autoFocus>
+              Close
+            </Button>
+          </DialogActions>
+        </Dialog>
       </Box>
     );
   }
