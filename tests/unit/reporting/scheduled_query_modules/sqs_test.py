@@ -9,6 +9,23 @@ def test_action_name():
     assert sqs.action_name() == "sqs"
 
 
+def test_get_client_uses_configured_timeout(mocker):
+    client_mock = mocker.MagicMock()
+    client_ctor = mocker.patch("reporting.scheduled_query_modules.sqs.get_boto_client", return_value=client_mock)
+    mocker.patch("reporting.settings.AWS_CONNECT_TIMEOUT", 11)
+    mocker.patch("reporting.settings.AWS_READ_TIMEOUT", 23)
+    mocker.patch("reporting.scheduled_query_modules.sqs._SQS_URL", "http://sqs.local")
+
+    result = sqs._get_client()
+
+    assert result == client_mock
+    client_ctor.assert_called_once()
+    kwargs = client_ctor.call_args.kwargs
+    assert kwargs["endpoint_url"] == "http://sqs.local"
+    assert kwargs["config"].connect_timeout == 11
+    assert kwargs["config"].read_timeout == 23
+
+
 async def test_setup(mocker):
     mocker.patch("reporting.scheduled_query_modules.sqs._SQS_CREATE_SCHEDULED_QUERY_QUEUES", True)
     client_mock = mocker.MagicMock()

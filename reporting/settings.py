@@ -88,6 +88,12 @@ NEO4J_PASSWORD = str_env("NEO4J_PASSWORD")
 # removed from its connection pool.
 NEO4J_MAX_CONNECTION_LIFETIME = int_env("NEO4J_MAX_CONNECTION_LIFETIME", 3600)
 
+# Timeout in seconds for establishing a Neo4j TCP connection.
+NEO4J_CONNECTION_TIMEOUT = int_env("NEO4J_CONNECTION_TIMEOUT", 10)
+
+# Timeout in seconds for Neo4j query execution (server-side transaction timeout).
+NEO4J_QUERY_TIMEOUT = int_env("NEO4J_QUERY_TIMEOUT", 30)
+
 # Shared secret used to sign report-query capability tokens.
 # Required in normal authenticated deployments. Use a cryptographically random
 # value with at least 32 bytes of entropy; 64 bytes is preferred. Encode as hex
@@ -113,6 +119,23 @@ SCHEDULED_QUERY_MODULES = list_env(
     ],
 )
 # NOTE: scheduled query module settings are defined within the modules themselves
+
+# Timeout in seconds for the overall FastAPI request handling. Requests that
+# exceed this limit receive a 504 response.
+API_REQUEST_TIMEOUT = int_env("API_REQUEST_TIMEOUT", 60)
+
+# Timeout in seconds for JWKS endpoint HTTP requests used to fetch signing keys.
+JWKS_FETCH_TIMEOUT = int_env("JWKS_FETCH_TIMEOUT", 10)
+
+# Connection and read timeouts (in seconds) for AWS boto3 clients (DynamoDB, SQS).
+AWS_CONNECT_TIMEOUT = int_env("AWS_CONNECT_TIMEOUT", 5)
+AWS_READ_TIMEOUT = int_env("AWS_READ_TIMEOUT", 30)
+
+# Timeout in seconds for SQL statement execution (asyncpg/PostgreSQL only).
+SQL_STATEMENT_TIMEOUT = int_env("SQL_STATEMENT_TIMEOUT", 30)
+
+# Timeout in seconds for Slack API calls.
+SLACK_TIMEOUT = int_env("SLACK_TIMEOUT", 30)
 
 # Whether to enable HSTS (HTTP Strict Transport Security) headers.
 # Set to True in production to enforce HTTPS. Disable in development or when

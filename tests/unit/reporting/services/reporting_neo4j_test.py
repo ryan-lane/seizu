@@ -18,17 +18,40 @@ def _clear_client_cache():
 
 def test__get_neo4j_client(mocker):
     db_mock = mocker.MagicMock
-    mocker.patch(
+    driver_ctor = mocker.patch(
         "reporting.services.reporting_neo4j.AsyncGraphDatabase.driver",
         return_value=db_mock,
     )
     assert reporting_neo4j._get_async_neo4j_client() == db_mock
+    driver_ctor.assert_called_once_with(
+        reporting_neo4j.settings.NEO4J_URI,
+        auth=None,
+        max_connection_lifetime=reporting_neo4j.settings.NEO4J_MAX_CONNECTION_LIFETIME,
+        connection_timeout=reporting_neo4j.settings.NEO4J_CONNECTION_TIMEOUT,
+        notifications_min_severity=reporting_neo4j.settings.NEO4J_NOTIFICATIONS_MIN_SEVERITY,
+    )
 
 
 def test__get_neo4j_client_with_cache(mocker):
     db_mock = mocker.MagicMock
     mocker.patch.object(reporting_neo4j, "_ASYNC_CLIENT_CACHE", db_mock)
     assert reporting_neo4j._get_async_neo4j_client() == db_mock
+
+
+def test__get_sync_neo4j_client(mocker):
+    db_mock = mocker.MagicMock
+    driver_ctor = mocker.patch(
+        "reporting.services.reporting_neo4j.GraphDatabase.driver",
+        return_value=db_mock,
+    )
+    assert reporting_neo4j._get_sync_neo4j_client() == db_mock
+    driver_ctor.assert_called_once_with(
+        reporting_neo4j.settings.NEO4J_URI,
+        auth=None,
+        max_connection_lifetime=reporting_neo4j.settings.NEO4J_MAX_CONNECTION_LIFETIME,
+        connection_timeout=reporting_neo4j.settings.NEO4J_CONNECTION_TIMEOUT,
+        notifications_min_severity=reporting_neo4j.settings.NEO4J_NOTIFICATIONS_MIN_SEVERITY,
+    )
 
 
 async def test_run_query(mocker):
@@ -49,6 +72,11 @@ async def test_run_query(mocker):
     )
     result = await reporting_neo4j.run_query("MATCH (n) RETURN n")
     assert result == [mock_record]
+    session_mock.run.assert_awaited_once_with(
+        "MATCH (n) RETURN n",
+        parameters=None,
+        timeout=reporting_neo4j.settings.NEO4J_QUERY_TIMEOUT,
+    )
 
 
 async def test_run_query_with_single_retry_failure(mocker):
@@ -81,6 +109,11 @@ async def test_run_tx(mocker):
     tx_mock.run = AsyncMock(return_value=_records())
     result = await reporting_neo4j.run_tx(tx_mock, "MATCH (n) RETURN n")
     assert result == [mock_record]
+    tx_mock.run.assert_awaited_once_with(
+        "MATCH (n) RETURN n",
+        parameters=None,
+        timeout=reporting_neo4j.settings.NEO4J_QUERY_TIMEOUT,
+    )
 
 
 async def test_run_tx_with_single_retry_failure(mocker):

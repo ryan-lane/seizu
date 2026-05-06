@@ -29,7 +29,7 @@ class CurrentUser:
 def _get_jwks_client() -> PyJWKClient:
     global _jwks_client
     if _jwks_client is None:
-        _jwks_client = PyJWKClient(settings.JWKS_URL, cache_keys=True)
+        _jwks_client = PyJWKClient(settings.JWKS_URL, cache_keys=True, timeout=settings.JWKS_FETCH_TIMEOUT)
     return _jwks_client
 
 

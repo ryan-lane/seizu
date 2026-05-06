@@ -5,6 +5,7 @@ from decimal import Decimal
 from typing import Any
 
 import boto3
+import botocore.config
 import botocore.exceptions
 from snowflake import SnowflakeGenerator
 
@@ -440,6 +441,10 @@ def get_boto_resource() -> Any:
         "dynamodb",
         region_name=settings.DYNAMODB_REGION,
         endpoint_url=settings.DYNAMODB_ENDPOINT_URL or None,
+        config=botocore.config.Config(
+            connect_timeout=settings.AWS_CONNECT_TIMEOUT,
+            read_timeout=settings.AWS_READ_TIMEOUT,
+        ),
     )
 
 

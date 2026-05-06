@@ -46,6 +46,25 @@ def store():
 # ---------------------------------------------------------------------------
 
 
+def test_get_boto_resource_uses_configured_timeouts(mocker):
+    resource_mock = mocker.MagicMock()
+    resource_ctor = mocker.patch("reporting.services.report_store.dynamodb.boto3.resource", return_value=resource_mock)
+    mocker.patch("reporting.settings.DYNAMODB_REGION", "us-west-2")
+    mocker.patch("reporting.settings.DYNAMODB_ENDPOINT_URL", "http://dynamodb.local")
+    mocker.patch("reporting.settings.AWS_CONNECT_TIMEOUT", 7)
+    mocker.patch("reporting.settings.AWS_READ_TIMEOUT", 29)
+
+    result = dynamodb_module.get_boto_resource()
+
+    assert result == resource_mock
+    assert resource_ctor.call_args.args == ("dynamodb",)
+    config = resource_ctor.call_args.kwargs["config"]
+    assert resource_ctor.call_args.kwargs["region_name"] == "us-west-2"
+    assert resource_ctor.call_args.kwargs["endpoint_url"] == "http://dynamodb.local"
+    assert config.connect_timeout == 7
+    assert config.read_timeout == 29
+
+
 def _version_item(report_id="123", version=1):
     return {
         "PK": f"REPORT#{report_id}",

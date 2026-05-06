@@ -341,13 +341,14 @@ def _get_engine() -> AsyncEngine:
     global _engine
     if _engine is None:
         url = settings.SQL_DATABASE_URL
-        # Replace sync postgresql:// with async postgresql+asyncpg://
+        connect_args: dict[str, Any] = {}
         if url.startswith("postgresql://"):
             url = url.replace("postgresql://", "postgresql+asyncpg://", 1)
+            connect_args["command_timeout"] = settings.SQL_STATEMENT_TIMEOUT
         elif url.startswith("sqlite:"):
             # sqlite+aiosqlite for async sqlite (not commonly used in prod)
             url = url.replace("sqlite:", "sqlite+aiosqlite:", 1)
-        _engine = create_async_engine(url)
+        _engine = create_async_engine(url, connect_args=connect_args)
     return _engine
 
 

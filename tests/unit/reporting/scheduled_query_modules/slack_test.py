@@ -10,6 +10,21 @@ async def test_setup():
     assert await slack.setup() is None
 
 
+def test_get_client_uses_configured_timeout(mocker):
+    original_client = slack._CLIENT
+    slack._CLIENT = None
+    try:
+        client_mock = mocker.MagicMock()
+        client_ctor = mocker.patch("reporting.scheduled_query_modules.slack.WebClient", return_value=client_mock)
+        mocker.patch("reporting.settings.SLACK_TIMEOUT", 19)
+        mocker.patch("reporting.scheduled_query_modules.slack._SLACK_OAUTH_BOT_TOKEN", "xoxb-test")
+
+        assert slack._get_client() == client_mock
+        client_ctor.assert_called_once_with(token="xoxb-test", timeout=19)
+    finally:
+        slack._CLIENT = original_client
+
+
 def test_handle_results(mocker):
     action = ScheduledQueryAction(
         action_type="slack",

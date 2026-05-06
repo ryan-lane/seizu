@@ -5,6 +5,7 @@ import jwt
 import pytest
 from jwt.api_jwk import PyJWK
 
+import reporting.authnz as authnz_module
 from reporting.authnz import CurrentUser, _get_jwt_payload, get_current_user
 
 # JWK that matches the private key
@@ -38,6 +39,14 @@ def _make_mock_client(mocker, signing_key):
     mock_client = mocker.MagicMock()
     mock_client.get_signing_key_from_jwt.return_value = signing_key
     return mock_client
+
+
+@pytest.fixture(autouse=True)
+def reset_jwks_client():
+    original = authnz_module._jwks_client
+    authnz_module._jwks_client = None
+    yield
+    authnz_module._jwks_client = original
 
 
 async def test__get_jwt_payload_valid_token(mocker):
@@ -98,6 +107,22 @@ async def test__get_jwt_payload_aud_in_token_but_not_configured(mocker):
     )
     with pytest.raises(jwt.exceptions.InvalidAudienceError):
         await _get_jwt_payload(encoded)
+
+
+def test__get_jwks_client_uses_configured_timeout(mocker):
+    mock_client = mocker.MagicMock()
+    jwk_ctor = mocker.patch("reporting.authnz.PyJWKClient", return_value=mock_client)
+    mocker.patch("reporting.settings.JWKS_URL", "https://idp.example.com/jwks")
+    mocker.patch("reporting.settings.JWKS_FETCH_TIMEOUT", 17)
+
+    from reporting.authnz import _get_jwks_client
+
+    assert _get_jwks_client() == mock_client
+    jwk_ctor.assert_called_once_with(
+        "https://idp.example.com/jwks",
+        cache_keys=True,
+        timeout=17,
+    )
 
 
 async def test_get_current_user_auth_disabled(mocker):

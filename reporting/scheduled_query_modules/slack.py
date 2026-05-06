@@ -5,6 +5,7 @@ from typing import Any
 
 from slack_sdk import WebClient
 
+from reporting import settings
 from reporting.schema.report_config import ActionConfigFieldDef
 from reporting.schema.reporting_config import ScheduledQueryAction
 from reporting.utils.settings import str_env
@@ -21,7 +22,7 @@ def _get_client() -> Any:
     global _CLIENT
 
     if _CLIENT is None:
-        _CLIENT = WebClient(token=_SLACK_OAUTH_BOT_TOKEN)
+        _CLIENT = WebClient(token=_SLACK_OAUTH_BOT_TOKEN, timeout=settings.SLACK_TIMEOUT)
     return _CLIENT
 
 

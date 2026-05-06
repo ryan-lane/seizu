@@ -1,3 +1,4 @@
+import asyncio
 import base64
 import os
 import secrets
@@ -79,6 +80,55 @@ class _SecurityHeadersMiddleware(BaseHTTPMiddleware):
         return response
 
 
+_TIMEOUT_RESPONSE_BODY = b'{"error":"Request timed out"}'
+
+
+class _TimeoutMiddleware:
+    """Abort HTTP requests that exceed API_REQUEST_TIMEOUT seconds with a 504."""
+
+    def __init__(self, app: StarletteASGIApp, timeout: float) -> None:
+        self._app = app
+        self._timeout = timeout
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] != "http":
+            await self._app(scope, receive, send)
+            return
+
+        response_started = False
+
+        async def _tracked_send(message: Any) -> None:
+            nonlocal response_started
+            if message["type"] == "http.response.start":
+                response_started = True
+            await send(message)
+
+        try:
+            await asyncio.wait_for(
+                self._app(scope, receive, _tracked_send),
+                timeout=self._timeout,
+            )
+        except TimeoutError:
+            if not response_started:
+                await send(
+                    {
+                        "type": "http.response.start",
+                        "status": 504,
+                        "headers": [
+                            (b"content-type", b"application/json"),
+                            (b"content-length", str(len(_TIMEOUT_RESPONSE_BODY)).encode()),
+                        ],
+                    }
+                )
+                await send(
+                    {
+                        "type": "http.response.body",
+                        "body": _TIMEOUT_RESPONSE_BODY,
+                        "more_body": False,
+                    }
+                )
+
+
 class _MCPMiddleware:
     """Pure ASGI middleware that intercepts /api/v1/mcp* before FastAPI routing.
 
@@ -134,6 +184,7 @@ def create_app() -> FastAPI:
         hsts=hsts,
     )
     app.add_middleware(_SecurityHeadersMiddleware, secure_headers=secure_headers)
+    app.add_middleware(_TimeoutMiddleware, timeout=settings.API_REQUEST_TIMEOUT)
 
     @app.exception_handler(HTTPException)
     async def http_exception_handler(request: Request, exc: HTTPException) -> JSONResponse:

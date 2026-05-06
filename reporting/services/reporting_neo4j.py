@@ -24,6 +24,7 @@ def _get_async_neo4j_client() -> neo4j.AsyncDriver:
             settings.NEO4J_URI,
             auth=neo4j_auth,
             max_connection_lifetime=settings.NEO4J_MAX_CONNECTION_LIFETIME,
+            connection_timeout=settings.NEO4J_CONNECTION_TIMEOUT,
             notifications_min_severity=cast(
                 Literal["OFF", "WARNING", "INFORMATION"],
                 settings.NEO4J_NOTIFICATIONS_MIN_SEVERITY,
@@ -43,6 +44,7 @@ def _get_sync_neo4j_client() -> Driver:
             settings.NEO4J_URI,
             auth=neo4j_auth,
             max_connection_lifetime=settings.NEO4J_MAX_CONNECTION_LIFETIME,
+            connection_timeout=settings.NEO4J_CONNECTION_TIMEOUT,
             notifications_min_severity=cast(
                 Literal["OFF", "WARNING", "INFORMATION"],
                 settings.NEO4J_NOTIFICATIONS_MIN_SEVERITY,
@@ -55,7 +57,7 @@ async def run_query(cypher: str, parameters: dict = None) -> list[Record]:
     results = []
     driver = _get_async_neo4j_client()
     async with driver.session() as session:
-        query_results = await session.run(cypher, parameters=parameters)
+        query_results = await session.run(cypher, parameters=parameters, timeout=settings.NEO4J_QUERY_TIMEOUT)
         async for result in query_results:
             results.append(result)
     return results
@@ -75,7 +77,7 @@ async def run_query_with_retry(cypher: str, parameters: dict = None) -> list[Rec
 
 async def run_tx(tx: AsyncTransaction, cypher: str, parameters: dict = None) -> list[Record]:
     results = []
-    query_results = await tx.run(cypher, parameters=parameters)
+    query_results = await tx.run(cypher, parameters=parameters, timeout=settings.NEO4J_QUERY_TIMEOUT)
     async for result in query_results:
         results.append(result)
     return results

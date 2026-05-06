@@ -31,6 +31,14 @@ def reset_snowflake_gen():
     sql_module._snowflake_gen = original
 
 
+@pytest.fixture(autouse=True)
+def reset_engine():
+    original = sql_module._engine
+    sql_module._engine = None
+    yield
+    sql_module._engine = original
+
+
 @pytest.fixture()
 async def test_engine():
     """In-memory async SQLite engine shared across all sessions in a test."""
@@ -76,6 +84,22 @@ async def test_initialize_creates_tables(mocker):
     assert "skillsets" in table_names
     assert "skills" in table_names
     await engine.dispose()
+
+
+def test_get_engine_uses_command_timeout_for_postgres(mocker):
+    engine_mock = object()
+    create_engine = mocker.patch(
+        "reporting.services.report_store.sql.create_async_engine",
+        return_value=engine_mock,
+    )
+    mocker.patch("reporting.settings.SQL_DATABASE_URL", "postgresql://user:pass@localhost:5432/seizu")
+    mocker.patch("reporting.settings.SQL_STATEMENT_TIMEOUT", 31)
+
+    result = sql_module._get_engine()
+
+    assert result is engine_mock
+    assert create_engine.call_args.args == ("postgresql+asyncpg://user:pass@localhost:5432/seizu",)
+    assert create_engine.call_args.kwargs["connect_args"] == {"command_timeout": 31}
 
 
 # ---------------------------------------------------------------------------
