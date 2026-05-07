@@ -26,13 +26,17 @@ import {
   ReactFlow,
   Background,
   BackgroundVariant,
+  BaseEdge,
   Edge,
+  EdgeLabelRenderer,
+  EdgeProps,
   Handle,
   MarkerType,
   Node,
   NodeProps,
   Panel,
   Position,
+  getStraightPath,
   useEdgesState,
   useNodesState,
   useReactFlow,
@@ -51,15 +55,21 @@ interface GraphSettings {
 
 export interface GraphNode {
   id: string | number;
+  neo4j_id?: string | number;
+  labels?: string[];
+  properties?: Record<string, unknown>;
   label?: string;
   group?: string;
   [key: string]: unknown;
 }
 
 export interface GraphLink {
+  id?: string | number;
+  neo4j_id?: string | number;
   source: string | number | GraphNode;
   target: string | number | GraphNode;
   type?: string;
+  properties?: Record<string, unknown>;
   [key: string]: unknown;
 }
 
@@ -95,6 +105,32 @@ function isPathValue(v: unknown): v is Neo4jPathValue {
   return Array.isArray(obj['nodes']) && Array.isArray(obj['relationships']);
 }
 
+function readGraphValue(item: GraphNode | GraphLink, key: string): unknown {
+  const properties = item.properties;
+  if (key !== 'group' && properties && Object.prototype.hasOwnProperty.call(properties, key)) {
+    return properties[key];
+  }
+  if (Object.prototype.hasOwnProperty.call(item, key)) {
+    return item[key];
+  }
+  return properties?.[key];
+}
+
+function graphNodeId(node: Neo4jPathNode): string | number {
+  const propertyId = node.properties['id'];
+  if (typeof propertyId === 'string' && propertyId.length > 0) return propertyId;
+  if (typeof propertyId === 'number') return propertyId;
+  return node.id;
+}
+
+export function graphNodeHoverId(node: Pick<GraphNode, 'id' | 'neo4j_id' | 'properties'>): string {
+  const propertyId = node.properties?.['id'];
+  if (typeof propertyId === 'string' && propertyId.length > 0) return propertyId;
+  if (typeof propertyId === 'number') return String(propertyId);
+  if (node.neo4j_id !== undefined) return String(node.neo4j_id);
+  return String(node.id);
+}
+
 /**
  * Given query records, extract a GraphData object.
  *
@@ -104,7 +140,7 @@ function isPathValue(v: unknown): v is Neo4jPathValue {
  *     backend serialises Neo4j Path objects this way when the query does `RETURN path`.
  *     Nodes are de-duplicated by id across all records.
  */
-function extractGraphData(
+export function extractGraphData(
   records: Record<string, unknown>[],
   nodeLabelKey: string,
 ): GraphData | null {
@@ -120,6 +156,7 @@ function extractGraphData(
 
   // ── Format 2: path values across all records ──────────────────────────────
   const nodeMap = new Map<string | number, GraphNode>();
+  const nodeIdByNeo4jId = new Map<string | number, string | number>();
   const links: GraphLink[] = [];
   let foundPaths = false;
 
@@ -128,21 +165,26 @@ function extractGraphData(
       if (!isPathValue(value)) continue;
       foundPaths = true;
       for (const n of value.nodes) {
-        if (!nodeMap.has(n.id)) {
-          nodeMap.set(n.id, {
-            ...n.properties,
-            id: n.id,
-            label: String(n.properties[nodeLabelKey] ?? n.properties['name'] ?? n.id),
+        const id = graphNodeId(n);
+        nodeIdByNeo4jId.set(n.id, id);
+        if (!nodeMap.has(id)) {
+          nodeMap.set(id, {
+            id,
+            neo4j_id: n.id,
+            label: String(n.properties[nodeLabelKey] ?? n.properties['name'] ?? id),
             group: n.labels[0] ?? 'default',
+            labels: n.labels,
+            properties: n.properties,
           });
         }
       }
       for (const rel of value.relationships) {
         links.push({
-          ...rel.properties,
-          source: rel.start_node_id,
-          target: rel.end_node_id,
+          neo4j_id: rel.id,
+          source: nodeIdByNeo4jId.get(rel.start_node_id) ?? rel.start_node_id,
+          target: nodeIdByNeo4jId.get(rel.end_node_id) ?? rel.end_node_id,
           type: rel.type,
+          properties: rel.properties,
         });
       }
     }
@@ -193,7 +235,36 @@ export function colorForGroup(
 
 // ─── Force layout ─────────────────────────────────────────────────────────────
 
-function computeLayout(
+interface LayoutPoint {
+  x: number;
+  y: number;
+}
+
+interface SegmentDistance {
+  distance: number;
+  closestX: number;
+  closestY: number;
+  t: number;
+}
+
+export function pointToSegmentDistance(point: LayoutPoint, start: LayoutPoint, end: LayoutPoint): SegmentDistance {
+  const dx = end.x - start.x;
+  const dy = end.y - start.y;
+  const lengthSquared = dx * dx + dy * dy;
+  if (lengthSquared === 0) {
+    const distance = Math.sqrt((point.x - start.x) ** 2 + (point.y - start.y) ** 2);
+    return { distance, closestX: start.x, closestY: start.y, t: 0 };
+  }
+
+  const rawT = ((point.x - start.x) * dx + (point.y - start.y) * dy) / lengthSquared;
+  const t = Math.max(0, Math.min(1, rawT));
+  const closestX = start.x + t * dx;
+  const closestY = start.y + t * dy;
+  const distance = Math.sqrt((point.x - closestX) ** 2 + (point.y - closestY) ** 2);
+  return { distance, closestX, closestY, t };
+}
+
+export function computeLayout(
   nodes: GraphNode[],
   links: GraphLink[],
   width: number,
@@ -207,6 +278,10 @@ function computeLayout(
   const SPRING_LEN = 140 * repulsion;
   const SPRING_K = 0.06;
   const REPULSION = 3000 * repulsion * repulsion;
+  const MIN_NODE_DISTANCE = 96 * repulsion;
+  const COLLISION_K = 0.18;
+  const EDGE_AVOID_DISTANCE = 54;
+  const EDGE_AVOID_K = 0.2;
   const DAMPING = 0.82;
 
   const positions = new Map<string, { x: number; y: number; vx: number; vy: number }>();
@@ -228,6 +303,32 @@ function computeLayout(
     source: String(typeof l.source === 'object' ? (l.source as GraphNode).id : l.source),
     target: String(typeof l.target === 'object' ? (l.target as GraphNode).id : l.target),
   }));
+  const edgeKeys = new Set<string>();
+  const adjacency = new Map<string, Set<string>>();
+  nodeIds.forEach(id => adjacency.set(id, new Set()));
+  edgePairs.forEach(({ source, target }) => {
+    edgeKeys.add(source < target ? `${source}\0${target}` : `${target}\0${source}`);
+    adjacency.get(source)?.add(target);
+    adjacency.get(target)?.add(source);
+  });
+
+  const componentByNode = new Map<string, number>();
+  let nextComponent = 0;
+  nodeIds.forEach(id => {
+    if (componentByNode.has(id)) return;
+    const stack = [id];
+    const component = nextComponent;
+    nextComponent += 1;
+    componentByNode.set(id, component);
+    while (stack.length > 0) {
+      const current = stack.pop()!;
+      adjacency.get(current)?.forEach(neighbor => {
+        if (componentByNode.has(neighbor)) return;
+        componentByNode.set(neighbor, component);
+        stack.push(neighbor);
+      });
+    }
+  });
 
   for (let iter = 0; iter < 150; iter++) {
     const alpha = 1 - iter / 150;
@@ -246,7 +347,14 @@ function computeLayout(
         const dy = b.y - a.y;
         const d2 = Math.max(dx * dx + dy * dy, 1);
         const d = Math.sqrt(d2);
-        const f = (REPULSION * alpha) / d2;
+        const edgeKey = nodeIds[i] < nodeIds[j] ? `${nodeIds[i]}\0${nodeIds[j]}` : `${nodeIds[j]}\0${nodeIds[i]}`;
+        const directlyConnected = edgeKeys.has(edgeKey);
+        const sameComponent = componentByNode.get(nodeIds[i]) === componentByNode.get(nodeIds[j]);
+        const repulsionMultiplier = directlyConnected ? 1 : sameComponent ? 2.4 : 5.5;
+        const collisionForce = d < MIN_NODE_DISTANCE
+          ? (MIN_NODE_DISTANCE - d) * COLLISION_K * alpha
+          : 0;
+        const f = ((REPULSION * repulsionMultiplier * alpha) / d2) + collisionForce;
         a.vx -= (dx / d) * f;
         a.vy -= (dy / d) * f;
         b.vx += (dx / d) * f;
@@ -268,6 +376,43 @@ function computeLayout(
       b.vy -= (dy / d) * f;
     });
 
+    edgePairs.forEach(({ source, target }) => {
+      const a = positions.get(source);
+      const b = positions.get(target);
+      if (!a || !b) return;
+
+      const edgeDx = b.x - a.x;
+      const edgeDy = b.y - a.y;
+      const edgeDistance = Math.max(Math.sqrt(edgeDx * edgeDx + edgeDy * edgeDy), 1);
+      nodeIds.forEach(id => {
+        if (id === source || id === target) return;
+        const p = positions.get(id)!;
+        const segment = pointToSegmentDistance(p, a, b);
+        if (segment.t <= 0.08 || segment.t >= 0.92 || segment.distance >= EDGE_AVOID_DISTANCE) return;
+
+        let nx = p.x - segment.closestX;
+        let ny = p.y - segment.closestY;
+        const normalDistance = Math.sqrt(nx * nx + ny * ny);
+        if (normalDistance > 1) {
+          nx /= normalDistance;
+          ny /= normalDistance;
+        } else {
+          nx = -edgeDy / edgeDistance;
+          ny = edgeDx / edgeDistance;
+          const awayFromCenterX = p.x - cx;
+          const awayFromCenterY = p.y - cy;
+          if ((nx * awayFromCenterX) + (ny * awayFromCenterY) < 0) {
+            nx *= -1;
+            ny *= -1;
+          }
+        }
+
+        const f = (EDGE_AVOID_DISTANCE - segment.distance) * EDGE_AVOID_K * alpha;
+        p.vx += nx * f;
+        p.vy += ny * f;
+      });
+    });
+
     nodeIds.forEach(id => {
       const p = positions.get(id)!;
       p.x += p.vx * DAMPING;
@@ -282,49 +427,260 @@ function computeLayout(
 
 // ─── Custom node ──────────────────────────────────────────────────────────────
 
+type HandleSide =
+  | 'right'
+  | 'right-lower'
+  | 'bottom-right'
+  | 'bottom-right-lower'
+  | 'bottom'
+  | 'bottom-left-lower'
+  | 'bottom-left'
+  | 'left-lower'
+  | 'left'
+  | 'left-upper'
+  | 'top-left'
+  | 'top-left-upper'
+  | 'top'
+  | 'top-right-upper'
+  | 'top-right'
+  | 'right-upper';
+
+const HANDLE_SIDES: HandleSide[] = [
+  'right',
+  'right-lower',
+  'bottom-right',
+  'bottom-right-lower',
+  'bottom',
+  'bottom-left-lower',
+  'bottom-left',
+  'left-lower',
+  'left',
+  'left-upper',
+  'top-left',
+  'top-left-upper',
+  'top',
+  'top-right-upper',
+  'top-right',
+  'right-upper',
+];
+
+const HANDLE_DEFINITIONS: Record<HandleSide, { position: Position; style: React.CSSProperties }> = {
+  right: { position: Position.Right, style: { top: '50%' } },
+  'right-lower': { position: Position.Right, style: { top: '70%' } },
+  'bottom-right': { position: Position.Bottom, style: { left: '78%' } },
+  'bottom-right-lower': { position: Position.Bottom, style: { left: '65%' } },
+  bottom: { position: Position.Bottom, style: { left: '50%' } },
+  'bottom-left-lower': { position: Position.Bottom, style: { left: '35%' } },
+  'bottom-left': { position: Position.Bottom, style: { left: '22%' } },
+  'left-lower': { position: Position.Left, style: { top: '70%' } },
+  left: { position: Position.Left, style: { top: '50%' } },
+  'left-upper': { position: Position.Left, style: { top: '30%' } },
+  'top-left': { position: Position.Top, style: { left: '22%' } },
+  'top-left-upper': { position: Position.Top, style: { left: '35%' } },
+  top: { position: Position.Top, style: { left: '50%' } },
+  'top-right-upper': { position: Position.Top, style: { left: '65%' } },
+  'top-right': { position: Position.Top, style: { left: '78%' } },
+  'right-upper': { position: Position.Right, style: { top: '30%' } },
+};
+
+const hiddenHandleStyle: React.CSSProperties = {
+  opacity: 0,
+  width: 1,
+  height: 1,
+  minWidth: 1,
+  minHeight: 1,
+  border: 0,
+  background: 'transparent',
+  pointerEvents: 'none',
+};
+
 function GraphNodeComponent({ data, selected }: NodeProps) {
   const theme = useTheme();
   const palette = theme.palette.mode === 'dark' ? chartPalette.dark : chartPalette.light;
   const color = colorForGroup(String(data['group'] ?? 'default'), palette);
-  const label = String(data['label'] ?? data['id'] ?? '');
+  const typeLabel = String(data['group'] ?? data['label'] ?? data['id'] ?? '');
+  const hoverId = graphNodeHoverId(data as unknown as GraphNode);
+  const title = typeLabel ? `${typeLabel}: ${hoverId}` : hoverId;
 
   return (
-    <div style={{ textAlign: 'center', cursor: 'pointer' }}>
-      <Handle type="target" position={Position.Top} style={{ opacity: 0, width: 0, height: 0, minWidth: 0, minHeight: 0 }} />
-      <div
-        style={{
-          width: 30,
-          height: 30,
-          borderRadius: '50%',
-          background: color,
-          border: `2.5px solid ${selected ? theme.palette.primary.main : theme.palette.background.paper}`,
-          boxSizing: 'border-box',
-          margin: '0 auto',
-          boxShadow: selected ? `0 0 0 2px ${theme.palette.primary.main}` : 'none',
-        }}
-      />
-      <Handle type="source" position={Position.Bottom} style={{ opacity: 0, width: 0, height: 0, minWidth: 0, minHeight: 0 }} />
-      <div
-        style={{
-          marginTop: 3,
-          fontSize: 10,
-          color: theme.palette.text.secondary,
-          fontFamily: theme.typography.fontFamily ?? 'sans-serif',
-          maxWidth: 80,
-          overflow: 'hidden',
-          textOverflow: 'ellipsis',
-          whiteSpace: 'nowrap',
-        }}
-      >
-        {label}
+    <Tooltip
+      title={title}
+      arrow
+      disableInteractive
+      enterDelay={NODE_HOVER_ENTER_DELAY_MS}
+      enterNextDelay={0}
+      placement="top"
+    >
+      <div style={{ cursor: 'pointer' }}>
+        {HANDLE_SIDES.map(side => {
+          const handle = HANDLE_DEFINITIONS[side];
+          return (
+            <Handle
+              key={`target-${side}`}
+              id={`target-${side}`}
+              type="target"
+              position={handle.position}
+              style={{ ...hiddenHandleStyle, ...handle.style }}
+            />
+          );
+        })}
+        <div
+          style={{
+            width: 64,
+            height: 64,
+            borderRadius: '50%',
+            background: color,
+            border: `2.5px solid ${selected ? theme.palette.primary.main : theme.palette.background.paper}`,
+            boxSizing: 'border-box',
+            boxShadow: selected ? `0 0 0 2px ${theme.palette.primary.main}` : 'none',
+            color: theme.palette.getContrastText(color),
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            fontFamily: theme.typography.fontFamily ?? 'sans-serif',
+            fontSize: 9,
+            fontWeight: 600,
+            lineHeight: 1.1,
+            overflow: 'hidden',
+            padding: 8,
+            textTransform: 'none',
+          }}
+        >
+          <span
+            style={{
+              display: '-webkit-box',
+              WebkitBoxOrient: 'vertical',
+              WebkitLineClamp: 4,
+              maxWidth: '100%',
+              minWidth: 0,
+              overflow: 'hidden',
+              overflowWrap: 'anywhere',
+              textAlign: 'center',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'normal',
+            }}
+          >
+            {typeLabel}
+          </span>
+        </div>
+        {HANDLE_SIDES.map(side => {
+          const handle = HANDLE_DEFINITIONS[side];
+          return (
+            <Handle
+              key={`source-${side}`}
+              id={`source-${side}`}
+              type="source"
+              position={handle.position}
+              style={{ ...hiddenHandleStyle, ...handle.style }}
+            />
+          );
+        })}
       </div>
-    </div>
+    </Tooltip>
   );
 }
 
 const nodeTypes = { graphNode: GraphNodeComponent };
 
+const NODE_HOVER_ENTER_DELAY_MS = 150;
+
+const RELATIONSHIP_LABEL_FONT_SIZE = 9;
+const RELATIONSHIP_LABEL_GAP = 2;
+const RELATIONSHIP_LABEL_OFFSET = RELATIONSHIP_LABEL_FONT_SIZE / 2 + RELATIONSHIP_LABEL_GAP;
+
+export function relationshipLabelTransform(
+  sourceX: number,
+  sourceY: number,
+  targetX: number,
+  targetY: number,
+  labelX: number,
+  labelY: number,
+): string {
+  const rawAngle = Math.atan2(targetY - sourceY, targetX - sourceX) * 180 / Math.PI;
+  let readableAngle = rawAngle > 90 || rawAngle < -90 ? rawAngle + 180 : rawAngle;
+  if (readableAngle >= 360) readableAngle -= 360;
+  if (readableAngle <= -360) readableAngle += 360;
+
+  const dx = targetX - sourceX;
+  const dy = targetY - sourceY;
+  const distance = Math.max(Math.sqrt(dx * dx + dy * dy), 1);
+  let offsetX = (dy / distance) * RELATIONSHIP_LABEL_OFFSET;
+  let offsetY = (-dx / distance) * RELATIONSHIP_LABEL_OFFSET;
+  if (offsetY > 0) {
+    offsetX *= -1;
+    offsetY *= -1;
+  }
+
+  return `translate(-50%, -50%) translate(${labelX + offsetX}px, ${labelY + offsetY}px) rotate(${readableAngle}deg)`;
+}
+
+function RelationshipEdge(props: EdgeProps & { labelStyle?: React.CSSProperties }) {
+  const {
+    sourceX,
+    sourceY,
+    targetX,
+    targetY,
+    markerEnd,
+    style,
+    label,
+    labelStyle,
+  } = props;
+  const [edgePath, labelX, labelY] = getStraightPath({ sourceX, sourceY, targetX, targetY });
+  const labelColor = (labelStyle as React.CSSProperties | undefined)?.color
+    ?? (labelStyle as React.CSSProperties | undefined)?.fill
+    ?? style?.stroke
+    ?? 'currentColor';
+  const labelOpacity = (labelStyle as React.CSSProperties | undefined)?.opacity ?? style?.opacity ?? 1;
+
+  return (
+    <>
+      <BaseEdge path={edgePath} markerEnd={markerEnd} style={style} />
+      {label ? (
+        <EdgeLabelRenderer>
+          <div
+            style={{
+              position: 'absolute',
+              transform: relationshipLabelTransform(sourceX, sourceY, targetX, targetY, labelX, labelY),
+              transformOrigin: 'center',
+              pointerEvents: 'none',
+              color: String(labelColor),
+              opacity: Number(labelOpacity),
+              fontSize: RELATIONSHIP_LABEL_FONT_SIZE,
+              fontWeight: 500,
+              lineHeight: 1,
+              whiteSpace: 'nowrap',
+              textShadow: '0 0 2px var(--xy-edge-label-background-color, transparent)',
+            }}
+          >
+            {label}
+          </div>
+        </EdgeLabelRenderer>
+      ) : null}
+    </>
+  );
+}
+
+const edgeTypes = { relationship: RelationshipEdge };
+
 // ─── Converters ───────────────────────────────────────────────────────────────
+
+export function closestEdgeHandles(
+  sourcePosition: { x: number; y: number },
+  targetPosition: { x: number; y: number },
+): { sourceHandle: string; targetHandle: string } {
+  const dx = targetPosition.x - sourcePosition.x;
+  const dy = targetPosition.y - sourcePosition.y;
+  const sector = Math.round(Math.atan2(dy, dx) / (Math.PI / 8));
+  const sourceIndex = (sector + HANDLE_SIDES.length) % HANDLE_SIDES.length;
+  const targetIndex = (sourceIndex + 8) % HANDLE_SIDES.length;
+  const sourceSide = HANDLE_SIDES[sourceIndex];
+  const targetSide = HANDLE_SIDES[targetIndex];
+
+  return {
+    sourceHandle: `source-${sourceSide}`,
+    targetHandle: `target-${targetSide}`,
+  };
+}
 
 function buildXyNodes(
   graphNodes: GraphNode[],
@@ -340,25 +696,35 @@ function buildXyNodes(
       position: pos,
       data: {
         ...n,
-        label: String(n[nodeLabelKey] ?? n.id ?? ''),
-        group: String(n[nodeColorByKey] ?? 'default'),
+        label: String(readGraphValue(n, nodeLabelKey) ?? n.id ?? ''),
+        group: String(readGraphValue(n, nodeColorByKey) ?? 'default'),
         original: n,
       },
     };
   });
 }
 
-function buildXyEdges(graphLinks: GraphLink[], edgeColor: string): Edge[] {
+export function buildXyEdges(
+  graphLinks: GraphLink[],
+  edgeColor: string,
+  positions?: Map<string, { x: number; y: number }>,
+): Edge[] {
   return graphLinks.map((l, i) => {
     const source = String(typeof l.source === 'object' ? (l.source as GraphNode).id : l.source);
     const target = String(typeof l.target === 'object' ? (l.target as GraphNode).id : l.target);
+    const handles = positions?.has(source) && positions.has(target)
+      ? closestEdgeHandles(positions.get(source)!, positions.get(target)!)
+      : {};
     return {
       id: `edge-${i}`,
+      type: 'relationship',
       source,
       target,
+      ...handles,
       label: l.type ?? undefined,
-      labelStyle: { fontSize: 10 },
-      style: { stroke: edgeColor, strokeWidth: 1.5 },
+      labelShowBg: false,
+      labelStyle: { fontSize: RELATIONSHIP_LABEL_FONT_SIZE, color: edgeColor, fill: edgeColor, fontWeight: 500, opacity: FULL_OPACITY },
+      style: { stroke: edgeColor, strokeWidth: 1.4, opacity: FULL_OPACITY },
       markerEnd: { type: MarkerType.ArrowClosed, color: edgeColor },
       data: { original: l },
     };
@@ -487,7 +853,7 @@ const REPULSION_MIN = 0.5;
 const REPULSION_MAX = 4;
 const REPULSION_STEP = 0.25;
 const ICON_SIZE = 20;
-const DIM_OPACITY = 0.15;
+const DIM_OPACITY = 0.35;
 const FULL_OPACITY = 1;
 
 function CtrlBtn({
@@ -625,7 +991,7 @@ export default function CypherGraph({
 
   const nodeLabelKey = graphSettings?.node_label ?? 'label';
   const nodeColorByKey = graphSettings?.node_color_by ?? 'group';
-  const edgeColor = theme.palette.divider;
+  const edgeColor = theme.palette.text.secondary;
 
   // Extract graph data from query results, supporting both explicit-graph and path formats.
   const graphData = useMemo(
@@ -683,7 +1049,7 @@ export default function CypherGraph({
     setFocusedId(null);
     const positions = computeLayout(graphData.nodes, graphData.links, 800, 450, repulsion);
     setNodes(buildXyNodes(graphData.nodes, positions, nodeLabelKey, nodeColorByKey));
-    setEdges(buildXyEdges(graphData.links, edgeColor));
+    setEdges(buildXyEdges(graphData.links, edgeColor, positions));
     setFitViewTrigger(n => n + 1);
   }, [graphData, nodeLabelKey, nodeColorByKey, edgeColor, setNodes, setEdges, repulsion]);
 
@@ -919,6 +1285,8 @@ export default function CypherGraph({
                 onEdgeClick={handleEdgeClick}
                 onPaneClick={handlePaneClick}
                 nodeTypes={nodeTypes}
+                edgeTypes={edgeTypes}
+                proOptions={{ hideAttribution: true }}
                 fitView
                 fitViewOptions={{ padding: 0.2 }}
                 minZoom={0.1}
