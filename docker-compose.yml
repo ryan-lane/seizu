@@ -75,7 +75,7 @@ services:
     networks:
       database:
   neo4j:
-    image: neo4j:5.15
+    image: neo4j:5.26
     restart: unless-stopped
     volumes:
       - ./.compose/neo4j/neo4j.conf:/conf/neo4j.conf
