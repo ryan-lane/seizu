@@ -78,6 +78,16 @@ interface GraphData {
   links: GraphLink[];
 }
 
+function normalizeGraphData(value: unknown): GraphData | null {
+  if (typeof value !== 'object' || value === null) return null;
+  const graph = value as Record<string, unknown>;
+  if (!Array.isArray(graph['nodes']) || !Array.isArray(graph['links'])) return null;
+  return {
+    nodes: graph['nodes'] as GraphNode[],
+    links: graph['links'] as GraphLink[],
+  };
+}
+
 // ─── Neo4j path format ────────────────────────────────────────────────────────
 
 interface Neo4jPathNode {
@@ -148,10 +158,8 @@ export function extractGraphData(
 
   // ── Format 1: explicit graph map (any key whose value has {nodes, links}) ─
   for (const value of Object.values(records[0])) {
-    const v = value as GraphData | undefined;
-    if (v && Array.isArray(v.nodes) && Array.isArray(v.links)) {
-      return v;
-    }
+    const graph = normalizeGraphData(value);
+    if (graph) return graph;
   }
 
   // ── Format 2: path values across all records ──────────────────────────────
@@ -265,13 +273,15 @@ export function pointToSegmentDistance(point: LayoutPoint, start: LayoutPoint, e
 }
 
 export function computeLayout(
-  nodes: GraphNode[],
-  links: GraphLink[],
+  nodes: unknown,
+  links: unknown,
   width: number,
   height: number,
   repulsion: number = 1,
 ): Map<string, { x: number; y: number }> {
-  if (nodes.length === 0) return new Map();
+  const graphNodes = Array.isArray(nodes) ? nodes as GraphNode[] : [];
+  const graphLinks = Array.isArray(links) ? links as GraphLink[] : [];
+  if (graphNodes.length === 0) return new Map();
 
   // SPRING_LEN scales linearly with repulsion; the many-body force scales
   // quadratically so that equilibrium pairwise distances scale roughly linearly.
@@ -288,8 +298,8 @@ export function computeLayout(
   const cx = width / 2;
   const cy = height / 2;
   const r = Math.min(width, height) * 0.32;
-  nodes.forEach((n, i) => {
-    const angle = (i / Math.max(nodes.length, 1)) * 2 * Math.PI;
+  graphNodes.forEach((n, i) => {
+    const angle = (i / Math.max(graphNodes.length, 1)) * 2 * Math.PI;
     positions.set(String(n.id), {
       x: cx + r * Math.cos(angle),
       y: cy + r * Math.sin(angle),
@@ -298,8 +308,8 @@ export function computeLayout(
     });
   });
 
-  const nodeIds = nodes.map(n => String(n.id));
-  const edgePairs = links.map(l => ({
+  const nodeIds = graphNodes.map(n => String(n.id));
+  const edgePairs = graphLinks.map(l => ({
     source: String(typeof l.source === 'object' ? (l.source as GraphNode).id : l.source),
     target: String(typeof l.target === 'object' ? (l.target as GraphNode).id : l.target),
   }));
@@ -995,7 +1005,7 @@ export default function CypherGraph({
 
   // Extract graph data from query results, supporting both explicit-graph and path formats.
   const graphData = useMemo(
-    () => (records ? extractGraphData(records, nodeLabelKey) : null),
+    () => normalizeGraphData(records ? extractGraphData(records, nodeLabelKey) : null),
     [records, nodeLabelKey],
   );
 
@@ -1040,7 +1050,7 @@ export default function CypherGraph({
 
   // Rebuild XyFlow graph whenever extracted graph data or spread changes.
   useEffect(() => {
-    if (!graphData?.nodes?.length) {
+    if (!graphData || graphData.nodes.length === 0) {
       setNodes([]);
       setEdges([]);
       setFocusedId(null);

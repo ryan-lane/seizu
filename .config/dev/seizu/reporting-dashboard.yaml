@@ -1,115 +1,269 @@
-dashboard: dashboard
+dashboard: seizu-overview
 
 reports:
-  dashboard:
-    name: Dashboard
+  seizu-overview:
+    name: Seizu Overview
     queries:
-      cves-total: |-
-        MATCH (c:CVE)
-        RETURN count(c.id) AS total
-      cves-severity-of-total: |-
-        MATCH (c:CVE)
-        WITH COUNT(DISTINCT c.id) AS denominator
-        MATCH (c:CVE)
-        WHERE c.base_severity = $base_severity
-        RETURN count(DISTINCT c.id) AS numerator, denominator
-      cves-severity-of-total-details: |-
-        MATCH (c:CVE)
-        WHERE c.base_severity = $base_severity
-        RETURN c AS details
-      cves-by-severity-as-rows: |-
-        MATCH (c:CVE)
-        WITH c.base_severity AS severity, count(c.id) AS total
-        RETURN {id: severity, value: total} AS details
-      cves-graph: |-
-        MATCH (c:CVE)
-        WHERE c.base_severity IS NOT NULL
-        WITH c LIMIT 50
-        WITH
-          collect(distinct {id: c.base_severity, label: c.base_severity, group: 'severity'}) AS severity_nodes,
-          collect({id: c.id, label: c.id, group: c.base_severity}) AS cve_nodes,
-          collect({source: c.id, target: c.base_severity}) AS links
-        RETURN {nodes: severity_nodes + cve_nodes, links: links}
+      seizu-runtimes-count: |-
+        UNWIND [
+          {runtime: 'FastAPI web app', role: 'Serves the REST API, MCP endpoint, static React app, and SPA fallback', entrypoint: 'reporting/asgi.py / reporting/app.py', interfaces: 'REST API, MCP, React UI'},
+          {runtime: 'Scheduled query worker', role: 'Runs validated recurring graph queries and dispatches actions', entrypoint: 'reporting/scheduled_queries.py', interfaces: 'Slack, SQS, logs, metrics'}
+        ] AS row
+        RETURN count(row.runtime) AS total
+      seizu-runtimes-details: |-
+        UNWIND [
+          {runtime: 'FastAPI web app', role: 'Serves the REST API, MCP endpoint, static React app, and SPA fallback', entrypoint: 'reporting/asgi.py / reporting/app.py', interfaces: 'REST API, MCP, React UI'},
+          {runtime: 'Scheduled query worker', role: 'Runs validated recurring graph queries and dispatches actions', entrypoint: 'reporting/scheduled_queries.py', interfaces: 'Slack, SQS, logs, metrics'}
+        ] AS row
+        RETURN row.runtime AS runtime,
+               row.role AS role,
+               row.entrypoint AS entrypoint,
+               row.interfaces AS interfaces
+        ORDER BY runtime
+      seizu-store-count: |-
+        UNWIND [
+          {backend: 'DynamoDB', stores: 'Reports, report versions, roles, toolsets, skillsets, and scheduled queries', used_for: 'Default local/dev backend and AWS-style deployments'},
+          {backend: 'PostgreSQL', stores: 'The same versioned Seizu metadata through SQLModel tables', used_for: 'SQL-backed deployments via REPORT_STORE_BACKEND=sqlmodel'}
+        ] AS row
+        RETURN count(row.backend) AS total
+      seizu-store-details: |-
+        UNWIND [
+          {backend: 'DynamoDB', stores: 'Reports, report versions, roles, toolsets, skillsets, and scheduled queries', used_for: 'Default local/dev backend and AWS-style deployments'},
+          {backend: 'PostgreSQL', stores: 'The same versioned Seizu metadata through SQLModel tables', used_for: 'SQL-backed deployments via REPORT_STORE_BACKEND=sqlmodel'}
+        ] AS row
+        RETURN row.backend AS backend,
+               row.stores AS stores,
+               row.used_for AS used_for
+        ORDER BY backend
+      seizu-feature-readiness: |-
+        UNWIND [
+          {surface: 'Reports', seeded: true, example: 'Seizu Overview, CVEs, Panel Examples, GitHub Organization Security Overview'},
+          {surface: 'Scheduled queries', seeded: true, example: 'Recently published HIGH/CRITICAL CVEs and CVE severity counts'},
+          {surface: 'Toolsets', seeded: true, example: 'CVE Analysis, Graph Exploration, GitHub Security'},
+          {surface: 'Skillsets', seeded: true, example: 'GitHub Security Investigations'},
+          {surface: 'Dashboard pointer', seeded: true, example: 'Seizu Overview is the default dashboard'}
+        ] AS surface
+        WITH count(*) AS denominator,
+             sum(CASE WHEN surface.seeded THEN 1 ELSE 0 END) AS numerator
+        RETURN numerator, denominator
+      seizu-feature-readiness-details: |-
+        UNWIND [
+          {surface: 'Reports', seeded: true, example: 'Seizu Overview, CVEs, Panel Examples, GitHub Organization Security Overview'},
+          {surface: 'Scheduled queries', seeded: true, example: 'Recently published HIGH/CRITICAL CVEs and CVE severity counts'},
+          {surface: 'Toolsets', seeded: true, example: 'CVE Analysis, Graph Exploration, GitHub Security'},
+          {surface: 'Skillsets', seeded: true, example: 'GitHub Security Investigations'},
+          {surface: 'Dashboard pointer', seeded: true, example: 'Seizu Overview is the default dashboard'}
+        ] AS surface
+        RETURN surface.surface AS surface,
+               surface.seeded AS seeded,
+               surface.example AS example
+        ORDER BY surface
+      seizu-capability-bars: |-
+        UNWIND [
+          {area: 'Reports', sort: 1, capability: 'Versioned report definitions'},
+          {area: 'Reports', sort: 1, capability: 'Grid-based panel layouts'},
+          {area: 'Reports', sort: 1, capability: 'Parameterized inputs'},
+          {area: 'Reports', sort: 1, capability: 'Tables and vertical tables'},
+          {area: 'Reports', sort: 1, capability: 'Charts and progress panels'},
+          {area: 'Reports', sort: 1, capability: 'Graph visualization'},
+          {area: 'Query console', sort: 2, capability: 'Validated read-only Cypher'},
+          {area: 'Query console', sort: 2, capability: 'Query history'},
+          {area: 'Query console', sort: 2, capability: 'Schema browser'},
+          {area: 'Query console', sort: 2, capability: 'Saved history attribution'},
+          {area: 'Scheduled queries', sort: 3, capability: 'Recurring Cypher execution'},
+          {area: 'Scheduled queries', sort: 3, capability: 'Slack actions'},
+          {area: 'Scheduled queries', sort: 3, capability: 'SQS actions'},
+          {area: 'Scheduled queries', sort: 3, capability: 'Log and metrics actions'},
+          {area: 'Scheduled queries', sort: 3, capability: 'Sync watch windows'},
+          {area: 'MCP tools', sort: 4, capability: 'Built-in Seizu tools'},
+          {area: 'MCP tools', sort: 4, capability: 'User-defined Cypher tools'},
+          {area: 'MCP tools', sort: 4, capability: 'Toolsets'},
+          {area: 'MCP tools', sort: 4, capability: 'Skillsets'},
+          {area: 'MCP tools', sort: 4, capability: 'OAuth-aware MCP endpoint'},
+          {area: 'RBAC', sort: 5, capability: 'Built-in roles'},
+          {area: 'RBAC', sort: 5, capability: 'User-defined roles'},
+          {area: 'RBAC', sort: 5, capability: 'Permission-gated APIs'},
+          {area: 'RBAC', sort: 5, capability: 'User attribution'},
+          {area: 'CLI', sort: 6, capability: 'Report seeding'},
+          {area: 'CLI', sort: 6, capability: 'Report export'},
+          {area: 'CLI', sort: 6, capability: 'Toolset management'},
+          {area: 'CLI', sort: 6, capability: 'Device login'}
+        ] AS capability
+        WITH capability.area AS area, min(capability.sort) AS sort, count(*) AS total
+        ORDER BY sort
+        RETURN {id: area, value: total} AS details
+      seizu-surface-pie: |-
+        UNWIND [
+          {id: 'Web app', value: 4},
+          {id: 'Worker', value: 2},
+          {id: 'CLI', value: 2},
+          {id: 'MCP', value: 2}
+        ] AS details
+        RETURN details
+      seizu-feature-table: |-
+        UNWIND [
+          {surface: 'Reports', feature: 'Versioned dashboards and panel layouts', role: 'Share reusable graph views'},
+          {surface: 'Query console', feature: 'Validated ad-hoc Cypher with history', role: 'Explore the graph safely'},
+          {surface: 'Scheduled queries', feature: 'Recurring checks with Slack, SQS, and log actions', role: 'Turn graph findings into signals'},
+          {surface: 'MCP', feature: 'Built-in and Cypher-backed tools', role: 'Let agents inspect and operate Seizu'},
+          {surface: 'RBAC', feature: 'Viewer, editor, admin, and custom roles', role: 'Keep access explicit'}
+        ] AS row
+        RETURN row.surface AS surface, row.feature AS feature, row.role AS role
+      seizu-architecture-graph: |-
+        RETURN {
+          nodes: [
+            {id: 'neo4j', label: 'Neo4j graph', group: 'data'},
+            {id: 'store', label: 'Report store', group: 'data'},
+            {id: 'seed', label: 'Seed config', group: 'config'},
+            {id: 'api', label: 'FastAPI', group: 'runtime'},
+            {id: 'ui', label: 'React UI', group: 'runtime'},
+            {id: 'worker', label: 'Scheduler', group: 'runtime'},
+            {id: 'cli', label: 'CLI', group: 'client'},
+            {id: 'mcp', label: 'MCP', group: 'client'},
+            {id: 'actions', label: 'Actions', group: 'output'}
+          ],
+          links: [
+            {source: 'seed', target: 'store', type: 'seeds'},
+            {source: 'api', target: 'neo4j', type: 'queries'},
+            {source: 'api', target: 'store', type: 'reads'},
+            {source: 'ui', target: 'api', type: 'REST'},
+            {source: 'cli', target: 'api', type: 'REST'},
+            {source: 'mcp', target: 'api', type: 'tools'},
+            {source: 'worker', target: 'neo4j', type: 'queries'},
+            {source: 'worker', target: 'store', type: 'schedules'},
+            {source: 'worker', target: 'actions', type: 'delivers'}
+          ]
+        } AS graph
     rows:
-      - name: CVEs as count and progress panels
+      - name: Product overview
         panels:
-          - cypher: cves-total
+          - type: markdown
+            x: 0
+            y: 0
+            w: 6
+            h: 6
+            auto_height: true
+            markdown: |-
+              ## Seizu
+
+              Seizu is a configuration-driven reporting platform for security
+              graph data in Neo4j. It turns graph queries into reusable reports,
+              scheduled checks, and MCP tools so analysts and agents can work
+              from the same governed source of truth.
+
+              The product has two runtime paths: the web/API service for
+              interactive workflows, and the scheduled-query worker for recurring
+              detection and notification.
+          - cypher: seizu-runtimes-count
+            details_cypher: seizu-runtimes-details
             type: count
-            caption: Total CVEs
-            size: 2
-          - cypher: |-
-              MATCH (c:CVE)
-              RETURN count(c.id) AS total
+            caption: Runtimes
+            x: 6
+            y: 0
+            w: 2
+            h: 4
+          - cypher: seizu-store-count
+            details_cypher: seizu-store-details
             type: count
-            caption: Total CVEs (direct)
-            size: 2
-          - cypher: cves-severity-of-total
-            details_cypher: cves-severity-of-total-details
+            caption: Store backends
+            x: 8
+            y: 0
+            w: 2
+            h: 4
+          - cypher: seizu-feature-readiness
+            details_cypher: seizu-feature-readiness-details
             type: progress
-            params:
-              - name: base_severity
-                value: CRITICAL
-            caption: Critical CVEs
-            size: 2
+            caption: Seeded surfaces
+            x: 10
+            y: 0
+            w: 2
+            h: 4
             threshold: 0
-          - cypher: cves-severity-of-total
-            details_cypher: cves-severity-of-total-details
-            type: progress
-            params:
-              - name: base_severity
-                value: HIGH
-            caption: High CVEs
-            size: 2
-            threshold: 0
-          - cypher: cves-severity-of-total
-            details_cypher: cves-severity-of-total-details
-            type: progress
-            params:
-              - name: base_severity
-                value: MEDIUM
-            caption: Medium CVEs
-            size: 2
-            threshold: 0
-          - cypher: cves-severity-of-total
-            details_cypher: cves-severity-of-total-details
-            type: progress
-            params:
-              - name: base_severity
-                value: LOW
-            caption: Low CVEs
-            size: 2
-            threshold: 0
-      - name: CVEs as pie, bar panels
+      - name: Architecture map
         panels:
-          - cypher: cves-by-severity-as-rows
-            type: pie
-            caption: CVE severities (pie)
-            size: 6
-          - cypher: cves-by-severity-as-rows
-            type: bar
-            caption: CVE severities (bar)
-            size: 6
-          - cypher: cves-by-severity-as-rows
-            type: pie
-            caption: CVE severities (pie, column legend)
-            size: 6
-            pie_settings:
-              legend: column
-          - cypher: cves-by-severity-as-rows
-            type: bar
-            caption: CVE severities (bar, row legend)
-            size: 6
-            bar_settings:
-              legend: row
-      - name: CVEs as graph
-        panels:
-          - cypher: cves-graph
+          - type: markdown
+            x: 0
+            y: 0
+            w: 12
+            h: 4
+            auto_height: true
+            markdown: |-
+              ### Architecture map
+
+              The graph below shows how Seizu separates data, configuration,
+              runtimes, clients, and outputs. Neo4j remains the source for
+              security graph facts, while the report store keeps versioned
+              dashboards, toolsets, skillsets, roles, and scheduled-query
+              definitions.
+          - cypher: seizu-architecture-graph
             type: graph
-            caption: CVE severity graph
-            size: 12
+            caption: How Seizu fits together
+            x: 0
+            y: 4
+            w: 7
+            h: 10
             graph_settings:
               node_label: label
               node_color_by: group
+          - cypher: seizu-feature-table
+            type: table
+            caption: Feature matrix
+            x: 7
+            y: 4
+            w: 5
+            h: 10
+      - name: Capability mix
+        panels:
+          - type: markdown
+            x: 0
+            y: 0
+            w: 12
+            h: 4
+            auto_height: true
+            markdown: |-
+              ### Capability mix
+
+              Seizu is meant to cover the full path from graph exploration to
+              repeatable operational output. The bar chart counts concrete
+              capabilities represented in this overview, while the pie chart
+              groups the same product into the main operating surfaces users
+              interact with.
+          - cypher: seizu-capability-bars
+            type: bar
+            caption: Capability count
+            x: 0
+            y: 4
+            w: 6
+            h: 8
+            bar_settings:
+              legend: row
+          - cypher: seizu-surface-pie
+            type: pie
+            caption: Operating surfaces
+            x: 6
+            y: 4
+            w: 6
+            h: 8
+            pie_settings:
+              legend: column
+      - name: Next steps
+        panels:
+          - type: markdown
+            x: 0
+            y: 0
+            w: 12
+            h: 8
+            auto_height: true
+            markdown: |-
+              ### What to try next
+
+              Use this overview as a map of the main workflows:
+
+              - Open **Panel Examples** to see the available visualization components and the query shapes they expect.
+              - Open **CVEs** to see a parameterized report with an autocomplete input and reusable Cypher.
+              - Use the query console for validated read-only Cypher exploration before promoting a query into a report or tool.
+              - Use toolsets to expose approved graph queries through MCP, then attach skills to make repeatable investigations easier for agents.
+              - Use scheduled queries when a graph question should become a recurring signal through Slack, SQS, logs, or metrics.
   cves:
     name: CVEs
     queries:
@@ -139,9 +293,13 @@ reports:
             params:
               - name: base_severity
                 input_id: cve_base_severity
-            size: 12
+            x: 0
+            y: 0
+            w: 12
+            h: 10
 
   panel-examples:
+    pinned: true
     name: Panel Examples
     queries:
       cves-total: |-
@@ -222,7 +380,11 @@ reports:
       - name: About this report
         panels:
           - type: markdown
-            size: 12
+            x: 0
+            y: 0
+            w: 12
+            h: 6
+            auto_height: true
             markdown: |-
               ## Panel Examples
 
@@ -247,7 +409,10 @@ reports:
           - cypher: cves-total
             type: count
             caption: Total CVEs
-            size: 3
+            x: 0
+            y: 0
+            w: 3
+            h: 4
           - cypher: cves-severity-count
             details_cypher: cves-severity-fraction-details
             type: count
@@ -255,7 +420,10 @@ reports:
               - name: base_severity
                 value: CRITICAL
             caption: Critical CVEs
-            size: 3
+            x: 3
+            y: 0
+            w: 3
+            h: 4
           - cypher: cves-severity-count
             details_cypher: cves-severity-fraction-details
             type: count
@@ -263,7 +431,10 @@ reports:
               - name: base_severity
                 value: HIGH
             caption: High CVEs
-            size: 3
+            x: 6
+            y: 0
+            w: 3
+            h: 4
           - cypher: cves-severity-count
             details_cypher: cves-severity-fraction-details
             type: count
@@ -271,7 +442,10 @@ reports:
               - name: base_severity
                 value: MEDIUM
             caption: Medium CVEs
-            size: 3
+            x: 9
+            y: 0
+            w: 3
+            h: 4
       - name: Progress panels
         panels:
           - cypher: cves-severity-fraction
@@ -281,7 +455,10 @@ reports:
               - name: base_severity
                 value: CRITICAL
             caption: Critical CVEs
-            size: 3
+            x: 0
+            y: 0
+            w: 3
+            h: 4
             threshold: 0
           - cypher: cves-severity-fraction
             details_cypher: cves-severity-fraction-details
@@ -290,7 +467,10 @@ reports:
               - name: base_severity
                 value: HIGH
             caption: High CVEs
-            size: 3
+            x: 3
+            y: 0
+            w: 3
+            h: 4
             threshold: 0
           - cypher: cves-severity-fraction
             details_cypher: cves-severity-fraction-details
@@ -299,7 +479,10 @@ reports:
               - name: base_severity
                 value: MEDIUM
             caption: Medium CVEs
-            size: 3
+            x: 6
+            y: 0
+            w: 3
+            h: 4
             threshold: 0
           - cypher: cves-severity-fraction
             details_cypher: cves-severity-fraction-details
@@ -308,28 +491,43 @@ reports:
               - name: base_severity
                 value: LOW
             caption: Low CVEs
-            size: 3
+            x: 9
+            y: 0
+            w: 3
+            h: 4
             threshold: 0
       - name: Pie and bar charts
         panels:
           - cypher: cves-by-severity
             type: pie
             caption: CVEs by severity (arc labels)
-            size: 6
+            x: 0
+            y: 0
+            w: 6
+            h: 8
           - cypher: cves-by-severity
             type: bar
             caption: CVEs by severity (no legend)
-            size: 6
+            x: 6
+            y: 0
+            w: 6
+            h: 8
           - cypher: cves-by-severity
             type: pie
             caption: CVEs by severity (column legend)
-            size: 6
+            x: 0
+            y: 8
+            w: 6
+            h: 8
             pie_settings:
               legend: column
           - cypher: cves-by-severity
             type: bar
             caption: CVEs by severity (row legend)
-            size: 6
+            x: 6
+            y: 8
+            w: 6
+            h: 8
             bar_settings:
               legend: row
       - name: Graph panel
@@ -337,7 +535,10 @@ reports:
           - cypher: cves-graph
             type: graph
             caption: CVE severity graph (node_label=label, node_color_by=group)
-            size: 12
+            x: 0
+            y: 0
+            w: 12
+            h: 12
             graph_settings:
               node_label: label
               node_color_by: group
@@ -349,7 +550,10 @@ reports:
             params:
               - name: search
                 input_id: panel_examples_search
-            size: 12
+            x: 0
+            y: 0
+            w: 12
+            h: 10
       - name: Table with autocomplete filter
         panels:
           - cypher: cves-by-severity-list
@@ -358,13 +562,362 @@ reports:
             params:
               - name: base_severity
                 input_id: panel_examples_severity
-            size: 12
+            x: 0
+            y: 0
+            w: 12
+            h: 10
       - name: Vertical table panel
         panels:
           - cypher: cve-single
             type: vertical-table
             table_id: id
-            size: 12
+            x: 0
+            y: 0
+            w: 12
+            h: 10
+            auto_height: true
+
+  github-security-overview:
+    pinned: true
+    name: GitHub Organization Security Overview
+    inputs:
+      - input_id: github_org
+        cypher: |-
+          MATCH (o:GitHubOrganization)
+          WITH coalesce(o.username, replace(coalesce(o.id, ''), 'https://github.com/', ''), o._ont_name) AS value
+          WHERE value IS NOT NULL AND value <> ''
+          RETURN DISTINCT value
+          ORDER BY value
+        label: GitHub organization
+        type: autocomplete
+        size: 3
+    queries:
+      active-repos-count: |-
+        MATCH (o:GitHubOrganization)
+        WHERE o.id = 'https://github.com/' + $org OR o.username = $org OR o._ont_name = $org
+        MATCH (r:GitHubRepository)-[:OWNER]->(o)
+        WHERE coalesce(r.archived, false) = false AND coalesce(r.disabled, false) = false
+        RETURN count(r) AS total
+      public-repos-count: |-
+        MATCH (o:GitHubOrganization)
+        WHERE o.id = 'https://github.com/' + $org OR o.username = $org OR o._ont_name = $org
+        MATCH (r:GitHubRepository)-[:OWNER]->(o)
+        WHERE coalesce(r.archived, false) = false AND coalesce(r.disabled, false) = false AND coalesce(r.private, false) = false
+        RETURN count(r) AS total
+      open-alerts-count: |-
+        MATCH (o:GitHubOrganization)
+        WHERE o.id = 'https://github.com/' + $org OR o.username = $org OR o._ont_name = $org
+        MATCH (r:GitHubRepository)-[:OWNER]->(o)
+        WHERE coalesce(r.archived, false) = false AND coalesce(r.disabled, false) = false
+        MATCH (r)-[:FOUND_IN]-(s:SecurityIssue {state: 'open'})
+        RETURN count(DISTINCT s) AS total
+      critical-high-progress: |-
+        MATCH (o:GitHubOrganization)
+        WHERE o.id = 'https://github.com/' + $org OR o.username = $org OR o._ont_name = $org
+        MATCH (r:GitHubRepository)-[:OWNER]->(o)
+        WHERE coalesce(r.archived, false) = false AND coalesce(r.disabled, false) = false
+        OPTIONAL MATCH (r)-[:FOUND_IN]-(s:SecurityIssue {state: 'open'})
+        WITH collect(DISTINCT s) AS issues
+        RETURN size([i IN issues WHERE i IS NOT NULL AND i.severity IN ['critical', 'high']]) AS numerator,
+               size([i IN issues WHERE i IS NOT NULL]) AS denominator
+      open-alerts-by-severity: |-
+        MATCH (o:GitHubOrganization)
+        WHERE o.id = 'https://github.com/' + $org OR o.username = $org OR o._ont_name = $org
+        MATCH (r:GitHubRepository)-[:OWNER]->(o)
+        WHERE coalesce(r.archived, false) = false AND coalesce(r.disabled, false) = false
+        MATCH (r)-[:FOUND_IN]-(s:SecurityIssue {state: 'open'})
+        WITH s.severity AS severity, count(DISTINCT s) AS total
+        RETURN {id: coalesce(severity, 'unknown'), value: total} AS details
+        ORDER BY total DESC
+      open-alerts-by-repo: |-
+        MATCH (o:GitHubOrganization)
+        WHERE o.id = 'https://github.com/' + $org OR o.username = $org OR o._ont_name = $org
+        MATCH (r:GitHubRepository)-[:OWNER]->(o)
+        WHERE coalesce(r.archived, false) = false AND coalesce(r.disabled, false) = false
+        OPTIONAL MATCH (r)-[:FOUND_IN]-(s:SecurityIssue {state: 'open'})
+        WITH r.fullname AS repo, count(DISTINCT s) AS total
+        WHERE total > 0
+        RETURN {id: replace(repo, $org + '/', ''), value: total} AS details
+        ORDER BY total DESC
+      top-open-vulnerabilities: |-
+        MATCH (o:GitHubOrganization)
+        WHERE o.id = 'https://github.com/' + $org OR o.username = $org OR o._ont_name = $org
+        MATCH (r:GitHubRepository)-[:OWNER]->(o)
+        WHERE coalesce(r.archived, false) = false AND coalesce(r.disabled, false) = false
+        MATCH (r)-[:FOUND_IN]-(s:SecurityIssue {state: 'open'})
+        WITH DISTINCT r, s,
+             CASE s.severity WHEN 'critical' THEN 4 WHEN 'high' THEN 3 WHEN 'medium' THEN 2 WHEN 'low' THEN 1 ELSE 0 END AS severity_rank
+        RETURN r.fullname AS repo,
+               s.severity AS severity,
+               coalesce(s.cvss_v4_score, s.cvss_v3_score) AS cvss,
+               s.epss_percentage AS epss,
+               s.dependency_package_ecosystem AS ecosystem,
+               s.dependency_package_name AS package,
+               s.dependency_scope AS scope,
+               s.dependency_manifest_path AS manifest,
+               s.advisory_summary AS advisory,
+               s.cve_id AS cve,
+               s.first_patched_version AS patched_version,
+               s.html_url AS url
+        ORDER BY severity_rank DESC, coalesce(s.epss_percentage, 0) DESC, coalesce(s.cvss_v4_score, s.cvss_v3_score, 0) DESC
+        LIMIT 25
+      repository-posture: |-
+        MATCH (o:GitHubOrganization)
+        WHERE o.id = 'https://github.com/' + $org OR o.username = $org OR o._ont_name = $org
+        MATCH (r:GitHubRepository)-[:OWNER]->(o)
+        WHERE coalesce(r.archived, false) = false AND coalesce(r.disabled, false) = false
+        OPTIONAL MATCH (r)-[:HAS_MANIFEST]->(m:DependencyGraphManifest)
+        OPTIONAL MATCH (m)-[:REQUIRES|HAS_DEP]->(d:Dependency)
+        OPTIONAL MATCH (r)-[:FOUND_IN]-(s:SecurityIssue {state: 'open'})
+        RETURN r.fullname AS repo,
+               CASE WHEN coalesce(r.private, false) THEN 'private' ELSE 'public' END AS visibility,
+               coalesce(r.primarylanguage, 'unknown') AS language,
+               r.defaultbranch AS default_branch,
+               count(DISTINCT m) AS manifests,
+               count(DISTINCT d) AS dependencies,
+               count(DISTINCT s) AS open_alerts,
+               r.updatedat AS updated_at
+        ORDER BY open_alerts DESC, repo
+      coverage-gaps: |-
+        MATCH (o:GitHubOrganization)
+        WHERE o.id = 'https://github.com/' + $org OR o.username = $org OR o._ont_name = $org
+        MATCH (r:GitHubRepository)-[:OWNER]->(o)
+        WHERE coalesce(r.archived, false) = false AND coalesce(r.disabled, false) = false
+        OPTIONAL MATCH (r)-[:HAS_WORKFLOW]->(w:GitHubWorkflow)
+        WITH r, collect(DISTINCT w.name) AS workflow_names, collect(DISTINCT w.path) AS workflow_paths
+        WITH r,
+             any(name IN workflow_names WHERE toLower(coalesce(name, '')) CONTAINS 'codeql') OR any(path IN workflow_paths WHERE toLower(coalesce(path, '')) CONTAINS 'codeql') AS has_codeql,
+             any(name IN workflow_names WHERE toLower(coalesce(name, '')) CONTAINS 'scorecard') OR any(path IN workflow_paths WHERE toLower(coalesce(path, '')) CONTAINS 'scorecard') AS has_scorecard,
+             any(name IN workflow_names WHERE toLower(coalesce(name, '')) CONTAINS 'dependency graph') OR any(path IN workflow_paths WHERE toLower(coalesce(path, '')) CONTAINS 'dependabot') AS has_dependency_graph
+        RETURN r.fullname AS repo,
+               has_codeql AS codeql,
+               has_scorecard AS scorecard,
+               has_dependency_graph AS dependency_graph,
+               CASE WHEN r.primarylanguage IS NULL THEN true ELSE false END AS missing_language,
+               coalesce(r.private, false) AS private
+        ORDER BY repo
+      elevated-workflows: |-
+        MATCH (o:GitHubOrganization)
+        WHERE o.id = 'https://github.com/' + $org OR o.username = $org OR o._ont_name = $org
+        MATCH (r:GitHubRepository)-[:OWNER]->(o)
+        WHERE coalesce(r.archived, false) = false AND coalesce(r.disabled, false) = false
+        MATCH (r)-[:HAS_WORKFLOW]->(w:GitHubWorkflow)
+        WHERE coalesce(w.permissions_contents, '') = 'write'
+           OR coalesce(w.permissions_id_token, '') = 'write'
+           OR coalesce(w.permissions_packages, '') = 'write'
+           OR coalesce(w.permissions_pull_requests, '') = 'write'
+           OR coalesce(w.permissions_security_events, '') = 'write'
+        RETURN r.fullname AS repo,
+               w.name AS workflow,
+               w.path AS path,
+               w.trigger_events AS triggers,
+               w.permissions_contents AS contents,
+               w.permissions_id_token AS id_token,
+               w.permissions_packages AS packages,
+               w.permissions_pull_requests AS pull_requests,
+               w.permissions_security_events AS security_events
+        ORDER BY repo, workflow
+      unpinned-actions: |-
+        MATCH (o:GitHubOrganization)
+        WHERE o.id = 'https://github.com/' + $org OR o.username = $org OR o._ont_name = $org
+        MATCH (r:GitHubRepository)-[:OWNER]->(o)
+        WHERE coalesce(r.archived, false) = false AND coalesce(r.disabled, false) = false
+        MATCH (r)-[:HAS_WORKFLOW]->(w:GitHubWorkflow)-[:USES_ACTION]->(a:GitHubAction)
+        WHERE a.is_pinned = false OR a.is_pinned IS NULL
+        RETURN r.fullname AS repo,
+               w.name AS workflow,
+               w.path AS workflow_path,
+               count(DISTINCT a) AS unpinned_actions,
+               collect(DISTINCT coalesce(a.name, a.source_uri, 'unknown') + '@' + coalesce(a.version, 'unknown'))[0..8] AS actions
+        ORDER BY unpinned_actions DESC, repo, workflow
+      security-overview-graph: |-
+        MATCH (o:GitHubOrganization)
+        WHERE o.id = 'https://github.com/' + $org OR o.username = $org OR o._ont_name = $org
+        MATCH (r:GitHubRepository)-[:OWNER]->(o)
+        WHERE coalesce(r.archived, false) = false AND coalesce(r.disabled, false) = false
+        OPTIONAL MATCH (r)-[:FOUND_IN]-(s:SecurityIssue {state: 'open'})
+        WITH $org AS org, r, collect(DISTINCT s) AS raw_issues
+        WITH org, collect({repo: r, issues: [i IN raw_issues WHERE i IS NOT NULL]}) AS rows
+        WITH org,
+             [row IN rows | {
+               id: row.repo.fullname,
+               label: replace(row.repo.fullname, org + '/', ''),
+               group: CASE
+                 WHEN size([i IN row.issues WHERE i.severity IN ['critical', 'high']]) > 0 THEN 'critical-high'
+                 WHEN size(row.issues) > 0 THEN 'open-alerts'
+                 ELSE 'no-open-alerts'
+               END
+             }] AS repo_nodes,
+             [row IN rows WHERE size(row.issues) > 0 | {
+               source: row.repo.fullname,
+               target: 'open-alerts',
+               type: toString(size(row.issues)) + ' open'
+             }] AS alert_links,
+             [row IN rows WHERE size([i IN row.issues WHERE i.severity IN ['critical', 'high']]) > 0 | {
+               source: row.repo.fullname,
+               target: 'critical-high',
+               type: toString(size([i IN row.issues WHERE i.severity IN ['critical', 'high']])) + ' severe'
+             }] AS severe_links
+        RETURN {
+          nodes: repo_nodes + [
+            {id: 'open-alerts', label: 'Open alerts', group: 'risk'},
+            {id: 'critical-high', label: 'Critical/high', group: 'risk'}
+          ],
+          links: alert_links + severe_links
+        } AS graph
+    rows:
+      - name: Overview
+        panels:
+          - type: markdown
+            x: 0
+            y: 0
+            w: 4
+            h: 4
+            auto_height: true
+            markdown: |-
+              ## GitHub Organization Security Overview
+
+              Select a GitHub organization to review active repositories,
+              dependency alerts, workflow hardening, and coverage gaps from the
+              security graph.
+
+              Archived and disabled repositories are excluded.
+          - cypher: active-repos-count
+            type: count
+            caption: Active repos
+            params:
+              - name: org
+                input_id: github_org
+            x: 4
+            y: 0
+            w: 2
+            h: 4
+          - cypher: public-repos-count
+            type: count
+            caption: Public repos
+            params:
+              - name: org
+                input_id: github_org
+            x: 6
+            y: 0
+            w: 2
+            h: 4
+          - cypher: open-alerts-count
+            type: count
+            caption: Open alerts
+            params:
+              - name: org
+                input_id: github_org
+            x: 8
+            y: 0
+            w: 2
+            h: 4
+          - cypher: critical-high-progress
+            type: progress
+            caption: Critical/high share
+            params:
+              - name: org
+                input_id: github_org
+            x: 10
+            y: 0
+            w: 2
+            h: 4
+            threshold: 0
+      - name: Vulnerability Backlog
+        panels:
+          - cypher: open-alerts-by-severity
+            type: bar
+            caption: Open alerts by severity
+            params:
+              - name: org
+                input_id: github_org
+            x: 0
+            y: 0
+            w: 5
+            h: 8
+            bar_settings:
+              legend: row
+          - cypher: open-alerts-by-repo
+            type: pie
+            caption: Open alerts by repo
+            params:
+              - name: org
+                input_id: github_org
+            x: 5
+            y: 0
+            w: 7
+            h: 8
+            pie_settings:
+              legend: column
+          - cypher: top-open-vulnerabilities
+            type: table
+            caption: Top open vulnerabilities
+            params:
+              - name: org
+                input_id: github_org
+            x: 0
+            y: 8
+            w: 12
+            h: 10
+      - name: Repository Posture
+        panels:
+          - cypher: repository-posture
+            type: table
+            caption: Repo inventory and dependency visibility
+            params:
+              - name: org
+                input_id: github_org
+            x: 0
+            y: 0
+            w: 7
+            h: 10
+          - cypher: coverage-gaps
+            type: table
+            caption: Security coverage gaps
+            params:
+              - name: org
+                input_id: github_org
+            x: 7
+            y: 0
+            w: 5
+            h: 10
+      - name: Workflow Hardening
+        panels:
+          - cypher: elevated-workflows
+            type: table
+            caption: Workflows with write-level permissions
+            params:
+              - name: org
+                input_id: github_org
+            x: 0
+            y: 0
+            w: 6
+            h: 10
+          - cypher: unpinned-actions
+            type: table
+            caption: Unpinned GitHub Actions
+            params:
+              - name: org
+                input_id: github_org
+            x: 6
+            y: 0
+            w: 6
+            h: 10
+      - name: Risk Map
+        panels:
+          - cypher: security-overview-graph
+            type: graph
+            caption: Repository risk map
+            params:
+              - name: org
+                input_id: github_org
+            x: 0
+            y: 0
+            w: 12
+            h: 12
+            graph_settings:
+              node_label: label
+              node_color_by: group
 
 toolsets:
   cve_analysis:
@@ -502,6 +1055,533 @@ toolsets:
             description: Maximum number of sync records to return.
             required: false
             default: 20
+        enabled: true
+  github_security:
+    name: GitHub Security
+    description: >-
+      Reusable Cypher-backed tools for summarizing GitHub organization security
+      posture, dependency vulnerabilities, Actions hardening, coverage gaps,
+      identity access, and sync freshness.
+    enabled: true
+    tools:
+      org_overview:
+        name: org_overview
+        description: >-
+          Return a high-level GitHub organization security overview: repository
+          inventory, visibility split, open security alerts by severity, and
+          repository list.
+        cypher: |-
+          MATCH (o:GitHubOrganization)
+          WHERE o.id = 'https://github.com/' + $org OR o.username = $org OR o._ont_name = $org
+          MATCH (r:GitHubRepository)-[:OWNER]->(o)
+          WHERE ($include_archived OR (coalesce(r.archived, false) = false AND coalesce(r._ont_archived, false) = false AND coalesce(r.disabled, false) = false))
+            AND ($exclude_forks = false OR coalesce(r.fork, false) = false)
+          WITH collect(DISTINCT r) AS repos
+          UNWIND CASE WHEN size(repos) = 0 THEN [null] ELSE repos END AS repo
+          OPTIONAL MATCH (repo)-[:FOUND_IN]-(s:SecurityIssue)
+          WITH repos, collect(DISTINCT s) AS raw_issues
+          WITH repos, [i IN raw_issues WHERE i IS NOT NULL] AS issues
+          RETURN size(repos) AS repositories,
+                 size([r IN repos WHERE coalesce(r.private, false) = false]) AS public_repositories,
+                 size([r IN repos WHERE coalesce(r.private, false) = true]) AS private_repositories,
+                 size([i IN issues WHERE i.state = 'open']) AS open_alerts,
+                 size([i IN issues WHERE i.state = 'fixed']) AS fixed_alerts,
+                 size([i IN issues WHERE i.state = 'auto_dismissed']) AS auto_dismissed_alerts,
+                 size([i IN issues WHERE i.state = 'open' AND i.severity = 'critical']) AS open_critical,
+                 size([i IN issues WHERE i.state = 'open' AND i.severity = 'high']) AS open_high,
+                 size([i IN issues WHERE i.state = 'open' AND i.severity = 'medium']) AS open_medium,
+                 size([i IN issues WHERE i.state = 'open' AND i.severity = 'low']) AS open_low,
+                 [r IN repos | {name: r.fullname, private: coalesce(r.private, false), language: r.primarylanguage, default_branch: r.defaultbranch, updated_at: r.updatedat}] AS repositories_sample
+        parameters:
+          - name: org
+            type: string
+            description: GitHub organization login, e.g. mappedsky.
+            required: true
+          - name: exclude_forks
+            type: boolean
+            description: >-
+              Exclude repositories marked as forks. Missing fork metadata is
+              treated as not a fork.
+            required: false
+            default: true
+          - name: include_archived
+            type: boolean
+            description: Include archived or disabled repositories.
+            required: false
+            default: false
+        enabled: true
+      top_vulnerabilities:
+        name: top_vulnerabilities
+        description: >-
+          List top GitHub Dependabot/SecurityIssue findings for an organization,
+          deduped and ranked by severity, EPSS, then CVSS.
+        cypher: |-
+          MATCH (o:GitHubOrganization)
+          WHERE o.id = 'https://github.com/' + $org OR o.username = $org OR o._ont_name = $org
+          MATCH (r:GitHubRepository)-[:OWNER]->(o)
+          WHERE ($include_archived OR (coalesce(r.archived, false) = false AND coalesce(r._ont_archived, false) = false AND coalesce(r.disabled, false) = false))
+            AND ($exclude_forks = false OR coalesce(r.fork, false) = false)
+          MATCH (r)-[:FOUND_IN]-(s:SecurityIssue)
+          WHERE ($state = '' OR s.state = $state)
+            AND ($severity = '' OR s.severity = $severity)
+          WITH DISTINCT r, s,
+               CASE s.severity WHEN 'critical' THEN 4 WHEN 'high' THEN 3 WHEN 'medium' THEN 2 WHEN 'low' THEN 1 ELSE 0 END AS severity_rank
+          RETURN r.fullname AS repo,
+                 s.state AS state,
+                 s.severity AS severity,
+                 coalesce(s.cvss_v4_score, s.cvss_v3_score) AS cvss,
+                 s.epss_percentage AS epss,
+                 s.dependency_package_ecosystem AS ecosystem,
+                 s.dependency_package_name AS package,
+                 s.dependency_scope AS scope,
+                 s.dependency_manifest_path AS manifest,
+                 s.advisory_summary AS advisory,
+                 s.cve_id AS cve,
+                 s.advisory_ghsa_id AS ghsa,
+                 s.first_patched_version AS patched_version,
+                 s.vulnerable_version_range AS vulnerable_range,
+                 s.html_url AS url
+          ORDER BY severity_rank DESC, coalesce(s.epss_percentage, 0) DESC, coalesce(s.cvss_v4_score, s.cvss_v3_score, 0) DESC
+          LIMIT $limit
+        parameters:
+          - name: org
+            type: string
+            description: GitHub organization login, e.g. mappedsky.
+            required: true
+          - name: state
+            type: string
+            description: Alert state filter. Use open, fixed, auto_dismissed, or empty string for all.
+            required: false
+            default: open
+          - name: severity
+            type: string
+            description: "Severity filter: critical, high, medium, low, or empty string for all."
+            required: false
+            default: ""
+          - name: limit
+            type: integer
+            description: Maximum number of findings to return.
+            required: false
+            default: 25
+          - name: exclude_forks
+            type: boolean
+            description: >-
+              Exclude repositories marked as forks. Missing fork metadata is
+              treated as not a fork.
+            required: false
+            default: true
+          - name: include_archived
+            type: boolean
+            description: Include archived or disabled repositories.
+            required: false
+            default: false
+        enabled: true
+      repo_risk_summary:
+        name: repo_risk_summary
+        description: >-
+          Return one row per GitHub repository with visibility, dependency
+          inventory, open alert severity counts, and a simple risk score.
+        cypher: |-
+          MATCH (o:GitHubOrganization)
+          WHERE o.id = 'https://github.com/' + $org OR o.username = $org OR o._ont_name = $org
+          MATCH (r:GitHubRepository)-[:OWNER]->(o)
+          WHERE ($include_archived OR (coalesce(r.archived, false) = false AND coalesce(r._ont_archived, false) = false AND coalesce(r.disabled, false) = false))
+            AND ($exclude_forks = false OR coalesce(r.fork, false) = false)
+          OPTIONAL MATCH (r)-[:HAS_MANIFEST]->(m:DependencyGraphManifest)
+          OPTIONAL MATCH (m)-[:REQUIRES|HAS_DEP]->(d:Dependency)
+          WITH r, count(DISTINCT m) AS manifests, count(DISTINCT d) AS dependencies
+          OPTIONAL MATCH (r)-[:FOUND_IN]-(s:SecurityIssue {state: 'open'})
+          WITH r, manifests, dependencies, collect(DISTINCT s) AS raw_issues
+          WITH r, manifests, dependencies, [i IN raw_issues WHERE i IS NOT NULL] AS issues
+          WITH r, manifests, dependencies, issues,
+               size([i IN issues WHERE i.severity = 'critical']) AS critical,
+               size([i IN issues WHERE i.severity = 'high']) AS high,
+               size([i IN issues WHERE i.severity = 'medium']) AS medium,
+               size([i IN issues WHERE i.severity = 'low']) AS low
+          RETURN r.fullname AS repo,
+                 CASE WHEN coalesce(r.private, false) THEN 'private' ELSE 'public' END AS visibility,
+                 coalesce(r.primarylanguage, 'unknown') AS language,
+                 r.defaultbranch AS default_branch,
+                 manifests,
+                 dependencies,
+                 size(issues) AS open_alerts,
+                 critical AS open_critical,
+                 high AS open_high,
+                 medium AS open_medium,
+                 low AS open_low,
+                 (critical * 100 + high * 20 + medium * 5 + low + CASE WHEN coalesce(r.private, false) THEN 0 ELSE 5 END) AS risk_score,
+                 r.updatedat AS updated_at
+          ORDER BY risk_score DESC, open_alerts DESC, repo
+        parameters:
+          - name: org
+            type: string
+            description: GitHub organization login, e.g. mappedsky.
+            required: true
+          - name: exclude_forks
+            type: boolean
+            description: >-
+              Exclude repositories marked as forks. Missing fork metadata is
+              treated as not a fork.
+            required: false
+            default: true
+          - name: include_archived
+            type: boolean
+            description: Include archived or disabled repositories.
+            required: false
+            default: false
+        enabled: true
+      actions_hardening_findings:
+        name: actions_hardening_findings
+        description: >-
+          Find GitHub Actions workflows with elevated permissions,
+          pull_request_target triggers, or unpinned action dependencies.
+        cypher: |-
+          MATCH (o:GitHubOrganization)
+          WHERE o.id = 'https://github.com/' + $org OR o.username = $org OR o._ont_name = $org
+          MATCH (r:GitHubRepository)-[:OWNER]->(o)
+          WHERE ($include_archived OR (coalesce(r.archived, false) = false AND coalesce(r._ont_archived, false) = false AND coalesce(r.disabled, false) = false))
+            AND ($exclude_forks = false OR coalesce(r.fork, false) = false)
+          MATCH (r)-[:HAS_WORKFLOW]->(w:GitHubWorkflow)
+          OPTIONAL MATCH (w)-[:USES_ACTION]->(a:GitHubAction)
+          WITH r, w, collect(DISTINCT CASE WHEN a.is_pinned = false OR a.is_pinned IS NULL THEN a ELSE null END) AS raw_unpinned
+          WITH r, w, [a IN raw_unpinned WHERE a IS NOT NULL] AS unpinned
+          WHERE coalesce(w.permissions_contents, '') = 'write'
+             OR coalesce(w.permissions_id_token, '') = 'write'
+             OR coalesce(w.permissions_packages, '') = 'write'
+             OR coalesce(w.permissions_pull_requests, '') = 'write'
+             OR coalesce(w.permissions_security_events, '') = 'write'
+             OR 'pull_request_target' IN coalesce(w.trigger_events, [])
+             OR size(unpinned) > 0
+          RETURN r.fullname AS repo,
+                 w.name AS workflow,
+                 w.path AS path,
+                 w.trigger_events AS triggers,
+                 w.permissions_contents AS contents,
+                 w.permissions_id_token AS id_token,
+                 w.permissions_packages AS packages,
+                 w.permissions_pull_requests AS pull_requests,
+                 w.permissions_security_events AS security_events,
+                 'pull_request_target' IN coalesce(w.trigger_events, []) AS uses_pull_request_target,
+                 size(unpinned) AS unpinned_actions,
+                 [a IN unpinned | coalesce(a.name, a.source_uri, 'unknown') + '@' + coalesce(a.version, 'unknown')][0..10] AS unpinned_action_sample
+          ORDER BY uses_pull_request_target DESC, unpinned_actions DESC, repo, workflow
+        parameters:
+          - name: org
+            type: string
+            description: GitHub organization login, e.g. mappedsky.
+            required: true
+          - name: exclude_forks
+            type: boolean
+            description: >-
+              Exclude repositories marked as forks. Missing fork metadata is
+              treated as not a fork.
+            required: false
+            default: true
+          - name: include_archived
+            type: boolean
+            description: Include archived or disabled repositories.
+            required: false
+            default: false
+        enabled: true
+      coverage_gaps:
+        name: coverage_gaps
+        description: >-
+          Return repository-level GitHub security coverage gaps such as missing
+          CodeQL, Scorecard, dependency graph workflows, manifests, or language
+          metadata.
+        cypher: |-
+          MATCH (o:GitHubOrganization)
+          WHERE o.id = 'https://github.com/' + $org OR o.username = $org OR o._ont_name = $org
+          MATCH (r:GitHubRepository)-[:OWNER]->(o)
+          WHERE ($include_archived OR (coalesce(r.archived, false) = false AND coalesce(r._ont_archived, false) = false AND coalesce(r.disabled, false) = false))
+            AND ($exclude_forks = false OR coalesce(r.fork, false) = false)
+          OPTIONAL MATCH (r)-[:HAS_WORKFLOW]->(w:GitHubWorkflow)
+          WITH r, collect(DISTINCT w.name) AS workflow_names, collect(DISTINCT w.path) AS workflow_paths
+          OPTIONAL MATCH (r)-[:HAS_MANIFEST]->(m:DependencyGraphManifest)
+          WITH r, workflow_names, workflow_paths, count(DISTINCT m) AS manifests
+          WITH r, manifests,
+               any(name IN workflow_names WHERE toLower(coalesce(name, '')) CONTAINS 'codeql') OR any(path IN workflow_paths WHERE toLower(coalesce(path, '')) CONTAINS 'codeql') AS has_codeql,
+               any(name IN workflow_names WHERE toLower(coalesce(name, '')) CONTAINS 'scorecard') OR any(path IN workflow_paths WHERE toLower(coalesce(path, '')) CONTAINS 'scorecard') AS has_scorecard,
+               any(name IN workflow_names WHERE toLower(coalesce(name, '')) CONTAINS 'dependency graph') OR any(path IN workflow_paths WHERE toLower(coalesce(path, '')) CONTAINS 'dependabot') AS has_dependency_graph
+          RETURN r.fullname AS repo,
+                 coalesce(r.private, false) AS private,
+                 coalesce(r.primarylanguage, 'unknown') AS language,
+                 manifests,
+                 has_codeql AS codeql,
+                 has_scorecard AS scorecard,
+                 has_dependency_graph AS dependency_graph,
+                 CASE WHEN r.primarylanguage IS NULL THEN true ELSE false END AS missing_language,
+                 [gap IN [
+                   CASE WHEN NOT has_codeql THEN 'missing_codeql' ELSE null END,
+                   CASE WHEN NOT has_scorecard THEN 'missing_scorecard' ELSE null END,
+                   CASE WHEN NOT has_dependency_graph THEN 'missing_dependency_graph' ELSE null END,
+                   CASE WHEN manifests = 0 THEN 'missing_dependency_manifests' ELSE null END,
+                   CASE WHEN r.primarylanguage IS NULL THEN 'missing_language' ELSE null END
+                 ] WHERE gap IS NOT NULL] AS gaps
+          ORDER BY size([gap IN [
+                   CASE WHEN NOT has_codeql THEN 'missing_codeql' ELSE null END,
+                   CASE WHEN NOT has_scorecard THEN 'missing_scorecard' ELSE null END,
+                   CASE WHEN NOT has_dependency_graph THEN 'missing_dependency_graph' ELSE null END,
+                   CASE WHEN manifests = 0 THEN 'missing_dependency_manifests' ELSE null END,
+                   CASE WHEN r.primarylanguage IS NULL THEN 'missing_language' ELSE null END
+                 ] WHERE gap IS NOT NULL]) DESC, repo
+        parameters:
+          - name: org
+            type: string
+            description: GitHub organization login, e.g. mappedsky.
+            required: true
+          - name: exclude_forks
+            type: boolean
+            description: >-
+              Exclude repositories marked as forks. Missing fork metadata is
+              treated as not a fork.
+            required: false
+            default: true
+          - name: include_archived
+            type: boolean
+            description: Include archived or disabled repositories.
+            required: false
+            default: false
+        enabled: true
+      identity_access_summary:
+        name: identity_access_summary
+        description: >-
+          Summarize GitHub organization members/admins and direct repository
+          admin collaborators where represented in the graph.
+        cypher: |-
+          MATCH (o:GitHubOrganization)
+          WHERE o.id = 'https://github.com/' + $org OR o.username = $org OR o._ont_name = $org
+          OPTIONAL MATCH (o)<-[:MEMBER_OF]-(member:GitHubUser)
+          WITH o, collect(DISTINCT member) AS members
+          OPTIONAL MATCH (o)<-[:ADMIN_OF]-(admin:GitHubUser)
+          WITH o, members, collect(DISTINCT admin) AS admins
+          MATCH (r:GitHubRepository)-[:OWNER]->(o)
+          WHERE ($include_archived OR (coalesce(r.archived, false) = false AND coalesce(r._ont_archived, false) = false AND coalesce(r.disabled, false) = false))
+            AND ($exclude_forks = false OR coalesce(r.fork, false) = false)
+          OPTIONAL MATCH (r)-[:DIRECT_COLLAB_ADMIN]-(repo_admin:GitHubUser)
+          WITH members, admins, collect(DISTINCT r) AS repos, collect(DISTINCT repo_admin) AS raw_repo_admins
+          WITH [u IN members WHERE u IS NOT NULL] AS members,
+               [u IN admins WHERE u IS NOT NULL] AS admins,
+               repos,
+               [u IN raw_repo_admins WHERE u IS NOT NULL] AS repo_admins
+          RETURN size(members) AS org_members,
+                 size(admins) AS org_admins,
+                 size(repo_admins) AS direct_repo_admins,
+                 size([u IN members + admins + repo_admins WHERE u._ont_has_mfa IS NULL]) AS users_with_unknown_mfa,
+                 [u IN members | {username: u.username, email: u.email, has_mfa: u._ont_has_mfa, site_admin: u.is_site_admin}][0..50] AS member_sample,
+                 [u IN admins | {username: u.username, email: u.email, has_mfa: u._ont_has_mfa, site_admin: u.is_site_admin}][0..50] AS admin_sample,
+                 [u IN repo_admins | {username: u.username, email: u.email, has_mfa: u._ont_has_mfa, site_admin: u.is_site_admin}][0..50] AS direct_repo_admin_sample
+        parameters:
+          - name: org
+            type: string
+            description: GitHub organization login, e.g. mappedsky.
+            required: true
+          - name: exclude_forks
+            type: boolean
+            description: >-
+              Exclude repositories marked as forks. Missing fork metadata is
+              treated as not a fork.
+            required: false
+            default: true
+          - name: include_archived
+            type: boolean
+            description: Include archived or disabled repositories.
+            required: false
+            default: false
+        enabled: true
+      sync_freshness:
+        name: sync_freshness
+        description: >-
+          Return GitHub-related SyncMetadata freshness for an organization,
+          useful for qualifying security reports with data age and source
+          coverage.
+        cypher: |-
+          MATCH (s:SyncMetadata)
+          WHERE coalesce(s.groupid, '') = 'https://github.com/' + $org
+             OR coalesce(s.groupid, '') CONTAINS $org
+             OR coalesce(s.grouptype, '') CONTAINS 'GitHub'
+             OR coalesce(s.syncedtype, '') CONTAINS 'GitHub'
+          RETURN s.grouptype AS grouptype,
+                 s.syncedtype AS syncedtype,
+                 s.groupid AS groupid,
+                 datetime({epochSeconds: s.lastupdated}) AS last_synced,
+                 s.lastupdated AS lastupdated_epoch
+          ORDER BY s.lastupdated DESC
+          LIMIT $limit
+        parameters:
+          - name: org
+            type: string
+            description: GitHub organization login, e.g. mappedsky.
+            required: true
+          - name: limit
+            type: integer
+            description: Maximum number of sync records to return.
+            required: false
+            default: 20
+        enabled: true
+      recommendations:
+        name: recommendations
+        description: >-
+          Return prioritized GitHub security recommendations with computed
+          evidence and affected repositories.
+        cypher: |-
+          MATCH (o:GitHubOrganization)
+          WHERE o.id = 'https://github.com/' + $org OR o.username = $org OR o._ont_name = $org
+          MATCH (r:GitHubRepository)-[:OWNER]->(o)
+          WHERE ($include_archived OR (coalesce(r.archived, false) = false AND coalesce(r._ont_archived, false) = false AND coalesce(r.disabled, false) = false))
+            AND ($exclude_forks = false OR coalesce(r.fork, false) = false)
+          WITH collect(DISTINCT r) AS repos
+          CALL {
+            WITH repos
+            UNWIND repos AS r
+            OPTIONAL MATCH (r)-[:FOUND_IN]-(s:SecurityIssue {state: 'open'})
+            WITH collect(DISTINCT s) AS issues,
+                 collect(DISTINCT CASE WHEN s.severity IN ['critical', 'high'] THEN r.fullname ELSE null END) AS raw_severe_repos
+            RETURN size([i IN issues WHERE i IS NOT NULL]) AS open_alerts,
+                   size([i IN issues WHERE i IS NOT NULL AND i.severity = 'critical']) AS open_critical,
+                   size([i IN issues WHERE i IS NOT NULL AND i.severity = 'high']) AS open_high,
+                   [repo IN raw_severe_repos WHERE repo IS NOT NULL] AS severe_repos
+          }
+          CALL {
+            WITH repos
+            UNWIND repos AS r
+            OPTIONAL MATCH (r)-[:HAS_WORKFLOW]->(w:GitHubWorkflow)-[:USES_ACTION]->(a:GitHubAction)
+            WITH collect(DISTINCT CASE WHEN a.is_pinned = false OR a.is_pinned IS NULL THEN r.fullname ELSE null END) AS raw_unpinned_repos,
+                 count(DISTINCT CASE WHEN a.is_pinned = false OR a.is_pinned IS NULL THEN a ELSE null END) AS unpinned_actions
+            RETURN unpinned_actions, [repo IN raw_unpinned_repos WHERE repo IS NOT NULL] AS unpinned_repos
+          }
+          CALL {
+            WITH repos
+            UNWIND repos AS r
+            OPTIONAL MATCH (r)-[:HAS_WORKFLOW]->(w:GitHubWorkflow)
+            WITH r, collect(DISTINCT w.name) AS names, collect(DISTINCT w.path) AS paths
+            WITH collect(DISTINCT CASE WHEN NOT (any(name IN names WHERE toLower(coalesce(name, '')) CONTAINS 'codeql') OR any(path IN paths WHERE toLower(coalesce(path, '')) CONTAINS 'codeql')) THEN r.fullname ELSE null END) AS raw_missing_codeql,
+                 collect(DISTINCT CASE WHEN NOT (any(name IN names WHERE toLower(coalesce(name, '')) CONTAINS 'scorecard') OR any(path IN paths WHERE toLower(coalesce(path, '')) CONTAINS 'scorecard')) THEN r.fullname ELSE null END) AS raw_missing_scorecard
+            RETURN [repo IN raw_missing_codeql WHERE repo IS NOT NULL] AS missing_codeql_repos,
+                   [repo IN raw_missing_scorecard WHERE repo IS NOT NULL] AS missing_scorecard_repos
+          }
+          CALL {
+            WITH repos
+            UNWIND repos AS r
+            OPTIONAL MATCH (r)-[:HAS_WORKFLOW]->(w:GitHubWorkflow)
+            WHERE coalesce(w.permissions_contents, '') = 'write'
+               OR coalesce(w.permissions_id_token, '') = 'write'
+               OR coalesce(w.permissions_packages, '') = 'write'
+               OR coalesce(w.permissions_pull_requests, '') = 'write'
+               OR coalesce(w.permissions_security_events, '') = 'write'
+            RETURN count(DISTINCT w) AS elevated_workflows,
+                   collect(DISTINCT r.fullname) AS elevated_workflow_repos
+          }
+          WITH [
+            {priority: 1, area: 'Dependency vulnerabilities', recommendation: 'Patch open critical and high dependency alerts first.', evidence: toString(open_critical) + ' critical and ' + toString(open_high) + ' high open alerts; ' + toString(open_alerts) + ' total open alerts.', affected_repos: severe_repos},
+            {priority: 2, area: 'GitHub Actions supply chain', recommendation: 'Pin GitHub Actions to commit SHAs, prioritizing publish and deploy workflows.', evidence: toString(unpinned_actions) + ' unpinned action nodes observed.', affected_repos: unpinned_repos},
+            {priority: 3, area: 'Workflow permissions', recommendation: 'Restrict write-level workflow permissions to release-only jobs and protected environments.', evidence: toString(elevated_workflows) + ' workflows request write-level permissions.', affected_repos: elevated_workflow_repos},
+            {priority: 4, area: 'Code scanning coverage', recommendation: 'Enable CodeQL on repositories missing it.', evidence: toString(size(missing_codeql_repos)) + ' repositories appear to lack CodeQL.', affected_repos: missing_codeql_repos},
+            {priority: 5, area: 'Supply-chain posture', recommendation: 'Enable OSSF Scorecard across repositories.', evidence: toString(size(missing_scorecard_repos)) + ' repositories appear to lack Scorecard coverage.', affected_repos: missing_scorecard_repos}
+          ] AS recommendations
+          UNWIND recommendations AS recommendation
+          RETURN recommendation.priority AS priority,
+                 recommendation.area AS area,
+                 recommendation.recommendation AS recommendation,
+                 recommendation.evidence AS evidence,
+                 recommendation.affected_repos AS affected_repos
+          ORDER BY priority
+        parameters:
+          - name: org
+            type: string
+            description: GitHub organization login, e.g. mappedsky.
+            required: true
+          - name: exclude_forks
+            type: boolean
+            description: >-
+              Exclude repositories marked as forks. Missing fork metadata is
+              treated as not a fork.
+            required: false
+            default: true
+          - name: include_archived
+            type: boolean
+            description: Include archived or disabled repositories.
+            required: false
+            default: false
+        enabled: true
+
+skillsets:
+  github_security_investigations:
+    name: GitHub Security Investigations
+    description: >-
+      Reusable investigation workflows for GitHub organization security posture
+      using the github_security user-defined toolset.
+    enabled: true
+    skills:
+      github_org_security_overview:
+        name: GitHub Organization Security Overview
+        description: >-
+          Guide an agent through a GitHub organization security investigation
+          using the github_security toolset and produce a prioritized executive
+          summary.
+        template: |-
+          Investigate the GitHub organization `{{org}}` using the github_security user-defined tools. Treat `org` as an explicit required input and do not substitute a default organization.
+
+          Inputs:
+          - org: `{{org}}`
+          - exclude_forks: `{{exclude_forks}}`
+          - include_archived: `{{include_archived}}`
+          - limit: `{{limit}}`
+
+          Workflow:
+          1. Call `github_security__sync_freshness` with `org` first. State the newest GitHub sync timestamp and qualify the report if the data looks stale or incomplete.
+          2. Call `github_security__org_overview` with `org`, `exclude_forks`, and `include_archived`. Establish repository count, visibility split, alert totals, and any caveats around fork metadata.
+          3. Call `github_security__repo_risk_summary` and identify the highest-risk repositories by critical/high alerts, total open alerts, public exposure, and risk score.
+          4. Call `github_security__top_vulnerabilities` with `state='open'` and `limit`. Prioritize critical and high findings, then high EPSS/CVSS medium findings if they materially change remediation order.
+          5. Call `github_security__actions_hardening_findings`. Look for unpinned actions, write-level permissions, publish/deploy workflows, and `pull_request_target` usage.
+          6. Call `github_security__coverage_gaps`. Identify missing CodeQL, Scorecard, dependency graph coverage, manifests, and language metadata.
+          7. Call `github_security__identity_access_summary`. Summarize org admins, direct repo admins, and MFA visibility limits without overstating unknown fields.
+          8. Call `github_security__recommendations` and reconcile its computed recommendations with the evidence from the earlier tools.
+
+          Output format:
+          - Start with a concise security posture summary for `{{org}}`.
+          - Include a `Data Freshness` note with exact sync timestamps when available.
+          - Include `Top Risks` ordered by severity and likely exploitability.
+          - Include `Vulnerabilities` with repository, package, severity, CVE/GHSA when present, patch version, and why it matters.
+          - Include `Misconfigurations and Coverage Gaps` focused on GitHub Actions, scanning, dependency visibility, and identity/access findings.
+          - Include `Top Recommendations` as a numbered remediation plan, with affected repositories and concrete next actions.
+          - Call out graph limitations explicitly, especially missing fork metadata, archived state uncertainty, absent MFA fields, or repositories with no dependency manifests.
+          - Do not claim a repository is forked, archived, protected, or MFA-enforced unless the tool output contains that evidence.
+          - Keep the response evidence-backed; separate confirmed facts from inferences.
+        parameters:
+          - name: org
+            type: string
+            description: GitHub organization login to investigate.
+            required: true
+          - name: exclude_forks
+            type: boolean
+            description: Exclude repositories marked as forks when the graph has fork metadata.
+            required: false
+            default: true
+          - name: include_archived
+            type: boolean
+            description: Include archived or disabled repositories.
+            required: false
+            default: false
+          - name: limit
+            type: integer
+            description: Maximum number of top vulnerabilities to inspect in detail.
+            required: false
+            default: 25
+        triggers:
+          - GitHub organization security overview
+          - GitHub org security posture
+          - GitHub vulnerability and misconfiguration investigation
+          - investigate GitHub security findings
+        tools_required:
+          - github_security__sync_freshness
+          - github_security__org_overview
+          - github_security__repo_risk_summary
+          - github_security__top_vulnerabilities
+          - github_security__actions_hardening_findings
+          - github_security__coverage_gaps
+          - github_security__identity_access_summary
+          - github_security__recommendations
         enabled: true
 
 scheduled_queries:

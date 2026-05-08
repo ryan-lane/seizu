@@ -76,18 +76,32 @@ export function ProgressPanelSkeleton({ caption, inline = false }: CaptionProps 
     );
   }
   return (
-    <Card data-testid="progress-panel-loading-skeleton" sx={{ minHeight: 300 }}>
+    <Card
+      data-testid="progress-panel-loading-skeleton"
+      sx={{ height: '100%', minHeight: 0, display: 'flex', flexDirection: 'column' }}
+    >
       {caption && (
         <>
           <HeaderSkeleton caption={caption} />
           <Divider />
         </>
       )}
-      <CardContent sx={{ display: 'flex', justifyContent: 'center', py: 2 }}>
-        <Skeleton variant="text" width={150} height={56} />
-      </CardContent>
-      <CardContent sx={{ display: 'flex', justifyContent: 'center', pt: 0 }}>
-        <Skeleton variant="circular" width={100} height={100} />
+      <CardContent
+        sx={{
+          flex: 1,
+          minHeight: 0,
+          overflow: 'hidden',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: 1,
+          p: 1,
+          '&:last-child': { pb: 1 }
+        }}
+      >
+        <Skeleton variant="text" width={150} height={32} sx={{ maxWidth: '70%', flexShrink: 0 }} />
+        <Skeleton variant="circular" width={64} height={64} sx={{ flexShrink: 1 }} />
       </CardContent>
     </Card>
   );

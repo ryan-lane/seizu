@@ -455,6 +455,16 @@ class Report(BaseModel):
         examples=[1],
     )
 
+    pinned: bool | None = Field(
+        default=None,
+        description=(
+            "Optional seed metadata for dashboard navigation. When set, the"
+            " seeder pins or unpins the report after creating or updating it."
+            " This field is not stored inside report version configs."
+        ),
+        examples=[True],
+    )
+
     name: str = Field(
         description="The name of the report.",
         examples=["CVEs"],

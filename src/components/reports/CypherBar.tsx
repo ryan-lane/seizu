@@ -31,6 +31,63 @@ const chartFillSx = {
   display: 'flex'
 };
 
+const MAX_AXIS_LABEL_LINES = 2;
+const MAX_AXIS_LABEL_CHARS = 18;
+const DEFAULT_AXIS_LABEL_LINE_LENGTH = 9;
+
+export function ellipsizeText(value: string, maxChars: number): string {
+  if (value.length <= maxChars) {
+    return value;
+  }
+  if (maxChars <= 3) {
+    return '.'.repeat(Math.max(0, maxChars));
+  }
+  return `${value.slice(0, maxChars - 3).trimEnd()}...`;
+}
+
+export function wrapAxisLabel(
+  value: string,
+  lineLength = DEFAULT_AXIS_LABEL_LINE_LENGTH,
+  maxLines = MAX_AXIS_LABEL_LINES,
+  maxChars = MAX_AXIS_LABEL_CHARS,
+): string {
+  const label = value.trim();
+  if (label.length <= lineLength) {
+    return label;
+  }
+
+  const words = label.split(/\s+/);
+  const lines: string[] = [];
+  let current = '';
+
+  for (const word of words) {
+    const next = current ? `${current} ${word}` : word;
+    if (next.length <= lineLength) {
+      current = next;
+      continue;
+    }
+    if (current) {
+      lines.push(current);
+      current = word;
+    } else {
+      lines.push(word);
+      current = '';
+    }
+  }
+  if (current) {
+    lines.push(current);
+  }
+
+  const boundedLines = lines.slice(0, maxLines);
+  if (lines.length > maxLines) {
+    boundedLines[maxLines - 1] = `${boundedLines[maxLines - 1]} ${lines.slice(maxLines).join(' ')}`;
+  }
+
+  return boundedLines
+    .map((line) => ellipsizeText(line, maxChars))
+    .join('\n');
+}
+
 interface BarSettings {
   legend?: string;
 }
@@ -237,8 +294,12 @@ export default function CypherBar({
             xAxis={[{
               scaleType: 'band',
               dataKey: 'id',
+              height: 48,
               disableLine: true,
               disableTicks: true,
+              tickLabelInterval: () => true,
+              tickLabelMinGap: 2,
+              valueFormatter: (value) => wrapAxisLabel(String(value)),
               tickLabelStyle
             }]}
             yAxis={[{
@@ -256,10 +317,10 @@ export default function CypherBar({
             hideLegend={!hasLegend}
             margin={
               barSettings?.legend === 'column'
-                ? { top: 16, right: 150, bottom: 40, left: 48 }
+                ? { top: 16, right: 150, bottom: 56, left: 48 }
                 : barSettings?.legend === 'row'
-                  ? { top: 16, right: 16, bottom: 72, left: 48 }
-                  : { top: 16, right: 16, bottom: 40, left: 48 }
+                  ? { top: 16, right: 16, bottom: 88, left: 48 }
+                  : { top: 16, right: 16, bottom: 56, left: 48 }
             }
             slotProps={hasLegend ? {
               legend: {
