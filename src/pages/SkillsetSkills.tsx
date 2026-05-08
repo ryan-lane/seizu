@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
   Alert, Box, Button, Checkbox, Chip, CircularProgress, Dialog, DialogActions, DialogContent,
@@ -113,6 +113,8 @@ function SkillDialog({ open, onClose, onSave, initial, catalog }: SkillDialogPro
   const updateParam = <K extends keyof ParamFormState>(i: number, key: K, val: ParamFormState[K]) =>
     setParams((ps) => ps.map((p, idx) => (idx === i ? { ...p, [key]: val } : p)));
 
+  const handleTemplateChange = useCallback((value: string | undefined) => setTemplate(value ?? ''), []);
+
   const handleSave = async () => {
     setError(null);
     if (!name.trim()) { setError('Name is required.'); return; }
@@ -165,7 +167,7 @@ function SkillDialog({ open, onClose, onSave, initial, catalog }: SkillDialogPro
             <Typography variant="subtitle2" sx={{ mb: 1 }}>Template</Typography>
             <MarkdownEditor
               value={template}
-              onChange={(value) => setTemplate(value ?? '')}
+              onChange={handleTemplateChange}
               sourceLabel="Template"
             />
           </Box>

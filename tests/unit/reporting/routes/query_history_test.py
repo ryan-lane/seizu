@@ -165,3 +165,53 @@ async def test_list_query_history_requires_query_history_read_permission():
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         ret = await client.get("/api/v1/query-history")
     assert ret.status_code == 403
+
+
+async def test_get_query_history_item_returns_item(mocker):
+    item = _make_history_item()
+    mocker.patch(
+        "reporting.routes.query_history.report_store.get_query_history_item",
+        new=AsyncMock(return_value=item),
+    )
+
+    app = _make_app()
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        ret = await client.get("/api/v1/query-history/123")
+
+    assert ret.status_code == 200
+    body = ret.json()
+    assert body["history_id"] == "123"
+    assert body["query"] == "MATCH (n) RETURN n LIMIT 1"
+
+
+async def test_get_query_history_item_not_found(mocker):
+    mocker.patch(
+        "reporting.routes.query_history.report_store.get_query_history_item",
+        new=AsyncMock(return_value=None),
+    )
+
+    app = _make_app()
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        ret = await client.get("/api/v1/query-history/nonexistent")
+
+    assert ret.status_code == 404
+
+
+async def test_get_query_history_item_scoped_to_current_user(mocker):
+    mock_get = mocker.patch(
+        "reporting.routes.query_history.report_store.get_query_history_item",
+        new=AsyncMock(return_value=None),
+    )
+
+    app = _make_app(current_user=_OTHER_CURRENT_USER)
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        await client.get("/api/v1/query-history/123")
+
+    mock_get.assert_awaited_once_with(user_id="other-user-id", history_id="123")
+
+
+async def test_get_query_history_item_requires_permission():
+    app = _make_app(current_user=_UNPRIVILEGED_CURRENT_USER)
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        ret = await client.get("/api/v1/query-history/123")
+    assert ret.status_code == 403

@@ -482,6 +482,10 @@ class ReportStore(ABC):
         pass a user_id they do not own.
         """
 
+    @abstractmethod
+    async def get_query_history_item(self, user_id: str, history_id: str) -> QueryHistoryItem | None:
+        """Return a single history item by ID, scoped to user_id, or None if not found."""
+
     # ------------------------------------------------------------------
     # Roles (user-defined, versioned)
     # ------------------------------------------------------------------

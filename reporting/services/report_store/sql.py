@@ -2021,6 +2021,23 @@ class SQLModelReportStore(ReportStore):
                 for r in rows
             ], total
 
+    async def get_query_history_item(self, user_id: str, history_id: str) -> QueryHistoryItem | None:
+        async with AsyncSession(_get_engine()) as session:
+            stmt = select(QueryHistoryRecord).where(
+                col(QueryHistoryRecord.user_id) == user_id,
+                col(QueryHistoryRecord.history_id) == history_id,
+            )
+            result = await session.execute(stmt)
+            row = result.scalar_one_or_none()
+            if row is None:
+                return None
+            return QueryHistoryItem(
+                history_id=row.history_id,
+                user_id=row.user_id,
+                query=row.query,
+                executed_at=row.executed_at,
+            )
+
     # ------------------------------------------------------------------
     # Roles (user-defined, versioned)
     # ------------------------------------------------------------------

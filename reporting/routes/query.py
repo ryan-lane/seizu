@@ -8,7 +8,7 @@ from neo4j.graph import Node, Path, Relationship
 
 from reporting.authnz import CurrentUser, require_permission
 from reporting.authnz.permissions import Permission
-from reporting.schema.query import QueryRequest, QueryResponse, ReportQueryRequest
+from reporting.schema.query import HistoryQueryRequest, QueryRequest, QueryResponse, ReportQueryRequest
 from reporting.services import report_store, reporting_neo4j
 from reporting.services.query_validator import validate_query
 from reporting.services.report_query_tokens import QueryTokenExpiredError, resolve_report_query_request
@@ -68,18 +68,21 @@ async def _execute_query(
     try:
         results = await reporting_neo4j.run_query(query, parameters=params)
         serialized = [{key: _serialize_neo4j_value(value) for key, value in record.items()} for record in results]
+        history_id: str | None = None
         if save_history:
             try:
-                await report_store.save_query_history(
+                history_item = await report_store.save_query_history(
                     user_id=current.user.user_id,
                     query=query,
                 )
+                history_id = history_item.history_id
             except Exception:
                 logger.warning("Failed to save query history", exc_info=True)
         return {
             "results": serialized,
             "warnings": [str(w) for w in validation.warnings],
             "errors": [],
+            "history_id": history_id,
         }
     except neo4j.exceptions.Neo4jError as e:
         logger.exception("Query execution failed")
@@ -138,3 +141,18 @@ async def query_report(
         return JSONResponse(content={"error": "Invalid report query token"}, status_code=400)
 
     return await _execute_query(query=query, params=params, current=current, save_history=False)
+
+
+@router.post("/api/v1/query/history", response_model=QueryResponse)
+async def query_by_history_id(
+    body: HistoryQueryRequest,
+    current: CurrentUser = Depends(require_permission(Permission.QUERY_EXECUTE)),
+) -> Any:
+    """Re-execute a query by history ID without creating a new history entry."""
+    item = await report_store.get_query_history_item(
+        user_id=current.user.user_id,
+        history_id=body.history_id,
+    )
+    if item is None:
+        return JSONResponse(content={"error": "Not found"}, status_code=404)
+    return await _execute_query(query=item.query, params=None, current=current, save_history=False)

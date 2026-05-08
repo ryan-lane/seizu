@@ -18,6 +18,7 @@ from starlette.types import Receive, Scope, Send
 
 from reporting import settings
 from reporting.routes import config as config_routes
+from reporting.routes import graph as graph_routes
 from reporting.routes import me as me_routes
 from reporting.routes import query as query_routes
 from reporting.routes import query_history as query_history_routes
@@ -198,6 +199,7 @@ def create_app() -> FastAPI:
     # API routers
     for router_module in [
         config_routes,
+        graph_routes,
         me_routes,
         query_routes,
         query_history_routes,

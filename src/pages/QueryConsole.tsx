@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import {
   Box,
   Button,
@@ -12,14 +13,19 @@ import PlayArrow from '@mui/icons-material/PlayArrow';
 import CypherGraph from 'src/components/reports/CypherGraph';
 import QueryConsoleSchemaPanel from 'src/components/QueryConsoleSchemaPanel';
 import { usePermissionState } from 'src/hooks/usePermissions';
+import { useFetchHistoryItem, QueryHistoryItem } from 'src/hooks/useQueryHistory';
 import { pageContentSx } from 'src/theme/layout';
 
 const QUERY_CONSOLE_SCHEMA_PANEL_STORAGE_KEY = 'seizu:query-console:schema-panel-open';
 
 export default function QueryConsole() {
   const { hasPermission, loading: permissionsLoading } = usePermissionState();
+  const navigate = useNavigate();
+  const location = useLocation();
+  const fetchHistoryItem = useFetchHistoryItem();
   const [queryText, setQueryText] = useState('');
   const [submittedQuery, setSubmittedQuery] = useState<string | undefined>(undefined);
+  const [submittedHistoryId, setSubmittedHistoryId] = useState<string | undefined>(undefined);
   const [runKey, setRunKey] = useState(0);
   const [schemaPanelOpen, setSchemaPanelOpen] = useState(() => {
     if (typeof window === 'undefined') return true;
@@ -31,42 +37,79 @@ export default function QueryConsole() {
   const dragStartY = useRef(0);
   const dragStartHeight = useRef(0);
 
-  const handleQueryComplete = useCallback(() => {
-    setHistoryRefreshTrigger((n) => n + 1);
-  }, []);
+  // justPushedRef: the history ID we most recently pushed to the URL ourselves,
+  // so we can skip re-running when our own navigate() triggers a location change.
+  const justPushedRef = useRef<string | null>(null);
 
-  const handleRun = () => {
-    const trimmed = queryText.trim();
+  const handleQueryComplete = useCallback((historyId: string | null) => {
+    if (historyId) {
+      setHistoryRefreshTrigger((n) => n + 1);
+      justPushedRef.current = historyId;
+      navigate(`?h=${historyId}`);
+    }
+  }, [navigate]);
+
+  // Restore and re-run query when URL changes via browser back/forward.
+  useEffect(() => {
+    const h = new URLSearchParams(location.search).get('h');
+    if (!h) return;
+    if (justPushedRef.current === h) {
+      justPushedRef.current = null;
+      return;
+    }
+    setSubmittedHistoryId(h);
+    setSubmittedQuery(undefined);
+    setRunKey((k) => k + 1);
+    let cancelled = false;
+    fetchHistoryItem(h).then((item) => {
+      if (cancelled || !item) return;
+      setQueryText(item.query);
+    });
+    return () => { cancelled = true; };
+  }, [location.search, fetchHistoryItem]);
+
+  const queryTextRef = useRef(queryText);
+  queryTextRef.current = queryText;
+
+  const handleRun = useCallback(() => {
+    const trimmed = queryTextRef.current.trim();
     if (!trimmed) return;
+    setSubmittedHistoryId(undefined);
     setSubmittedQuery(trimmed);
     setRunKey((k) => k + 1);
-  };
+  }, []);
 
-  const handleKeyDown = (e: React.KeyboardEvent) => {
+  const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
       handleRun();
     }
-  };
+  }, [handleRun]);
 
   /** Insert a query from the schema browser and run it immediately. */
-  const handleQuerySelect = (query: string) => {
+  const handleQuerySelect = useCallback((query: string) => {
     setQueryText(query);
     setSubmittedQuery(query);
+    setSubmittedHistoryId(undefined);
     setRunKey((k) => k + 1);
-  };
+  }, []);
 
-  /** Load a query from history into the editor without running it. */
-  const handleHistorySelect = (query: string) => {
-    setQueryText(query);
-  };
+  /** Load a query from history into the editor and re-execute by history ID. */
+  const handleHistorySelect = useCallback((item: QueryHistoryItem) => {
+    setQueryText(item.query);
+    setSubmittedHistoryId(item.history_id);
+    setSubmittedQuery(undefined);
+    setRunKey((k) => k + 1);
+    justPushedRef.current = item.history_id;
+    navigate(`?h=${item.history_id}`);
+  }, [navigate]);
 
-  const handleSchemaPanelToggle = (tab?: 'schema' | 'history') => {
+  const handleSchemaPanelToggle = useCallback((tab?: 'schema' | 'history') => {
     if (tab) {
       setSchemaPanelOpen(true);
       return;
     }
     setSchemaPanelOpen((value) => !value);
-  };
+  }, []);
 
   useEffect(() => {
     window.localStorage.setItem(
@@ -146,9 +189,10 @@ export default function QueryConsole() {
       >
         {/* Graph panel — detail panel open by default in the console */}
         <Box sx={{ flex: 1, minHeight: 0, overflow: 'hidden' }}>
-          {submittedQuery ? (
+          {(submittedQuery || submittedHistoryId) ? (
             <CypherGraph
-              cypher={submittedQuery}
+              cypher={submittedHistoryId ? undefined : submittedQuery}
+              queryHistoryId={submittedHistoryId}
               defaultDetailOpen
               fillHeight
               refreshKey={runKey}

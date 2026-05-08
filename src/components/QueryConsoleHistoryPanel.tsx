@@ -9,12 +9,12 @@ import {
   Typography
 } from '@mui/material';
 import ErrorIcon from '@mui/icons-material/Error';
-import { useQueryHistory } from 'src/hooks/useQueryHistory';
+import { useQueryHistory, QueryHistoryItem } from 'src/hooks/useQueryHistory';
 
 const PER_PAGE = 20;
 
 interface QueryConsoleHistoryPanelProps {
-  onQuerySelect: (query: string) => void;
+  onQuerySelect: (item: QueryHistoryItem) => void;
   refreshTrigger?: number;
 }
 
@@ -91,7 +91,7 @@ export default function QueryConsoleHistoryPanel({
             }}
           >
             <ListItemButton
-              onClick={() => onQuerySelect(item.query)}
+              onClick={() => onQuerySelect(item)}
               sx={{
                 py: 0.75,
                 px: 1.5,

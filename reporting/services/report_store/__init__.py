@@ -550,6 +550,10 @@ async def list_query_history(user_id: str, page: int, per_page: int) -> tuple[li
     return await get_store().list_query_history(user_id=user_id, page=page, per_page=per_page)
 
 
+async def get_query_history_item(user_id: str, history_id: str) -> QueryHistoryItem | None:
+    return await get_store().get_query_history_item(user_id=user_id, history_id=history_id)
+
+
 # ---------------------------------------------------------------------------
 # Role convenience functions
 # ---------------------------------------------------------------------------

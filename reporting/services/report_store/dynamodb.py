@@ -2263,6 +2263,27 @@ class DynamoDBReportStore(ReportStore):
 
         return await asyncio.to_thread(_op)
 
+    async def get_query_history_item(self, user_id: str, history_id: str) -> QueryHistoryItem | None:
+        def _op() -> QueryHistoryItem | None:
+            table = _get_table()
+            resp = table.get_item(
+                Key={
+                    "PK": _query_history_pk(user_id),
+                    "SK": _query_history_sk(history_id),
+                }
+            )
+            item = resp.get("Item")
+            if item is None:
+                return None
+            return QueryHistoryItem(
+                history_id=item["history_id"],
+                user_id=item["user_id"],
+                query=item["query"],
+                executed_at=item["executed_at"],
+            )
+
+        return await asyncio.to_thread(_op)
+
     # ------------------------------------------------------------------
     # Roles (user-defined, versioned)
     # ------------------------------------------------------------------

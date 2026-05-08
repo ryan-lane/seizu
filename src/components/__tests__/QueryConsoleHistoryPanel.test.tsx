@@ -84,7 +84,7 @@ describe('QueryConsoleHistoryPanel', () => {
     expect(screen.getByText('MATCH (a)-[r]->(b) RETURN a, r, b')).toBeInTheDocument();
   });
 
-  it('calls onQuerySelect with the query when an item is clicked', () => {
+  it('calls onQuerySelect with the full history item when an item is clicked', () => {
     const onQuerySelect = jest.fn();
     mockHook({ data: { items: ITEMS, total: 2, page: 1, per_page: 20 } });
     render(
@@ -93,7 +93,7 @@ describe('QueryConsoleHistoryPanel', () => {
       </Wrapper>
     );
     fireEvent.click(screen.getByText('MATCH (n) RETURN n'));
-    expect(onQuerySelect).toHaveBeenCalledWith('MATCH (n) RETURN n');
+    expect(onQuerySelect).toHaveBeenCalledWith(ITEMS[0]);
   });
 
   it('does not show pagination when only one page of results', () => {

@@ -6,7 +6,7 @@ from httpx import ASGITransport, AsyncClient
 from reporting.app import create_app
 from reporting.authnz import CurrentUser, get_current_user
 from reporting.authnz.permissions import ALL_PERMISSIONS
-from reporting.schema.report_config import User
+from reporting.schema.report_config import QueryHistoryItem, User
 from reporting.services.query_validator import ValidationResult
 from reporting.services.report_query_tokens import issue_report_query_token
 
@@ -361,14 +361,20 @@ async def test_query_saves_history_for_adhoc_requests(mocker):
         "reporting.routes.query.reporting_neo4j.run_query",
         new=AsyncMock(return_value=[mock_record]),
     )
+    fake_history_item = QueryHistoryItem(
+        history_id="hist-1",
+        user_id="test-user-id",
+        query="MATCH (n) RETURN n LIMIT 1",
+        executed_at="2024-01-01T00:00:00+00:00",
+    )
     mock_save = mocker.patch(
         "reporting.routes.query.report_store.save_query_history",
-        new=AsyncMock(),
+        new=AsyncMock(return_value=fake_history_item),
     )
 
     app = _make_app()
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
-        await client.post(
+        ret = await client.post(
             "/api/v1/query/adhoc",
             json={"query": "MATCH (n) RETURN n LIMIT 1"},
         )
@@ -377,6 +383,7 @@ async def test_query_saves_history_for_adhoc_requests(mocker):
         user_id="test-user-id",
         query="MATCH (n) RETURN n LIMIT 1",
     )
+    assert ret.json()["history_id"] == "hist-1"
 
 
 async def test_report_query_does_not_save_history(mocker):
@@ -539,3 +546,143 @@ async def test_report_query_rejects_expired_token(mocker):
     body = ret.json()
     assert body["error"] == "Report query token has expired"
     assert body["code"] == "token_expired"
+
+
+async def test_history_query_success(mocker):
+    """Re-executing by history ID returns results."""
+    _mock_validate(mocker)
+    mock_record = MagicMock()
+    mock_record.items.return_value = [("name", "Alice")]
+    mocker.patch(
+        "reporting.routes.query.reporting_neo4j.run_query",
+        new=AsyncMock(return_value=[mock_record]),
+    )
+    fake_history_item = QueryHistoryItem(
+        history_id="hist-abc",
+        user_id="test-user-id",
+        query="MATCH (n) RETURN n.name AS name",
+        executed_at="2024-01-01T00:00:00+00:00",
+    )
+    mocker.patch(
+        "reporting.routes.query.report_store.get_query_history_item",
+        new=AsyncMock(return_value=fake_history_item),
+    )
+
+    app = _make_app()
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        ret = await client.post(
+            "/api/v1/query/history",
+            json={"history_id": "hist-abc"},
+        )
+
+    assert ret.status_code == 200
+    assert ret.json()["results"] == [{"name": "Alice"}]
+    assert ret.json()["errors"] == []
+
+
+async def test_history_query_not_found(mocker):
+    """Returns 404 when the history item does not exist."""
+    mocker.patch(
+        "reporting.routes.query.report_store.get_query_history_item",
+        new=AsyncMock(return_value=None),
+    )
+
+    app = _make_app()
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        ret = await client.post(
+            "/api/v1/query/history",
+            json={"history_id": "nonexistent"},
+        )
+
+    assert ret.status_code == 404
+    assert ret.json()["error"] == "Not found"
+
+
+async def test_history_query_scoped_to_current_user(mocker):
+    """get_query_history_item is called with the current user's user_id."""
+    _mock_validate(mocker)
+    mock_record = MagicMock()
+    mock_record.items.return_value = [("n", 1)]
+    mocker.patch(
+        "reporting.routes.query.reporting_neo4j.run_query",
+        new=AsyncMock(return_value=[mock_record]),
+    )
+    fake_history_item = QueryHistoryItem(
+        history_id="hist-xyz",
+        user_id="test-user-id",
+        query="MATCH (n) RETURN n LIMIT 1",
+        executed_at="2024-01-01T00:00:00+00:00",
+    )
+    mock_get = mocker.patch(
+        "reporting.routes.query.report_store.get_query_history_item",
+        new=AsyncMock(return_value=fake_history_item),
+    )
+
+    app = _make_app()
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        await client.post(
+            "/api/v1/query/history",
+            json={"history_id": "hist-xyz"},
+        )
+
+    mock_get.assert_awaited_once_with(
+        user_id="test-user-id",
+        history_id="hist-xyz",
+    )
+
+
+async def test_history_query_does_not_save_history(mocker):
+    """Re-executing by history ID must not write a new history entry."""
+    _mock_validate(mocker)
+    mock_record = MagicMock()
+    mock_record.items.return_value = [("n", 1)]
+    mocker.patch(
+        "reporting.routes.query.reporting_neo4j.run_query",
+        new=AsyncMock(return_value=[mock_record]),
+    )
+    fake_history_item = QueryHistoryItem(
+        history_id="hist-nosave",
+        user_id="test-user-id",
+        query="MATCH (n) RETURN n LIMIT 1",
+        executed_at="2024-01-01T00:00:00+00:00",
+    )
+    mocker.patch(
+        "reporting.routes.query.report_store.get_query_history_item",
+        new=AsyncMock(return_value=fake_history_item),
+    )
+    mock_save = mocker.patch(
+        "reporting.routes.query.report_store.save_query_history",
+        new=AsyncMock(),
+    )
+
+    app = _make_app()
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        ret = await client.post(
+            "/api/v1/query/history",
+            json={"history_id": "hist-nosave"},
+        )
+
+    assert ret.status_code == 200
+    assert ret.json()["history_id"] is None
+    mock_save.assert_not_called()
+
+
+async def test_history_query_requires_permission(mocker):
+    """Unprivileged users receive 403."""
+    from reporting.authnz.permissions import Permission
+
+    unprivileged = CurrentUser(
+        user=_FAKE_USER,
+        jwt_claims={},
+        permissions=frozenset(p for p in ALL_PERMISSIONS if p != Permission.QUERY_EXECUTE),
+    )
+
+    app = create_app()
+    app.dependency_overrides[get_current_user] = lambda: unprivileged
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        ret = await client.post(
+            "/api/v1/query/history",
+            json={"history_id": "any"},
+        )
+
+    assert ret.status_code == 403

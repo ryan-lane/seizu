@@ -17,8 +17,19 @@ class QueryResponse(BaseModel):
     results: list[dict[str, Any]]
     errors: list[str] = []
     warnings: list[str] = []
+    history_id: str | None = None
+
+
+class HistoryQueryRequest(BaseModel):
+    history_id: str
 
 
 class ValidationResponse(BaseModel):
     errors: list[str]
     warnings: list[str]
+
+
+class GraphSchemaResponse(BaseModel):
+    labels: list[str]
+    relationship_types: list[str]
+    property_keys: list[str]

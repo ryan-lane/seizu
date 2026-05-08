@@ -1,4 +1,4 @@
-import { useState, useCallback, useContext } from 'react';
+import { useState, useCallback, useContext, useRef } from 'react';
 import { AuthContext } from 'src/auth.context';
 import { AuthConfigContext } from 'src/authConfig.context';
 
@@ -59,4 +59,26 @@ export function useQueryHistory() {
   );
 
   return { ...state, fetchHistory };
+}
+
+export function useFetchHistoryItem(): (historyId: string) => Promise<QueryHistoryItem | null> {
+  const { accessToken } = useContext(AuthContext);
+  const { auth_required } = useContext(AuthConfigContext);
+  const accessTokenRef = useRef(accessToken);
+  accessTokenRef.current = accessToken;
+  const authRequiredRef = useRef(auth_required);
+  authRequiredRef.current = auth_required;
+
+  return useCallback(async (historyId: string): Promise<QueryHistoryItem | null> => {
+    if (authRequiredRef.current && !accessTokenRef.current) return null;
+    const headers: Record<string, string> = {};
+    if (accessTokenRef.current) headers.Authorization = `Bearer ${accessTokenRef.current}`;
+    try {
+      const res = await fetch(`/api/v1/query-history/${historyId}`, { headers });
+      if (!res.ok) return null;
+      return res.json() as Promise<QueryHistoryItem>;
+    } catch {
+      return null;
+    }
+  }, []);
 }

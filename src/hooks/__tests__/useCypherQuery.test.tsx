@@ -2,7 +2,7 @@ import { renderHook, act, waitFor } from '@testing-library/react';
 import { useState } from 'react';
 import { AuthContext } from 'src/auth.context';
 import { AuthConfigContext } from 'src/authConfig.context';
-import { useLazyCypherQuery, clearQueryResultCache } from 'src/hooks/useCypherQuery';
+import { useLazyCypherQuery, useLazyHistoryQuery, clearQueryResultCache } from 'src/hooks/useCypherQuery';
 import { CurrentUser, CurrentUserState, CurrentUserStateProvider } from 'src/hooks/useCurrentUser';
 import { usePermissionState } from 'src/hooks/usePermissions';
 
@@ -221,6 +221,175 @@ describe('useLazyCypherQuery', () => {
         body: JSON.stringify({ token: 'signed-token', params: { base_severity: 'HIGH' } })
       })
     );
+  });
+
+  it('exposes historyId from the server response on success', async () => {
+    global.fetch = jest.fn().mockResolvedValue({
+      json: () => Promise.resolve({ results: [{ n: 1 }], history_id: 'hist-abc' })
+    });
+    const { result } = renderHook(() => useLazyCypherQuery(CYPHER), {
+      wrapper: makeWrapper(false, null)
+    });
+    act(() => { result.current[0](); });
+    await waitFor(() => expect(result.current[1].loading).toBe(false));
+    expect(result.current[1].historyId).toBe('hist-abc');
+  });
+
+  it('sets historyId to null when the response omits history_id', async () => {
+    global.fetch = jest.fn().mockResolvedValue({
+      json: () => Promise.resolve({ results: [] })
+    });
+    const { result } = renderHook(() => useLazyCypherQuery(CYPHER), {
+      wrapper: makeWrapper(false, null)
+    });
+    act(() => { result.current[0](); });
+    await waitFor(() => expect(result.current[1].loading).toBe(false));
+    expect(result.current[1].historyId).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// useLazyHistoryQuery
+// ---------------------------------------------------------------------------
+
+describe('useLazyHistoryQuery', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockUsePermissionState.mockReturnValue({
+      hasPermission: () => true,
+      loading: false,
+      currentUser: CURRENT_USER
+    });
+    global.fetch = jest.fn().mockResolvedValue({
+      json: () => Promise.resolve({ results: [] })
+    });
+  });
+
+  it('does not fetch when auth_required and accessToken is null', () => {
+    const { result } = renderHook(() => useLazyHistoryQuery(), {
+      wrapper: makeWrapper(true, null)
+    });
+    const [run] = result.current;
+    act(() => { run('hist-1'); });
+    expect(global.fetch).not.toHaveBeenCalled();
+  });
+
+  it('does not fetch while permissions are loading', () => {
+    mockUsePermissionState.mockReturnValue({
+      hasPermission: () => false,
+      loading: true,
+      currentUser: null
+    });
+    const { result } = renderHook(() => useLazyHistoryQuery(), {
+      wrapper: makeWrapper(false, null, { currentUser: null, loading: true })
+    });
+    act(() => { result.current[0]('hist-1'); });
+    expect(global.fetch).not.toHaveBeenCalled();
+  });
+
+  it('does not fetch without query:execute permission', () => {
+    mockUsePermissionState.mockReturnValue({
+      hasPermission: () => false,
+      loading: false,
+      currentUser: { ...CURRENT_USER, permissions: [] }
+    });
+    const { result } = renderHook(() => useLazyHistoryQuery(), {
+      wrapper: makeWrapper(false, null, {
+        currentUser: { ...CURRENT_USER, permissions: [] },
+        loading: false
+      })
+    });
+    act(() => { result.current[0]('hist-1'); });
+    expect(global.fetch).not.toHaveBeenCalled();
+    expect(result.current[1].error?.message).toBe('You do not have permission to run this query.');
+  });
+
+  it('POSTs to /api/v1/query/history with the history_id', () => {
+    const { result } = renderHook(() => useLazyHistoryQuery(), {
+      wrapper: makeWrapper(false, null)
+    });
+    act(() => { result.current[0]('hist-xyz'); });
+    expect(global.fetch).toHaveBeenCalledWith(
+      '/api/v1/query/history',
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({ history_id: 'hist-xyz' })
+      })
+    );
+  });
+
+  it('returns results on success', async () => {
+    global.fetch = jest.fn().mockResolvedValue({
+      json: () => Promise.resolve({ results: [{ name: 'Alice' }] })
+    });
+    const { result } = renderHook(() => useLazyHistoryQuery(), {
+      wrapper: makeWrapper(false, null)
+    });
+    act(() => { result.current[0]('hist-1'); });
+    await waitFor(() => expect(result.current[1].loading).toBe(false));
+    expect(result.current[1].records).toEqual([{ name: 'Alice' }]);
+    expect(result.current[1].errors).toBeUndefined();
+  });
+
+  it('sets error state on server error response', async () => {
+    global.fetch = jest.fn().mockResolvedValue({
+      json: () => Promise.resolve({ error: 'Not found' })
+    });
+    const { result } = renderHook(() => useLazyHistoryQuery(), {
+      wrapper: makeWrapper(false, null)
+    });
+    act(() => { result.current[0]('hist-missing'); });
+    await waitFor(() => expect(result.current[1].loading).toBe(false));
+    expect(result.current[1].error?.message).toBe('Not found');
+    expect(result.current[1].records).toBeUndefined();
+  });
+
+  it('sets queryErrors on validation error response', async () => {
+    global.fetch = jest.fn().mockResolvedValue({
+      json: () => Promise.resolve({ errors: ['Write queries are not allowed'], warnings: [] })
+    });
+    const { result } = renderHook(() => useLazyHistoryQuery(), {
+      wrapper: makeWrapper(false, null)
+    });
+    act(() => { result.current[0]('hist-bad'); });
+    await waitFor(() => expect(result.current[1].loading).toBe(false));
+    expect(result.current[1].queryErrors).toEqual(['Write queries are not allowed']);
+    expect(result.current[1].error).toBeNull();
+  });
+
+  it('historyId is always null (re-execution does not create new history)', async () => {
+    global.fetch = jest.fn().mockResolvedValue({
+      json: () => Promise.resolve({ results: [{ n: 1 }], history_id: 'should-be-ignored' })
+    });
+    const { result } = renderHook(() => useLazyHistoryQuery(), {
+      wrapper: makeWrapper(false, null)
+    });
+    act(() => { result.current[0]('hist-1'); });
+    await waitFor(() => expect(result.current[1].loading).toBe(false));
+    expect(result.current[1].historyId).toBeNull();
+  });
+
+  it('includes Authorization header when accessToken is set', () => {
+    const { result } = renderHook(() => useLazyHistoryQuery(), {
+      wrapper: makeWrapper(true, 'tok-abc')
+    });
+    act(() => { result.current[0]('hist-1'); });
+    expect(global.fetch).toHaveBeenCalledWith(
+      '/api/v1/query/history',
+      expect.objectContaining({
+        headers: expect.objectContaining({ Authorization: 'Bearer tok-abc' })
+      })
+    );
+  });
+
+  it('sets error state on network failure', async () => {
+    global.fetch = jest.fn().mockRejectedValue(new Error('Network error'));
+    const { result } = renderHook(() => useLazyHistoryQuery(), {
+      wrapper: makeWrapper(false, null)
+    });
+    act(() => { result.current[0]('hist-1'); });
+    await waitFor(() => expect(result.current[1].loading).toBe(false));
+    expect(result.current[1].error?.message).toBe('Network error');
   });
 });
 

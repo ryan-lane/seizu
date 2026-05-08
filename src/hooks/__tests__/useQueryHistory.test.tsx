@@ -1,7 +1,7 @@
 import { renderHook, act, waitFor } from '@testing-library/react';
 import { AuthContext } from 'src/auth.context';
 import { AuthConfigContext } from 'src/authConfig.context';
-import { useQueryHistory } from 'src/hooks/useQueryHistory';
+import { useQueryHistory, useFetchHistoryItem } from 'src/hooks/useQueryHistory';
 
 const AUTH_CONFIG_NO_OIDC = { auth_required: false, oidc: null, userManager: null };
 
@@ -157,5 +157,107 @@ describe('useQueryHistory', () => {
     act(() => {
       resolveFetch({ ok: true, json: () => Promise.resolve(HISTORY_PAGE) });
     });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// useFetchHistoryItem
+// ---------------------------------------------------------------------------
+
+const HISTORY_ITEM = {
+  history_id: '42',
+  user_id: 'u1',
+  query: 'MATCH (n) RETURN n',
+  executed_at: '2024-06-01T10:00:00Z'
+};
+
+describe('useFetchHistoryItem', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it('returns null when auth_required and accessToken is null', async () => {
+    global.fetch = jest.fn();
+    const { result } = renderHook(() => useFetchHistoryItem(), {
+      wrapper: makeWrapper(true, null)
+    });
+    const item = await result.current('42');
+    expect(item).toBeNull();
+    expect(global.fetch).not.toHaveBeenCalled();
+  });
+
+  it('fetches from /api/v1/query-history/{id}', async () => {
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve(HISTORY_ITEM)
+    });
+    const { result } = renderHook(() => useFetchHistoryItem(), {
+      wrapper: makeWrapper(false, null)
+    });
+    await result.current('42');
+    expect(global.fetch).toHaveBeenCalledWith(
+      '/api/v1/query-history/42',
+      expect.any(Object)
+    );
+  });
+
+  it('returns the history item on success', async () => {
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve(HISTORY_ITEM)
+    });
+    const { result } = renderHook(() => useFetchHistoryItem(), {
+      wrapper: makeWrapper(false, null)
+    });
+    const item = await result.current('42');
+    expect(item).toEqual(HISTORY_ITEM);
+  });
+
+  it('returns null on non-ok response', async () => {
+    global.fetch = jest.fn().mockResolvedValue({ ok: false, status: 404 });
+    const { result } = renderHook(() => useFetchHistoryItem(), {
+      wrapper: makeWrapper(false, null)
+    });
+    const item = await result.current('missing');
+    expect(item).toBeNull();
+  });
+
+  it('returns null on network failure', async () => {
+    global.fetch = jest.fn().mockRejectedValue(new Error('Network error'));
+    const { result } = renderHook(() => useFetchHistoryItem(), {
+      wrapper: makeWrapper(false, null)
+    });
+    const item = await result.current('42');
+    expect(item).toBeNull();
+  });
+
+  it('includes Authorization header when accessToken is set', async () => {
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve(HISTORY_ITEM)
+    });
+    const { result } = renderHook(() => useFetchHistoryItem(), {
+      wrapper: makeWrapper(true, 'tok-xyz')
+    });
+    await result.current('42');
+    expect(global.fetch).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({
+        headers: expect.objectContaining({ Authorization: 'Bearer tok-xyz' })
+      })
+    );
+  });
+
+  it('does not include Authorization header when no token', async () => {
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve(HISTORY_ITEM)
+    });
+    const { result } = renderHook(() => useFetchHistoryItem(), {
+      wrapper: makeWrapper(false, null)
+    });
+    await result.current('42');
+    const headers = (global.fetch as jest.Mock).mock.calls[0][1].headers;
+    expect(headers).not.toHaveProperty('Authorization');
   });
 });

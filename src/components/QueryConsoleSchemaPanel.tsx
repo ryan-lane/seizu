@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { memo, useEffect, useState } from 'react';
 import {
   Accordion,
   AccordionDetails,
@@ -15,16 +15,11 @@ import AccountTree from '@mui/icons-material/AccountTree';
 import ChevronLeft from '@mui/icons-material/ChevronLeft';
 import ExpandMore from '@mui/icons-material/ExpandMore';
 import History from '@mui/icons-material/History';
-import { useLazyCypherQuery } from 'src/hooks/useCypherQuery';
+import { useGraphSchema } from 'src/hooks/useGraphSchema';
 import { colorForGroup } from 'src/components/reports/CypherGraph';
 import { chartPalette } from 'src/theme/brand';
 import QueryConsoleHistoryPanel from 'src/components/QueryConsoleHistoryPanel';
-
-const LABELS_QUERY = 'CALL db.labels() YIELD label RETURN label ORDER BY label';
-const RELS_QUERY =
-  'CALL db.relationshipTypes() YIELD relationshipType RETURN relationshipType AS type ORDER BY type';
-const PROPS_QUERY =
-  'CALL db.propertyKeys() YIELD propertyKey RETURN propertyKey AS key ORDER BY key';
+import { QueryHistoryItem } from 'src/hooks/useQueryHistory';
 
 const PANEL_WIDTH = 260;
 
@@ -34,11 +29,11 @@ interface QueryConsoleSchemaProps {
   open: boolean;
   onToggle: (tab?: ActiveTab) => void;
   onQuerySelect: (query: string) => void;
-  onHistorySelect: (query: string) => void;
+  onHistorySelect: (item: QueryHistoryItem) => void;
   historyRefreshTrigger?: number;
 }
 
-export default function QueryConsoleSchemaPanel({
+function QueryConsoleSchemaPanel({
   open,
   onToggle,
   onQuerySelect,
@@ -49,21 +44,15 @@ export default function QueryConsoleSchemaPanel({
   const graphPalette = theme.palette.mode === 'dark' ? chartPalette.dark : chartPalette.light;
   const [activeTab, setActiveTab] = useState<ActiveTab>('schema');
 
-  const [runLabels, { records: labelRecords }] =
-    useLazyCypherQuery(LABELS_QUERY);
-  const [runRels, { records: relRecords }] = useLazyCypherQuery(RELS_QUERY);
-  const [runProps, { records: propRecords }] = useLazyCypherQuery(PROPS_QUERY);
+  const { schema, fetchSchema } = useGraphSchema();
 
   useEffect(() => {
-    runLabels();
-    runRels();
-    runProps();
-  }, [runLabels, runRels, runProps]);
+    fetchSchema();
+  }, [fetchSchema]);
 
-  const labels =
-    labelRecords?.map((r) => String(r.label)).filter(Boolean) ?? [];
-  const rels = relRecords?.map((r) => String(r.type)).filter(Boolean) ?? [];
-  const props = propRecords?.map((r) => String(r.key)).filter(Boolean) ?? [];
+  const labels = schema?.labels ?? [];
+  const rels = schema?.relationship_types ?? [];
+  const props = schema?.property_keys ?? [];
 
   /** Open or switch to a tab. If already open on the same tab, collapse. */
   const handleTabClick = (tab: ActiveTab) => {
@@ -401,3 +390,5 @@ export default function QueryConsoleSchemaPanel({
     </Box>
   );
 }
+
+export default memo(QueryConsoleSchemaPanel);
