@@ -1,5 +1,6 @@
 import { fireEvent, render, screen, cleanup, waitFor } from '@testing-library/react';
 import { ThemeProvider, createTheme } from '@mui/material/styles';
+import { MemoryRouter } from 'react-router-dom';
 import QueryConsole from 'src/pages/QueryConsole';
 import * as usePermissionsModule from 'src/hooks/usePermissions';
 
@@ -28,7 +29,11 @@ const mockUsePermissionState = usePermissionsModule.usePermissionState as jest.M
 const theme = createTheme();
 
 function Wrapper({ children }: { children: React.ReactNode }) {
-  return <ThemeProvider theme={theme}>{children}</ThemeProvider>;
+  return (
+    <MemoryRouter>
+      <ThemeProvider theme={theme}>{children}</ThemeProvider>
+    </MemoryRouter>
+  );
 }
 
 describe('QueryConsole', () => {
