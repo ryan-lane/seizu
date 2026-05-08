@@ -41,6 +41,7 @@ export interface QueryState {
   warnings: string[];
   queryErrors: string[];
   tokenExpired: boolean;
+  historyId: string | null;
 }
 
 export interface RunOptions {
@@ -63,6 +64,7 @@ export function useLazyCypherQuery(
     warnings: [],
     queryErrors: [],
     tokenExpired: false,
+    historyId: null,
   });
 
   const run = useCallback(
@@ -82,6 +84,7 @@ export function useLazyCypherQuery(
           warnings: [],
           queryErrors: [],
           tokenExpired: false,
+          historyId: null,
         });
         return;
       }
@@ -90,7 +93,7 @@ export function useLazyCypherQuery(
       if (reportToken && !options?.force) {
         const cached = readQueryCache(reportToken, params);
         if (cached !== undefined) {
-          setState({ loading: false, error: null, records: cached, first: cached[0], warnings: [], queryErrors: [], tokenExpired: false });
+          setState({ loading: false, error: null, records: cached, first: cached[0], warnings: [], queryErrors: [], tokenExpired: false, historyId: null });
           return;
         }
       }
@@ -117,7 +120,7 @@ export function useLazyCypherQuery(
         body: JSON.stringify(body)
       })
         .then((res) => res.json())
-        .then((data: { error?: string; code?: string; errors?: string[]; warnings?: string[]; results?: QueryRecord[] }) => {
+        .then((data: { error?: string; code?: string; errors?: string[]; warnings?: string[]; results?: QueryRecord[]; history_id?: string }) => {
           const validationErrors = data.errors ?? [];
           const validationWarnings = data.warnings ?? [];
 
@@ -141,6 +144,7 @@ export function useLazyCypherQuery(
                 warnings: [],
                 queryErrors: [],
                 tokenExpired: false,
+                historyId: null,
               });
             }
           } else if (validationErrors.length > 0) {
@@ -153,6 +157,7 @@ export function useLazyCypherQuery(
               warnings: validationWarnings,
               queryErrors: validationErrors,
               tokenExpired: false,
+              historyId: null,
             });
           } else {
             const results = data.results ?? [];
@@ -167,14 +172,115 @@ export function useLazyCypherQuery(
               warnings: validationWarnings,
               queryErrors: [],
               tokenExpired: false,
+              historyId: data.history_id ?? null,
             });
           }
         })
         .catch((err: Error) => {
-          setState({ loading: false, error: err, records: undefined, first: undefined, warnings: [], queryErrors: [], tokenExpired: false });
+          setState({ loading: false, error: err, records: undefined, first: undefined, warnings: [], queryErrors: [], tokenExpired: false, historyId: null });
         });
     },
     [cypher, reportToken, accessToken, auth_required, permissionsLoading, hasPermission]
+  );
+
+  return [run, state];
+}
+
+export function useLazyHistoryQuery(): [(historyId: string) => void, QueryState] {
+  const { accessToken } = useContext(AuthContext);
+  const { auth_required } = useContext(AuthConfigContext);
+  const { hasPermission, loading: permissionsLoading } = usePermissionState();
+  const [state, setState] = useState<QueryState>({
+    loading: false,
+    error: null,
+    records: undefined,
+    first: undefined,
+    warnings: [],
+    queryErrors: [],
+    tokenExpired: false,
+    historyId: null,
+  });
+
+  const run = useCallback(
+    (historyId: string) => {
+      if (!historyId) return;
+      if (auth_required && !accessToken) return;
+      if (permissionsLoading) return;
+
+      if (!hasPermission('query:execute')) {
+        setState({
+          loading: false,
+          error: new Error('You do not have permission to run this query.'),
+          records: undefined,
+          first: undefined,
+          warnings: [],
+          queryErrors: [],
+          tokenExpired: false,
+          historyId: null,
+        });
+        return;
+      }
+
+      setState((prev) => ({ ...prev, loading: true, error: null, warnings: [], queryErrors: [], tokenExpired: false }));
+
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json'
+      };
+      if (accessToken) {
+        headers['Authorization'] = `Bearer ${accessToken}`;
+      }
+
+      fetch('/api/v1/query/history', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ history_id: historyId })
+      })
+        .then((res) => res.json())
+        .then((data: { error?: string; code?: string; errors?: string[]; warnings?: string[]; results?: QueryRecord[]; history_id?: string }) => {
+          const validationErrors = data.errors ?? [];
+          const validationWarnings = data.warnings ?? [];
+
+          if (data.error) {
+            setState({
+              loading: false,
+              error: new Error(data.error),
+              records: undefined,
+              first: undefined,
+              warnings: [],
+              queryErrors: [],
+              tokenExpired: false,
+              historyId: null,
+            });
+          } else if (validationErrors.length > 0) {
+            setState({
+              loading: false,
+              error: null,
+              records: undefined,
+              first: undefined,
+              warnings: validationWarnings,
+              queryErrors: validationErrors,
+              tokenExpired: false,
+              historyId: null,
+            });
+          } else {
+            const results = data.results ?? [];
+            setState({
+              loading: false,
+              error: null,
+              records: results,
+              first: results[0],
+              warnings: validationWarnings,
+              queryErrors: [],
+              tokenExpired: false,
+              historyId: null,
+            });
+          }
+        })
+        .catch((err: Error) => {
+          setState({ loading: false, error: err, records: undefined, first: undefined, warnings: [], queryErrors: [], tokenExpired: false, historyId: null });
+        });
+    },
+    [accessToken, auth_required, permissionsLoading, hasPermission]
   );
 
   return [run, state];

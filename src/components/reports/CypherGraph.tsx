@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Box,
   Card,
@@ -42,7 +42,7 @@ import {
   useReactFlow,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
-import { useLazyCypherQuery } from 'src/hooks/useCypherQuery';
+import { useLazyCypherQuery, useLazyHistoryQuery } from 'src/hooks/useCypherQuery';
 import QueryValidationBadge from 'src/components/reports/QueryValidationBadge';
 import { GraphPanelSkeleton } from 'src/components/reports/PanelLoadingSkeletons';
 import GraphDetailPanel, { GraphSummaryPanel } from 'src/components/reports/GraphDetailPanel';
@@ -212,10 +212,11 @@ interface CypherGraphProps {
   graphSettings?: GraphSettings;
   needInputs?: string[];
   reportQueryToken?: string;
+  queryHistoryId?: string;
   /** Whether the details panel starts open. Default false (collapsed). */
   defaultDetailOpen?: boolean;
   /** Called after a query completes successfully (results received). */
-  onQueryComplete?: () => void;
+  onQueryComplete?: (historyId: string | null) => void;
   /** When true, the card fills 100% of its parent height instead of using a fixed 450px canvas. */
   fillHeight?: boolean;
   refreshKey?: number;
@@ -959,13 +960,14 @@ function GraphControls({ repulsion, onRepulsionChange }: GraphControlsProps) {
 
 const DETAIL_PANEL_WIDTH = 280;
 
-export default function CypherGraph({
+function CypherGraph({
   cypher,
   params,
   caption,
   graphSettings,
   needInputs,
   reportQueryToken,
+  queryHistoryId,
   defaultDetailOpen = false,
   onQueryComplete,
   fillHeight = false,
@@ -974,17 +976,24 @@ export default function CypherGraph({
 }: CypherGraphProps) {
   const theme = useTheme();
 
-  const [runQuery, { loading, error, records, warnings, queryErrors, tokenExpired }] =
-    useLazyCypherQuery(cypher, reportQueryToken);
+  const [runAdhocQuery, adhocState] = useLazyCypherQuery(
+    queryHistoryId ? undefined : cypher,
+    queryHistoryId ? undefined : reportQueryToken,
+  );
+  const [runHistoryQuery, historyQueryState] = useLazyHistoryQuery();
+
+  const activeState = queryHistoryId ? historyQueryState : adhocState;
+  const { loading, error, records, warnings, queryErrors, tokenExpired } = activeState;
+  const completedHistoryId = activeState.historyId;
 
   // Call onQueryComplete once after each successful query (loading → false with records).
   const prevLoadingRef = useRef(false);
   useEffect(() => {
     if (prevLoadingRef.current && !loading && records !== undefined && onQueryComplete) {
-      onQueryComplete();
+      onQueryComplete(completedHistoryId);
     }
     prevLoadingRef.current = loading;
-  }, [loading, records, onQueryComplete]);
+  }, [loading, records, onQueryComplete, completedHistoryId]);
 
   const [selectedItem, setSelectedItem] = useState<
     { type: 'node'; data: GraphNode } | { type: 'link'; data: GraphLink } | null
@@ -1024,16 +1033,20 @@ export default function CypherGraph({
     ? preferredTab
     : availableTabs[0] ?? 'table';
 
-  const runQueryRef = useRef(runQuery);
-  runQueryRef.current = runQuery;
+  const runAdhocQueryRef = useRef(runAdhocQuery);
+  runAdhocQueryRef.current = runAdhocQuery;
+  const runHistoryQueryRef = useRef(runHistoryQuery);
+  runHistoryQueryRef.current = runHistoryQuery;
   const needInputsRef = useRef(needInputs);
   needInputsRef.current = needInputs;
 
   useEffect(() => {
-    if (needInputsRef.current === undefined || needInputsRef.current.length === 0) {
-      runQueryRef.current(params, { force: (refreshKey ?? 0) > 0 });
+    if (queryHistoryId) {
+      runHistoryQueryRef.current(queryHistoryId);
+    } else if (!needInputsRef.current?.length) {
+      runAdhocQueryRef.current(params, { force: (refreshKey ?? 0) > 0 });
     }
-  }, [cypher, params, refreshKey]);
+  }, [cypher, params, refreshKey, queryHistoryId]);
 
   useEffect(() => {
     if (tokenExpired) {
@@ -1046,7 +1059,7 @@ export default function CypherGraph({
     setSelectedItem(null);
     setFocusedId(null);
     setPreferredTab(null);
-  }, [cypher]);
+  }, [cypher, queryHistoryId]);
 
   // Rebuild XyFlow graph whenever extracted graph data or spread changes.
   useEffect(() => {
@@ -1093,7 +1106,7 @@ export default function CypherGraph({
 
   // ── Error / loading states ────────────────────────────────────────────────
 
-  if (cypher === undefined) {
+  if (cypher === undefined && !queryHistoryId) {
     return (
       <Card>
         {caption && (
@@ -1369,3 +1382,5 @@ export default function CypherGraph({
     </Card>
   );
 }
+
+export default memo(CypherGraph);

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { memo, useEffect, useRef, useState } from 'react';
 import {
   Box,
   Button,
@@ -95,7 +95,7 @@ function ToolbarButton({ label, onClick, active, disabled, children }: ToolbarBu
   );
 }
 
-function MarkdownEditor({ value, onChange, sourceLabel = 'Markdown content' }: MarkdownEditorProps) {
+function MarkdownEditorInner({ value, onChange, sourceLabel = 'Markdown content' }: MarkdownEditorProps) {
   const [mode, setMode] = useState<Mode>('wysiwyg');
   const [linkDialogOpen, setLinkDialogOpen] = useState(false);
   const [linkUrl, setLinkUrl] = useState('');
@@ -592,4 +592,5 @@ function MarkdownEditor({ value, onChange, sourceLabel = 'Markdown content' }: M
   );
 }
 
+const MarkdownEditor = memo(MarkdownEditorInner);
 export default MarkdownEditor;

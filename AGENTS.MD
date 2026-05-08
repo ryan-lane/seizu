@@ -137,6 +137,7 @@ FastAPI, Python 3.12, Gunicorn + UvicornWorker (ASGI). All I/O is async (neo4j a
 | POST | `/api/v1/query` | Execute validated read-only Cypher; returns `{results, errors, warnings}`; pass `save_history: true` to record in console history |
 | POST | `/api/v1/validate` | Validate Cypher without executing; returns `{errors, warnings}` |
 | GET | `/api/v1/query-history` | Paginated query history for the current user; params `page`, `per_page` (1–100) |
+| GET | `/api/v1/query-history/<id>` | Single query history item by ID (scoped to current user); 404 if not found |
 | GET | `/api/v1/reports` | List reports (metadata only) |
 | POST | `/api/v1/reports` | Create report; 201 |
 | GET | `/api/v1/reports/dashboard` | Latest dashboard report; 404 if none |
