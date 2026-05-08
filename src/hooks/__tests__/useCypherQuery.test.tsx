@@ -328,7 +328,7 @@ describe('useLazyHistoryQuery', () => {
     act(() => { result.current[0]('hist-1'); });
     await waitFor(() => expect(result.current[1].loading).toBe(false));
     expect(result.current[1].records).toEqual([{ name: 'Alice' }]);
-    expect(result.current[1].errors).toBeUndefined();
+    expect(result.current[1].queryErrors).toEqual([]);
   });
 
   it('sets error state on server error response', async () => {
