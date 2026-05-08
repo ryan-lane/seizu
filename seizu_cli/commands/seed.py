@@ -38,6 +38,10 @@ def _publish_report(report_id: str) -> None:
     state.get_client().put(f"/api/v1/reports/{report_id}/visibility", json={"access": {"scope": "public"}})
 
 
+def _pin_report(report_id: str, pinned: bool) -> None:
+    state.get_client().put(f"/api/v1/reports/{report_id}/pin", json={"pinned": pinned})
+
+
 def _get_report(report_id: str) -> dict[str, Any] | None:
     try:
         return state.get_client().get(f"/api/v1/reports/{report_id}")
@@ -170,7 +174,7 @@ def seed_cmd(config: str, force: bool, dry_run: bool) -> None:
     seeded_ids: dict[str, str] = {}
 
     for report_key, report in loaded.reports.items():
-        report_config_dict = report.model_dump(exclude_none=True)
+        report_config_dict = report.model_dump(exclude_none=True, exclude={"pinned"})
         existing = existing_by_name.get(report.name)
 
         if existing:
@@ -180,6 +184,8 @@ def seed_cmd(config: str, force: bool, dry_run: bool) -> None:
                     try:
                         if existing.get("access", {}).get("scope") != "public":
                             _publish_report(existing["report_id"])
+                        if report.pinned is not None and existing.get("pinned") != report.pinned:
+                            _pin_report(existing["report_id"], report.pinned)
                     except Exception as exc:
                         _die(exc)
                         return
@@ -200,6 +206,8 @@ def seed_cmd(config: str, force: bool, dry_run: bool) -> None:
                     json={"config": report_config_dict, "comment": SEED_UPDATE_COMMENT},
                 )
                 _publish_report(existing["report_id"])
+                if report.pinned is not None:
+                    _pin_report(existing["report_id"], report.pinned)
             except Exception as exc:
                 _die(exc)
                 return
@@ -222,6 +230,8 @@ def seed_cmd(config: str, force: bool, dry_run: bool) -> None:
                 json={"config": report_config_dict, "comment": SEED_COMMENT},
             )
             _publish_report(new_report["report_id"])
+            if report.pinned is not None:
+                _pin_report(new_report["report_id"], report.pinned)
         except Exception as exc:
             _die(exc)
             return
@@ -715,6 +725,8 @@ def export_cmd(config: str, dry_run: bool) -> None:
             suffix += 1
 
         new_reports[key] = report_obj
+        if item.get("pinned"):
+            report_obj.pinned = True
         if dashboard_id and item["report_id"] == dashboard_id:
             dashboard_key = key
         console.print(f"[green][export][/green] report '{item['name']}' → key='{key}'")

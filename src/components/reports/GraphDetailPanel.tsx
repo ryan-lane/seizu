@@ -200,21 +200,31 @@ export default function GraphDetailPanel({ type, data }: GraphDetailPanelProps) 
 // ─── Graph summary panel ──────────────────────────────────────────────────────
 
 interface GraphSummaryPanelProps {
-  nodes: GraphNode[];
-  links: GraphLink[];
+  nodes: unknown;
+  links: unknown;
   nodeGroupKey: string;
   getColor: (group: string) => string;
 }
 
+function graphNodes(value: unknown): GraphNode[] {
+  return Array.isArray(value) ? value as GraphNode[] : [];
+}
+
+function graphLinks(value: unknown): GraphLink[] {
+  return Array.isArray(value) ? value as GraphLink[] : [];
+}
+
 export function GraphSummaryPanel({ nodes, links, nodeGroupKey, getColor }: GraphSummaryPanelProps) {
+  const safeNodes = graphNodes(nodes);
+  const safeLinks = graphLinks(links);
   const groupCounts = new Map<string, number>();
-  nodes.forEach(n => {
+  safeNodes.forEach(n => {
     const g = String(readGraphValue(n, nodeGroupKey) ?? 'default');
     groupCounts.set(g, (groupCounts.get(g) ?? 0) + 1);
   });
 
   const typeCounts = new Map<string, number>();
-  links.forEach(l => {
+  safeLinks.forEach(l => {
     const t = l.type ? String(l.type) : null;
     if (t) typeCounts.set(t, (typeCounts.get(t) ?? 0) + 1);
   });
@@ -226,7 +236,7 @@ export function GraphSummaryPanel({ nodes, links, nodeGroupKey, getColor }: Grap
       </Typography>
 
       <Typography variant="body2" gutterBottom>
-        {nodes.length} {nodes.length === 1 ? 'node' : 'nodes'}
+        {safeNodes.length} {safeNodes.length === 1 ? 'node' : 'nodes'}
       </Typography>
       {[...groupCounts.entries()].map(([group, count]) => (
         <Box key={group} sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5, pl: 1 }}>
@@ -245,11 +255,11 @@ export function GraphSummaryPanel({ nodes, links, nodeGroupKey, getColor }: Grap
         </Box>
       ))}
 
-      {links.length > 0 && (
+      {safeLinks.length > 0 && (
         <>
           <Divider sx={{ my: 1.5 }} />
           <Typography variant="body2" gutterBottom>
-            {links.length} {links.length === 1 ? 'relationship' : 'relationships'}
+            {safeLinks.length} {safeLinks.length === 1 ? 'relationship' : 'relationships'}
           </Typography>
           {typeCounts.size > 0
             ? [...typeCounts.entries()].map(([type, count]) => (

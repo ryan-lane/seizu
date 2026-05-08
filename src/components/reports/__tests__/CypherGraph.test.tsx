@@ -64,6 +64,10 @@ function distance(
 }
 
 describe('computeLayout', () => {
+  it('returns an empty layout for malformed graph data', () => {
+    expect(computeLayout({ length: 1 }, { length: 1 }, 800, 450).size).toBe(0);
+  });
+
   it('spreads disconnected components farther apart as repulsion increases', () => {
     const graphNodes = [{ id: 'a' }, { id: 'b' }, { id: 'c' }, { id: 'd' }];
     const graphLinks = [
@@ -106,6 +110,19 @@ describe('pointToSegmentDistance', () => {
 });
 
 describe('extractGraphData', () => {
+  it('rejects explicit graph maps whose nodes or links are not arrays', () => {
+    const result = extractGraphData([
+      {
+        graph: {
+          nodes: { length: 1, 0: { id: 'a' } },
+          links: [],
+        },
+      },
+    ], 'name');
+
+    expect(result).toBeNull();
+  });
+
   it('keeps Neo4j path metadata separate from node and relationship properties', () => {
     const result = extractGraphData([
       {
