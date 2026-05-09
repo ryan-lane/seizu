@@ -1,3 +1,13 @@
+// Security: keep Markdoc rendering safe by upholding these invariants:
+//   1. Do not pass a `partials` config sourced from user input — `{% partial %}`
+//      becomes a content-inclusion primitive otherwise.
+//   2. Do not register custom tags that route variable values into `style`,
+//      `dangerouslySetInnerHTML`, or URL props (`href`, `src`, `srcDoc`)
+//      without validating the value. Variables flow in as React text by default,
+//      which React escapes; attribute positions bypass that escaping.
+//   3. The Markdoc tokenizer keeps markdown-it `html: false`, so raw HTML in
+//      source content is rendered as escaped text, not executed. Don't enable
+//      `html: true` on the renderer.
 import * as React from 'react';
 import Markdoc, { Tag, nodes } from '@markdoc/markdoc';
 import {
