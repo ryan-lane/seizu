@@ -105,4 +105,25 @@ describe('MarkdownPanelEditor', () => {
     expect(screen.getByLabelText('URL')).toBeInTheDocument();
   });
 
+  it('disables the Insert variable button when no variables are available', () => {
+    render(<MarkdownPanelEditor value="" onChange={() => {}} />);
+    expect(screen.getByRole('button', { name: 'Insert variable' })).toBeDisabled();
+  });
+
+  it('lists available variables in the Insert variable menu', () => {
+    render(
+      <MarkdownPanelEditor
+        value=""
+        onChange={() => {}}
+        availableVariables={[
+          { name: 'org', label: 'Organization' },
+          { name: 'limit' },
+        ]}
+      />
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Insert variable' }));
+    expect(screen.getByRole('menuitem', { name: /\$limit/ })).toBeInTheDocument();
+    expect(screen.getByRole('menuitem', { name: /\$org/ })).toBeInTheDocument();
+  });
+
 });

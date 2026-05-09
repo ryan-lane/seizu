@@ -1,4 +1,4 @@
-import { memo, useEffect, useRef, useState } from 'react';
+import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Box,
   Button,
@@ -20,6 +20,7 @@ import {
 import ChecklistIcon from '@mui/icons-material/Checklist';
 import CodeIcon from '@mui/icons-material/Code';
 import DataObjectIcon from '@mui/icons-material/DataObject';
+import DataArrayIcon from '@mui/icons-material/DataArray';
 import FormatBoldIcon from '@mui/icons-material/FormatBold';
 import FormatItalicIcon from '@mui/icons-material/FormatItalic';
 import FormatListBulletedIcon from '@mui/icons-material/FormatListBulleted';
@@ -44,6 +45,13 @@ import { TaskList } from '@tiptap/extension-task-list';
 import { Markdown } from 'tiptap-markdown';
 import type { MarkdownStorage } from 'tiptap-markdown';
 
+import { MarkdocVariable, expandMarkdocVariables } from 'src/components/markdoc/MarkdocVariableNode';
+
+export interface MarkdocVariableOption {
+  name: string;
+  label?: string;
+}
+
 type Mode = 'wysiwyg' | 'source';
 type HeadingLevel = 1 | 2 | 3 | 4 | 5 | 6;
 
@@ -51,6 +59,7 @@ interface MarkdownEditorProps {
   value: string | undefined;
   onChange: (value: string | undefined) => void;
   sourceLabel?: string;
+  availableVariables?: MarkdocVariableOption[];
 }
 
 function getMarkdown(editor: Editor): string {
@@ -95,12 +104,19 @@ function ToolbarButton({ label, onClick, active, disabled, children }: ToolbarBu
   );
 }
 
-function MarkdownEditorInner({ value, onChange, sourceLabel = 'Markdown content' }: MarkdownEditorProps) {
+function MarkdownEditorInner({
+  value,
+  onChange,
+  sourceLabel = 'Markdown content',
+  availableVariables = [],
+}: MarkdownEditorProps) {
   const [mode, setMode] = useState<Mode>('wysiwyg');
   const [linkDialogOpen, setLinkDialogOpen] = useState(false);
   const [linkUrl, setLinkUrl] = useState('');
   const tableButtonRef = useRef<HTMLButtonElement | null>(null);
   const [tableMenuOpen, setTableMenuOpen] = useState(false);
+  const variableButtonRef = useRef<HTMLButtonElement | null>(null);
+  const [variableMenuOpen, setVariableMenuOpen] = useState(false);
   const [, setTick] = useState(0);
 
   const editor = useEditor({
@@ -114,13 +130,14 @@ function MarkdownEditorInner({ value, onChange, sourceLabel = 'Markdown content'
       TableCell,
       TaskList,
       TaskItem.configure({ nested: true }),
+      MarkdocVariable,
       Markdown.configure({
-        html: false,
+        html: true,
         tightLists: true,
         breaks: false
       })
     ],
-    content: value ?? '',
+    content: expandMarkdocVariables(value ?? ''),
     onUpdate: ({ editor: e }) => {
       const md = getMarkdown(e);
       onChange(md.trim() ? md : undefined);
@@ -142,7 +159,7 @@ function MarkdownEditorInner({ value, onChange, sourceLabel = 'Markdown content'
     if (!editor || mode !== 'wysiwyg') return;
     const current = getMarkdown(editor);
     if ((value ?? '') !== current) {
-      editor.commands.setContent(value ?? '', { emitUpdate: false });
+      editor.commands.setContent(expandMarkdocVariables(value ?? ''), { emitUpdate: false });
     }
     // We only want to resync when switching back to WYSIWYG; intentionally omit `value`.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -186,6 +203,17 @@ function MarkdownEditorInner({ value, onChange, sourceLabel = 'Markdown content'
     if (!editor) return;
     cmd(editor.chain().focus()).run();
     setTableMenuOpen(false);
+  }
+
+  const sortedVariables = useMemo(
+    () => [...availableVariables].sort((a, b) => a.name.localeCompare(b.name)),
+    [availableVariables]
+  );
+
+  function insertVariable(name: string) {
+    if (!editor) return;
+    editor.chain().focus().insertMarkdocVariable({ name }).run();
+    setVariableMenuOpen(false);
   }
 
   return (
@@ -324,6 +352,40 @@ function MarkdownEditorInner({ value, onChange, sourceLabel = 'Markdown content'
             >
               <DataObjectIcon fontSize="small" />
             </ToolbarButton>
+            <Tooltip title={sortedVariables.length === 0 ? 'No variables available' : 'Insert variable'}>
+              <span>
+                <IconButton
+                  ref={variableButtonRef}
+                  aria-label="Insert variable"
+                  aria-haspopup="menu"
+                  aria-expanded={variableMenuOpen || undefined}
+                  size="small"
+                  onClick={() => setVariableMenuOpen(true)}
+                  disabled={!editor || sortedVariables.length === 0}
+                >
+                  <DataArrayIcon fontSize="small" />
+                </IconButton>
+              </span>
+            </Tooltip>
+            <Menu
+              anchorEl={variableButtonRef.current}
+              open={variableMenuOpen}
+              onClose={() => setVariableMenuOpen(false)}
+              slotProps={{ paper: { sx: { minWidth: 220 } } }}
+            >
+              {sortedVariables.map((v) => (
+                <MenuItem key={v.name} onClick={() => insertVariable(v.name)}>
+                  <Box sx={{ fontFamily: 'monospace', fontSize: '0.85rem', color: 'primary.main', mr: 1 }}>
+                    {`$${v.name}`}
+                  </Box>
+                  {v.label && (
+                    <Box sx={{ color: 'text.secondary', fontSize: '0.8rem' }}>
+                      {v.label}
+                    </Box>
+                  )}
+                </MenuItem>
+              ))}
+            </Menu>
             <Divider orientation="vertical" flexItem sx={{ mx: 0.5 }} />
             <ToolbarButton
               label="Link"

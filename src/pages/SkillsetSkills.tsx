@@ -39,7 +39,7 @@ import type { BackState } from 'src/navigation';
 import { pageContentSx } from 'src/theme/layout';
 
 const LOWER_SNAKE_ID = /^[a-z][a-z0-9]*(?:_[a-z0-9]+)*$/;
-const RAW_PLACEHOLDER_RE = /{{\s*([^{}]+?)\s*}}/g;
+const MARKDOC_VAR_RE = /\{%\s*\$([a-z][a-z0-9_]*)\s*%\}/g;
 
 const descriptionColumnSx = { ...listTableSecondaryCellSx, width: '26%' };
 const versionColumnSx = { ...listTableSecondaryCellSx, width: 96 };
@@ -125,9 +125,9 @@ function SkillDialog({ open, onClose, onSave, initial, catalog }: SkillDialogPro
       if (!LOWER_SNAKE_ID.test(p.name.trim())) { setError('All parameter names must be lower_snake_case.'); return; }
       paramNames.add(p.name.trim());
     }
-    for (const match of template.matchAll(RAW_PLACEHOLDER_RE)) {
+    for (const match of template.matchAll(MARKDOC_VAR_RE)) {
       if (!LOWER_SNAKE_ID.test(match[1]) || !paramNames.has(match[1])) {
-        setError(`Placeholder ${match[1]} must match a declared parameter.`);
+        setError(`Variable $${match[1]} must match a declared parameter.`);
         return;
       }
     }
@@ -169,6 +169,7 @@ function SkillDialog({ open, onClose, onSave, initial, catalog }: SkillDialogPro
               value={template}
               onChange={handleTemplateChange}
               sourceLabel="Template"
+              availableVariables={params.filter((p) => p.name.trim() !== '').map((p) => ({ name: p.name.trim() }))}
             />
           </Box>
           <Box>
