@@ -16,6 +16,14 @@ describe('MarkdocRenderer', () => {
     expect(container.textContent).toContain('Hello !');
   });
 
+  it('treats absent variables as falsy in {% if not($foo) %}', () => {
+    const source = '{% if not($foo) %}unset{% else /%}set{% /if %}';
+    const { container, rerender } = render(<MarkdocRenderer source={source} variables={{}} />);
+    expect(container.textContent).toContain('unset');
+    rerender(<MarkdocRenderer source={source} variables={{ foo: 'bar' }} />);
+    expect(container.textContent).toContain('set');
+  });
+
   it('demotes h1 in markdown source to h2 in output', () => {
     render(<MarkdocRenderer source={'# A heading'} />);
     const heading = screen.getByText('A heading');

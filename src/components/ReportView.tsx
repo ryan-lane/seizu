@@ -190,9 +190,14 @@ const PanelItem = memo(function PanelItem({ item, rowIndex, index, varData, allI
         />
       );
   } else if (item.type === 'markdown') {
+    // Markdoc's truthy check treats '' and 0 as truthy; only undefined/null/false are falsy.
+    // Omit unset/empty values so {% if not($foo) %} works when an input is cleared.
     const flatVars: Record<string, string> = {};
     allInputs.forEach((input) => {
-      flatVars[input.input_id] = varData[input.input_id]?.value ?? '';
+      const value = varData[input.input_id]?.value;
+      if (value !== undefined && value !== '') {
+        flatVars[input.input_id] = value;
+      }
     });
     itemComponent = (
       <Box sx={{
