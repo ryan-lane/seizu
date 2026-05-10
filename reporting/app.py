@@ -53,6 +53,13 @@ def _build_csp_policy(nonce: str | None = None) -> str:
         "default-src 'self'",
         f"connect-src {' '.join(connect_src)}",
         f"style-src {' '.join(style_src)}",
+        # style-src governs <style> blocks (nonce-only above). style-src-attr
+        # governs `style="..."` attributes — nonces don't apply to attributes,
+        # so without 'unsafe-inline' here, MUI/emotion and dynamic positioning
+        # libraries (react-grid-layout, @xyflow/react, popper) would have
+        # their inline styles blocked. CSS-based exfil via this loophole
+        # (e.g. `background:url(...)`) is still blocked by default-src 'self'.
+        "style-src-attr 'unsafe-inline'",
         "script-src 'self'",
         "base-uri 'self'",
         "form-action 'self'",

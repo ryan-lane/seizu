@@ -131,6 +131,15 @@ def test_csp_policy_includes_xss_hardening_directives(mocker):
     assert "frame-ancestors 'none'" in policy
 
 
+def test_csp_policy_allows_inline_style_attributes(mocker):
+    """style-src-attr 'unsafe-inline' is required for MUI / dynamic positioning libs."""
+    from reporting.app import _build_csp_policy
+
+    mocker.patch("reporting.settings.OIDC_AUTHORITY", "")
+    policy = _build_csp_policy()
+    assert "style-src-attr 'unsafe-inline'" in policy
+
+
 def test_csp_policy_includes_nonce_in_style_src(mocker):
     from reporting.app import _build_csp_policy
 
