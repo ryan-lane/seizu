@@ -4,9 +4,10 @@ import { createRoot } from 'react-dom/client';
 import { BrowserRouter } from 'react-router-dom';
 import { TssCacheProvider } from 'tss-react';
 import App from './App';
-import { getCspNonce } from './cspNonce';
+import { getCspNonce, preinjectReactDraggableStyle } from './cspNonce';
 
 const cspNonce = getCspNonce();
+preinjectReactDraggableStyle(cspNonce);
 
 const container = document.getElementById('root') as HTMLElement;
 const root = createRoot(container);
