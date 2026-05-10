@@ -13,6 +13,20 @@ async def test_healthcheck(mocker):
     assert ret.json() == {"success": True}
 
 
+async def test_security_headers_present():
+    app = create_app()
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        ret = await client.get("/healthcheck")
+    headers = {k.lower(): v for k, v in ret.headers.items()}
+    assert headers["referrer-policy"] == "strict-origin-when-cross-origin"
+    assert headers["x-content-type-options"] == "nosniff"
+    csp = headers["content-security-policy"]
+    assert "frame-ancestors 'none'" in csp
+    assert "base-uri 'self'" in csp
+    assert "form-action 'self'" in csp
+    assert "script-src 'self'" in csp
+
+
 async def test_index(mocker, tmp_path):
     # Create a minimal build fixture so the test doesn't rely on a built frontend.
     (tmp_path / "index.html").write_text(

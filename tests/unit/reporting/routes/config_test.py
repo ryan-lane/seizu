@@ -119,6 +119,18 @@ def test_csp_policy_oidc_origin_not_duplicated(mocker):
     assert policy.count("https://idp.example.com") == 2
 
 
+def test_csp_policy_includes_xss_hardening_directives(mocker):
+    """script-src, base-uri, form-action, and frame-ancestors are all set."""
+    from reporting.app import _build_csp_policy
+
+    mocker.patch("reporting.settings.OIDC_AUTHORITY", "")
+    policy = _build_csp_policy()
+    assert "script-src 'self'" in policy
+    assert "base-uri 'self'" in policy
+    assert "form-action 'self'" in policy
+    assert "frame-ancestors 'none'" in policy
+
+
 def test_csp_policy_includes_nonce_in_style_src(mocker):
     from reporting.app import _build_csp_policy
 

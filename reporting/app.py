@@ -53,7 +53,10 @@ def _build_csp_policy(nonce: str | None = None) -> str:
         "default-src 'self'",
         f"connect-src {' '.join(connect_src)}",
         f"style-src {' '.join(style_src)}",
-        "script-src-elem 'self'",
+        "script-src 'self'",
+        "base-uri 'self'",
+        "form-action 'self'",
+        "frame-ancestors 'none'",
     ]
     if settings.OIDC_AUTHORITY:
         parsed = urlparse(settings.OIDC_AUTHORITY)
@@ -183,6 +186,8 @@ def create_app() -> FastAPI:
     secure_headers = secure.Secure(
         server=secure.Server().set(""),
         hsts=hsts,
+        referrer=secure.ReferrerPolicy().strict_origin_when_cross_origin(),
+        xcto=secure.XContentTypeOptions().nosniff(),
     )
     app.add_middleware(_SecurityHeadersMiddleware, secure_headers=secure_headers)
     app.add_middleware(_TimeoutMiddleware, timeout=settings.API_REQUEST_TIMEOUT)
