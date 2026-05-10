@@ -57,7 +57,12 @@ OIDC_AUTHORITY = str_env("OIDC_AUTHORITY", "")
 OIDC_INTERNAL_AUTHORITY = str_env("OIDC_INTERNAL_AUTHORITY", "")
 OIDC_CLIENT_ID = str_env("OIDC_CLIENT_ID", "")
 OIDC_REDIRECT_URI = str_env("OIDC_REDIRECT_URI", "")
-OIDC_SCOPE = str_env("OIDC_SCOPE", "openid email")
+# Default includes offline_access so the OIDC client gets a refresh_token and
+# can renew silently via direct POST to the token endpoint. Without it,
+# oidc-client-ts falls back to a hidden iframe against the IDP's authorize
+# endpoint, which most IDPs (including Authentik) block via
+# X-Frame-Options: deny.
+OIDC_SCOPE = str_env("OIDC_SCOPE", "openid email offline_access")
 
 # Whether or not to require authentication.
 # This option should only be changed in development.

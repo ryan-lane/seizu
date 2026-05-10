@@ -151,6 +151,13 @@ entries:
         - !Find
           - authentik_providers_oauth2.scopemapping
           - [managed, "goauthentik.io/providers/oauth2/scope-profile"]
+        # offline_access issues a refresh_token, used by oidc-client-ts for
+        # silent renewal via the token endpoint instead of a hidden iframe.
+        # Authentik blocks iframe embedding via X-Frame-Options: deny, so the
+        # iframe path would fail.
+        - !Find
+          - authentik_providers_oauth2.scopemapping
+          - [managed, "goauthentik.io/providers/oauth2/scope-offline_access"]
         - !Find
           - authentik_providers_oauth2.scopemapping
           - [managed, "seizu.dev/providers/oauth2/scope-seizu-role"]
