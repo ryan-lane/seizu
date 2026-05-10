@@ -45,7 +45,7 @@ import { TaskList } from '@tiptap/extension-task-list';
 import { Markdown } from 'tiptap-markdown';
 import type { MarkdownStorage } from 'tiptap-markdown';
 
-import { MarkdocVariable, expandMarkdocVariables } from 'src/components/markdoc/MarkdocVariableNode';
+import { MarkdocVariable } from 'src/components/markdoc/MarkdocVariableNode';
 import { getCspNonce } from 'src/cspNonce';
 
 export interface MarkdocVariableOption {
@@ -133,7 +133,12 @@ function MarkdownEditorInner({
       TaskItem.configure({ nested: true }),
       MarkdocVariable,
       Markdown.configure({
-        html: true,
+        // MarkdocVariable's parse.setup registers a markdown-it inline rule
+        // that handles `{%$name%}` directly, so we don't need html:true to
+        // bridge through HTML spans. Keeping html:false means stray `<div>`
+        // / `<script>` etc. pasted into source mode are escaped as text
+        // rather than rendered.
+        html: false,
         tightLists: true,
         breaks: false
       })
@@ -142,7 +147,7 @@ function MarkdownEditorInner({
     // <style> tag at runtime via `createStyleTag`. Pass our CSP nonce so
     // the tag satisfies `style-src 'self' 'nonce-...'`.
     injectNonce: getCspNonce(),
-    content: expandMarkdocVariables(value ?? ''),
+    content: value ?? '',
     onUpdate: ({ editor: e }) => {
       const md = getMarkdown(e);
       onChange(md.trim() ? md : undefined);
@@ -164,7 +169,7 @@ function MarkdownEditorInner({
     if (!editor || mode !== 'wysiwyg') return;
     const current = getMarkdown(editor);
     if ((value ?? '') !== current) {
-      editor.commands.setContent(expandMarkdocVariables(value ?? ''), { emitUpdate: false });
+      editor.commands.setContent(value ?? '', { emitUpdate: false });
     }
     // We only want to resync when switching back to WYSIWYG; intentionally omit `value`.
     // eslint-disable-next-line react-hooks/exhaustive-deps

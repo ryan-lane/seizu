@@ -2,15 +2,15 @@ import { Node, mergeAttributes } from '@tiptap/core';
 import { NodeViewWrapper, ReactNodeViewRenderer } from '@tiptap/react';
 import type { NodeViewProps } from '@tiptap/react';
 import { Chip } from '@mui/material';
+import type MarkdownIt from 'markdown-it';
 
-export const MARKDOC_VAR_RE = /\{%\s*\$([a-z][a-z0-9_]*)\s*%\}/g;
-
-export function expandMarkdocVariables(markdown: string): string {
-  return markdown.replace(
-    MARKDOC_VAR_RE,
-    (_match, name) => `<span data-markdoc-var="${name}"></span>`
-  );
-}
+// Recognise compact `{%$name%}` and the spaced form `{% $name %}` — the
+// renderer accepts both on input, but the editor's serializer always writes
+// the compact form so links like `[x](https://.../{%$foo%})` round-trip
+// through markdown-it without breaking.
+const MARKDOC_VAR_INLINE_RE = /^\{%\s*\$([a-z][a-z0-9_]*)\s*%\}/;
+const OPEN_BRACE = 0x7b; // '{'
+const PERCENT = 0x25; // '%'
 
 declare module '@tiptap/core' {
   interface Commands<ReturnType> {
@@ -18,6 +18,30 @@ declare module '@tiptap/core' {
       insertMarkdocVariable: (attrs: { name: string }) => ReturnType;
     };
   }
+}
+
+// Register a markdown-it inline rule that turns `{%$name%}` into a
+// `markdoc_variable` token, plus a renderer rule that emits the HTML span our
+// `parseHTML` matcher picks up. Exported so the unit test can exercise it
+// without spinning up a Tiptap editor.
+export function setupMarkdocVariableMarkdownIt(md: MarkdownIt): void {
+  md.inline.ruler.before('emphasis', 'markdoc_variable', (state, silent) => {
+    if (state.src.charCodeAt(state.pos) !== OPEN_BRACE) return false;
+    if (state.src.charCodeAt(state.pos + 1) !== PERCENT) return false;
+    const match = MARKDOC_VAR_INLINE_RE.exec(state.src.slice(state.pos));
+    if (!match) return false;
+    if (!silent) {
+      const token = state.push('markdoc_variable', '', 0);
+      token.meta = { name: match[1] };
+    }
+    state.pos += match[0].length;
+    return true;
+  });
+  md.renderer.rules.markdoc_variable = (tokens, idx) => {
+    const meta = tokens[idx].meta as { name?: string } | null;
+    const name = meta?.name ?? '';
+    return `<span data-markdoc-var="${name}"></span>`;
+  };
 }
 
 function MarkdocVariableChip({ node }: NodeViewProps) {
@@ -86,12 +110,16 @@ export const MarkdocVariable = Node.create({
     return {
       markdown: {
         serialize(state: { write: (s: string) => void }, node: { attrs: { name: string } }) {
-          // Compact form (no spaces) is required so markdown-it can parse links
-          // like `[label](https://example.com/{%$foo%})`. The renderer's regex
-          // accepts both `{%$foo%}` and `{% $foo %}` on input.
+          // Compact form (no spaces) is required so markdown-it can parse
+          // links like `[label](https://example.com/{%$foo%})` — markdown-it
+          // bails on URLs containing spaces.
           state.write(`{%$${node.attrs.name}%}`);
         },
-        parse: {},
+        parse: {
+          setup(this: { editor: unknown; options: unknown }, md: MarkdownIt) {
+            setupMarkdocVariableMarkdownIt(md);
+          },
+        },
       },
     };
   },
