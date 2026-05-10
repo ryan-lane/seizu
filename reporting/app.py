@@ -58,8 +58,17 @@ def _build_csp_policy(nonce: str | None = None) -> str:
         # so without 'unsafe-inline' here, MUI/emotion and dynamic positioning
         # libraries (react-grid-layout, @xyflow/react, popper) would have
         # their inline styles blocked. CSS-based exfil via this loophole
-        # (e.g. `background:url(...)`) is still blocked by default-src 'self'.
+        # (e.g. `background:url(...)`) is still blocked by img-src below.
         "style-src-attr 'unsafe-inline'",
+        # img-src allows same-origin images plus inline `data:` URIs. MUI and
+        # react-grid-layout/react-resizable embed small SVG assets (resize
+        # handles, etc.) as base64 `data:image/svg+xml;...` URIs. Browsers
+        # disable scripting in SVGs loaded as images, and data URIs can't
+        # make outbound requests, so this is safe. External http(s) images
+        # are intentionally not allowed — keeping them out also closes the
+        # CSS-exfil-via-background-image vector for the inline-style
+        # attribute loophole above.
+        "img-src 'self' data:",
         "script-src 'self'",
         "base-uri 'self'",
         "form-action 'self'",

@@ -140,6 +140,15 @@ def test_csp_policy_allows_inline_style_attributes(mocker):
     assert "style-src-attr 'unsafe-inline'" in policy
 
 
+def test_csp_policy_allows_data_image_uris(mocker):
+    """img-src 'self' data: covers MUI/grid-layout inline SVG assets."""
+    from reporting.app import _build_csp_policy
+
+    mocker.patch("reporting.settings.OIDC_AUTHORITY", "")
+    policy = _build_csp_policy()
+    assert "img-src 'self' data:" in policy
+
+
 def test_csp_policy_includes_nonce_in_style_src(mocker):
     from reporting.app import _build_csp_policy
 
