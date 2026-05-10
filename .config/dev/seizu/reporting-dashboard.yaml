@@ -777,11 +777,21 @@ reports:
             markdown: |-
               ## GitHub Organization Security Overview
 
-              Select a GitHub organization to review active repositories,
-              dependency alerts, workflow hardening, and coverage gaps from the
-              security graph.
+              {% if not($github_org) %}
+              Select a GitHub organization above to review its active
+              repositories, dependency alerts, workflow hardening, and
+              coverage gaps from the security graph.
 
-              Archived and disabled repositories are excluded.
+              Archived and disabled repositories are excluded from all
+              panels.
+              {% else /%}
+              Reviewing
+              **[{% $github_org %}](https://github.com/{% $github_org %})**
+              — all active repositories owned by the organization. Archived
+              and disabled repositories are excluded.
+
+              Click any panel's info icon to inspect the underlying Cypher.
+              {% /if %}
           - cypher: active-repos-count
             type: count
             caption: Active repos
@@ -918,6 +928,38 @@ reports:
             graph_settings:
               node_label: label
               node_color_by: group
+      - name: Next Steps
+        panels:
+          - type: markdown
+            x: 0
+            y: 0
+            w: 12
+            h: 6
+            auto_height: true
+            markdown: |-
+              {% if not($github_org) %}
+              ### Get started
+              Pick an organization from the dropdown at the top of the page
+              to populate the panels above. The graph must contain
+              `GitHubOrganization` and `GitHubRepository` data — see the
+              `cartography sync_github` make target if you have not synced
+              GitHub yet.
+              {% else /%}
+              ### Suggested follow-ups for {% $github_org %}
+
+              - Drill into **Top open vulnerabilities** above to triage by
+                severity, EPSS, and patch availability.
+              - Review **Workflows with write-level permissions** for
+                workflows that should drop to read-only or pin tighter
+                permissions.
+              - Cross-check **Security coverage gaps** against the
+                organization's expected baseline (CodeQL, Scorecard,
+                dependency graph) and open issues for any missing coverage.
+              - Visit
+                [{% $github_org %} on GitHub](https://github.com/{% $github_org %})
+                to confirm metadata that may be missing or stale in the
+                graph.
+              {% /if %}
 
 toolsets:
   cve_analysis:
