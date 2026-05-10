@@ -108,13 +108,23 @@ const ALLOWED_SUBSTITUTED_PROTO_RE = /^(https?|mailto|tel):/i;
 const SCHEME_RE = /^[a-z][a-z0-9+\-.]*:/i;
 const SAFE_DATA_IMAGE_RE = /^data:image\/(gif|png|jpeg|webp);/i;
 
+// Browsers (per the WHATWG URL spec) strip ASCII tab, LF, CR, and other C0
+// control characters from `href` attributes at navigation time. Mirror that
+// stripping before validation so a value like "java\tscript:alert(1)" cannot
+// slip past the scheme check (the embedded tab makes SCHEME_RE fail to match,
+// so it would otherwise be treated as a relative URL) and then resolve to
+// `javascript:` in the browser after the tab is removed. We return the
+// normalized form so the rendered href is also clean.
+const URL_CONTROL_CHARS_RE = /[\u0000-\u001F\u007F]/g;
+
 function safeSubstitutedUrl(url: string): string {
-  const trimmed = url.trim();
+  const normalized = url.replace(URL_CONTROL_CHARS_RE, '').trim();
+  if (!normalized) return '#';
   // Relative URLs (no scheme) are always safe — they resolve under the
   // current page's origin.
-  if (!SCHEME_RE.test(trimmed)) return url;
-  if (ALLOWED_SUBSTITUTED_PROTO_RE.test(trimmed)) return url;
-  if (SAFE_DATA_IMAGE_RE.test(trimmed)) return url;
+  if (!SCHEME_RE.test(normalized)) return normalized;
+  if (ALLOWED_SUBSTITUTED_PROTO_RE.test(normalized)) return normalized;
+  if (SAFE_DATA_IMAGE_RE.test(normalized)) return normalized;
   return '#';
 }
 

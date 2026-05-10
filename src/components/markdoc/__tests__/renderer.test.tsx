@@ -109,6 +109,56 @@ describe('MarkdocRenderer', () => {
     expect(container.querySelector('a')?.getAttribute('href')).toBe('#');
   });
 
+  it('blocks javascript: with an embedded tab (browsers strip tabs from href)', () => {
+    const { container } = render(
+      <MarkdocRenderer
+        source="[click](<{%$url%}>)"
+        variables={{ url: 'java\tscript:alert(1)' }}
+      />
+    );
+    expect(container.querySelector('a')?.getAttribute('href')).toBe('#');
+  });
+
+  it('blocks javascript: with an embedded newline', () => {
+    const { container } = render(
+      <MarkdocRenderer
+        source="[click](<{%$url%}>)"
+        variables={{ url: 'java\nscript:alert(1)' }}
+      />
+    );
+    expect(container.querySelector('a')?.getAttribute('href')).toBe('#');
+  });
+
+  it('blocks javascript: with a leading null byte', () => {
+    const { container } = render(
+      <MarkdocRenderer
+        source="[click](<{%$url%}>)"
+        variables={{ url: '\u0000javascript:alert(1)' }}
+      />
+    );
+    expect(container.querySelector('a')?.getAttribute('href')).toBe('#');
+  });
+
+  it('blocks mixed-case Javascript: after substitution', () => {
+    const { container } = render(
+      <MarkdocRenderer
+        source="[click](<{%$url%}>)"
+        variables={{ url: 'JaVaScRiPt:alert(1)' }}
+      />
+    );
+    expect(container.querySelector('a')?.getAttribute('href')).toBe('#');
+  });
+
+  it('strips control characters from a substituted https URL before rendering', () => {
+    const { container } = render(
+      <MarkdocRenderer
+        source="[home](<{%$url%}>)"
+        variables={{ url: 'https://example.com/p\tath' }}
+      />
+    );
+    expect(container.querySelector('a')?.getAttribute('href')).toBe('https://example.com/path');
+  });
+
   it('blocks custom OS protocol handlers from a variable-built href', () => {
     const { container } = render(
       <MarkdocRenderer
