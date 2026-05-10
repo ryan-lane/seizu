@@ -66,7 +66,7 @@ export const MarkdocVariable = Node.create({
 
   renderHTML({ HTMLAttributes, node }) {
     const name = (node.attrs.name as string | undefined) ?? '';
-    return ['span', mergeAttributes(HTMLAttributes, { 'data-markdoc-var': name }), `{% $${name} %}`];
+    return ['span', mergeAttributes(HTMLAttributes, { 'data-markdoc-var': name }), `{%$${name}%}`];
   },
 
   addNodeView() {
@@ -86,7 +86,10 @@ export const MarkdocVariable = Node.create({
     return {
       markdown: {
         serialize(state: { write: (s: string) => void }, node: { attrs: { name: string } }) {
-          state.write(`{% $${node.attrs.name} %}`);
+          // Compact form (no spaces) is required so markdown-it can parse links
+          // like `[label](https://example.com/{%$foo%})`. The renderer's regex
+          // accepts both `{%$foo%}` and `{% $foo %}` on input.
+          state.write(`{%$${node.attrs.name}%}`);
         },
         parse: {},
       },

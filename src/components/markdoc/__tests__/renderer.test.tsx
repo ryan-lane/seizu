@@ -51,4 +51,113 @@ describe('MarkdocRenderer', () => {
     expect(ul).not.toBeNull();
     expect(ul?.className).toContain('mui-markdown-ul');
   });
+
+  it('substitutes variables inside link href (compact form)', () => {
+    const { container } = render(
+      <MarkdocRenderer
+        source="[label](https://github.com/{%$org%})"
+        variables={{ org: 'octo-org' }}
+      />
+    );
+    const a = container.querySelector('a');
+    expect(a).not.toBeNull();
+    expect(a?.getAttribute('href')).toBe('https://github.com/octo-org');
+    expect(a?.textContent).toBe('label');
+  });
+
+  it('substitutes variables inside angle-bracketed link href (spaced form)', () => {
+    const { container } = render(
+      <MarkdocRenderer
+        source="[label](<https://github.com/{% $org %}>)"
+        variables={{ org: 'octo-org' }}
+      />
+    );
+    const a = container.querySelector('a');
+    expect(a).not.toBeNull();
+    expect(a?.getAttribute('href')).toBe('https://github.com/octo-org');
+  });
+
+  it('substitutes variables inside image src', () => {
+    const { container } = render(
+      <MarkdocRenderer
+        source="![alt](https://cdn.example.com/{%$file%}.png)"
+        variables={{ file: 'logo' }}
+      />
+    );
+    const img = container.querySelector('img');
+    expect(img).not.toBeNull();
+    expect(img?.getAttribute('src')).toBe('https://cdn.example.com/logo.png');
+  });
+
+  it('keeps a substituted URL with an allowlisted scheme', () => {
+    const { container } = render(
+      <MarkdocRenderer
+        source="[click](https://example.com/{%$path%})"
+        variables={{ path: 'reports/42' }}
+      />
+    );
+    expect(container.querySelector('a')?.getAttribute('href')).toBe('https://example.com/reports/42');
+  });
+
+  it('blocks raw javascript: protocol from a fully variable href', () => {
+    const { container } = render(
+      <MarkdocRenderer
+        source="[click](<{%$url%}>)"
+        variables={{ url: 'javascript:alert(1)' }}
+      />
+    );
+    expect(container.querySelector('a')?.getAttribute('href')).toBe('#');
+  });
+
+  it('blocks custom OS protocol handlers from a variable-built href', () => {
+    const { container } = render(
+      <MarkdocRenderer
+        source="[click](<{%$url%}>)"
+        variables={{ url: 'slack://channel/T01' }}
+      />
+    );
+    expect(container.querySelector('a')?.getAttribute('href')).toBe('#');
+  });
+
+  it('blocks protocol-relative URLs from a variable-built href', () => {
+    const { container } = render(
+      <MarkdocRenderer
+        source="[click](<{%$url%}>)"
+        variables={{ url: '//evil.example.com/x' }}
+      />
+    );
+    // The substituted URL has no scheme, so it's treated as a relative path and
+    // kept verbatim. Browsers will resolve protocol-relative URLs under the
+    // current origin's protocol, which is intentional and what `/path` does too.
+    expect(container.querySelector('a')?.getAttribute('href')).toBe('//evil.example.com/x');
+  });
+
+  it('allows mailto and tel after substitution', () => {
+    const { container } = render(
+      <>
+        <MarkdocRenderer source="[email](mailto:{%$addr%})" variables={{ addr: 'a@b.co' }} />
+        <MarkdocRenderer source="[call](tel:{%$num%})" variables={{ num: '+15555555' }} />
+      </>
+    );
+    const links = container.querySelectorAll('a');
+    expect(links[0]?.getAttribute('href')).toBe('mailto:a@b.co');
+    expect(links[1]?.getAttribute('href')).toBe('tel:+15555555');
+  });
+
+  it('preserves static editor-authored URLs unchanged (no substitution check)', () => {
+    // A static slack:// URL from an editor passes through markdown-it's parser
+    // and our renderer does not second-guess it. This is intentional: the
+    // allowlist only applies when a variable substitution changed the URL.
+    const { container } = render(
+      <MarkdocRenderer source="[chat](slack://channel/T01)" variables={{}} />
+    );
+    expect(container.querySelector('a')?.getAttribute('href')).toBe('slack://channel/T01');
+  });
+
+  it('preserves non-substituted link URLs unchanged', () => {
+    const { container } = render(
+      <MarkdocRenderer source="[home](https://example.com/path)" variables={{}} />
+    );
+    expect(container.querySelector('a')?.getAttribute('href')).toBe('https://example.com/path');
+  });
 });

@@ -400,7 +400,25 @@ Report inputs are exposed as Markdoc variables. Reference an input by its `input
 Showing CVEs at severity {% $cve-severity-autocomplete-input %} or higher.
 ```
 
+The compact form `{%$input_id%}` (no whitespace) is also accepted, and is what the **Insert variable** toolbar produces. Use the compact form inside markdown link URLs — markdown-it's link parser bails on URLs that contain spaces, so the spaced form `{% $... %}` would prevent `[label](https://example.com/{% $foo %})` from being recognized as a link at all.
+
 When the user changes the input, the markdown re-renders with the new value. Inputs that are unset (cleared, or with no default) are omitted from the variables map — see [Conditionals](#conditionals) for how to branch on this.
+
+#### Variables in link and image URLs
+
+Variables can be interpolated into the `href` of a link or the `src` of an image:
+
+```markdown
+[{%$github_org%}](https://github.com/{%$github_org%})
+
+![logo](https://cdn.example.com/{%$customer%}/logo.png)
+```
+
+A few rules apply:
+
+- Use the **compact form** `{%$name%}` inside the URL (markdown-it cannot parse a URL that contains spaces).
+- If you prefer the spaced form, wrap the URL in angle brackets: `[label](<https://github.com/{% $foo %}>)`. Both produce the same output.
+- **URLs whose value came from variable substitution are validated against an allowlist** of `http://`, `https://`, `mailto:`, `tel:`, plus relative URLs (no scheme) and safe image data URIs (`data:image/{gif,png,jpeg,webp}`). Anything else — including custom OS protocol handlers like `slack://`, `vscode://`, or any future scheme — resolves to `#`. The allowlist applies only when a variable changed the URL; static editor-authored URLs (e.g., `[chat](slack://channel-id)` with no variables) pass through unchanged.
 
 #### Conditionals
 

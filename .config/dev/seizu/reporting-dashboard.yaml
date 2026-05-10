@@ -786,7 +786,7 @@ reports:
               panels.
               {% else /%}
               Reviewing
-              **[{% $github_org %}](https://github.com/{% $github_org %})**
+              **[{%$github_org%}](https://github.com/{%$github_org%})**
               — all active repositories owned by the organization. Archived
               and disabled repositories are excluded.
 
@@ -945,7 +945,7 @@ reports:
               `cartography sync_github` make target if you have not synced
               GitHub yet.
               {% else /%}
-              ### Suggested follow-ups for {% $github_org %}
+              ### Suggested follow-ups for {%$github_org%}
 
               - Drill into **Top open vulnerabilities** above to triage by
                 severity, EPSS, and patch availability.
@@ -956,7 +956,7 @@ reports:
                 organization's expected baseline (CodeQL, Scorecard,
                 dependency graph) and open issues for any missing coverage.
               - Visit
-                [{% $github_org %} on GitHub](https://github.com/{% $github_org %})
+                [{%$github_org%} on GitHub](https://github.com/{%$github_org%})
                 to confirm metadata that may be missing or stale in the
                 graph.
               {% /if %}
