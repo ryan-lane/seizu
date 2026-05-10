@@ -46,6 +46,7 @@ import { Markdown } from 'tiptap-markdown';
 import type { MarkdownStorage } from 'tiptap-markdown';
 
 import { MarkdocVariable, expandMarkdocVariables } from 'src/components/markdoc/MarkdocVariableNode';
+import { getCspNonce } from 'src/cspNonce';
 
 export interface MarkdocVariableOption {
   name: string;
@@ -137,6 +138,10 @@ function MarkdownEditorInner({
         breaks: false
       })
     ],
+    // Tiptap's column-resize plugin (and a few other utilities) inject a
+    // <style> tag at runtime via `createStyleTag`. Pass our CSP nonce so
+    // the tag satisfies `style-src 'self' 'nonce-...'`.
+    injectNonce: getCspNonce(),
     content: expandMarkdocVariables(value ?? ''),
     onUpdate: ({ editor: e }) => {
       const md = getMarkdown(e);

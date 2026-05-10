@@ -4,11 +4,7 @@ import { createRoot } from 'react-dom/client';
 import { BrowserRouter } from 'react-router-dom';
 import { TssCacheProvider } from 'tss-react';
 import App from './App';
-
-function getCspNonce(): string | undefined {
-  const nonceMeta = document.querySelector('meta[property="csp-nonce"]');
-  return nonceMeta?.getAttribute('content') ?? undefined;
-}
+import { getCspNonce } from './cspNonce';
 
 const cspNonce = getCspNonce();
 
