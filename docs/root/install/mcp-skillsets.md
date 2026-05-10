@@ -31,13 +31,13 @@ Creating a skill requires:
 | id | Immutable lower_snake_case ID. |
 | name | User-friendly display name. |
 | description | Optional description shown to MCP clients. |
-| template | Prompt text using simple `{{param_name}}` placeholders. |
+| template | Prompt text using `{% $param_name %}` placeholders. |
 | parameters | Typed arguments: `string`, `integer`, `float`, or `boolean`. |
 | triggers | Optional list of phrases that describe when an agent should use the skill. |
 | tools required | Optional list of MCP tool names, selected from Seizu tools, that the skill expects an agent to use. |
 | enabled | When disabled, the skill is hidden from MCP clients. |
 
-Parameter names and placeholders must be lower_snake_case. Unknown placeholders are rejected when creating or updating a skill.
+Parameter names and placeholders must be lower_snake_case. Unknown placeholders are rejected when creating or updating a skill. Skill templates only do variable substitution — they are not rendered as Markdoc and do not support tags or conditionals. Anything that is not a `{% $name %}` reference (including stray `{{...}}`) is preserved verbatim in the rendered prompt.
 Required tools are stored as MCP names such as `graph__query` or `{toolset_id}__{tool_id}` and are validated against Seizu's tool catalog.
 
 When a rendered skill has triggers or required tools, Seizu prepends generated frontmatter:
@@ -60,7 +60,7 @@ seizu skillsets list
 seizu skillsets create investigations "Investigations"
 seizu skillsets skills create investigations summarize_node \
   --name "Summarize node" \
-  --template "Summarize {{node_id}} for a security analyst." \
+  --template "Summarize {% $node_id %} for a security analyst." \
   --parameters '[{"name":"node_id","type":"string","required":true}]' \
   --triggers '["summarize node context"]' \
   --tools-required '["graph__query"]'
