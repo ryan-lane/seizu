@@ -378,27 +378,90 @@ To render markdown, use a ``markdown`` panel.
 
 ![a markdown panel example](/images/markdown-panel.png)
 
-Standard Markdown is supported, including **bold**, *italic*, headings, ordered and unordered lists, links, code spans, fenced code blocks, and tables.
-Tables are rendered using MUI components with themed borders and a highlighted header row.
+Markdown panels are rendered with [Markdoc](https://markdoc.dev/), a Markdown-based authoring framework with first-class support for variables and tags.
+Standard Markdown works as you'd expect — **bold**, *italic*, headings, ordered and unordered lists, links, code spans, fenced code blocks, and tables.
+Tables render using MUI components with themed borders and a highlighted header row.
 Heading levels in the Markdown source are shifted down by one (``##`` renders as ``<h3>``, etc.) so they fit naturally within the panel hierarchy.
+
+The WYSIWYG editor recognizes Markdoc variable syntax and displays each variable as an inline chip. Use the **Insert variable** button in the editor toolbar to insert a reference to one of the report's inputs.
 
 | Field | Description |
 |-------|-------------|
-| markdown | The markdown content to render. Supports headings, lists, links, code, and tables. |
+| markdown | The markdown content to render. Supports Markdoc variables, tags, and standard Markdown (headings, lists, links, code, tables). |
 | type | The type of panel. ``markdown``, for this panel type. |
 | size, w, h, x, y, min_h | Layout fields. See [Panel layout](#panel-layout). |
 | auto_height | When ``true``, the panel grows to fit its content rather than scrolling within a fixed grid cell. |
+
+#### Variables
+
+Report inputs are exposed as Markdoc variables. Reference an input by its `input_id`, prefixed with `$`:
+
+```markdown
+Showing CVEs at severity {% $cve-severity-autocomplete-input %} or higher.
+```
+
+The compact form `{%$input_id%}` (no whitespace) is also accepted, and is what the **Insert variable** toolbar produces. Use the compact form inside markdown link URLs — markdown-it's link parser bails on URLs that contain spaces, so the spaced form `{% $... %}` would prevent `[label](https://example.com/{% $foo %})` from being recognized as a link at all.
+
+When the user changes the input, the markdown re-renders with the new value. Inputs that are unset (cleared, or with no default) are omitted from the variables map — see [Conditionals](#conditionals) for how to branch on this.
+
+#### Variables in link and image URLs
+
+Variables can be interpolated into the `href` of a link or the `src` of an image:
+
+```markdown
+[{%$github_org%}](https://github.com/{%$github_org%})
+
+![logo](https://cdn.example.com/{%$customer%}/logo.png)
+```
+
+A few rules apply:
+
+- Use the **compact form** `{%$name%}` inside the URL (markdown-it cannot parse a URL that contains spaces).
+- If you prefer the spaced form, wrap the URL in angle brackets: `[label](<https://github.com/{% $foo %}>)`. Both produce the same output.
+- **URLs whose value came from variable substitution are validated against an allowlist** of `http://`, `https://`, `mailto:`, `tel:`, plus relative URLs (no scheme) and safe image data URIs (`data:image/{gif,png,jpeg,webp}`). Anything else — including custom OS protocol handlers like `slack://`, `vscode://`, or any future scheme — resolves to `#`. The allowlist applies only when a variable changed the URL; static editor-authored URLs (e.g., `[chat](slack://channel-id)` with no variables) pass through unchanged.
+
+#### Conditionals
+
+Markdoc's `{% if %}` / `{% else /%}` / `{% /if %}` tags let you show different content based on whether an input is set or matches a value:
+
+```markdown
+{% if not($org) %}
+Select a GitHub organization to view its repositories.
+{% else /%}
+Repositories owned by **{% $org %}**:
+{% /if %}
+```
+
+Markdoc's truthiness rules differ from JavaScript: only `null`, `undefined`, and `false` are falsy — empty strings and `0` are truthy. Seizu omits unset/empty inputs from the variables map so `not($input_id)` evaluates to `true` when the input is cleared.
+
+You can also compare values:
+
+```markdown
+{% if equals($severity, "CRITICAL") %}
+**Action required**: critical findings present.
+{% /if %}
+```
+
+#### Other Markdoc features
+
+Markdoc supports a richer authoring vocabulary than vanilla Markdown — function calls (`equals`, `and`, `or`, `not`, `default`), the `{% partial %}` tag for content reuse, and custom tag schemas. Seizu does not register any custom tags or partials by default; you get the standard Markdoc surface plus the `$input_id` variables described above.
+
+For the full Markdoc syntax reference and feature list, see the [Markdoc documentation](https://markdoc.dev/docs).
 
 #### Example
 
 ```yaml
           - markdown: |-
               ## CVE info
+              {% if not($cve-severity-autocomplete-input) %}
+              Select a CVE severity to filter the list below.
+              {% else /%}
+              Showing **{% $cve-severity-autocomplete-input %}** CVEs:
+
               1. [CVE-2021-44228](https://security.snyk.io/vuln/SNYK-JAVA-ORGAPACHELOGGINGLOG4J-2314720): Remote Code Execution (RCE), affects log4j versions below 2.15.0
-              1. [CVE-2021-4104](https://security.snyk.io/vuln/SNYK-JAVA-LOG4J-2316893): Arbitrary Code Execution, affects log4j 1.x
               1. [CVE-2021-45046](https://security.snyk.io/vuln/SNYK-JAVA-ORGAPACHELOGGINGLOG4J-2320014): Remote Code Execution (RCE), affects log4j versions below 2.16.0
               1. [CVE-2021-45105](https://security.snyk.io/vuln/SNYK-JAVA-ORGAPACHELOGGINGLOG4J-2321524): Denial of Service (DoS), affects log4j versions below 2.17.0
-              1. [CVE-2021-44832](https://security.snyk.io/vuln/SNYK-JAVA-ORGAPACHELOGGINGLOG4J-2327339): Arbitrary Code Execution (RCE), affects log4j versions below 2.17.1
+              {% /if %}
 
               ## Recommended action
               Upgrade to log4j 2.17.1 or higher.

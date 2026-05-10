@@ -174,6 +174,9 @@ describe('Roles', () => {
     expect(screen.getByRole('menuitem', { name: /^delete$/i })).not.toHaveAttribute('aria-disabled', 'true');
   });
 
+  // Two confirm dialogs and an edit dialog with several act() blocks.
+  // Passes comfortably in isolation (~2.4s) but creeps past the default 5s
+  // timeout under the full suite. Bump for headroom.
   it('warns before editing a role with missing permissions and strips them on save', async () => {
     mockUseRolesList.mockReturnValue({
       roles: [
@@ -208,5 +211,5 @@ describe('Roles', () => {
     expect(mockUpdateRole).toHaveBeenCalledWith('role1', expect.objectContaining({
       permissions: ['reports:read'],
     }));
-  });
+  }, 15_000);
 });

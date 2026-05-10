@@ -65,7 +65,7 @@ def _skill(
     name: str = "Summarize",
     enabled: bool = True,
     parameters=None,
-    template: str = "Summarize {{topic}} in {{count}} bullets.",
+    template: str = "Summarize {% $topic %} in {% $count %} bullets.",
 ):
     return SkillItem(
         skill_id=skill_id,

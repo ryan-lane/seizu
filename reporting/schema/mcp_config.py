@@ -546,19 +546,12 @@ class RenderSkillResponse(BaseModel):
     text: str
 
 
+_SKILL_VAR_RE = re.compile(r"\{%\s*\$([a-z][a-z0-9_]*)\s*%\}")
+
+
 def template_placeholders(template: str) -> set[str]:
-    """Return simple ``{{param_name}}`` placeholders used by a skill template."""
-    placeholders: set[str] = set()
-    search_start = 0
-    while True:
-        open_idx = template.find("{{", search_start)
-        if open_idx == -1:
-            return placeholders
-        close_idx = template.find("}}", open_idx + 2)
-        if close_idx == -1:
-            return placeholders
-        placeholders.add(template[open_idx + 2 : close_idx].strip())
-        search_start = close_idx + 2
+    """Return ``{% $param_name %}`` placeholders used by a skill template."""
+    return {m.group(1) for m in _SKILL_VAR_RE.finditer(template)}
 
 
 def validate_skill_template(parameters: list[ToolParamDef], template: str) -> list[str]:
@@ -597,23 +590,8 @@ def render_skill_template(
     if errors:
         return None, errors
 
-    rendered: list[str] = []
-    search_start = 0
-    while True:
-        open_idx = template.find("{{", search_start)
-        if open_idx == -1:
-            rendered.append(template[search_start:])
-            break
-        close_idx = template.find("}}", open_idx + 2)
-        if close_idx == -1:
-            rendered.append(template[search_start:])
-            break
-        rendered.append(template[search_start:open_idx])
-        placeholder = template[open_idx + 2 : close_idx].strip()
-        rendered.append(str(values.get(placeholder, "")))
-        search_start = close_idx + 2
-
-    return "".join(rendered), []
+    rendered = _SKILL_VAR_RE.sub(lambda m: str(values.get(m.group(1), "")), template)
+    return rendered, []
 
 
 def _quote_frontmatter_value(value: str) -> str:

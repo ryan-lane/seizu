@@ -24,6 +24,7 @@ import Add from '@mui/icons-material/Add';
 import DeleteIcon from '@mui/icons-material/Delete';
 import { Panel, PanelParam, PanelThreshold, ColumnDef } from 'src/config.context';
 import MarkdownPanelEditor from 'src/components/reports/MarkdownPanelEditor';
+import type { MarkdocVariableOption } from 'src/components/MarkdownEditor';
 import ThresholdsEditor from 'src/components/reports/ThresholdsEditor';
 import { defaultPanelHeight } from 'src/components/reports/panelLayout';
 import { migrateLegacyThreshold } from 'src/components/reports/thresholds';
@@ -61,6 +62,7 @@ interface PanelEditorProps {
   panel: EditablePanel | null;
   onClose: () => void;
   onSave: (panel: EditablePanel) => void;
+  availableVariables?: MarkdocVariableOption[];
 }
 
 function ParamRow({
@@ -138,7 +140,7 @@ function ColumnRow({
   );
 }
 
-function PanelEditor({ open, panel, onClose, onSave }: PanelEditorProps) {
+function PanelEditor({ open, panel, onClose, onSave, availableVariables }: PanelEditorProps) {
   const [form, setForm] = useState<Panel>(emptyPanel('count'));
   const [id, setId] = useState('');
 
@@ -347,6 +349,7 @@ function PanelEditor({ open, panel, onClose, onSave }: PanelEditorProps) {
               <MarkdownPanelEditor
                 value={form.markdown}
                 onChange={(v) => set('markdown', v)}
+                availableVariables={availableVariables}
               />
             </>
           )}

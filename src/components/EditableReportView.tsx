@@ -1312,6 +1312,7 @@ function EditableReportView({ report, reportId: _reportId, onSave, onCancel }: E
         panel={editingPanelRef?.panelId ? editingPanel.current : null}
         onClose={() => setEditorOpen(false)}
         onSave={handlePanelSave}
+        availableVariables={editableInputs.map((i) => ({ name: i.input_id, label: i.label }))}
       />
 
       {/* Input editor dialog */}

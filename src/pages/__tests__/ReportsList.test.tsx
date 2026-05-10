@@ -146,6 +146,10 @@ describe('ReportsList', () => {
     expect(screen.getByText('carol')).toBeInTheDocument();
   });
 
+  // Multiple `userEvent.click` interactions trigger many React re-renders
+  // through MUI menus/dialogs/router. In isolation this runs in ~2.5s, but
+  // under the full test suite the per-render cost grows and the default 5s
+  // timeout becomes flaky. Bump for headroom; actual work is unchanged.
   it('clones from the list view and navigates to the cloned report in edit mode', async () => {
     const user = userEvent.setup({ delay: null });
     render(<ReportsList />, { wrapper: Wrapper });
@@ -164,5 +168,5 @@ describe('ReportsList', () => {
     await waitFor(() => {
       expect(screen.getByTestId('location')).toHaveTextContent('/app/reports/clone1?edit=true');
     });
-  });
+  }, 15_000);
 });

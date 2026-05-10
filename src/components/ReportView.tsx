@@ -7,19 +7,12 @@ import {
   Divider,
   IconButton,
   Paper,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
-  Tooltip,
   Typography
 } from '@mui/material';
 import Error from '@mui/icons-material/Error';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
-import MuiMarkdown, { defaultOverrides } from 'mui-markdown';
 
+import { MarkdocRenderer } from 'src/components/markdoc/renderer';
 import { Report, Panel, ReportInput } from 'src/config.context';
 import { getQueryStringValue } from 'src/components/QueryString';
 import CypherAutocomplete from 'src/components/reports/CypherAutocomplete';
@@ -39,53 +32,6 @@ import {
 import { contentContainerSx } from 'src/theme/layout';
 
 const EMPTY_QUERY_CAPABILITIES: Record<string, string> = {};
-
-function MarkdownTable({ children }: { children?: React.ReactNode }) {
-  return (
-    <TableContainer component={Paper} variant="outlined" sx={{ my: 2 }}>
-      <Table size="small" sx={{ borderCollapse: 'collapse' }}>
-        {children}
-      </Table>
-    </TableContainer>
-  );
-}
-
-function MarkdownHeadCell({ children }: { children?: React.ReactNode }) {
-  return (
-    <TableCell
-      component="th"
-      scope="col"
-      sx={{ whiteSpace: 'normal', border: '1px solid', borderColor: 'divider', fontWeight: 700, bgcolor: 'action.hover' }}
-    >
-      {children}
-    </TableCell>
-  );
-}
-
-function MarkdownCell({ children }: { children?: React.ReactNode }) {
-  return (
-    <TableCell sx={{ whiteSpace: 'normal', border: '1px solid', borderColor: 'divider' }}>
-      {children}
-    </TableCell>
-  );
-}
-
-const markdownOverrides = {
-  ...defaultOverrides,
-  h1: { component: 'h2' as const },
-  h2: { component: 'h3' as const },
-  h3: { component: 'h4' as const },
-  h4: { component: 'h5' as const },
-  h5: { component: 'h6' as const },
-  ol: { props: { className: 'mui-markdown-ol' } },
-  ul: { props: { className: 'mui-markdown-ul' } },
-  table: { component: MarkdownTable },
-  thead: { component: TableHead },
-  tbody: { component: TableBody },
-  tr: { component: TableRow },
-  th: { component: MarkdownHeadCell },
-  td: { component: MarkdownCell },
-};
 
 interface PanelItemProps {
   item: Panel;
@@ -244,6 +190,15 @@ const PanelItem = memo(function PanelItem({ item, rowIndex, index, varData, allI
         />
       );
   } else if (item.type === 'markdown') {
+    // Markdoc's truthy check treats '' and 0 as truthy; only undefined/null/false are falsy.
+    // Omit unset/empty values so {% if not($foo) %} works when an input is cleared.
+    const flatVars: Record<string, string> = {};
+    allInputs.forEach((input) => {
+      const value = varData[input.input_id]?.value;
+      if (value !== undefined && value !== '') {
+        flatVars[input.input_id] = value;
+      }
+    });
     itemComponent = (
       <Box sx={{
         ...(item.auto_height
@@ -262,9 +217,7 @@ const PanelItem = memo(function PanelItem({ item, rowIndex, index, varData, allI
           '& p': { my: 0 },
         },
       }}>
-        <MuiMarkdown options={{ overrides: markdownOverrides }}>
-          {item.markdown}
-        </MuiMarkdown>
+        <MarkdocRenderer source={item.markdown ?? ''} variables={flatVars} />
       </Box>
     );
   }
@@ -288,6 +241,14 @@ const PanelItem = memo(function PanelItem({ item, rowIndex, index, varData, allI
   if (prevProps.rowIndex !== nextProps.rowIndex) return false;
   if (prevProps.index !== nextProps.index) return false;
   if (prevProps.item !== nextProps.item) return false;
+
+  // Markdown panels can reference any input via {% $id %} — check all inputs.
+  if (nextProps.item.type === 'markdown') {
+    for (const input of nextProps.allInputs) {
+      if (prevProps.varData[input.input_id]?.value !== nextProps.varData[input.input_id]?.value) return false;
+    }
+    return true;
+  }
 
   // Only re-render if a varData value for an input this panel uses has changed
   const inputIds = (nextProps.item.params ?? [])

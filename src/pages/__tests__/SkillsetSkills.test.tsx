@@ -235,7 +235,7 @@ describe('SkillsetSkills', () => {
     fireEvent.change(within(dialog).getByLabelText(/^Name/), { target: { value: 'Respond to incident' } });
     fireEvent.click(within(dialog).getByRole('button', { name: /Markdown source/i }));
     fireEvent.change(within(dialog).getByLabelText('Template'), {
-      target: { value: '## Incident\n\nSummarize {{incident_id}}.' },
+      target: { value: '## Incident\n\nSummarize {% $incident_id %}.' },
     });
     fireEvent.click(within(dialog).getByRole('button', { name: 'Add parameter' }));
     fireEvent.change(within(dialog).getAllByLabelText(/^Name/)[1], { target: { value: 'incident_id' } });
@@ -244,7 +244,7 @@ describe('SkillsetSkills', () => {
     await waitFor(() => expect(mockCreateSkill).toHaveBeenCalledWith(expect.objectContaining({
       skill_id: 'respond_to_incident',
       name: 'Respond to incident',
-      template: '## Incident\n\nSummarize {{incident_id}}.',
+      template: '## Incident\n\nSummarize {% $incident_id %}.',
       parameters: [expect.objectContaining({ name: 'incident_id', type: 'string' })],
     })));
     expect(mockUpdateSkill).not.toHaveBeenCalled();
@@ -260,11 +260,11 @@ describe('SkillsetSkills', () => {
     fireEvent.change(within(dialog).getByLabelText(/^Name/), { target: { value: 'Bad placeholder' } });
     fireEvent.click(within(dialog).getByRole('button', { name: /Markdown source/i }));
     fireEvent.change(within(dialog).getByLabelText('Template'), {
-      target: { value: 'Summarize {{missing_param}}' },
+      target: { value: 'Summarize {% $missing_param %}' },
     });
     fireEvent.click(within(dialog).getByRole('button', { name: 'Save' }));
 
-    expect(within(dialog).getByText('Placeholder missing_param must match a declared parameter.')).toBeInTheDocument();
+    expect(within(dialog).getByText('Variable $missing_param must match a declared parameter.')).toBeInTheDocument();
     expect(mockCreateSkill).not.toHaveBeenCalled();
   });
 });
