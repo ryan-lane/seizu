@@ -10,8 +10,8 @@ function GlobalStyles() {
           padding: 0
         },
         html: {
-          '-webkit-font-smoothing': 'antialiased',
-          '-moz-osx-font-smoothing': 'grayscale'
+          WebkitFontSmoothing: 'antialiased',
+          MozOsxFontSmoothing: 'grayscale'
         },
         body: {
           backgroundColor: '#f4f6f8',

@@ -35,6 +35,7 @@ import DragIndicatorIcon from '@mui/icons-material/DragIndicator';
 import EditIcon from '@mui/icons-material/Edit';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import OpenWithIcon from '@mui/icons-material/OpenWith';
+import OpenInFullIcon from '@mui/icons-material/OpenInFull';
 import RemoveIcon from '@mui/icons-material/Remove';
 import SaveIcon from '@mui/icons-material/Save';
 import type { ResponsiveLayouts, Layout as RglLayout } from 'react-grid-layout';
@@ -160,20 +161,19 @@ interface EditablePanelCardProps {
   panel: EditablePanel;
   onEdit: () => void;
   onDelete: () => void;
-  onResize: (delta: number) => void;
   moveTargetRows: ReadonlyArray<{ id: string; name: string }>;
   onMoveToRow: (targetRowId: string) => void;
 }
 
-function EditablePanelCard({ panel, onEdit, onDelete, onResize, moveTargetRows, onMoveToRow }: EditablePanelCardProps) {
+function EditablePanelCard({ panel, onEdit, onDelete, moveTargetRows, onMoveToRow }: EditablePanelCardProps) {
   const [moveMenuAnchor, setMoveMenuAnchor] = useState<HTMLElement | null>(null);
   const moveMenuOpen = Boolean(moveMenuAnchor);
-  const capped = Math.max(1, Math.min(12, panel.w ?? panel.size ?? 3));
 
   return (
     <Paper
       variant="outlined"
       sx={{
+        position: 'relative',
         p: 1,
         height: '100%',
         minHeight: 0,
@@ -196,35 +196,8 @@ function EditablePanelCard({ panel, onEdit, onDelete, onResize, moveTargetRows, 
         <EditPanelSkeleton type={panel.type} />
       </Box>
 
-      {/* Width controls + edit + delete. Drag and resize are handled by react-grid-layout. */}
-      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.25, flexShrink: 0 }}>
-        <Tooltip title="Decrease width">
-          <span>
-            <IconButton
-              aria-label="Decrease width"
-              size="small"
-              disabled={capped <= 1}
-              onClick={() => onResize(-1)}
-            >
-              <RemoveIcon sx={{ fontSize: 14 }} />
-            </IconButton>
-          </span>
-        </Tooltip>
-        <Typography variant="caption" sx={{ minWidth: 16, textAlign: 'center' }}>
-          {capped}
-        </Typography>
-        <Tooltip title="Increase width">
-          <span>
-            <IconButton
-              aria-label="Increase width"
-              size="small"
-              disabled={capped >= 12}
-              onClick={() => onResize(1)}
-            >
-              <Add sx={{ fontSize: 14 }} />
-            </IconButton>
-          </span>
-        </Tooltip>
+      {/* Edit/delete controls. Drag and resize are handled by react-grid-layout. */}
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.25, flexShrink: 0, pr: 2.5 }}>
         <Box sx={{ flex: 1 }} />
         <Tooltip title="Edit panel">
           <IconButton aria-label="Edit panel" size="small" onClick={onEdit}>
@@ -273,6 +246,24 @@ function EditablePanelCard({ panel, onEdit, onDelete, onResize, moveTargetRows, 
             </Menu>
           </>
         )}
+      </Box>
+      <Box
+        aria-hidden="true"
+        sx={{
+          position: 'absolute',
+          right: 4,
+          bottom: 4,
+          width: 18,
+          height: 18,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          color: 'text.secondary',
+          opacity: 0.65,
+          pointerEvents: 'none'
+        }}
+      >
+        <OpenInFullIcon sx={{ fontSize: 15, transform: 'scaleX(-1)' }} />
       </Box>
     </Paper>
   );
@@ -651,7 +642,6 @@ interface EditableRowCardProps {
   onDeleteRow: (rowId: string) => void;
   onEditPanel: (rowId: string, panelId: string) => void;
   onDeletePanel: (rowId: string, panelId: string) => void;
-  onResizePanel: (rowId: string, panelId: string, delta: number) => void;
   onLayoutChange: (
     rowId: string,
     layouts: ResponsiveLayouts<ResponsiveBreakpoint>
@@ -670,7 +660,6 @@ const EditableRowCard = memo(function EditableRowCard({
   onDeleteRow,
   onEditPanel,
   onDeletePanel,
-  onResizePanel,
   onLayoutChange,
   dragHandleProps,
   moveTargetRows,
@@ -783,7 +772,6 @@ const EditableRowCard = memo(function EditableRowCard({
                   panel={panel}
                   onEdit={() => onEditPanel(row._id, panel._id)}
                   onDelete={() => onDeletePanel(row._id, panel._id)}
-                  onResize={(delta) => onResizePanel(row._id, panel._id, delta)}
                   moveTargetRows={moveTargetRows}
                   onMoveToRow={(targetRowId) => onMovePanel(panel._id, targetRowId)}
                 />
@@ -1091,23 +1079,6 @@ function EditableReportView({ report, reportId: _reportId, onSave, onCancel }: E
     });
   }
 
-  function resizePanel(rowId: string, panelId: string, delta: number) {
-    setEditableRows((prev) =>
-      prev.map((r) =>
-        r._id === rowId
-          ? {
-              ...r,
-              panels: r.panels.map((p) =>
-                p._id === panelId
-                  ? { ...p, w: Math.max(1, Math.min(12, (p.w ?? p.size ?? 3) + delta)) }
-                  : p
-              )
-            }
-          : r
-      )
-    );
-  }
-
   // ---------------------------------------------------------------------------
   // react-grid-layout: persist x/y/w/h after drag/resize
   // ---------------------------------------------------------------------------
@@ -1283,7 +1254,6 @@ function EditableReportView({ report, reportId: _reportId, onSave, onCancel }: E
                       onDeleteRow={deleteRow}
                       onEditPanel={openEditPanel}
                       onDeletePanel={deletePanel}
-                      onResizePanel={resizePanel}
                       onLayoutChange={handleLayoutChange}
                       dragHandleProps={dragHandleProps}
                       moveTargetRows={rowNameMap.filter((r) => r.id !== row._id)}

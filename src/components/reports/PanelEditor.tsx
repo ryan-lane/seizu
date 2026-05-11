@@ -180,7 +180,6 @@ function PanelEditor({ open, panel, onClose, onSave, availableVariables }: Panel
     setForm({
       type: newType,
       caption: form.caption,
-      size: form.size,
       w: form.w,
       h: form.h,
       x: form.x,
@@ -270,14 +269,14 @@ function PanelEditor({ open, panel, onClose, onSave, availableVariables }: Panel
           {/* Width */}
           <Box>
             <Typography gutterBottom variant="body2">
-              Width (grid columns: {form.w ?? form.size ?? 3})
+              Width (grid columns: {form.w ?? 3})
             </Typography>
             <Slider
               min={1}
               max={12}
               step={1}
               marks
-              value={form.w ?? form.size ?? 3}
+              value={form.w ?? 3}
               onChange={(_, v) => set('w', v as number)}
               valueLabelDisplay="auto"
             />
@@ -544,7 +543,6 @@ function cleanPanel(panel: Panel): Panel {
   const result: Panel = { type: panel.type };
   if (panel.caption) result.caption = panel.caption;
   if (panel.hide_caption) result.hide_caption = true;
-  if (panel.size != null) result.size = Math.max(1, Math.min(12, panel.size));
   if (panel.w != null) result.w = Math.max(1, Math.min(12, panel.w));
   if (panel.h != null) result.h = Math.max(1, Math.min(MAX_HEIGHT_ROWS, panel.h));
   if (panel.x != null) result.x = Math.max(0, panel.x);

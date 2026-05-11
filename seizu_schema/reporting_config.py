@@ -9,7 +9,7 @@ import re
 from typing import Any, Literal
 
 import yaml
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 LOWER_SNAKE_ID_RE = re.compile(r"^[a-z][a-z0-9]*(?:_[a-z0-9]+)*$")
 
@@ -181,6 +181,13 @@ class Panel(BaseModel):
         examples=["table"],
     )
 
+    @model_validator(mode="before")
+    @classmethod
+    def reject_legacy_size(cls, data: Any) -> Any:
+        if isinstance(data, dict) and "size" in data:
+            raise ValueError("Panel field 'size' is no longer supported; use 'w' for width.")
+        return data
+
     cypher: str | None = Field(
         default=None,
         description="A reference to a cypher from the cypher section of the configuration.",
@@ -258,21 +265,9 @@ class Panel(BaseModel):
         ],
     )
 
-    size: int | None = Field(
-        default=2,
-        description=(
-            "The legacy width of the panel as MUI grid columns (1-12). When"
-            " ``w`` is set, ``w`` takes precedence. Retained for back-compat"
-            " with reports authored before per-panel height support."
-        ),
-        examples=["2"],
-    )
-
     w: int | None = Field(
         default=None,
-        description=(
-            "The width of the panel in grid columns (1-12). Supersedes ``size`` when set. Used by react-grid-layout."
-        ),
+        description="The width of the panel in grid columns (1-12). Used by react-grid-layout.",
         examples=["3"],
     )
 
@@ -440,7 +435,7 @@ class Row(BaseModel):
                   params:
                     base_severity: CRITICAL
                   caption: Critical CVEs
-                  size: 2
+                  w: 2
             """
         ],
     )
@@ -526,7 +521,7 @@ class Report(BaseModel):
                       params:
                         - name: severity
                           input_id: cve_base_severity
-                      size: 12
+                      w: 12
             """
         ],
     )
@@ -831,7 +826,7 @@ class ReportingConfig(BaseModel):
                       panels:
                         - cypher: cves
                           type: table
-                          size: 12
+                          w: 12
             """
         ],
     )

@@ -39,13 +39,13 @@ reports:
           - cypher: cves-total       # reference to a named query in this report's queries dict
             type: count
             caption: Total CVEs
-            size: 3
+            w: 3
           - cypher: |-               # direct Cypher string — no named reference needed
               MATCH (c:CVE)
               RETURN count(c.id) AS total
             type: count
             caption: Total CVEs (direct)
-            size: 3
+            w: 3
 ```
 
 To change the dashboard at runtime, use the Reports list in the UI (see below) or call the API directly:
@@ -155,7 +155,7 @@ To simply display a count of a particular query, use a ``count`` panel.
           details_cypher: cves-details
           caption: Total CVEs
           type: count
-          size: 3
+          w: 3
 ```
 
 ### progress
@@ -186,7 +186,7 @@ By default, this panel will color the progress data based on a threshold of <70%
           caption: Critical CVEs
           type: progress
           threshold: 0
-          size: 3
+          w: 3
 ```
 
 ### pie
@@ -214,7 +214,7 @@ To display a pie graph, use a ``pie`` panel.
           type: pie
           pie_settings:
             legend: column
-          size: 3
+          w: 3
 ```
 
 ### bar
@@ -242,7 +242,7 @@ To display a bar graph, use a ``bar`` panel.
           type: bar
           bar_settings:
             legend: column
-          size: 3
+          w: 3
 ```
 
 ### table
@@ -278,7 +278,7 @@ When `columns` is specified in the panel config, those column names are read dir
               - name: cveId
                 input_id: cve-id-autocomplete-input
             type: table
-            size: 12
+            w: 12
 ```
 
 ### vertical-table
@@ -311,7 +311,7 @@ Supports the same return formats as the ``table`` panel (named columns, map, or 
                 input_id: cve-id-autocomplete-input
             type: vertical-table
             table_id: id
-            size: 12
+            w: 12
 ```
 
 
@@ -369,7 +369,7 @@ If the query does not return graph-compatible data (e.g. ``RETURN n`` or a plain
           graph_settings:
             node_label: name
             node_color_by: group
-          size: 12
+          w: 12
 ```
 
 ### markdown
@@ -466,7 +466,7 @@ For the full Markdoc syntax reference and feature list, see the [Markdoc documen
               ## Recommended action
               Upgrade to log4j 2.17.1 or higher.
             type: markdown
-            size: 12
+            w: 12
 ```
 
 ## Named Queries
@@ -490,14 +490,14 @@ reports:
           - cypher: cves-total
             type: count
             caption: Total CVEs
-            size: 3
+            w: 3
           # Direct Cypher string — no entry in queries needed
           - cypher: |-
               MATCH (c:CVE)
               RETURN count(c.id) AS total
             type: count
             caption: Total CVEs (direct)
-            size: 3
+            w: 3
 ```
 
 ## Inputs

@@ -1,8 +1,3 @@
-To activate this project's virtualenv, run pipenv shell.
-Alternatively, run a command inside the virtualenv with pipenv run.
-Installing dependencies from Pipfile.lock (fabdec)...
-Installing dependencies from Pipfile.lock (fabdec)...
-All dependencies are now up-to-date!
 {
     "$defs": {
         "BarPanelSettings": {
@@ -289,22 +284,6 @@ All dependencies are now up-to-date!
                     ],
                     "title": "Markdown"
                 },
-                "size": {
-                    "anyOf": [
-                        {
-                            "type": "integer"
-                        },
-                        {
-                            "type": "null"
-                        }
-                    ],
-                    "default": 2,
-                    "description": "The legacy width of the panel as MUI grid columns (1-12). When ``w`` is set, ``w`` takes precedence. Retained for back-compat with reports authored before per-panel height support.",
-                    "examples": [
-                        "2"
-                    ],
-                    "title": "Size"
-                },
                 "w": {
                     "anyOf": [
                         {
@@ -315,7 +294,7 @@ All dependencies are now up-to-date!
                         }
                     ],
                     "default": null,
-                    "description": "The width of the panel in grid columns (1-12). Supersedes ``size`` when set. Used by react-grid-layout.",
+                    "description": "The width of the panel in grid columns (1-12). Used by react-grid-layout.",
                     "examples": [
                         "3"
                     ],
@@ -625,6 +604,22 @@ All dependencies are now up-to-date!
                     "title": "Schema Version",
                     "type": "integer"
                 },
+                "pinned": {
+                    "anyOf": [
+                        {
+                            "type": "boolean"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "description": "Optional seed metadata for dashboard navigation. When set, the seeder pins or unpins the report after creating or updating it. This field is not stored inside report version configs.",
+                    "examples": [
+                        true
+                    ],
+                    "title": "Pinned"
+                },
                 "name": {
                     "description": "The name of the report.",
                     "examples": [
@@ -658,7 +653,7 @@ All dependencies are now up-to-date!
                 "rows": {
                     "description": "The rows of the report.",
                     "examples": [
-                        "\n            .. code-block:: yaml\n\n              rows:\n                - name: \"CVEs\"\n                  panels:\n                    - cypher: cves\n                      type: table\n                      params:\n                        - name: severity\n                          input_id: cve_base_severity\n                      size: 12\n            "
+                        "\n            .. code-block:: yaml\n\n              rows:\n                - name: \"CVEs\"\n                  panels:\n                    - cypher: cves\n                      type: table\n                      params:\n                        - name: severity\n                          input_id: cve_base_severity\n                      w: 12\n            "
                     ],
                     "items": {
                         "$ref": "#/$defs/Row"
@@ -718,7 +713,7 @@ All dependencies are now up-to-date!
                 "panels": {
                     "description": "The panels to show in the row.",
                     "examples": [
-                        "\n            .. code-block:: yaml\n\n              panels:\n                - cypher: cves-by-severity\n                  details_cypher: cves-by-severity-details\n                  type: count\n                  params:\n                    base_severity: CRITICAL\n                  caption: Critical CVEs\n                  size: 2\n            "
+                        "\n            .. code-block:: yaml\n\n              panels:\n                - cypher: cves-by-severity\n                  details_cypher: cves-by-severity-details\n                  type: count\n                  params:\n                    base_severity: CRITICAL\n                  caption: Critical CVEs\n                  w: 2\n            "
                     ],
                     "items": {
                         "$ref": "#/$defs/Panel"
@@ -1160,7 +1155,7 @@ All dependencies are now up-to-date!
             },
             "description": "The reports to use for the report.",
             "examples": [
-                "\n            .. code-block:: yaml\n\n              reports:\n                cves:\n                  name: CVEs\n                  rows:\n                    - name: CVEs\n                      panels:\n                        - cypher: cves\n                          type: table\n                          size: 12\n            "
+                "\n            .. code-block:: yaml\n\n              reports:\n                cves:\n                  name: CVEs\n                  rows:\n                    - name: CVEs\n                      panels:\n                        - cypher: cves\n                          type: table\n                          w: 12\n            "
             ],
             "title": "Reports",
             "type": "object"

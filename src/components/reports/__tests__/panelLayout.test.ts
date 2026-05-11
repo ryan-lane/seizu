@@ -38,15 +38,7 @@ describe('defaultMinHeight', () => {
 });
 
 describe('defaultPanelWidth', () => {
-  it('prefers w over size', () => {
-    expect(defaultPanelWidth({ type: 'count', w: 4, size: 2 })).toBe(4);
-  });
-
-  it('falls back to size when w is unset', () => {
-    expect(defaultPanelWidth({ type: 'count', size: 6 })).toBe(6);
-  });
-
-  it('uses 3 when both are unset', () => {
+  it('uses 3 when w is unset', () => {
     expect(defaultPanelWidth({ type: 'count' })).toBe(3);
   });
 
@@ -119,13 +111,6 @@ describe('deriveRowLayout', () => {
     const layout = deriveRowLayout(panels);
 
     expect(layout[0].minH).toBe(7);
-  });
-
-  it('falls back to size when w is missing (legacy panel)', () => {
-    const panels: Panel[] = [{ type: 'count', size: 6 }];
-    const layout = deriveRowLayout(panels);
-
-    expect(layout[0].w).toBe(6);
   });
 });
 
