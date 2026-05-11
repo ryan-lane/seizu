@@ -1,13 +1,20 @@
 """Round-trip tests for the new layout fields on ``Panel``."""
 
+import pytest
+from pydantic import ValidationError
+
 from seizu_schema.reporting_config import Panel
 
 
-def test_legacy_panel_without_layout_fields_validates() -> None:
-    """A panel authored before per-panel height support must still validate."""
-    panel = Panel.model_validate({"type": "count", "size": 3, "cypher": "RETURN 1"})
+def test_legacy_panel_size_is_rejected() -> None:
+    """The old panel ``size`` width field is no longer accepted."""
+    with pytest.raises(ValidationError, match="size"):
+        Panel.model_validate({"type": "count", "size": 3, "cypher": "RETURN 1"})
 
-    assert panel.size == 3
+
+def test_panel_without_layout_fields_validates() -> None:
+    panel = Panel.model_validate({"type": "count", "cypher": "RETURN 1"})
+
     assert panel.w is None
     assert panel.h is None
     assert panel.x is None

@@ -118,25 +118,6 @@ describe('EditableReportView', () => {
     ));
   });
 
-  it('width controls write to the new w field, not size', async () => {
-    const onSave = jest.fn().mockResolvedValue(undefined);
-    render(
-      <Wrapper>
-        <EditableReportView report={REPORT} reportId="r1" onSave={onSave} onCancel={jest.fn()} />
-      </Wrapper>
-    );
-
-    fireEvent.click(screen.getByRole('button', { name: /increase width/i }));
-    fireEvent.click(screen.getByRole('button', { name: /save version/i }));
-
-    await waitFor(() => expect(onSave).toHaveBeenCalled());
-    const [savedReport] = onSave.mock.calls[0];
-    const panel = savedReport.rows[0].panels[0];
-    // The legacy size field is preserved (none on this fixture); w now carries the width.
-    expect(panel.w).toBeGreaterThan(3);
-    expect(panel.size).toBeUndefined();
-  });
-
   it('saves a locally edited named query value', async () => {
     const onSave = jest.fn().mockResolvedValue(undefined);
     render(

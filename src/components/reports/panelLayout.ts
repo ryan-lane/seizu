@@ -67,7 +67,7 @@ function clampWidth(value: number, cols: number): number {
 }
 
 export function defaultPanelWidth(panel: Panel, cols: number = MAX_COLS): number {
-  const raw = panel.w ?? panel.size ?? FALLBACK_WIDTH;
+  const raw = panel.w ?? FALLBACK_WIDTH;
   return clampWidth(raw, cols);
 }
 
@@ -129,8 +129,7 @@ export function deriveRowLayout(panels: Panel[], cols: number = MAX_COLS): Layou
 /**
  * Build a layout map for every responsive breakpoint. At ``xs`` (mobile),
  * panel widths are doubled (capped to the column count) and panels stack
- * vertically — matching the legacy ``xsSize = item.size * 2`` behavior in
- * ``ReportView.tsx``.
+ * vertically.
  */
 export function buildResponsiveLayouts(
   panels: Panel[],

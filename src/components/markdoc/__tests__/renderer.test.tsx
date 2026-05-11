@@ -65,6 +65,26 @@ describe('MarkdocRenderer', () => {
     expect(a?.textContent).toBe('label');
   });
 
+  it('renders links with the themed MUI Link component', () => {
+    const { container } = render(<MarkdocRenderer source="[home](https://example.com)" />);
+    const a = container.querySelector('a');
+    expect(a).not.toBeNull();
+    expect(a?.className).toContain('MuiLink-root');
+    expect(a?.className).toContain('MuiLink-underlineHover');
+  });
+
+  it('does not render nested paragraphs when conditionals return block content', () => {
+    const { container } = render(
+      <MarkdocRenderer
+        source={'Before {% if $show %}\nShown\n{% /if %}'}
+        variables={{ show: 'yes' }}
+      />
+    );
+    expect(container.querySelector('p p')).toBeNull();
+    expect(container.textContent).toContain('Before');
+    expect(container.textContent).toContain('Shown');
+  });
+
   it('substitutes variables inside angle-bracketed link href (spaced form)', () => {
     const { container } = render(
       <MarkdocRenderer

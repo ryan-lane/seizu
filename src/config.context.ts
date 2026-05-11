@@ -10,7 +10,6 @@ export interface Panel {
   details_cypher?: string;
   caption?: string;
   hide_caption?: boolean;
-  size?: number;
   w?: number;
   h?: number;
   x?: number;

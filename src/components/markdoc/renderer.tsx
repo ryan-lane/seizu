@@ -21,6 +21,7 @@ import {
   TableContainer,
   Table,
   Paper,
+  Link,
 } from '@mui/material';
 
 function MarkdocTable({ children }: { children?: React.ReactNode }) {
@@ -60,6 +61,7 @@ function MarkdocCell({ children }: { children?: React.ReactNode }) {
 }
 
 const markdocComponents = {
+  MuiLink: Link,
   MuiTable: MarkdocTable,
   MuiTableHead: TableHead,
   MuiTableBody: TableBody,
@@ -75,6 +77,71 @@ const headingNode = {
     const children = node.transformChildren(config);
     const level = Math.min((node.attributes.level ?? 1) + 1, 6);
     return new Tag(`h${level}`, attributes, children);
+  },
+};
+
+const BLOCK_TAGS = new Set([
+  'article',
+  'blockquote',
+  'h1',
+  'h2',
+  'h3',
+  'h4',
+  'h5',
+  'h6',
+  'hr',
+  'MuiTable',
+  'ol',
+  'p',
+  'pre',
+  'table',
+  'ul',
+]);
+
+function hasMeaningfulContent(children: any[]): boolean {
+  return children.some((child) => {
+    if (typeof child === 'string') return child.trim() !== '';
+    if (child == null || child === false) return false;
+    if (Tag.isTag(child)) return hasMeaningfulContent(child.children);
+    return true;
+  });
+}
+
+function isBlockTag(child: any): child is Tag {
+  return Tag.isTag(child) && BLOCK_TAGS.has(child.name);
+}
+
+function isEmptyBlockTag(child: Tag): boolean {
+  return child.children.length === 0 || !hasMeaningfulContent(child.children);
+}
+
+const paragraphNode = {
+  ...nodes.paragraph,
+  transform(node: any, config: any) {
+    const attributes = node.transformAttributes(config);
+    const children = node.transformChildren(config);
+    if (!children.some(isBlockTag)) return new Tag('p', attributes, children);
+
+    const result: any[] = [];
+    let inlineChildren: any[] = [];
+    const flushInline = () => {
+      if (hasMeaningfulContent(inlineChildren)) {
+        result.push(new Tag('p', attributes, inlineChildren));
+      }
+      inlineChildren = [];
+    };
+
+    children.forEach((child: any) => {
+      if (isBlockTag(child)) {
+        flushInline();
+        if (!isEmptyBlockTag(child)) result.push(child);
+      } else {
+        inlineChildren.push(child);
+      }
+    });
+    flushInline();
+
+    return result;
   },
 };
 
@@ -156,7 +223,7 @@ const linkNode = {
       const { value, changed } = substituteUrlVars(attributes.href, config.variables ?? {});
       if (changed) attributes.href = safeSubstitutedUrl(value);
     }
-    return new Tag('a', attributes, children);
+    return new Tag('MuiLink', { underline: 'hover', color: 'primary', ...attributes }, children);
   },
 };
 
@@ -174,6 +241,7 @@ const imageNode = {
 
 const markdocNodes = {
   heading: headingNode,
+  paragraph: paragraphNode,
   list: listNode,
   link: linkNode,
   image: imageNode,

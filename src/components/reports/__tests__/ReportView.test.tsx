@@ -317,7 +317,7 @@ describe('ReportView param building', () => {
         panels: [{
           type: 'markdown',
           markdown: '## Hello\n\nSome **bold** text.',
-          size: 12
+          w: 12
         }]
       }]
     };

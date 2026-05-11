@@ -28,7 +28,7 @@ FROM oven/bun AS nodebuilder
 
 WORKDIR /home/node/seizu
 
-COPY package*.json bun.lock .eslintrc .prettierrc .prettierignore tsconfig.json vite.config.ts .
+COPY package.json bun.lock .eslintrc .prettierrc .prettierignore tsconfig.json vite.config.ts .
 
 RUN bun install
 
