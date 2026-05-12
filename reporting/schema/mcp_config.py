@@ -98,6 +98,11 @@ class ToolParamDef(BaseModel):
     def validate_name(cls, v: str) -> str:
         return validate_lower_snake_id(v)
 
+    @field_validator("default", mode="before")
+    @classmethod
+    def coerce_default(cls, v: Any) -> Any:
+        return _coerce_decimal(v)
+
 
 class ToolsetListItem(BaseModel):
     """Lightweight summary of a toolset for list views."""
