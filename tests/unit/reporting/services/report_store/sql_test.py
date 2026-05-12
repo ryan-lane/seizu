@@ -8,6 +8,7 @@ from datetime import UTC
 from unittest.mock import patch
 
 import pytest
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import create_async_engine
 from sqlalchemy.pool import StaticPool
 from sqlmodel import SQLModel
@@ -507,6 +508,37 @@ async def test_get_or_create_user_returns_existing_without_update(store, mocker)
     await store.get_or_create_user(sub="sub123", iss="https://idp.example.com", email="old@example.com")
     user = await store.get_or_create_user(sub="sub123", iss="https://idp.example.com", email="new@example.com")
     assert user.email == "old@example.com"
+
+
+async def test_get_or_create_user_returns_existing_after_unique_race(store, mocker):
+    """A concurrent first login can win the insert race after the initial lookup."""
+    mocker.patch(
+        "reporting.services.report_store.sql.generate_report_id",
+        return_value="uid2",
+    )
+    await store.get_or_create_user(sub="sub123", iss="https://idp.example.com", email="alice@example.com")
+
+    original_execute = sql_module.AsyncSession.execute
+    first_lookup_done = False
+
+    async def execute_with_stale_first_lookup(self, statement, *args, **kwargs):
+        nonlocal first_lookup_done
+        result = await original_execute(self, statement, *args, **kwargs)
+        if not first_lookup_done:
+            first_lookup_done = True
+            return mocker.Mock(scalars=lambda: mocker.Mock(first=lambda: None))
+        return result
+
+    mocker.patch.object(sql_module.AsyncSession, "execute", execute_with_stale_first_lookup)
+    mocker.patch.object(
+        sql_module.AsyncSession,
+        "commit",
+        side_effect=IntegrityError("duplicate key", {}, Exception("duplicate key")),
+    )
+
+    user = await store.get_or_create_user(sub="sub123", iss="https://idp.example.com", email="alice@example.com")
+
+    assert user.user_id == "uid2"
 
 
 # ---------------------------------------------------------------------------
