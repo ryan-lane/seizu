@@ -8,8 +8,8 @@ If you're just wanting to quickly evaluate or demo Seizu, please see the [quicks
 
 ```bash
 # first setup your environment in an env file, according to the configuration instructions
-docker pull ghcr.io/paypay/seizu:latest
-docker run --env-file <your-env-file> ghcr.io/paypay/seizu:latest
+docker pull ghcr.io/mappedsky/seizu:latest
+docker run --env-file <your-env-file> ghcr.io/mappedsky/seizu:latest
 ```
 
 ## Backend configuration

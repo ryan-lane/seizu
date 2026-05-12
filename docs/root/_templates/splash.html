@@ -130,6 +130,7 @@
     transition: background 200ms ease, border-color 200ms ease;
   }
   .btn-ghost:hover { background: rgba(140,170,230,0.06); border-color: rgba(140,170,230,0.5); }
+  .btn-ghost svg.gh { margin-right: 8px; }
 
   /* ---------- Hero ---------- */
   .hero {
@@ -191,7 +192,6 @@
     font-size: 19px; line-height: 1.55; color: var(--text-dim);
   }
   .hero-ctas { margin-top: 48px; display: flex; gap: 14px; flex-wrap: wrap; }
-  .hero-ctas svg.gh { margin-right: 8px; }
   .integration-strip {
     margin-top: 80px; display: flex; align-items: center;
     gap: 28px; flex-wrap: wrap;
@@ -321,6 +321,125 @@
     opacity: 0.35; transition: opacity 240ms;
   }
   .feature-cell:hover .accent-svg { opacity: 0.8; }
+
+  /* ---------- Product carousel ---------- */
+  .showcase {
+    border-top: 1px solid var(--rule);
+    border-bottom: 1px solid var(--rule);
+    background:
+      radial-gradient(ellipse at 50% 0%, rgba(143,180,255,0.10), transparent 62%),
+      linear-gradient(to bottom, rgba(6,10,24,0.95), rgba(10,15,34,0.86));
+  }
+  .carousel {
+    margin-top: 54px;
+    position: relative;
+  }
+  .carousel-shell {
+    position: relative;
+    border: 1px solid rgba(140,170,230,0.18);
+    border-radius: 10px;
+    background: rgba(8,12,28,0.74);
+    box-shadow: 0 28px 80px rgba(0,0,0,0.36);
+    overflow: hidden;
+  }
+  .carousel-shell::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    border-radius: inherit;
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.05);
+    z-index: 2;
+  }
+  .carousel-track {
+    display: flex;
+    overflow-x: auto;
+    scroll-snap-type: x mandatory;
+    scroll-behavior: smooth;
+    scrollbar-width: none;
+  }
+  .carousel-track::-webkit-scrollbar { display: none; }
+  .carousel-slide {
+    flex: 0 0 100%;
+    margin: 0;
+    scroll-snap-align: start;
+    position: relative;
+  }
+  .carousel-slide img {
+    display: block;
+    width: 100%;
+    aspect-ratio: 1568 / 727;
+    object-fit: cover;
+    background: rgba(10,15,34,0.9);
+  }
+  .carousel-caption {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 24px;
+    padding: 18px 22px;
+    border-top: 1px solid rgba(140,170,230,0.12);
+    background: rgba(6,10,24,0.86);
+  }
+  .carousel-caption strong {
+    font-family: var(--font-display);
+    font-style: var(--display-style);
+    font-size: 27px;
+    font-weight: 400;
+    color: var(--text);
+    letter-spacing: -0.01em;
+  }
+  .carousel-caption span {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--text-faint);
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    white-space: nowrap;
+  }
+  .carousel-button {
+    position: absolute;
+    top: calc(50% - 26px);
+    z-index: 3;
+    width: 44px;
+    height: 44px;
+    border-radius: 999px;
+    border: 1px solid rgba(143,180,255,0.30);
+    background: rgba(4,7,18,0.74);
+    color: var(--text);
+    cursor: pointer;
+    display: grid;
+    place-items: center;
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    transition: background 180ms ease, border-color 180ms ease, color 180ms ease;
+  }
+  .carousel-button:hover {
+    background: rgba(143,180,255,0.16);
+    border-color: rgba(143,180,255,0.48);
+    color: var(--accent);
+  }
+  .carousel-button.prev { left: 18px; }
+  .carousel-button.next { right: 18px; }
+  .carousel-dots {
+    display: flex;
+    justify-content: center;
+    gap: 10px;
+    margin-top: 20px;
+  }
+  .carousel-dot {
+    width: 34px;
+    height: 4px;
+    padding: 0;
+    border: 0;
+    border-radius: 999px;
+    background: rgba(140,170,230,0.22);
+    cursor: pointer;
+  }
+  .carousel-dot[aria-current="true"] {
+    background: var(--accent);
+    box-shadow: 0 0 16px rgba(143,180,255,0.45);
+  }
 
   /* ---------- Cartography ---------- */
   .cartography {
@@ -500,11 +619,18 @@
     .footer-grid > div:nth-child(4) { grid-column: auto; }
     .integration-strip { gap: 16px; }
     .integration-strip .brand { font-size: 18px; }
+    .carousel-caption { align-items: flex-start; flex-direction: column; gap: 6px; }
+    .carousel-caption span { white-space: normal; line-height: 1.5; }
   }
   @media (max-width: 560px) {
     .footer-grid { grid-template-columns: 1fr; }
     .footer-bottom { flex-direction: column; gap: 6px; }
     .nav-cta { display: none; }
+    .carousel-shell { border-radius: 8px; }
+    .carousel-button { display: none; }
+    .carousel-caption { padding: 14px 16px; }
+    .carousel-caption strong { font-size: 23px; }
+    .carousel-dot { width: 24px; }
   }
 
   @media (prefers-reduced-motion: reduce) {
@@ -785,11 +911,82 @@
   </div>
 </section>
 
+<!-- ============== PRODUCT TOUR ============== -->
+<section class="showcase">
+  <div class="section">
+    <div class="section-label">
+      <span class="num">03</span>
+      <span class="rule"></span>
+      <span class="kanji">画面</span>
+      <span class="text">PRODUCT · TOUR</span>
+    </div>
+    <h2 class="h2-display">The observatory, in motion.</h2>
+    <div class="carousel" data-carousel>
+      <div class="carousel-shell">
+        <div class="carousel-track" tabindex="0" aria-label="Seizu product screenshots">
+          <figure class="carousel-slide">
+            <img src="{{ pathto('_static/seizu-report-walkthrough.gif', 1) }}" alt="Seizu report dashboard with panel examples and CVE filters" loading="lazy" />
+            <figcaption class="carousel-caption">
+              <strong>Reports</strong>
+              <span>Dashboards, filters, charts, tables, and graph panels</span>
+            </figcaption>
+          </figure>
+          <figure class="carousel-slide">
+            <img src="{{ pathto('_static/seizu-edit-report-walkthrough.gif', 1) }}" alt="Seizu report editor showing named Cypher queries" loading="lazy" />
+            <figcaption class="carousel-caption">
+              <strong>Report Editing</strong>
+              <span>Versioned reports built from named Cypher and visual panels</span>
+            </figcaption>
+          </figure>
+          <figure class="carousel-slide">
+            <img src="{{ pathto('_static/seizu-query-console-walkthrough.gif', 1) }}" alt="Seizu query console with schema browser and Cypher input" loading="lazy" />
+            <figcaption class="carousel-caption">
+              <strong>Query Console</strong>
+              <span>Explore schema, run Cypher, and inspect graph results</span>
+            </figcaption>
+          </figure>
+          <figure class="carousel-slide">
+            <img src="{{ pathto('_static/seizu-toolsets-skillsets-walkthrough.gif', 1) }}" alt="Seizu MCP tools and skillsets screen" loading="lazy" />
+            <figcaption class="carousel-caption">
+              <strong>Tools and Skills</strong>
+              <span>Publish graph-backed tools for MCP clients and agents</span>
+            </figcaption>
+          </figure>
+          <figure class="carousel-slide">
+            <img src="{{ pathto('_static/seizu-mcp-agent-walkthrough.gif', 1) }}" alt="Claude Code using Seizu MCP tools" loading="lazy" />
+            <figcaption class="carousel-caption">
+              <strong>Agents Using MCP</strong>
+              <span>Let agents query the graph with governed Seizu tools</span>
+            </figcaption>
+          </figure>
+        </div>
+        <button class="carousel-button prev" type="button" aria-label="Previous screenshot">
+          <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M15 18l-6-6 6-6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+          </svg>
+        </button>
+        <button class="carousel-button next" type="button" aria-label="Next screenshot">
+          <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M9 6l6 6-6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+          </svg>
+        </button>
+      </div>
+      <div class="carousel-dots" aria-label="Choose screenshot">
+        <button class="carousel-dot" type="button" aria-label="Show Reports" aria-current="true"></button>
+        <button class="carousel-dot" type="button" aria-label="Show Report Editing" aria-current="false"></button>
+        <button class="carousel-dot" type="button" aria-label="Show Query Console" aria-current="false"></button>
+        <button class="carousel-dot" type="button" aria-label="Show Tools and Skills" aria-current="false"></button>
+        <button class="carousel-dot" type="button" aria-label="Show Agents Using MCP" aria-current="false"></button>
+      </div>
+    </div>
+  </div>
+</section>
+
 <!-- ============== CARTOGRAPHY ============== -->
 <section class="cartography">
   <div class="section">
     <div class="section-label">
-      <span class="num">03</span>
+      <span class="num">04</span>
       <span class="rule"></span>
       <span class="kanji">地図</span>
       <span class="text">INTEGRATION · CARTOGRAPHY</span>
@@ -848,7 +1045,7 @@ RETURN u.arn, g.name, p.name</pre>
 <!-- ============== MCP ============== -->
 <section class="section mcp">
   <div class="section-label">
-    <span class="num">04</span>
+    <span class="num">05</span>
     <span class="rule"></span>
     <span class="kanji">信号</span>
     <span class="text">SIGNAL · MCP · LLM</span>
@@ -901,7 +1098,7 @@ RETURN u.arn, g.name, p.name</pre>
 <!-- ============== USE CASES ============== -->
 <section class="section section-feature">
   <div class="section-label">
-    <span class="num">05</span>
+    <span class="num">06</span>
     <span class="rule"></span>
     <span class="kanji">用途</span>
     <span class="text">USE · CASES</span>
@@ -1045,6 +1242,55 @@ RETURN u.arn, g.name, p.name</pre>
   onScroll();
 
   var prefersReduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  // ---------- Product carousel ----------
+  var carousels = document.querySelectorAll('[data-carousel]');
+  for (var ci = 0; ci < carousels.length; ci++) {
+    (function (carousel) {
+      var track = carousel.querySelector('.carousel-track');
+      var slides = Array.prototype.slice.call(carousel.querySelectorAll('.carousel-slide'));
+      var dots = Array.prototype.slice.call(carousel.querySelectorAll('.carousel-dot'));
+      var prev = carousel.querySelector('.carousel-button.prev');
+      var next = carousel.querySelector('.carousel-button.next');
+      if (!track || slides.length === 0) return;
+
+      var active = 0;
+      var scrollTimer = 0;
+
+      function setActive(index) {
+        active = Math.max(0, Math.min(slides.length - 1, index));
+        for (var i = 0; i < dots.length; i++) {
+          dots[i].setAttribute('aria-current', i === active ? 'true' : 'false');
+        }
+      }
+
+      function goTo(index) {
+        var target = Math.max(0, Math.min(slides.length - 1, index));
+        var left = slides[target].offsetLeft;
+        track.scrollTo({ left: left, behavior: prefersReduced ? 'auto' : 'smooth' });
+        setActive(target);
+      }
+
+      function updateFromScroll() {
+        var width = track.clientWidth || 1;
+        setActive(Math.round(track.scrollLeft / width));
+      }
+
+      if (prev) prev.addEventListener('click', function () { goTo(active - 1); });
+      if (next) next.addEventListener('click', function () { goTo(active + 1); });
+      for (var d = 0; d < dots.length; d++) {
+        dots[d].addEventListener('click', (function (index) {
+          return function () { goTo(index); };
+        })(d));
+      }
+      track.addEventListener('scroll', function () {
+        window.clearTimeout(scrollTimer);
+        scrollTimer = window.setTimeout(updateFromScroll, 80);
+      }, { passive: true });
+      window.addEventListener('resize', updateFromScroll);
+      setActive(0);
+    })(carousels[ci]);
+  }
 
   // ---------- Animated starfield ----------
   var canvas = document.getElementById('starfield');
