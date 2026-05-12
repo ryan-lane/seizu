@@ -45,6 +45,7 @@ seizu-scheduled-queries = "reporting.scheduled_queries:main"
 [dependency-groups]
 dev = [
     "aiosqlite>=0.21.0",
+    "hypothesis>=6.152.6",
     "pre-commit>=4.0.0",
     "pytest>=9.0.0",
     "pytest-asyncio>=1.3.0",
