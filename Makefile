@@ -9,9 +9,9 @@ AUTH_PROFILE := $(shell grep -q 'DEVELOPMENT_ONLY_REQUIRE_AUTH=true' .env 2>/dev
 SQL_PROFILE := $(shell grep -q 'REPORT_STORE_BACKEND=sqlmodel' .env 2>/dev/null && echo '--profile sqlmodel' || echo '')
 COMPOSE_PROFILES := $(AUTH_PROFILE) $(SQL_PROFILE)
 
-.PHONY: pipenv_install
-pipenv_install:
-	pipenv install --dev
+.PHONY: uv_sync
+uv_sync:
+	docker compose run --rm --user root seizu uv sync --frozen --all-groups --all-packages --no-install-workspace
 
 junit:
 	mkdir -p junit
@@ -20,12 +20,12 @@ junit:
 test: test_unit test_frontend
 
 .PHONY: test_unit
-test_unit: junit pipenv_install
-	pipenv run pytest --strict --junitxml=coverage/unit.xml --cov=reporting --cov=seizu_schema --cov-report=html:coverage/cov_html --cov-report=xml:coverage/cov.xml --cov-report=term --no-cov-on-fail tests/unit
+test_unit: junit uv_sync
+	docker compose run --rm seizu uv run --frozen --no-sync pytest --strict --junitxml=coverage/unit.xml --cov=reporting --cov=seizu_schema --cov-report=html:coverage/cov_html --cov-report=xml:coverage/cov.xml --cov-report=term --no-cov-on-fail tests/unit
 
 .PHONY: test_integration
 test_integration:
-	docker compose run --rm seizu pipenv run pytest tests/integration -v
+	docker compose run --rm seizu uv run --frozen --no-sync pytest tests/integration -v
 
 .PHONY: test_frontend
 test_frontend:
@@ -33,15 +33,11 @@ test_frontend:
 
 .PHONY: lock
 lock:
-	docker compose run --rm seizu bash -c "cd /home/seizu/seizu && pipenv requirements" > requirements.txt
+	docker compose run --rm seizu uv lock
 
 .PHONY: lock_update
 lock_update:
-	docker compose run --rm seizu bash -c "cd /home/seizu/seizu && pipenv lock && pipenv requirements" > requirements.txt
-
-.PHONY: lock_dev
-lock_dev:
-	docker compose run --rm seizu bash -c "cd /home/seizu/seizu && pipenv requirements --dev-only" > test-requirements.txt
+	docker compose run --rm seizu uv lock --upgrade
 
 .PHONY: rebuild
 rebuild:
@@ -61,16 +57,16 @@ drop_db: down
 
 .PHONY: seed_dashboard
 seed_dashboard:
-	docker compose $(COMPOSE_PROFILES) run --rm seizu bash -c "pipenv sync --dev && PYTHONPATH=/home/seizu/seizu pipenv run python -m seizu_cli --api-url http://seizu:8080 seed --config .config/dev/seizu/reporting-dashboard.yaml $(ARGS)"
+	docker compose $(COMPOSE_PROFILES) run --rm seizu uv run --frozen --no-sync python -m seizu_cli --api-url http://seizu:8080 seed --config .config/dev/seizu/reporting-dashboard.yaml $(ARGS)
 
 .PHONY: schema
 schema: generate_openapi
-	pipenv run python -m reporting.schema.cli export > schema/reporting-schema.json
+	docker compose run --rm seizu uv run --frozen --no-sync python -m reporting.schema.cli export > schema/reporting-schema.json
 
 # Export the OpenAPI spec from the FastAPI app (no backend connections required).
 .PHONY: generate_openapi
 generate_openapi:
-	DYNAMODB_CREATE_TABLE=false pipenv run python -c "from reporting.app import create_app; import json; app = create_app(); print(json.dumps(app.openapi()))" > schema/openapi.json
+	docker compose run --rm -e DYNAMODB_CREATE_TABLE=false seizu uv run --frozen --no-sync python -c "from reporting.app import create_app; import json; app = create_app(); print(json.dumps(app.openapi()))" > schema/openapi.json
 
 # Generate a client library from schema/openapi.json using openapi-generator-cli.
 # Usage: make generate_client LANG=go
@@ -88,11 +84,16 @@ generate_client: generate_openapi
 		-o /local/generated/$(LANG)-client \
 		--package-name seizu_client
 
-# Build the seizu-cli pip-installable distribution (wheel + sdist).
-# Output lands in dist/. Requires the `build` package (pip install build).
+# Build the standalone Seizu server package (wheel + sdist). Output lands in dist/.
+.PHONY: build_server
+build_server:
+	docker compose run --rm seizu-node bun run build
+	docker compose run --rm seizu uv build --package seizu --wheel
+
+# Build the separately releasable seizu-cli package (wheel + sdist).
 .PHONY: build_cli
 build_cli:
-	docker compose run --rm seizu bash -c "pip install --quiet build && python -m build"
+	docker compose run --rm seizu uv build --package seizu-cli --wheel
 
 .PHONY: docs
 # Builds the Sphinx site via docs/build.sh, which uses its own isolated

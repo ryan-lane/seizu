@@ -12,6 +12,31 @@ docker pull ghcr.io/mappedsky/seizu:latest
 docker run --env-file <your-env-file> ghcr.io/mappedsky/seizu:latest
 ```
 
+## Installation using Python packages
+
+Seizu also publishes Python wheels for environments where running without Docker is useful.
+
+The `seizu` package includes the FastAPI backend, scheduled query worker, CLI, shared schema models, and the generated frontend bundle. The packaged frontend includes the full Vite build output: `index.html`, JavaScript, CSS, manifest, favicon, and any other files emitted into `build/` at release time.
+
+```bash
+python -m venv .venv
+. .venv/bin/activate
+pip install seizu
+
+# Web/API process
+seizu-server
+
+# Scheduled query worker, usually run as a separate process
+seizu-scheduled-queries
+```
+
+The separately published `seizu-cli` package installs only the CLI and shared schema code:
+
+```bash
+pip install seizu-cli
+seizu --api-url https://seizu.example.com reports list
+```
+
 ## Backend configuration
 
 ### Basic configuration
@@ -21,7 +46,7 @@ When using the docker image, the defaults should be sufficient for basic configu
 * ``DEBUG``: Whether or not seizu is run in debug mode. This should never be set outside of development; default: ``False``
 * ``HOST``: IP address to listen on; default: ``0.0.0.0``
 * ``PORT``: Port to listen on; default: ``8080``
-* ``STATIC_FOLDER``: location of the react app build directory; default: ``/build``
+* ``STATIC_FOLDER``: location of the React app build directory. In the Docker image this is ``/build``. In the Python wheel, Seizu defaults to the packaged frontend at ``reporting/static_dist``. Set this explicitly to serve a different build directory.
 
 ### Frontend configuration
 
@@ -167,4 +192,4 @@ seizu ships with a sane json structured logging configuration, and good defaults
 Note that this setting is for the workers.
 You'll also need to change gunicorn's logging configuration file setting to change the web process.
 
-* ``LOG_CONFIG_FILE``: Location of the logging configuration file; default: ``/home/seizu/seizu/logging.conf``
+* ``LOG_CONFIG_FILE``: Location of the logging configuration file. In the Docker image this defaults to ``/home/seizu/seizu/logging.conf``. In the Python wheel, Seizu defaults to the packaged ``reporting/logging.conf``.

@@ -10,7 +10,7 @@ Seizu (星図) is a configuration-driven reporting platform for Neo4j graph data
 
 ## Running Commands with Docker
 
-Never install bun, node, pipenv, or Python directly on the host. Always use `docker compose run --rm <service>`.
+Never install bun, node, uv, or Python directly on the host. Always use `docker compose run --rm <service>`.
 
 ### Frontend (`seizu-node`)
 
@@ -24,17 +24,18 @@ docker compose run --rm seizu-node bun run type-check
 ### Backend (`seizu`)
 
 ```bash
-docker compose run --rm seizu bash -c "pipenv sync --dev && pipenv run pytest tests/unit"
-docker compose run --rm seizu bash -c "pipenv sync --dev && pipenv run pytest tests/unit/path/test.py::test_name"
-docker compose run --rm seizu pipenv install <package>
+docker compose run --rm --user root seizu uv sync --frozen --all-groups --all-packages --no-install-workspace
+docker compose run --rm seizu uv run --frozen --no-sync pytest tests/unit
+docker compose run --rm seizu uv add <package>
+docker compose run --rm seizu uv add --dev <package>
 ```
 
-> **Always `pipenv sync --dev` before pytest** — the `.venv` is project-dir-persisted and may be stale after new packages are added.
-> **After editing `Pipfile`**, run `docker compose run --rm seizu pipenv lock` then `make lock` to regenerate `requirements.txt`. Commit both `Pipfile` and `Pipfile.lock` together.
+> **Always run tests through `uv run --frozen --no-sync` in the container** so they use the already-synced Docker environment and `uv.lock`.
+> **After editing `pyproject.toml`**, run `docker compose run --rm seizu uv lock`. Commit `pyproject.toml` and `uv.lock` together.
 
 ### Docs (Sphinx)
 
-Docs have their own isolated virtualenv under `docs/.venv` with pinned deps in `docs/requirements.txt`. Sphinx and its extensions are **not** part of the main project's `Pipfile` — do not add them there. `docs/build.sh` bootstraps the venv on first run and is invoked by `make docs`.
+Docs have their own isolated virtualenv under `docs/.venv` with pinned deps in `docs/requirements.txt`. Sphinx and its extensions are **not** part of the main project's `pyproject.toml` — do not add them there. `docs/build.sh` bootstraps the venv on first run and is invoked by `make docs`.
 
 ```bash
 make docs   # runs docs/build.sh on the host using docs/.venv
@@ -189,13 +190,13 @@ Typer app calling the REST API. Invoked via `python -m seizu_cli`.
 
 **Usage (inside `seizu` container):**
 ```bash
-PYTHONPATH=/home/seizu/seizu pipenv run python -m seizu_cli --api-url http://seizu:8080 login
-PYTHONPATH=/home/seizu/seizu pipenv run python -m seizu_cli --api-url http://seizu:8080 reports list
-PYTHONPATH=/home/seizu/seizu pipenv run python -m seizu_cli --api-url http://seizu:8080 toolsets list
-PYTHONPATH=/home/seizu/seizu pipenv run python -m seizu_cli --api-url http://seizu:8080 toolsets tools list <toolset_id>
-PYTHONPATH=/home/seizu/seizu pipenv run python -m seizu_cli --api-url http://seizu:8080 toolsets tools call <toolset_id> <tool_id> --arg limit=10
-PYTHONPATH=/home/seizu/seizu pipenv run python -m seizu_cli --api-url http://seizu:8080 seed [--force|--dry-run]
-PYTHONPATH=/home/seizu/seizu pipenv run python -m seizu_cli --api-url http://seizu:8080 export
+uv run --frozen --no-sync python -m seizu_cli --api-url http://seizu:8080 login
+uv run --frozen --no-sync python -m seizu_cli --api-url http://seizu:8080 reports list
+uv run --frozen --no-sync python -m seizu_cli --api-url http://seizu:8080 toolsets list
+uv run --frozen --no-sync python -m seizu_cli --api-url http://seizu:8080 toolsets tools list <toolset_id>
+uv run --frozen --no-sync python -m seizu_cli --api-url http://seizu:8080 toolsets tools call <toolset_id> <tool_id> --arg limit=10
+uv run --frozen --no-sync python -m seizu_cli --api-url http://seizu:8080 seed [--force|--dry-run]
+uv run --frozen --no-sync python -m seizu_cli --api-url http://seizu:8080 export
 ```
 Prefer `make seed_dashboard [ARGS="--force|--dry-run|export"]`.
 
@@ -293,10 +294,10 @@ Action schemas served via `GET /api/v1/config` as `scheduled_query_action_schema
 Dev URLs: frontend `http://localhost:3000`, backend `http://localhost:8080`, Authentik `http://localhost:9000`.
 
 **Dockerfile stages:**
-- `base` — Python + pipenv + user setup + `Pipfile`/`Pipfile.lock` copied in. No deps installed.
-- `dev` — `pipenv install --system --dev`; used by `docker-compose.yml` (`target: dev`) for everything local.
+- `base` — Python + uv + user setup + `pyproject.toml`/`uv.lock` copied in. No deps installed.
+- `dev` — `uv sync --frozen --all-groups --all-packages --no-install-workspace`; used by `docker-compose.yml` (`target: dev`) for everything local.
 - `nodebuilder` — `oven/bun` image that produces the frontend build.
-- `production` — `pipenv install --system --deploy` (prod-only, strict lock) + built frontend. The published image (`publish.yml`) explicitly builds `target: production`, so pytest/pre-commit/etc. never ship.
+- `production` — `uv sync --frozen --no-dev --package seizu --no-install-workspace` (prod-only, strict lock) + built frontend. The published image (`publish.yml`) explicitly builds `target: production`, so pytest/pre-commit/etc. never ship.
 
 **Reset named volumes:**
 ```bash
@@ -365,7 +366,7 @@ The query validator (`reporting/services/query_validator.py`) enforces three lay
 
 **Running the validator test suite:**
 ```bash
-docker compose run --rm seizu bash -c "pipenv sync --dev && pipenv run pytest tests/unit/reporting/services/query_validator_test.py -v"
+docker compose run --rm seizu uv run --frozen --no-sync pytest tests/unit/reporting/services/query_validator_test.py -v
 ```
 
 **Enabling APOC for deeper testing** (APOC procedures are read-classified but can make outbound HTTP requests):
@@ -497,7 +498,7 @@ When changing the codebase, update as needed:
 - **`.github/workflows/`** — CI for new test/lint steps
 - **`Dockerfile` / `docker-compose.yml`** — new services, files, env vars
 - **`.pre-commit-config.yaml`** — linting/formatting changes
-- **`Pipfile` + `Pipfile.lock`** — always commit together; run `pipenv lock` then `make lock` after edits
+- **`pyproject.toml` + `uv.lock`** — always commit together; run `docker compose run --rm seizu uv lock` after edits
 - **`docs/`** — update for any user-facing changes; grep for removed items
 - **`schema/reporting-schema.json`** — `make schema` after Pydantic schema changes
 - **`.env.example`** — add/remove env vars
