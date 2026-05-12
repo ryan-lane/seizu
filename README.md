@@ -3,6 +3,8 @@
 
 # Seizu (星図)
 
+[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/mappedsky/seizu/badge)](https://scorecard.dev/viewer/?uri=github.com/mappedsky/seizu)
+
 ## What is Seizu?
 
 [Seizu (星図)](https://mappedsky.github.io/seizu/) is a star chart for your security graph — a React + Python frontend for Neo4j data, built for [Cartography](https://github.com/cartography-cncf/cartography) and [Starbase](https://github.com/JupiterOne/starbase).
