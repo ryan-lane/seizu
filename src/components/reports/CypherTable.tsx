@@ -30,7 +30,7 @@ import { TablePanelSkeleton } from 'src/components/reports/PanelLoadingSkeletons
  *  - Plain object: "key: value" pairs joined with ", "
  *  - Primitive:    String(value)
  */
-function formatValue(val: unknown): string {
+export function formatValue(val: unknown): string {
   if (val === null || val === undefined) return '';
   if (typeof val !== 'object') return String(val);
   if (Array.isArray(val)) return val.map(formatValue).join(', ');
@@ -70,7 +70,7 @@ function formatValue(val: unknown): string {
  *  - Single key, plain object: `RETURN {name: n.name} AS row` → unwrap the value
  *  - Single key, Neo4j node: `RETURN n` or `RETURN n AS x`   → unwrap `.properties`
  */
-function flattenRecord(record: QueryRecord): QueryRecord {
+export function flattenRecord(record: QueryRecord): QueryRecord {
   const keys = Object.keys(record);
   if (keys.length === 1) {
     const val = record[keys[0]];
