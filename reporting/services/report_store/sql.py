@@ -337,6 +337,19 @@ def _report_version_from_records(report: ReportRecord, version: ReportVersionRec
     )
 
 
+def _user_from_record(record: UserRecord) -> User:
+    return User(
+        user_id=record.user_id,
+        sub=record.sub,
+        iss=record.iss,
+        email=record.email,
+        display_name=record.display_name,
+        created_at=record.created_at,
+        last_login=record.last_login,
+        archived_at=record.archived_at,
+    )
+
+
 def _get_engine() -> AsyncEngine:
     global _engine
     if _engine is None:
@@ -954,18 +967,16 @@ class SQLModelReportStore(ReportStore):
                     archived_at=None,
                 )
                 session.add(record)
-                await session.commit()
-                await session.refresh(record)
-        return User(
-            user_id=record.user_id,
-            sub=record.sub,
-            iss=record.iss,
-            email=record.email,
-            display_name=record.display_name,
-            created_at=record.created_at,
-            last_login=record.last_login,
-            archived_at=record.archived_at,
-        )
+                try:
+                    await session.commit()
+                    await session.refresh(record)
+                except IntegrityError:
+                    await session.rollback()
+                    result = await session.execute(stmt)
+                    record = result.scalars().first()
+                    if not record:
+                        raise
+        return _user_from_record(record)
 
     async def update_user_profile(
         self,
@@ -994,32 +1005,14 @@ class SQLModelReportStore(ReportStore):
                 session.add(record)
                 await session.commit()
                 await session.refresh(record)
-        return User(
-            user_id=record.user_id,
-            sub=record.sub,
-            iss=record.iss,
-            email=record.email,
-            display_name=record.display_name,
-            created_at=record.created_at,
-            last_login=record.last_login,
-            archived_at=record.archived_at,
-        )
+        return _user_from_record(record)
 
     async def get_user(self, user_id: str) -> User | None:
         async with AsyncSession(_get_engine()) as session:
             record = await session.get(UserRecord, user_id)
             if not record:
                 return None
-            return User(
-                user_id=record.user_id,
-                sub=record.sub,
-                iss=record.iss,
-                email=record.email,
-                display_name=record.display_name,
-                created_at=record.created_at,
-                last_login=record.last_login,
-                archived_at=record.archived_at,
-            )
+            return _user_from_record(record)
 
     async def archive_user(self, user_id: str) -> bool:
         now = datetime.now(tz=UTC).isoformat()
