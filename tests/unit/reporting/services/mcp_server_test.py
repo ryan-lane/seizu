@@ -1,6 +1,7 @@
 """Unit tests for reporting/services/mcp_server.py."""
 
 import json
+from decimal import Decimal
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -402,13 +403,42 @@ async def test_call_tool_user_defined_success():
             "reporting.services.mcp_server.reporting_neo4j.run_query",
             new_callable=AsyncMock,
             return_value=[{"n": "value"}],
-        ),
+        ) as run_query,
     ):
         server = _build_mcp_server()
         result = await _call_tool(server, "ts1__t1", {})
         data = json.loads(result[0].text)
         assert data[0]["n"] == "value"
     get_enabled_tool.assert_awaited_once_with("ts1", "t1")
+    run_query.assert_awaited_once_with(tool.cypher, parameters={})
+
+
+async def test_call_tool_user_defined_coerces_decimal_parameter_defaults():
+    tool = _tool(
+        parameters=[
+            ToolParamDef(name="limit", type="integer", required=False, default=Decimal("10")),
+            ToolParamDef(name="threshold", type="float", required=False, default=Decimal("2.5")),
+        ],
+        cypher="MATCH (n) RETURN n LIMIT $limit",
+    )
+    get_enabled_tool = AsyncMock(return_value=tool)
+    with (
+        patch(
+            "reporting.services.mcp_server.report_store.get_enabled_tool",
+            new=get_enabled_tool,
+        ),
+        patch(
+            "reporting.services.mcp_server.reporting_neo4j.run_query",
+            new_callable=AsyncMock,
+            return_value=[{"n": "value"}],
+        ) as run_query,
+    ):
+        server = _build_mcp_server()
+        result = await _call_tool(server, "ts1__t1", {})
+        data = json.loads(result[0].text)
+        assert data[0]["n"] == "value"
+    get_enabled_tool.assert_awaited_once_with("ts1", "t1")
+    run_query.assert_awaited_once_with(tool.cypher, parameters={"limit": 10, "threshold": 2.5})
 
 
 async def test_call_tool_user_defined_execution_error():
