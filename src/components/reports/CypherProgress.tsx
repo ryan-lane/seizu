@@ -42,6 +42,13 @@ interface ProgressSettings {
   show_label?: boolean;
 }
 
+export function calculateProgressPercent(numerator: number, denominator: number): number {
+  if (!Number.isFinite(numerator) || !Number.isFinite(denominator) || denominator <= 0) {
+    return 0;
+  }
+  return Math.floor((numerator / denominator) * 100);
+}
+
 interface CypherProgressProps {
   cypher?: string;
   params?: Record<string, unknown>;
@@ -226,7 +233,7 @@ export default function CypherProgress({
 
   const numerator = first['numerator'] as number;
   const denominator = first['denominator'] as number;
-  const percent = Math.floor((numerator / denominator) * 100);
+  const percent = calculateProgressPercent(numerator, denominator);
 
   type CircularProgressColor = 'inherit' | 'primary' | 'secondary' | 'success' | 'error' | 'info' | 'warning';
   // Use the multi-threshold list when configured; otherwise fall back to

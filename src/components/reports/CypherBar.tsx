@@ -92,6 +92,35 @@ interface BarSettings {
   legend?: string;
 }
 
+export function buildBarDataset(records: QueryRecord[]): Record<string, string | number>[] {
+  const mungedRecords: Record<string, string | number>[] = [];
+  for (let i = 0; i < records.length; i++) {
+    const data = records[i];
+    let mungedData: Record<string, unknown>;
+    const dataDetails = data['details'] as QueryRecord & { properties?: QueryRecord };
+    if (dataDetails.properties === undefined) {
+      mungedData = dataDetails;
+    } else {
+      mungedData = dataDetails.properties;
+    }
+    const flat: Record<string, string | number> = {};
+    Object.keys(mungedData).forEach((key) => {
+      const val = mungedData[key];
+      if (Array.isArray(val)) {
+        flat[key] = (val as unknown[]).join(', ');
+      } else if (val === null || val === undefined) {
+        flat[key] = 0;
+      } else if (typeof val === 'string' || typeof val === 'number') {
+        flat[key] = val;
+      } else {
+        flat[key] = String(val);
+      }
+    });
+    mungedRecords.push(flat);
+  }
+  return mungedRecords;
+}
+
 interface CypherBarProps {
   cypher?: string;
   params?: Record<string, unknown>;
@@ -235,29 +264,7 @@ export default function CypherBar({
     );
   }
 
-  const mungedRecords: Record<string, string | number>[] = [];
-  for (let i = 0; i < records.length; i++) {
-    const data = records[i];
-    let mungedData: Record<string, unknown>;
-    const dataDetails = data['details'] as QueryRecord & { properties?: QueryRecord };
-    if (dataDetails.properties === undefined) {
-      mungedData = dataDetails;
-    } else {
-      mungedData = dataDetails.properties;
-    }
-    const flat: Record<string, string | number> = {};
-    Object.keys(mungedData).forEach((key) => {
-      const val = mungedData[key];
-      if (Array.isArray(val)) {
-        flat[key] = (val as unknown[]).join(', ');
-      } else if (val === null || val === undefined) {
-        flat[key] = 0;
-      } else {
-        flat[key] = val as string | number;
-      }
-    });
-    mungedRecords.push(flat);
-  }
+  const mungedRecords = buildBarDataset(records);
 
   const hasLegend = !!barSettings?.legend;
   // Object literal without explicit React.CSSProperties type — ChartsTextStyle is stricter

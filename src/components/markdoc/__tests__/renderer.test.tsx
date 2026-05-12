@@ -1,4 +1,5 @@
 import { render, screen, cleanup } from '@testing-library/react';
+import fc from 'fast-check';
 import { MarkdocRenderer } from '../renderer';
 
 afterEach(cleanup);
@@ -229,5 +230,80 @@ describe('MarkdocRenderer', () => {
       <MarkdocRenderer source="[home](https://example.com/path)" variables={{}} />
     );
     expect(container.querySelector('a')?.getAttribute('href')).toBe('https://example.com/path');
+  });
+
+  it('fuzzes markdown fragments without rendering raw executable HTML', () => {
+    const markdownFragment = fc.oneof(
+      fc.string({ minLength: 0, maxLength: 80 }),
+      fc.constantFrom(
+        '# Heading',
+        '## Subheading',
+        '**bold** and _italic_',
+        '- one\n- two',
+        '1. one\n2. two',
+        '| h | v |\n|---|---|\n| a | b |',
+        '[home](https://example.com/{%$path%})',
+        '![alt](https://example.com/{%$image%}.png)',
+        '<script>alert(1)</script>',
+        '<img src=x onerror=alert(1)>',
+        '{% if $show %}visible{% /if %}'
+      )
+    );
+
+    fc.assert(
+      fc.property(
+        fc.array(markdownFragment, { minLength: 1, maxLength: 8 }),
+        fc.string({ minLength: 0, maxLength: 40 }),
+        fc.string({ minLength: 0, maxLength: 40 }),
+        (fragments, path, image) => {
+          const { container } = render(
+            <MarkdocRenderer
+              source={fragments.join('\n\n')}
+              variables={{ path, image, show: 'true' }}
+            />
+          );
+
+          try {
+            expect(container.querySelector('script')).toBeNull();
+            expect(container.querySelector('[onerror]')).toBeNull();
+            expect(container.querySelector('[onclick]')).toBeNull();
+          } finally {
+            cleanup();
+          }
+        }
+      ),
+      { numRuns: 75 }
+    );
+  });
+
+  it('fuzzes variable-built javascript hrefs and keeps them blocked', () => {
+    const javascriptProtocol = fc
+      .constant('javascript:')
+      .chain((protocol) =>
+        fc.tuple(
+          ...protocol.split('').map((char) =>
+            fc.tuple(
+              fc.boolean(),
+              fc.constantFrom('', '\u0000', '\t', '\n', '\r')
+            ).map(([upper, separator]) => `${upper ? char.toUpperCase() : char}${separator}`)
+          )
+        )
+      )
+      .map((parts) => `${parts.join('')}alert(1)`);
+
+    fc.assert(
+      fc.property(javascriptProtocol, (url) => {
+        const { container } = render(
+          <MarkdocRenderer source="[click](<{%$url%}>)" variables={{ url }} />
+        );
+
+        try {
+          expect(container.querySelector('a')?.getAttribute('href')).toBe('#');
+        } finally {
+          cleanup();
+        }
+      }),
+      { numRuns: 75 }
+    );
   });
 });

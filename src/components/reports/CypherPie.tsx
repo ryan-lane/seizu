@@ -31,6 +31,27 @@ const chartFillSx = {
   display: 'flex'
 };
 
+export function buildPieData(records: QueryRecord[]): { id: string; value: number; label: string }[] {
+  const pieData: { id: string; value: number; label: string }[] = [];
+  for (let i = 0; i < records.length; i++) {
+    const data = records[i];
+    let mungedData: Record<string, unknown>;
+    const dataDetails = data['details'] as QueryRecord & { properties?: QueryRecord };
+    if (dataDetails.properties === undefined) {
+      mungedData = dataDetails;
+    } else {
+      mungedData = dataDetails.properties;
+    }
+    const value = Number(mungedData['value'] ?? 0);
+    pieData.push({
+      id: String(mungedData['id'] ?? i),
+      value: Number.isFinite(value) ? value : 0,
+      label: String(mungedData['id'] ?? i)
+    });
+  }
+  return pieData;
+}
+
 interface CypherPieProps {
   cypher?: string;
   params?: Record<string, unknown>;
@@ -174,22 +195,7 @@ export default function CypherPie({
     );
   }
 
-  const pieData: { id: string; value: number; label: string }[] = [];
-  for (let i = 0; i < records.length; i++) {
-    const data = records[i];
-    let mungedData: Record<string, unknown>;
-    const dataDetails = data['details'] as QueryRecord & { properties?: QueryRecord };
-    if (dataDetails.properties === undefined) {
-      mungedData = dataDetails;
-    } else {
-      mungedData = dataDetails.properties;
-    }
-    pieData.push({
-      id: String(mungedData['id'] ?? i),
-      value: Number(mungedData['value'] ?? 0),
-      label: String(mungedData['id'] ?? i)
-    });
-  }
+  const pieData = buildPieData(records);
 
   const hasLegend = !!pieSettings?.legend;
 
