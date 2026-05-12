@@ -34,7 +34,7 @@
     "@emotion/styled": "^11.14.1",
     "@markdoc/markdoc": "^0.5.2",
     "@mui/icons-material": "^7.3.9",
-    "@mui/material": "^7.3.9",
+    "@mui/material": "^9.0.1",
     "@mui/styles": "^6.4.8",
     "@mui/x-charts": "^8.27.5",
     "@tiptap/extension-link": "^3.22.3",
