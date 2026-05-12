@@ -1,4 +1,20 @@
+from importlib import resources
+
 from reporting.utils.settings import bool_env, int_env, list_env, str_env
+
+
+def _default_static_folder() -> str:
+    if resources.files("reporting").joinpath("static_dist", "index.html").is_file():
+        return str(resources.files("reporting").joinpath("static_dist"))
+    return "/build"
+
+
+def _default_logging_config() -> str:
+    packaged_config = resources.files("reporting").joinpath("logging.conf")
+    if packaged_config.is_file():
+        return str(packaged_config)
+    return "/home/seizu/seizu/logging.conf"
+
 
 # Whether or not reporting is run in debug mode. Never run reporting in debug
 # mode outside of development!
@@ -8,7 +24,7 @@ HOST = str_env("HOST", "0.0.0.0")
 # The port the ASGI app should use.
 PORT = int_env("PORT", 8080)
 # The location of the react app build directory
-STATIC_FOLDER = str_env("STATIC_FOLDER", "/build")
+STATIC_FOLDER = str_env("STATIC_FOLDER", _default_static_folder())
 
 # The hostname of the statsd server (used by the statsd scheduled query action module)
 STATSD_HOST = str_env("STATSD_HOST")
@@ -20,7 +36,7 @@ STATSD_CONSTANT_TAGS = list_env("STATSD_CONSTANT_TAGS")
 # The location of the logging configuration file
 LOG_CONFIG_FILE = str_env(
     "LOG_CONFIG_FILE",
-    "/home/seizu/seizu/logging.conf",
+    _default_logging_config(),
 )
 
 # Standard JWKS endpoint used to validate JWTs. Must be a JSON endpoint returning a

@@ -9,7 +9,7 @@ BUILD_DIR=build_docs
 [[ -z "${GENERATED_AUTOGEN_RST_DIR}" ]] && GENERATED_AUTOGEN_RST_DIR=generated/rst/autogen
 
 # Bootstrap an isolated virtualenv for docs so Sphinx and its extensions
-# do not pollute the main project's pipenv.
+# do not pollute the main project's uv environment.
 if [[ ! -x "${VENV_DIR}/bin/sphinx-build" ]]; then
     python3 -m venv "${VENV_DIR}"
 fi

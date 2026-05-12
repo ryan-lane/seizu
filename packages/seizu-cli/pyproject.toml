@@ -1,0 +1,30 @@
+[build-system]
+requires = ["setuptools>=80.0.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "seizu-cli"
+version = "0.1.0"
+description = "Command-line interface for the Seizu reporting platform"
+requires-python = ">=3.12"
+license = "Apache-2.0"
+dependencies = [
+    "keyring>=25.0.0",
+    "pydantic>=2.13.0",
+    "pyyaml>=6.0.0",
+    "requests>=2.33.0",
+    "rich>=15.0.0",
+    "shellingham>=1.5.0",
+    "typer>=0.25.0",
+]
+
+[project.scripts]
+seizu = "seizu_cli.main:app"
+
+[tool.setuptools]
+package-dir = { "" = "../.." }
+
+[tool.setuptools.packages.find]
+where = ["../.."]
+include = ["seizu_cli*", "seizu_schema*"]
+exclude = ["tests*"]

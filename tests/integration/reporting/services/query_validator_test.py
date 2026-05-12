@@ -5,7 +5,7 @@ service to be running and reachable via the NEO4J_URI environment variable
 (the default in docker-compose is bolt://neo4j:7687 with no auth).
 
 Run with:
-    docker compose run --rm seizu pipenv run pytest tests/integration
+    docker compose run --rm seizu uv run --frozen --no-sync pytest tests/integration
 """
 
 from reporting.services.query_validator import validate_query

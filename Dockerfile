@@ -1,22 +1,27 @@
 FROM python:3.12-slim-bookworm AS base
 
+COPY --from=ghcr.io/astral-sh/uv:0.11.1 /uv /uvx /usr/local/bin/
+
 RUN groupadd seizu && \
     useradd -s /bin/bash -d /home/seizu -m -g seizu seizu
-
-RUN pip3 install pipenv
 
 RUN mkdir /run/seizu && chown seizu:seizu /run/seizu
 
 WORKDIR /home/seizu/seizu
 
-COPY Pipfile Pipfile.lock ./
+ENV UV_PROJECT_ENVIRONMENT=/usr/local \
+    UV_LINK_MODE=copy \
+    UV_COMPILE_BYTECODE=1
+
+COPY pyproject.toml uv.lock ./
+COPY packages/seizu-cli/pyproject.toml packages/seizu-cli/pyproject.toml
 
 # Dev image: prod + dev deps (pytest, pre-commit, aiosqlite, etc.).
 # Used by docker-compose services for local development, testing, seeding,
 # and anything else that may need the dev toolchain.
 FROM base AS dev
 
-RUN pipenv install --system --dev
+RUN uv sync --frozen --all-groups --all-packages --no-install-workspace
 
 USER seizu
 
@@ -41,7 +46,7 @@ RUN bun run build
 # avoids shipping code paths that are not part of the runtime.
 FROM base AS production
 
-RUN pipenv install --system --deploy
+RUN uv sync --frozen --no-dev --package seizu --no-install-workspace
 
 USER seizu
 
