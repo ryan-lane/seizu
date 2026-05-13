@@ -45,7 +45,7 @@ services:
   # Use `make sqlmodel_enable && make down && make up` to activate this backend.
   # make up includes --profile sqlmodel automatically when REPORT_STORE_BACKEND=sqlmodel.
   postgres:
-    image: postgres:16-alpine
+    image: postgres:18-alpine
     profiles:
       - sqlmodel
     restart: unless-stopped
@@ -118,7 +118,7 @@ services:
   #   Dev user:  developer / devpassword
   # The seizu OIDC application is created automatically via the blueprint.
   authentik-postgresql:
-    image: postgres:16-alpine
+    image: postgres:18-alpine
     profiles:
       - auth
     restart: unless-stopped
