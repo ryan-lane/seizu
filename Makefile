@@ -53,10 +53,6 @@ drop_db: down
 		echo "Removing dynamodb_data volume..."; \
 		docker volume rm -f seizu_dynamodb_data; \
 	fi
-	@if grep -q 'DEVELOPMENT_ONLY_REQUIRE_AUTH=true' .env 2>/dev/null; then \
-		echo "Removing authentik_postgres_data volume..."; \
-		docker volume rm -f seizu_authentik_postgres_data; \
-	fi
 	@echo "Done. Run 'make up' to recreate and 'make seed_dashboard' to reseed."
 
 .PHONY: drop_auth_db
