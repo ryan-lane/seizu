@@ -37,7 +37,7 @@ import PushPinOutlinedIcon from '@mui/icons-material/PushPinOutlined';
 import MoreVertIcon from '@mui/icons-material/MoreVert';
 import PublicIcon from '@mui/icons-material/Public';
 import DraftsIcon from '@mui/icons-material/Drafts';
-import Error from '@mui/icons-material/Error';
+import ErrorIcon from '@mui/icons-material/Error';
 
 import {
   ReportListItem,
@@ -239,6 +239,12 @@ function ReportsList() {
 
   const [deleteTarget, setDeleteTarget] = useState<ReportListItem | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<{ title: string; message: string } | null>(null);
+
+  const messageFromError = (err: unknown, fallback: string): string => {
+    return err instanceof globalThis.Error && err.message ? err.message : fallback;
+  };
 
   const handleCreate = async () => {
     if (!newName.trim()) return;
@@ -285,8 +291,11 @@ function ReportsList() {
       await updateReportVisibility(report.report_id, report.access.scope === 'public' ? 'private' : 'public');
       refresh();
       refreshDashboard();
-    } catch {
-      // ignore – user can retry
+    } catch (err) {
+      setActionError({
+        title: report.access.scope === 'public' ? 'Could not unpublish report' : 'Could not publish report',
+        message: messageFromError(err, 'Failed to update report visibility')
+      });
     }
   };
 
@@ -316,12 +325,13 @@ function ReportsList() {
   const handleDeleteConfirm = async () => {
     if (!deleteTarget) return;
     setDeleting(true);
+    setDeleteError(null);
     try {
       await deleteReport(deleteTarget.report_id);
       setDeleteTarget(null);
       refresh();
-    } catch {
-      // dialog stays open so user can retry
+    } catch (err) {
+      setDeleteError(messageFromError(err, 'Failed to delete report'));
     } finally {
       setDeleting(false);
     }
@@ -431,7 +441,10 @@ function ReportsList() {
             onHistory={() => navigate(`/app/reports/${report.report_id}/history`, { state: { fromLabel: 'Reports' } satisfies BackState })}
             onClone={() => handleCloneOpen(report)}
             onToggleAccess={() => handleToggleAccess(report)}
-            onDelete={() => setDeleteTarget(report)}
+            onDelete={() => {
+              setDeleteTarget(report);
+              setDeleteError(null);
+            }}
             isOwner={isOwner}
             hasPermission={hasPermission}
           />
@@ -511,7 +524,7 @@ function ReportsList() {
 
         {error && (
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-            <Error />
+            <ErrorIcon />
             <Typography>Failed to load reports</Typography>
           </Box>
         )}
@@ -613,6 +626,11 @@ function ReportsList() {
       <Dialog open={!!deleteTarget} onClose={() => setDeleteTarget(null)} maxWidth="xs" fullWidth>
         <DialogTitle>Delete report?</DialogTitle>
         <DialogContent>
+          {deleteError && (
+            <Box sx={{ mb: 2 }}>
+              <Typography color="error">{deleteError}</Typography>
+            </Box>
+          )}
           <DialogContentText>
             Permanently delete <strong>{deleteTarget?.name}</strong> and all its versions? This
             cannot be undone.
@@ -629,6 +647,18 @@ function ReportsList() {
             disabled={deleting}
           >
             {deleting ? <CircularProgress size={20} /> : 'Delete'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog open={!!actionError} onClose={() => setActionError(null)} maxWidth="xs" fullWidth>
+        <DialogTitle>{actionError?.title}</DialogTitle>
+        <DialogContent>
+          <DialogContentText>{actionError?.message}</DialogContentText>
+        </DialogContent>
+        <DialogActions>
+          <Button variant="contained" onClick={() => setActionError(null)}>
+            OK
           </Button>
         </DialogActions>
       </Dialog>

@@ -526,6 +526,22 @@ describe('useReportsMutations (updateReportVisibility)', () => {
       })
     );
   });
+
+  it('updateReportVisibility throws backend error on non-ok response', async () => {
+    mockFetch.mockResolvedValue({
+      ok: false,
+      status: 400,
+      json: () => Promise.resolve({ error: 'Report must be unpinned first' })
+    });
+
+    const { result } = renderHook(() => useReportsMutations(), {
+      wrapper: makeWrapper(false, null)
+    });
+
+    await act(async () => {
+      await expect(result.current.updateReportVisibility('r1', 'private')).rejects.toThrow('Report must be unpinned first');
+    });
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -593,6 +609,36 @@ describe('useReportsMutations (pinReport)', () => {
 
     await act(async () => {
       await expect(result.current.pinReport('r1', true)).rejects.toThrow();
+    });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// useReportsMutations – deleteReport
+// ---------------------------------------------------------------------------
+
+describe('useReportsMutations (deleteReport)', () => {
+  let mockFetch: jest.Mock;
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockFetch = jest.fn();
+    global.fetch = mockFetch;
+  });
+
+  it('deleteReport throws backend error on non-ok response', async () => {
+    mockFetch.mockResolvedValue({
+      ok: false,
+      status: 400,
+      json: () => Promise.resolve({ error: 'Report must be unpinned before it can be deleted' })
+    });
+
+    const { result } = renderHook(() => useReportsMutations(), {
+      wrapper: makeWrapper(false, null)
+    });
+
+    await act(async () => {
+      await expect(result.current.deleteReport('r1')).rejects.toThrow('Report must be unpinned before it can be deleted');
     });
   });
 });
