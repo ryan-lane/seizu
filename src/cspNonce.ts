@@ -1,11 +1,32 @@
 // Read the per-request CSP nonce that the backend injected into the served
 // HTML's `<meta property="csp-nonce">` tag. Pass this to libraries that
-// inject their own <style> elements at runtime (emotion cache, tss-react
-// cache, Tiptap editor, etc.) so their tags satisfy
-// `style-src 'self' 'nonce-...'`.
+// inject their own <style> elements at runtime (emotion cache, Tiptap editor,
+// etc.) so their tags satisfy `style-src 'self' 'nonce-...'`.
 export function getCspNonce(): string | undefined {
   const nonceMeta = document.querySelector('meta[property="csp-nonce"]');
   return nonceMeta?.getAttribute('content') ?? undefined;
+}
+
+const STYLE_NONCE_PATCHED_KEY = '__seizuStyleNoncePatched';
+
+// Some component libraries create <style> tags directly instead of going
+// through Emotion's cache. Stamp the backend-provided nonce onto those tags at
+// creation time so the app can keep a nonce-only style-src CSP.
+export function installStyleNoncePatch(nonce: string | undefined): void {
+  if (typeof document === 'undefined' || !nonce) return;
+  const patchedDocument = document as Document & { [STYLE_NONCE_PATCHED_KEY]?: boolean };
+  if (patchedDocument[STYLE_NONCE_PATCHED_KEY]) return;
+
+  const originalCreateElement = document.createElement.bind(document);
+  document.createElement = ((tagName: string, options?: ElementCreationOptions) => {
+    const element = originalCreateElement(tagName, options);
+    if (tagName.toLowerCase() === 'style' && !element.getAttribute('nonce')) {
+      element.setAttribute('nonce', nonce);
+    }
+    return element;
+  }) as typeof document.createElement;
+
+  patchedDocument[STYLE_NONCE_PATCHED_KEY] = true;
 }
 
 // react-draggable injects an unnonced <style> element on first drag for its

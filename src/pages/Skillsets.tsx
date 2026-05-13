@@ -202,9 +202,8 @@ function Skillsets() {
       render: (item) => (
         <Typography
           variant="body2"
-          fontWeight={500}
           sx={[
-            { cursor: 'pointer', '&:hover': { textDecoration: 'underline' } },
+            { cursor: 'pointer', fontWeight: 500, '&:hover': { textDecoration: 'underline' } },
             listTableTruncateSx
           ]}
           onClick={() => navigate(`/app/skillsets/${item.skillset_id}/skills`)}

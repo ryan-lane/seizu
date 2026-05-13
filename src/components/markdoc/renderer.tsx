@@ -13,16 +13,14 @@
 //      `html: true` on the renderer.
 import * as React from 'react';
 import Markdoc, { Tag, nodes } from '@markdoc/markdoc';
-import {
-  TableHead,
-  TableBody,
-  TableRow,
-  TableCell,
-  TableContainer,
-  Table,
-  Paper,
-  Link,
-} from '@mui/material';
+import Link from '@mui/material/Link';
+import Paper from '@mui/material/Paper';
+import Table from '@mui/material/Table';
+import TableBody from '@mui/material/TableBody';
+import TableCell from '@mui/material/TableCell';
+import TableContainer from '@mui/material/TableContainer';
+import TableHead from '@mui/material/TableHead';
+import TableRow from '@mui/material/TableRow';
 
 function MarkdocTable({ children }: { children?: React.ReactNode }) {
   return (

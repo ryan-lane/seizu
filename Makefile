@@ -29,7 +29,7 @@ test_integration:
 
 .PHONY: test_frontend
 test_frontend:
-	@docker compose run --rm seizu-node bun run type-check
+	@docker compose run --rm --no-deps seizu-node bun run type-check
 
 .PHONY: lock
 lock:
@@ -42,18 +42,30 @@ lock_update:
 .PHONY: rebuild
 rebuild:
 	docker compose build seizu
-	docker compose run --rm seizu-node bun run build
+	docker compose run --rm --no-deps seizu-node bun run build
 
 .PHONY: drop_db
 drop_db: down
 	@if grep -q 'REPORT_STORE_BACKEND=sqlmodel' .env 2>/dev/null; then \
 		echo "Removing postgres_data volume..."; \
-		docker volume rm seizu_postgres_data; \
+		docker volume rm -f seizu_postgres_data; \
 	else \
 		echo "Removing dynamodb_data volume..."; \
-		docker volume rm seizu_dynamodb_data; \
+		docker volume rm -f seizu_dynamodb_data; \
+	fi
+	@if grep -q 'DEVELOPMENT_ONLY_REQUIRE_AUTH=true' .env 2>/dev/null; then \
+		echo "Removing authentik_postgres_data volume..."; \
+		docker volume rm -f seizu_authentik_postgres_data; \
 	fi
 	@echo "Done. Run 'make up' to recreate and 'make seed_dashboard' to reseed."
+
+.PHONY: drop_auth_db
+drop_auth_db:
+	docker compose --profile auth stop authentik-server authentik-worker authentik-postgresql
+	docker compose --profile auth rm -f authentik-server authentik-worker authentik-postgresql
+	@echo "Removing authentik_postgres_data volume..."
+	docker volume rm -f seizu_authentik_postgres_data
+	@echo "Done. Run 'make up' to recreate Authentik."
 
 .PHONY: seed_dashboard
 seed_dashboard:
@@ -87,7 +99,7 @@ generate_client: generate_openapi
 # Build the standalone Seizu server package (wheel + sdist). Output lands in dist/.
 .PHONY: build_server
 build_server:
-	docker compose run --rm seizu-node bun run build
+	docker compose run --rm --no-deps seizu-node bun run build
 	docker compose run --rm seizu uv build --package seizu --wheel
 
 # Build the separately releasable seizu-cli package (wheel + sdist).

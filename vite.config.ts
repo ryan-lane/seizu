@@ -17,8 +17,6 @@ export default defineConfig({
       output: {
         manualChunks(id) {
           if (id.includes('node_modules/@nivo')) return 'vendor-nivo';
-          if (id.includes('node_modules/@mui/icons-material')) return 'vendor-mui-icons';
-          if (id.includes('node_modules/@mui') || id.includes('node_modules/@emotion')) return 'vendor-mui';
           if (id.includes('node_modules/react') || id.includes('node_modules/react-dom') || id.includes('node_modules/react-router')) return 'vendor-react';
         },
       },

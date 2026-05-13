@@ -149,9 +149,11 @@ function DashboardSidebar({
           onClose={onMobileClose}
           open={openMobile}
           variant="temporary"
-          PaperProps={{
-            sx: {
-              width: DASHBOARD_SIDEBAR_EXPANDED_WIDTH
+          slotProps={{
+            paper: {
+              sx: {
+                width: DASHBOARD_SIDEBAR_EXPANDED_WIDTH
+              }
             }
           }}
         >
@@ -163,16 +165,18 @@ function DashboardSidebar({
           anchor="left"
           open
           variant="persistent"
-          PaperProps={{
-            sx: (theme) => ({
-              width: `var(${DASHBOARD_SIDEBAR_WIDTH_VAR})`,
-              top: 0,
-              height: '100%',
-              overflowX: 'hidden',
-              transition: theme.transitions.create('width', {
-                duration: theme.transitions.duration.shorter
+          slotProps={{
+            paper: {
+              sx: (theme) => ({
+                width: `var(${DASHBOARD_SIDEBAR_WIDTH_VAR})`,
+                top: 0,
+                height: '100%',
+                overflowX: 'hidden',
+                transition: theme.transitions.create('width', {
+                  duration: theme.transitions.duration.shorter
+                })
               })
-            })
+            }
           }}
         >
           {content(collapsed)}

@@ -1111,13 +1111,13 @@ function CypherGraph({
       <Card>
         {caption && (
           <>
-            <Grid container spacing={0} direction="column" alignItems="center">
+            <Grid container spacing={0} sx={{ flexDirection: 'column', alignItems: 'center' }}>
               <CardHeader title={caption} />
             </Grid>
             <Divider />
           </>
         )}
-        <Grid container spacing={0} direction="column" alignItems="center">
+        <Grid container spacing={0} sx={{ flexDirection: 'column', alignItems: 'center' }}>
           <CardContent>
             <Error />
             <Typography variant="body2">Missing cypher query</Typography>
@@ -1132,13 +1132,13 @@ function CypherGraph({
       <Card>
         {caption && (
           <>
-            <Grid container spacing={0} direction="column" alignItems="center">
+            <Grid container spacing={0} sx={{ flexDirection: 'column', alignItems: 'center' }}>
               <CardHeader title={caption} />
             </Grid>
             <Divider />
           </>
         )}
-        <Grid container spacing={0} direction="column" alignItems="center">
+        <Grid container spacing={0} sx={{ flexDirection: 'column', alignItems: 'center' }}>
           <CardContent>
             <Typography variant="body2" align="center">
               (Set {needInputs.join(', ')})
@@ -1162,14 +1162,14 @@ function CypherGraph({
       <Card>
         {caption && (
           <>
-            <Grid container direction="column" alignItems="center">
+            <Grid container sx={{ flexDirection: 'column', alignItems: 'center' }}>
               <CardHeader title={caption} />
             </Grid>
             <Divider />
           </>
         )}
         <QueryValidationBadge errors={queryErrors} warnings={warnings} />
-        <Grid container spacing={0} direction="column" alignItems="center">
+        <Grid container spacing={0} sx={{ flexDirection: 'column', alignItems: 'center' }}>
           <CardContent>
             <Typography variant="h4" align="center">N/A</Typography>
             <Typography variant="body2" align="center">Query validation failed</Typography>
@@ -1188,7 +1188,7 @@ function CypherGraph({
       <Card>
         {caption && (
           <>
-            <Grid container spacing={0} direction="column" alignItems="center">
+            <Grid container spacing={0} sx={{ flexDirection: 'column', alignItems: 'center' }}>
               <CardHeader title={caption} />
             </Grid>
             <Divider />
@@ -1202,7 +1202,7 @@ function CypherGraph({
               query returns graph data and that the MATCH clause finds data.
             </Typography>
           </Box>
-          <Typography variant="caption" color="text.secondary" display="block" gutterBottom>
+          <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }} gutterBottom>
             Supported return formats
           </Typography>
           <Box

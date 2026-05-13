@@ -341,8 +341,7 @@ function ReportsList() {
               to={`/app/reports/${report.report_id}`}
               underline="hover"
               color="inherit"
-              fontWeight="medium"
-              sx={{ flex: '1 1 auto', minWidth: 0, maxWidth: '100%', display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+              sx={{ flex: '1 1 auto', minWidth: 0, maxWidth: '100%', display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontWeight: 'medium' }}
             >
               {report.name}
             </Link>

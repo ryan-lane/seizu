@@ -8,14 +8,14 @@ import {
   Tooltip, Typography
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
-import AddCircleOutlineIcon from '@mui/icons-material/AddCircleOutline';
+import AddCircleOutlineIcon from '@mui/icons-material/AddCircle';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import DeleteIcon from '@mui/icons-material/Delete';
 import EditIcon from '@mui/icons-material/Edit';
 import HistoryIcon from '@mui/icons-material/History';
 import MoreVertIcon from '@mui/icons-material/MoreVert';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
-import RemoveCircleOutlineIcon from '@mui/icons-material/RemoveCircleOutline';
+import RemoveCircleOutlineIcon from '@mui/icons-material/RemoveCircle';
 import ToggleOnIcon from '@mui/icons-material/ToggleOn';
 import ToggleOffIcon from '@mui/icons-material/ToggleOff';
 import Error from '@mui/icons-material/Error';
@@ -449,7 +449,7 @@ function SkillRenderDialog({ skill, onClose, onRender }: {
                     required={param.required}
                     size="small"
                     type={param.type === 'integer' || param.type === 'float' ? 'number' : 'text'}
-                    inputProps={param.type === 'integer' ? { step: 1 } : param.type === 'float' ? { step: 'any' } : undefined}
+                    slotProps={{ htmlInput: param.type === 'integer' ? { step: 1 } : param.type === 'float' ? { step: 'any' } : undefined }}
                   />
                 )}
                 <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', mt: 0.75, flexWrap: 'wrap' }}>
@@ -529,9 +529,8 @@ function SkillsetSkills() {
       render: (skill) => (
         <Typography
           variant="body2"
-          fontWeight={500}
           sx={[
-            { cursor: 'pointer', '&:hover': { textDecoration: 'underline' } },
+            { cursor: 'pointer', fontWeight: 500, '&:hover': { textDecoration: 'underline' } },
             listTableTruncateSx
           ]}
           onClick={() => setDetailTarget(skill)}

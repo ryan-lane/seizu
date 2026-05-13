@@ -277,8 +277,10 @@ export default function QueryConsole() {
                     boxSizing: 'border-box',
                   },
                 }}
-                inputProps={{
-                  style: { fontFamily: 'monospace', fontSize: 13 }
+                slotProps={{
+                  htmlInput: {
+                    style: { fontFamily: 'monospace', fontSize: 13 }
+                  }
                 }}
               />
               <Box

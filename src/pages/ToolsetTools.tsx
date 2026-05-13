@@ -28,15 +28,15 @@ import {
   Typography
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
-import AddCircleOutlineIcon from '@mui/icons-material/AddCircleOutline';
+import AddCircleOutlineIcon from '@mui/icons-material/AddCircle';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import BadgeIcon from '@mui/icons-material/Badge';
 import DeleteIcon from '@mui/icons-material/Delete';
 import EditIcon from '@mui/icons-material/Edit';
 import HistoryIcon from '@mui/icons-material/History';
 import MoreVertIcon from '@mui/icons-material/MoreVert';
-import RemoveCircleOutlineIcon from '@mui/icons-material/RemoveCircleOutline';
-import PersonOutlineIcon from '@mui/icons-material/PersonOutline';
+import RemoveCircleOutlineIcon from '@mui/icons-material/RemoveCircle';
+import PersonOutlineIcon from '@mui/icons-material/Person';
 import ToggleOnIcon from '@mui/icons-material/ToggleOn';
 import ToggleOffIcon from '@mui/icons-material/ToggleOff';
 import Error from '@mui/icons-material/Error';
@@ -261,7 +261,7 @@ function ToolDialog({ open, onClose, onSave, initial }: ToolDialogProps) {
             required
             multiline
             minRows={5}
-            inputProps={{ style: { fontFamily: 'monospace', fontSize: 13 } }}
+            slotProps={{ htmlInput: { style: { fontFamily: 'monospace', fontSize: 13 } } }}
           />
           <FormControlLabel
             control={<Switch checked={enabled} onChange={(e) => setEnabled(e.target.checked)} />}
@@ -520,9 +520,8 @@ function ToolsetTools() {
       render: (item) => (
         <Typography
           variant="body2"
-          fontWeight={500}
           sx={[
-            { cursor: 'pointer', '&:hover': { textDecoration: 'underline' } },
+            { cursor: 'pointer', fontWeight: 500, '&:hover': { textDecoration: 'underline' } },
             listTableTruncateSx
           ]}
           onClick={() =>

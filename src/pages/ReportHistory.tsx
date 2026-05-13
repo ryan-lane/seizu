@@ -140,7 +140,7 @@ function ReportHistory() {
             state={versionBackState}
             underline="hover"
             color="inherit"
-            fontWeight={isCurrent ? 'bold' : 'medium'}
+            sx={{ fontWeight: isCurrent ? 'bold' : 'medium' }}
           >
               v{version.version}
             </Link>

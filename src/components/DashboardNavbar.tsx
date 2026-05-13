@@ -115,7 +115,7 @@ function DashboardNavbar({
               slotProps={{ paper: { sx: { minWidth: 220 } } }}
             >
               <Box sx={{ px: 2, py: 1 }}>
-                <Typography variant="body2" fontWeight={600}>
+                <Typography variant="body2" sx={{ fontWeight: 600 }}>
                   {userName}
                 </Typography>
               </Box>

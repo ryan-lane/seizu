@@ -75,7 +75,7 @@ function ParamRow({
   onDelete: () => void;
 }) {
   return (
-    <Stack direction="row" spacing={1} alignItems="center">
+    <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
       <TextField
         size="small"
         label="Name"
@@ -116,7 +116,7 @@ function ColumnRow({
   onDelete: () => void;
 }) {
   return (
-    <Stack direction="row" spacing={1} alignItems="center">
+    <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
       <TextField
         size="small"
         label="Field name"
@@ -455,7 +455,7 @@ function PanelEditor({ open, panel, onClose, onSave, availableVariables }: Panel
               <Divider />
               <Box>
                 <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
-                  <Typography variant="body2" fontWeight="medium">
+                  <Typography variant="body2" sx={{ fontWeight: 'medium' }}>
                     Parameters
                   </Typography>
                   <Button
@@ -494,7 +494,7 @@ function PanelEditor({ open, panel, onClose, onSave, availableVariables }: Panel
               <Divider />
               <Box>
                 <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
-                  <Typography variant="body2" fontWeight="medium">
+                  <Typography variant="body2" sx={{ fontWeight: 'medium' }}>
                     Columns (leave empty to auto-detect)
                   </Typography>
                   <Button

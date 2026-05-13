@@ -184,7 +184,7 @@ function EditablePanelCard({ panel, onEdit, onDelete, moveTargetRows, onMoveToRo
         bgcolor: 'background.paper'
       }}
     >
-      <Stack direction="row" spacing={0.5} alignItems="center" flexWrap="wrap" sx={{ flexShrink: 0 }}>
+      <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center', flexWrap: 'wrap', flexShrink: 0 }}>
         <PanelTypeChip type={panel.type} />
         {panel.caption && (
           <Typography variant="caption" noWrap sx={{ maxWidth: 150 }}>
@@ -297,7 +297,7 @@ function InputCard({ input, onEdit, onDelete, onResize }: InputCardProps) {
       sx={{ p: 1.5, display: 'flex', alignItems: 'center', gap: 1 }}
     >
       <Box sx={{ flex: 1, minWidth: 0 }}>
-        <Stack direction="row" spacing={0.5} alignItems="center" flexWrap="wrap">
+        <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center', flexWrap: 'wrap' }}>
           <Chip
             label={input.type}
             size="small"
@@ -424,14 +424,14 @@ function InputEditorDialog({ open, input, onClose, onSave }: InputEditorDialogPr
                 multiline minRows={3}
                 value={form.cypher ?? ''}
                 onChange={(e) => set('cypher', e.target.value || undefined)}
-                inputProps={{ style: { fontFamily: 'monospace', fontSize: '0.8rem' } }}
+                slotProps={{ htmlInput: { style: { fontFamily: 'monospace', fontSize: '0.8rem' } } }}
                 helperText="Query to populate the dropdown. Must return a 'value' column."
               />
             </>
           )}
 
           <Divider />
-          <Typography variant="body2" fontWeight="medium">Default value</Typography>
+          <Typography variant="body2" sx={{ fontWeight: 'medium' }}>Default value</Typography>
           <Stack direction="row" spacing={1}>
             <TextField
               size="small" label="Default label"
@@ -514,7 +514,7 @@ function QueryRow({ queryKey, value, onRename, onValueChange, onDraftValueChange
             setLocalKey(queryKey); // revert if empty or unchanged
           }
         }}
-        inputProps={{ 'data-query-key': queryKey }}
+        slotProps={{ htmlInput: { 'data-query-key': queryKey } }}
         sx={{ width: 220, flexShrink: 0 }}
         helperText="Used as cypher field in panels"
       />
@@ -532,7 +532,7 @@ function QueryRow({ queryKey, value, onRename, onValueChange, onDraftValueChange
           if (localValue !== value) onValueChange(queryKey, localValue);
         }}
         sx={{ flex: 1 }}
-        inputProps={{ 'data-query-value': queryKey, style: { fontFamily: 'monospace', fontSize: '0.8rem' } }}
+        slotProps={{ htmlInput: { 'data-query-value': queryKey, style: { fontFamily: 'monospace', fontSize: '0.8rem' } } }}
       />
       <Tooltip title="Delete query">
         <IconButton onClick={() => onDelete(queryKey)} size="small" sx={{ mt: 0.5 }}>
@@ -587,7 +587,7 @@ const EditToolbar = memo(function EditToolbar({
         gap: 1.5
       }}
     >
-      <Typography variant="body2" fontWeight="medium" sx={{ flexShrink: 0 }}>
+      <Typography variant="body2" sx={{ fontWeight: 'medium', flexShrink: 0 }}>
         Editing report
       </Typography>
       <TextField
@@ -1164,7 +1164,7 @@ function EditableReportView({ report, reportId: _reportId, onSave, onCancel }: E
         <Accordion variant="outlined" disableGutters defaultExpanded>
           <AccordionSummary expandIcon={<ExpandMoreIcon />}>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-              <Typography variant="body2" fontWeight="medium">
+              <Typography variant="body2" sx={{ fontWeight: 'medium' }}>
                 Named Queries
               </Typography>
               <Chip
@@ -1191,7 +1191,7 @@ function EditableReportView({ report, reportId: _reportId, onSave, onCancel }: E
         <Accordion variant="outlined" disableGutters defaultExpanded>
           <AccordionSummary expandIcon={<ExpandMoreIcon />}>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-              <Typography variant="body2" fontWeight="medium">
+              <Typography variant="body2" sx={{ fontWeight: 'medium' }}>
                 Inputs
               </Typography>
               <Chip

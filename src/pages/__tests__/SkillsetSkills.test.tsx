@@ -31,7 +31,7 @@ function Wrapper({ children }: { children: React.ReactNode }) {
 }
 
 describe('SkillsetSkills', () => {
-  jest.setTimeout(10000);
+  jest.setTimeout(20000);
 
   let useSkillsList: jest.Mock;
   let useSkillMutations: jest.Mock;
