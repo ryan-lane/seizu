@@ -15,6 +15,7 @@ members = [
     "seizu",
     "seizu-cli",
 ]
+constraints = [{ name = "urllib3", specifier = ">=2.7.0" }]
 
 [[package]]
 name = "aiosqlite"
