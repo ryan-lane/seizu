@@ -33,6 +33,7 @@ import Download from '@mui/icons-material/Download';
 
 import { useLazyCypherQuery, QueryRecord } from 'src/hooks/useCypherQuery';
 import { TablePanelSkeleton } from 'src/components/reports/PanelLoadingSkeletons';
+import { getCspNonce } from 'src/cspNonce';
 
 /**
  * Format any value for display in a table cell.
@@ -379,6 +380,7 @@ export default function CypherTable({
   onTokenExpired,
   preloadedRecords,
 }: CypherTableProps) {
+  const cspNonce = getCspNonce();
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [expandOpen, setExpandOpen] = useState(false);
   const [density, setDensity] = useState<GridDensity>('compact');
@@ -537,6 +539,7 @@ export default function CypherTable({
         <DataGrid
           rows={rows}
           columns={gridColumns}
+          nonce={cspNonce}
           getRowId={(row) => row.__rowId}
           density={density}
           disableColumnMenu
