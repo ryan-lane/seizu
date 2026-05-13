@@ -69,6 +69,8 @@ describe('ReportsList', () => {
   let mockUseReportsMutations: jest.Mock;
   let refreshReports: jest.Mock;
   let cloneReport: jest.Mock;
+  let updateReportVisibility: jest.Mock;
+  let deleteReport: jest.Mock;
 
   beforeEach(() => {
     jest.clearAllMocks();
@@ -81,6 +83,8 @@ describe('ReportsList', () => {
       report_id: 'clone1',
       name: 'Copy of Executive Risk',
     });
+    updateReportVisibility = jest.fn();
+    deleteReport = jest.fn();
     mockUsePermissionState.mockReturnValue({
       hasPermission: (permission: string) => ['reports:write', 'reports:delete', 'reports:set_dashboard'].includes(permission),
       loading: false,
@@ -116,8 +120,8 @@ describe('ReportsList', () => {
       saveReportVersion: jest.fn(),
       setDashboardReport: jest.fn(),
       pinReport: jest.fn(),
-      updateReportVisibility: jest.fn(),
-      deleteReport: jest.fn(),
+      updateReportVisibility,
+      deleteReport,
     });
   });
 
@@ -168,5 +172,32 @@ describe('ReportsList', () => {
     await waitFor(() => {
       expect(screen.getByTestId('location')).toHaveTextContent('/app/reports/clone1?edit=true');
     });
+  }, 15_000);
+
+  it('shows an error dialog when unpublishing is rejected', async () => {
+    updateReportVisibility.mockRejectedValue(new Error('Report must be unpinned and removed from the dashboard before it can be made private'));
+    const user = userEvent.setup({ delay: null });
+    render(<ReportsList />, { wrapper: Wrapper });
+
+    await user.click(screen.getAllByLabelText('More actions')[0]);
+    await user.click(screen.getByRole('menuitem', { name: /unpublish/i }));
+
+    expect(updateReportVisibility).toHaveBeenCalledWith('r1', 'private');
+    expect(await screen.findByRole('dialog', { name: 'Could not unpublish report' })).toBeInTheDocument();
+    expect(screen.getByText('Report must be unpinned and removed from the dashboard before it can be made private')).toBeInTheDocument();
+  }, 15_000);
+
+  it('shows the delete failure in the confirmation dialog', async () => {
+    deleteReport.mockRejectedValue(new Error('Report must be unpinned before it can be deleted'));
+    const user = userEvent.setup({ delay: null });
+    render(<ReportsList />, { wrapper: Wrapper });
+
+    await user.click(screen.getAllByLabelText('More actions')[0]);
+    await user.click(screen.getByRole('menuitem', { name: /delete/i }));
+    await user.click(screen.getByRole('button', { name: 'Delete' }));
+
+    expect(deleteReport).toHaveBeenCalledWith('r1');
+    expect(await screen.findByRole('dialog', { name: 'Delete report?' })).toBeInTheDocument();
+    expect(screen.getByText('Report must be unpinned before it can be deleted')).toBeInTheDocument();
   }, 15_000);
 });

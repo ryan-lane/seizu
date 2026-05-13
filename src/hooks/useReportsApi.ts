@@ -73,6 +73,19 @@ function getApiHeaders(accessToken: string | null): Record<string, string> {
   return headers;
 }
 
+async function errorMessage(res: Response, fallback: string): Promise<string> {
+  const data = await res.json().catch(() => ({}));
+  const detail = (data as { detail?: unknown }).detail;
+  if (typeof detail === 'string' && detail.trim()) return detail;
+  const error = (data as { error?: unknown }).error;
+  if (typeof error === 'string' && error.trim()) return error;
+  const errors = (data as { errors?: unknown }).errors;
+  if (Array.isArray(errors) && errors.every((error) => typeof error === 'string')) {
+    return errors.join(', ');
+  }
+  return fallback;
+}
+
 const REPORTS_UPDATED = 'seizu:reports-updated';
 
 function broadcastReportsUpdated() {
@@ -401,7 +414,7 @@ export function useReportsMutations(): {
         },
         body: JSON.stringify({ access: { scope } })
       });
-      if (!res.ok) throw new Error(`Failed to update report visibility: ${res.status}`);
+      if (!res.ok) throw new Error(await errorMessage(res, `Failed to update report visibility: ${res.status}`));
       return res.json();
     },
     [accessToken]
@@ -439,7 +452,7 @@ export function useReportsMutations(): {
         method: 'DELETE',
         headers: getApiHeaders(accessToken)
       });
-      if (!res.ok) throw new Error(`Failed to delete report: ${res.status}`);
+      if (!res.ok) throw new Error(await errorMessage(res, `Failed to delete report: ${res.status}`));
     },
     [accessToken]
   );
