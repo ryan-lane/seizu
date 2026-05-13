@@ -1,6 +1,6 @@
-FROM python:3.14-slim-bookworm AS base
+FROM python:3.14-slim-bookworm@sha256:a3974109d36f164ca70024bc0d0828ac706e4ccda849f8638d879e91f79e90ec AS base
 
-COPY --from=ghcr.io/astral-sh/uv:0.11.1 /uv /uvx /usr/local/bin/
+COPY --from=ghcr.io/astral-sh/uv:0.11.1@sha256:fc93e9ecd7218e9ec8fba117af89348eef8fd2463c50c13347478769aaedd0ce /uv /uvx /usr/local/bin/
 
 RUN groupadd seizu && \
     useradd -s /bin/bash -d /home/seizu -m -g seizu seizu
@@ -29,7 +29,7 @@ COPY . .
 
 EXPOSE 8080
 
-FROM oven/bun AS nodebuilder
+FROM oven/bun:latest@sha256:87416c977a612a204eb54ab9f3927023c2a3c971f4f345a01da08ea6262ae30e AS nodebuilder
 
 WORKDIR /home/node/seizu
 
