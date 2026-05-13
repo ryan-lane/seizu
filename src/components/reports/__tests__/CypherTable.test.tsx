@@ -68,6 +68,25 @@ describe('CypherTable', () => {
     ).toBeInTheDocument();
   });
 
+  it('shows needInputs message instead of no columns when columns are not configured', () => {
+    useLazyCypherQuery.mockReturnValue([
+      mockRunQuery,
+      { ...defaultState }
+    ]);
+    render(
+      <Wrapper>
+        <CypherTable
+          cypher="MATCH (n) RETURN n"
+          needInputs={['environment']}
+        />
+      </Wrapper>
+    );
+    expect(
+      screen.getByText(/select environment to load results/i)
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/no columns/i)).not.toBeInTheDocument();
+  });
+
   it('shows error message when query fails', () => {
     useLazyCypherQuery.mockReturnValue([
       mockRunQuery,

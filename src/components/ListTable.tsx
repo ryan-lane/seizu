@@ -493,8 +493,7 @@ export default function ListTable<T>({
         <Stack
           direction="row"
           spacing={1}
-          alignItems={searchOpen ? 'flex-start' : 'center'}
-          sx={{ minWidth: 0 }}
+          sx={{ alignItems: searchOpen ? 'flex-start' : 'center', minWidth: 0 }}
         >
           <Tooltip title={searchLabel} placement="top" arrow>
             <IconButton
@@ -532,19 +531,21 @@ export default function ListTable<T>({
                       closeSearch();
                     }
                   }}
-                  InputProps={{
-                    endAdornment: filterText ? (
-                      <InputAdornment position="end">
-                        <IconButton
-                          aria-label="Clear search"
-                          edge="end"
-                          onClick={() => setFilterText('')}
-                          size="small"
-                        >
-                          <Clear fontSize="small" />
-                        </IconButton>
-                      </InputAdornment>
-                    ) : undefined
+                  slotProps={{
+                    input: {
+                      endAdornment: filterText ? (
+                        <InputAdornment position="end">
+                          <IconButton
+                            aria-label="Clear search"
+                            edge="end"
+                            onClick={() => setFilterText('')}
+                            size="small"
+                          >
+                            <Clear fontSize="small" />
+                          </IconButton>
+                        </InputAdornment>
+                      ) : undefined
+                    }
                   }}
                 />
               </Box>

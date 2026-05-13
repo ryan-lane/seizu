@@ -30,7 +30,7 @@ import DeleteIcon from '@mui/icons-material/Delete';
 import EditIcon from '@mui/icons-material/Edit';
 import HistoryIcon from '@mui/icons-material/History';
 import MoreVertIcon from '@mui/icons-material/MoreVert';
-import PersonOutlineIcon from '@mui/icons-material/PersonOutline';
+import PersonOutlineIcon from '@mui/icons-material/Person';
 import VisibilityIcon from '@mui/icons-material/Visibility';
 import Error from '@mui/icons-material/Error';
 import {
@@ -236,7 +236,7 @@ function RoleDetailDialog({ role, onClose }: RoleDetailDialogProps) {
               <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
                 {Object.entries(groups).map(([group, permissions]) => (
                   <Box key={group}>
-                    <Typography variant="body2" fontWeight={700} sx={{ textTransform: 'capitalize', mb: 0.75 }}>
+                    <Typography variant="body2" sx={{ fontWeight: 700, textTransform: 'capitalize', mb: 0.75 }}>
                       {permissionLabel(group)}
                     </Typography>
                     <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.75 }}>
@@ -370,7 +370,7 @@ function RoleDialog({ open, onClose, onSave, initial, availablePermissions }: Ro
               >
                 {Object.entries(groups).map(([group, groupPermissions]) => (
                   <Paper key={group} variant="outlined" sx={{ p: 1.5 }}>
-                    <Typography variant="body2" fontWeight={700} sx={{ textTransform: 'capitalize', mb: 0.5 }}>
+                    <Typography variant="body2" sx={{ fontWeight: 700, textTransform: 'capitalize', mb: 0.5 }}>
                       {permissionLabel(group)}
                     </Typography>
                     <Box sx={{ display: 'flex', flexDirection: 'column' }}>

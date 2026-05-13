@@ -125,8 +125,7 @@ function ScheduledQueryHistory() {
         return (
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
             <Typography
-              fontWeight={isCurrent ? 'bold' : 'medium'}
-              sx={{ cursor: 'pointer', '&:hover': { textDecoration: 'underline' } }}
+              sx={{ cursor: 'pointer', fontWeight: isCurrent ? 'bold' : 'medium', '&:hover': { textDecoration: 'underline' } }}
               onClick={() =>
                 setDetailData({
                   name: version.name,

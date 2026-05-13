@@ -126,7 +126,7 @@ export default function ScheduledQueryDetailDialog({ open, onClose, data }: Prop
                     key={i}
                     sx={{ border: '1px solid', borderColor: 'error.light', borderRadius: 1, p: 1.5 }}
                   >
-                    <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 0.5 }}>
+                    <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>
                       {new Date(err.timestamp).toLocaleString()}
                     </Typography>
                     <Box
@@ -156,7 +156,7 @@ export default function ScheduledQueryDetailDialog({ open, onClose, data }: Prop
             {data.watch_scans.length > 0 && (
               <Box sx={{ mt: 0.5 }}>
                 {data.watch_scans.map((ws, i) => (
-                  <Typography key={i} variant="caption" color="text.secondary" display="block">
+                  <Typography key={i} variant="caption" color="text.secondary" sx={{ display: 'block' }}>
                     grouptype: {ws.grouptype ?? '*'} &nbsp;·&nbsp; syncedtype: {ws.syncedtype ?? '*'} &nbsp;·&nbsp; groupid: {ws.groupid ?? '*'}
                   </Typography>
                 ))}
@@ -213,7 +213,7 @@ export default function ScheduledQueryDetailDialog({ open, onClose, data }: Prop
                     key={i}
                     sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 1, p: 1.5 }}
                   >
-                    <Typography variant="body2" fontWeight={600} sx={{ mb: 0.5 }}>
+                    <Typography variant="body2" sx={{ fontWeight: 600, mb: 0.5 }}>
                       {a.action_type}
                     </Typography>
                     {Object.keys(a.action_config).length > 0 && (

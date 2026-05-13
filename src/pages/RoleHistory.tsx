@@ -141,7 +141,7 @@ function RoleHistory() {
         const isCurrent = version.version === latestVersion;
         return (
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-            <Typography fontWeight={isCurrent ? 'bold' : 'medium'}>
+            <Typography sx={{ fontWeight: isCurrent ? 'bold' : 'medium' }}>
               v{version.version}
             </Typography>
             {isCurrent && (

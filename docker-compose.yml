@@ -54,7 +54,10 @@ services:
       POSTGRES_USER: seizu
       POSTGRES_PASSWORD: seizu
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      # Postgres 18+ stores cluster data under a major-version-specific
+      # subdirectory below /var/lib/postgresql. Mount the parent directory so
+      # the image can manage that layout.
+      - postgres_data:/var/lib/postgresql
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U seizu"]
       interval: 10s
@@ -127,7 +130,8 @@ services:
       POSTGRES_USER: authentik
       POSTGRES_PASSWORD: authentik
     volumes:
-      - authentik_postgres_data:/var/lib/postgresql/data
+      # Match the Postgres 18+ volume layout used by the official image.
+      - authentik_postgres_data:/var/lib/postgresql
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U authentik"]
       interval: 10s

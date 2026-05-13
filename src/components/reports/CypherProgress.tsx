@@ -135,13 +135,13 @@ export default function CypherProgress({
       <Card sx={fillCardSx}>
         {caption && (
           <>
-            <Grid container spacing={0} direction="column" alignItems="center">
+            <Grid container spacing={0} sx={{ flexDirection: 'column', alignItems: 'center' }}>
               <CardHeader title={caption} />
             </Grid>
             <Divider />
           </>
         )}
-        <Grid container spacing={0} direction="column" alignItems="center" sx={fillBodySx}>
+        <Grid container spacing={0} sx={[fillBodySx, { flexDirection: 'column', alignItems: 'center' }]}>
           <CardContent>
             <Error />
             <Typography variant="body2">Missing cypher query</Typography>
@@ -156,13 +156,13 @@ export default function CypherProgress({
       <Card sx={fillCardSx}>
         {caption && (
           <>
-            <Grid container spacing={0} direction="column" alignItems="center">
+            <Grid container spacing={0} sx={{ flexDirection: 'column', alignItems: 'center' }}>
               <CardHeader title={caption} />
             </Grid>
             <Divider />
           </>
         )}
-        <Grid container spacing={0} direction="column" alignItems="center" sx={fillBodySx}>
+        <Grid container spacing={0} sx={[fillBodySx, { flexDirection: 'column', alignItems: 'center' }]}>
           <CardContent>
             <Typography variant="h4" align="center">
               N/A
@@ -190,14 +190,14 @@ export default function CypherProgress({
       <Card sx={fillCardSx}>
         {caption && (
           <>
-            <Grid container direction="column" alignItems="center">
+            <Grid container sx={{ flexDirection: 'column', alignItems: 'center' }}>
               <CardHeader title={caption} />
             </Grid>
             <Divider />
           </>
         )}
         <QueryValidationBadge errors={queryErrors} warnings={warnings} />
-        <Grid container spacing={0} direction="column" alignItems="center" sx={fillBodySx}>
+        <Grid container spacing={0} sx={[fillBodySx, { flexDirection: 'column', alignItems: 'center' }]}>
           <CardContent>
             <Typography variant="h4" align="center">N/A</Typography>
             <Typography variant="body2" align="center">Query validation failed</Typography>
@@ -216,13 +216,13 @@ export default function CypherProgress({
       <Card sx={fillCardSx}>
         {caption && (
           <>
-            <Grid container spacing={0} direction="column" alignItems="center">
+            <Grid container spacing={0} sx={{ flexDirection: 'column', alignItems: 'center' }}>
               <CardHeader title={caption} />
             </Grid>
             <Divider />
           </>
         )}
-        <Grid container spacing={0} direction="column" alignItems="center" sx={fillBodySx}>
+        <Grid container spacing={0} sx={[fillBodySx, { flexDirection: 'column', alignItems: 'center' }]}>
           <CardContent>
             <Typography variant="h4">N/A</Typography>
           </CardContent>
@@ -281,7 +281,7 @@ export default function CypherProgress({
         </IconButton>
         {caption && (
           <>
-            <Grid container direction="column" alignItems="center">
+            <Grid container sx={{ flexDirection: 'column', alignItems: 'center' }}>
               <CardHeader title={caption} />
             </Grid>
             <Divider />

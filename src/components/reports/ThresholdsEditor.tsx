@@ -99,7 +99,7 @@ function ColorSwatchPicker({ color, onChange }: ColorSwatchPickerProps) {
               value={color}
               onChange={(e) => onChange(e.target.value)}
               placeholder="#FFFFFF"
-              inputProps={{ style: { fontFamily: 'monospace', fontSize: '0.75rem' }, 'aria-label': 'Hex color' }}
+              slotProps={{ htmlInput: { style: { fontFamily: 'monospace', fontSize: '0.75rem' }, 'aria-label': 'Hex color' } }}
               sx={{ width: 100 }}
             />
           </Box>
@@ -145,7 +145,7 @@ function ThresholdRow({ threshold, onChange, onDelete }: ThresholdRowProps) {
   }, [threshold.value]);
 
   return (
-    <Stack direction="row" spacing={1} alignItems="center">
+    <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
       <TextField
         size="small"
         type="text"
@@ -210,7 +210,7 @@ function ThresholdsEditor({ thresholds, onChange, helperText }: ThresholdsEditor
 
   return (
     <Box>
-      <Typography gutterBottom variant="body2" fontWeight="medium">
+      <Typography gutterBottom variant="body2" sx={{ fontWeight: 'medium' }}>
         Thresholds
       </Typography>
       {helperText && (

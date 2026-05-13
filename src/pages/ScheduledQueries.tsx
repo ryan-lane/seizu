@@ -35,14 +35,14 @@ import BadgeIcon from '@mui/icons-material/Badge';
 import CancelOutlinedIcon from '@mui/icons-material/CancelOutlined';
 import DeleteIcon from '@mui/icons-material/Delete';
 import EditIcon from '@mui/icons-material/Edit';
-import ErrorOutlineIcon from '@mui/icons-material/ErrorOutline';
-import HelpOutlineIcon from '@mui/icons-material/HelpOutline';
-import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline';
+import ErrorOutlineIcon from '@mui/icons-material/Error';
+import HelpOutlineIcon from '@mui/icons-material/Help';
+import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircle';
 import FiberManualRecordIcon from '@mui/icons-material/FiberManualRecord';
 import HistoryIcon from '@mui/icons-material/History';
 import MoreVertIcon from '@mui/icons-material/MoreVert';
-import AddCircleOutlineIcon from '@mui/icons-material/AddCircleOutline';
-import RemoveCircleOutlineIcon from '@mui/icons-material/RemoveCircleOutline';
+import AddCircleOutlineIcon from '@mui/icons-material/AddCircle';
+import RemoveCircleOutlineIcon from '@mui/icons-material/RemoveCircle';
 import ToggleOnIcon from '@mui/icons-material/ToggleOn';
 import ToggleOffIcon from '@mui/icons-material/ToggleOff';
 import Error from '@mui/icons-material/Error';
@@ -199,7 +199,7 @@ function ActionConfigField({ field, value, onChange }: ActionConfigFieldProps) {
         multiline
         minRows={3}
         helperText={field.description}
-        inputProps={{ style: { fontFamily: 'monospace', fontSize: 12 } }}
+        slotProps={{ htmlInput: { style: { fontFamily: 'monospace', fontSize: 12 } } }}
       />
     );
   }
@@ -399,7 +399,7 @@ function ScheduledQueryDialog({
             required
             multiline
             minRows={4}
-            inputProps={{ style: { fontFamily: 'monospace', fontSize: 13 } }}
+            slotProps={{ htmlInput: { style: { fontFamily: 'monospace', fontSize: 13 } } }}
           />
           <FormControlLabel
             control={<Switch checked={enabled} onChange={(e) => setEnabled(e.target.checked)} />}
@@ -426,7 +426,7 @@ function ScheduledQueryDialog({
               type="number"
               value={frequency}
               onChange={(e) => setFrequency(e.target.value)}
-              inputProps={{ min: 1 }}
+              slotProps={{ htmlInput: { min: 1 } }}
               sx={{ maxWidth: 220 }}
             />
           )}
@@ -780,9 +780,8 @@ function ScheduledQueries() {
         <Box sx={{ minWidth: 0 }}>
           <Typography
             variant="body2"
-            fontWeight={500}
             sx={[
-              { cursor: 'pointer', '&:hover': { textDecoration: 'underline' } },
+              { cursor: 'pointer', fontWeight: 500, '&:hover': { textDecoration: 'underline' } },
               listTableTruncateSx
             ]}
             onClick={() => setDetailItem({

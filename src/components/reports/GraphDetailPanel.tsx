@@ -187,7 +187,7 @@ export default function GraphDetailPanel({ type, data }: GraphDetailPanelProps) 
 
   return (
     <Box>
-      <Typography variant="overline" color="text.secondary" display="block" gutterBottom>
+      <Typography variant="overline" color="text.secondary" sx={{ display: 'block' }} gutterBottom>
         {type === 'node' ? 'Node' : 'Relationship'}
       </Typography>
       <DetailSection title="Metadata" entries={metadataEntries(type, data)} formatMetadataKeys />
@@ -231,7 +231,7 @@ export function GraphSummaryPanel({ nodes, links, nodeGroupKey, getColor }: Grap
 
   return (
     <Box>
-      <Typography variant="overline" color="text.secondary" display="block" gutterBottom>
+      <Typography variant="overline" color="text.secondary" sx={{ display: 'block' }} gutterBottom>
         Graph Overview
       </Typography>
 

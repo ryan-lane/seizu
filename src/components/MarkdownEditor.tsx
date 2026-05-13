@@ -228,7 +228,7 @@ function MarkdownEditorInner({
 
   return (
     <Box>
-      <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1 }}>
+      <Stack direction="row" spacing={1} sx={{ alignItems: 'center', mb: 1 }}>
         <ToggleButtonGroup
           size="small"
           exclusive
@@ -292,7 +292,7 @@ function MarkdownEditorInner({
             </ToolbarButton>
             <Divider orientation="vertical" flexItem sx={{ mx: 0.5 }} />
             <Select
-              inputProps={{ 'aria-label': 'Heading level' }}
+              slotProps={{ input: { 'aria-label': 'Heading level' } }}
               value={getHeadingValue(editor)}
               onChange={(e) => applyHeading(e.target.value as string)}
               size="small"
