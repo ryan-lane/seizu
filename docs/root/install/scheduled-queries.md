@@ -221,8 +221,34 @@ Custom actions can be included through Python modules, configured via the `SCHED
 
 The module must implement the `ModuleInterface`:
 
-.. literalinclude:: ../../../reporting/scheduled_query_modules/__init__.py
-    :pyobject: ModuleInterface
+```python
+from typing import Any
+
+from reporting.schema.report_config import ActionConfigFieldDef
+from reporting.schema.reporting_config import ScheduledQueryAction
+
+
+class ModuleInterface:
+    @staticmethod
+    def action_name() -> str:
+        return ""
+
+    @staticmethod
+    async def setup() -> None:
+        return
+
+    @staticmethod
+    def action_config_schema() -> list[ActionConfigFieldDef]:
+        return []
+
+    @staticmethod
+    def handle_results(
+        scheduled_query_id: str,
+        action: ScheduledQueryAction,
+        results: list[dict[str, Any]],
+    ) -> None:
+        return
+```
 
 Key methods:
 
@@ -262,12 +288,18 @@ _SLACK_OAUTH_BOT_TOKEN = str_env("SLACK_OAUTH_BOT_TOKEN")
 
 ## Run the Scheduled Queries Worker
 
-The worker can be run directly:
+For packaged installs, run the worker with the installed console script:
+
+```bash
+seizu-scheduled-queries
+```
+
+When working from a source checkout, the equivalent module command is:
 
 ```bash
 python -m reporting.scheduled_queries
 ```
 
-Or via Docker Compose (the `seizu-scheduled-queries` service).
+In the Docker quickstart, Docker Compose runs the same worker as the `seizu-scheduled-queries` service.
 
 The worker runs continuously until terminated.

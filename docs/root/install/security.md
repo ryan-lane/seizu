@@ -50,7 +50,7 @@ Use built-in roles conservatively:
 |------|-----|
 | `seizu-viewer` | Read reports and dashboard. No ad-hoc query console or query history access. |
 | `seizu-editor` | Viewer plus report authoring. |
-| `seizu-admin` | Editor plus toolsets, scheduled queries, roles, and administrative objects. |
+| `seizu-admin` | Editor plus toolsets, tools, skillsets, skills, scheduled queries, roles, and administrative objects. |
 
 Recommended settings:
 
@@ -162,7 +162,7 @@ Recommendations:
 
 ## Report Store And Secrets
 
-Reports, scheduled queries, roles, toolsets, and tool definitions are stored in the report store. Protect that store as configuration state, not as disposable cache.
+Reports, scheduled queries, roles, toolsets, tools, skillsets, and skills are stored in the report store. Protect that store as configuration state, not as disposable cache.
 
 Recommendations:
 

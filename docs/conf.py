@@ -163,7 +163,9 @@ html_favicon = "images/favicon.svg"
 # Contents of `images/` are exposed under `_static/` so the Shibuya theme's
 # `light_logo` / `dark_logo` options (which resolve paths via `pathto`) can
 # reference them without moving the files out of their source location.
-html_static_path = ["images"]
+html_static_path = ["images", "_static"]
+
+html_css_files = ["seizu-theme.css"]
 
 # html_style = 'css/seizu.css'
 

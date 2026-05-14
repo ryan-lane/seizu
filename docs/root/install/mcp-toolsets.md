@@ -277,6 +277,6 @@ http://localhost:8888/callback
 
 Without this, the OAuth handshake will be rejected. For the development Authentik stack this is pre-configured automatically by the blueprint. For any other OIDC provider (Authentik in production, Okta, Keycloak, etc.) you must add it manually.
 
-> **VM / remote development:** If Claude is running on the VM, its OAuth callback server binds to port **8888 on the VM**. Authentik redirects the browser (on your local machine) to `http://localhost:8888/callback`, which means your local machine's port 8888 must be tunnelled to the VM. Add `-L 8888:localhost:8888` to your SSH tunnel command alongside the other ports — see the [quickstart](../dev/docker-compose.html#running-on-a-vm-or-remote-host) for the full tunnel commands.
+> **VM / remote development:** If Claude is running on the VM, its OAuth callback server binds to port **8888 on the VM**. Authentik redirects the browser (on your local machine) to `http://localhost:8888/callback`, which means your local machine's port 8888 must be tunnelled to the VM. Add `-L 8888:localhost:8888` to your SSH tunnel command alongside the other ports — see the [quickstart](quickstart.html#running-on-a-vm-or-remote-host) for the full tunnel commands.
 
 See the [backend configuration](backend.html#mcp-server) for available settings.
