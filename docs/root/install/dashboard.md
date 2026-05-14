@@ -198,7 +198,7 @@ By default, this panel will color the progress data based on a threshold of <70%
 
 To display a pie graph, use a ``pie`` panel.
 
-![a pie panel example with a column legend](/images/pie-panel-legend-column.png)
+![a pie panel example](/images/pie-panel.png)
 
 | Field | Description |
 |-------|-------------|
@@ -254,7 +254,7 @@ To display a bar graph, use a ``bar`` panel.
 
 To display rows in a paged table, use a ``table`` panel.
 
-![a table panel example](/images/table-panel.png)
+![a table panel example](/images/cypher-table.png)
 
 The table panel auto-detects columns from the query results. It supports three return formats:
 
@@ -291,7 +291,7 @@ When `columns` is specified in the panel config, those column names are read dir
 To display rows in a less-dense, vertical per-row view, use a ``vertical-table`` panel.
 Note: the caption per-row is set via the ``table_id`` field, and if unset, will display ``undefined``
 
-![a vertical table panel example](/images/vertical-table-panel.png)
+![a vertical table panel example](/images/vertical-table.png)
 
 Supports the same return formats as the ``table`` panel (named columns, map, or bare node).
 
@@ -323,6 +323,8 @@ Supports the same return formats as the ``table`` panel (named columns, map, or 
 ### graph
 
 To display graph data as an interactive node-link diagram, use a ``graph`` panel.
+
+![a graph panel example](/images/graph-panel.png)
 
 The panel has three tabs:
 
@@ -381,7 +383,7 @@ If the query does not return graph-compatible data (e.g. ``RETURN n`` or a plain
 
 To render markdown, use a ``markdown`` panel.
 
-![a markdown panel example](/images/markdown-panel.png)
+![a markdown panel example showing rendered Markdoc content with a table](/images/markdown-panel.png)
 
 Markdown panels are rendered with [Markdoc](https://markdoc.dev/), a Markdown-based authoring framework with first-class support for variables and tags.
 Standard Markdown works as you'd expect — **bold**, *italic*, headings, ordered and unordered lists, links, code spans, fenced code blocks, and tables.
