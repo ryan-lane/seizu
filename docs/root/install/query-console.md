@@ -39,7 +39,7 @@ Node labels are colour-coded using the same palette as the graph panel, so colou
 
 The history tab shows the last 500 ad-hoc queries you have run from the Query Console. Queries are shown newest first, 20 per page. Hovering over a row shows the full query in a tooltip.
 
-Clicking a history item **loads the query into the editor without running it**, so you can review or edit it before executing.
+Clicking a history item loads the query into the editor and re-runs that saved history item. To modify it, edit the query text after it loads and click **Run**.
 
 History is private to your account — you cannot see queries run by other users.
 

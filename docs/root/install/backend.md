@@ -2,7 +2,7 @@
 
 ## Demo/Quickstart/Development
 
-If you're just wanting to quickly evaluate or demo Seizu, please see the [quickstart documentation](../dev/docker-compose.html#Quickstart).
+If you're just wanting to quickly evaluate or demo Seizu, please see the [quickstart documentation](quickstart.html).
 
 ## Installation using docker image
 
@@ -37,6 +37,8 @@ pip install seizu-cli
 seizu --api-url https://seizu.example.com reports list
 ```
 
+See the [CLI documentation](cli.html) for authentication, configuration, seed/export, and common command examples.
+
 ## Backend configuration
 
 ### Basic configuration
@@ -51,7 +53,7 @@ When using the docker image, the defaults should be sufficient for basic configu
 ### Frontend configuration
 
 seizu passes configuration to the frontend via a configuration endpoint.
-Report and dashboard configurations are stored in DynamoDB; use ``seizu seed`` to populate them from a YAML file.
+Report and dashboard configurations are stored in the configured report store, which supports DynamoDB and SQL backends. Use ``seizu seed`` to populate the store from a YAML file.
 
 ### Neo4j configuration
 
@@ -63,12 +65,12 @@ Report and dashboard configurations are stored in DynamoDB; use ``seizu seed`` t
 
 ### Report storage configuration
 
-* ``REPORT_STORE_BACKEND``: storage backend to use for report configurations. Supported values: ``dynamodb`` (default), ``sqlmodel``
+* ``REPORT_STORE_BACKEND``: storage backend to use for Seizu-managed configuration objects, including reports, dashboards, scheduled queries, roles, toolsets, tools, skillsets, and skills. Supported values: ``dynamodb`` (default), ``sqlmodel``
 * ``REPORT_QUERY_SIGNING_SECRET``: cryptographically random secret used to sign report-query capability tokens. Use at least 32 bytes of entropy, 64 bytes preferred. Encode it as hex or base64, store it in a secret manager or deployment env var, and keep it stable across restarts so existing report tokens remain valid until they expire. If you use hex, 32 bytes becomes 64 characters and 64 bytes becomes 128 characters; if you use base64, 32 bytes is typically 44 characters with padding. Rotate it if exposed; rotation invalidates outstanding report tokens.
 
 ### DynamoDB configuration
 
-seizu stores report and dashboard configurations in DynamoDB. In production, standard AWS credential resolution applies (instance profile, environment variables, etc.).
+Used when ``REPORT_STORE_BACKEND=dynamodb``. In production, standard AWS credential resolution applies (instance profile, environment variables, etc.).
 
 * ``DYNAMODB_TABLE_NAME``: name of the DynamoDB table; default: ``seizu-reports``
 * ``DYNAMODB_REGION``: AWS region for DynamoDB; default: ``us-east-1``
@@ -120,7 +122,7 @@ Seizu uses Role-Based Access Control (RBAC) to restrict API and MCP access. Ever
 |------|-------------|
 | **seizu-viewer** | Read reports and dashboard. No ad-hoc query console or query history access. |
 | **seizu-editor** | All Viewer capabilities + create/edit/delete reports, set default dashboard |
-| **seizu-admin** | All Editor capabilities + manage toolsets, tools, scheduled queries, and user-defined roles |
+| **seizu-admin** | All Editor capabilities + manage toolsets, tools, skillsets, skills, scheduled queries, and user-defined roles |
 
 #### Role claim
 
@@ -148,7 +150,7 @@ Bind the mapping to the Seizu OAuth2 provider as a custom token property mapping
 
 #### User-defined roles
 
-Admins can create custom roles with arbitrary permission subsets via the API (``POST /api/v1/roles``). When a JWT contains a user-defined role name in ``RBAC_ROLE_CLAIM``, Seizu does a single database lookup to resolve its permissions. Built-in role resolution requires no database I/O.
+Admins can create and update custom roles with arbitrary permission subsets in the UI, via the API (``POST /api/v1/roles`` and ``PUT /api/v1/roles/<id>``), or through the MCP built-in role tools (for example, ``roles__create`` and ``roles__update``). When a JWT contains a user-defined role name in ``RBAC_ROLE_CLAIM``, Seizu does a single database lookup to resolve its permissions. Built-in role resolution requires no database I/O.
 
 ### MCP server
 
@@ -162,6 +164,65 @@ Seizu exposes a [Model Context Protocol (MCP)](https://modelcontextprotocol.io/)
   * Comma-separated list (e.g. ``graph,reports``) — only the listed groups are enabled.
 
   Known groups: ``graph``, ``reports``, ``scheduled_queries``, ``toolsets``, ``roles``.
+
+#### Connecting MCP clients
+
+Point MCP clients at the backend endpoint directly:
+
+```text
+https://your-seizu-host/api/v1/mcp
+```
+
+For local development, this is usually:
+
+```text
+http://localhost:8080/api/v1/mcp
+```
+
+The frontend development server does not proxy MCP traffic, so do not use port ``3000`` for MCP clients. If Seizu is behind a reverse proxy or load balancer, use the public backend URL and set ``MCP_RESOURCE_URL`` to the same MCP endpoint so OAuth discovery metadata advertises the reachable URL.
+
+##### Claude Code
+
+Add Seizu as an HTTP MCP server:
+
+```bash
+claude mcp add --transport http --callback-port 8888 seizu https://your-seizu-host/api/v1/mcp
+```
+
+The fixed callback port is useful for OAuth because the redirect URI must be registered with the OIDC provider:
+
+```text
+http://localhost:8888/callback
+```
+
+For the development Authentik stack this callback is pre-configured. For other OIDC providers, add it to the client manually.
+
+##### Codex
+
+Add Seizu as a streamable HTTP MCP server:
+
+```bash
+codex mcp add seizu --url https://your-seizu-host/api/v1/mcp
+```
+
+This writes an entry like the following to ``~/.codex/config.toml``:
+
+```toml
+[mcp_servers.seizu]
+url = "https://your-seizu-host/api/v1/mcp"
+```
+
+If Seizu requires OAuth and the MCP OAuth metadata endpoint is enabled, authenticate the configured server:
+
+```bash
+codex mcp login seizu
+```
+
+For token-based automation, configure Codex to read a bearer token from an environment variable:
+
+```bash
+codex mcp add seizu --url https://your-seizu-host/api/v1/mcp --bearer-token-env-var SEIZU_TOKEN
+```
 
 #### MCP OAuth metadata (optional)
 

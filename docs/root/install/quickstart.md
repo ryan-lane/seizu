@@ -49,13 +49,13 @@ Add `-N` to open the tunnels without starting a shell, or `-f -N` to background 
 
 ## Seeding reports
 
-Report and dashboard configurations are stored in DynamoDB Local. After starting the stack for the first time, seed the example reports from the YAML config:
+The default quickstart stack uses DynamoDB Local as Seizu's report store. After starting the stack for the first time, seed the example reports from the YAML config:
 
 ```bash
 make seed_dashboard
 ```
 
-This reads `.config/dev/seizu/reporting-dashboard.yaml`, creates each report in DynamoDB, and sets the dashboard pointer. After resetting the DynamoDB volume, re-run `make seed_dashboard` to repopulate.
+This reads `.config/dev/seizu/reporting-dashboard.yaml`, creates each report in the configured report store, and sets the dashboard pointer. In the default quickstart stack, that store is DynamoDB Local; after resetting the DynamoDB volume, re-run `make seed_dashboard` to repopulate.
 
 To reset the database and reseed:
 
@@ -81,10 +81,11 @@ The stack includes an embedded [Authentik](https://goauthentik.io/) OIDC provide
 make auth_enable && make down && make up
 ```
 
-On first run, Authentik takes about two minutes to initialize. Once ready, visit http://localhost:3000 and log in with:
+On first run, Authentik takes about two minutes to initialize. Once ready, visit http://localhost:3000 and log in with one of the seeded Seizu users:
 
-- **Admin:** `akadmin` / `devpassword`
-- **Developer:** `developer` / `devpassword`
+- **Admin:** `seizu-admin` / `seizu`
+- **Editor:** `seizu-editor` / `seizu`
+- **Viewer:** `seizu-viewer` / `seizu`
 
 To disable auth and return to the default unauthenticated mode:
 

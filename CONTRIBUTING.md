@@ -18,8 +18,19 @@ It'll make it easier and quicker for everyone if the developers can easily repro
 
 Our only method of accepting code changes is through github pull requests.
 
-### Sign the Contributor License Agreement (CLA)
+### Sign off commits with the Developer Certificate of Origin (DCO)
 
-We require a CLA for code contributions, so before we can accept a pull request we need to have a signed CLA.
-When you open your first pull request, the CLA will show up as a test.
-Please follow the test's link to sign the CLA, if you haven't done so yet.
+We require Developer Certificate of Origin sign-off for code contributions, not a Contributor License Agreement.
+Every commit in a pull request must include a `Signed-off-by` line confirming that you have the right to submit the contribution under the project's license.
+
+Use `git commit --signoff` when creating commits:
+
+```bash
+git commit --signoff
+```
+
+To add a sign-off to the most recent commit:
+
+```bash
+git commit --amend --signoff
+```

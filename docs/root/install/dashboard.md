@@ -11,11 +11,17 @@ Rows are rendered in the order specified, and panels within rows are also render
 
 ## Configuration Storage
 
-Report and dashboard configurations are stored in DynamoDB, not in the YAML configuration file.
-The YAML file contains a top-level `queries` dict (used only by `scheduled_queries` references), `scheduled_queries`, a `dashboard` pointer, a `reports` section, and a `toolsets` section — all used to seed DynamoDB.
+Report and dashboard configurations are stored in the configured report store, not in the YAML configuration file. The report store supports DynamoDB and SQL backends.
+The YAML file contains a top-level `queries` dict (used only by `scheduled_queries` references), `scheduled_queries`, a `dashboard` pointer, a `reports` section, a `toolsets` section, and a `skillsets` section — all used to seed the report store.
 Each report has its own `queries` dict for named Cypher strings used by its panels.
 
-To populate DynamoDB from the YAML file during initial setup or development:
+To populate the report store from the YAML file during initial setup or development, use the CLI directly:
+
+```bash
+seizu seed --config path/to/reporting-dashboard.yaml
+```
+
+When working from the source checkout, `make seed_dashboard` is a development shortcut that seeds the bundled quickstart config:
 
 ```bash
 make seed_dashboard
@@ -102,16 +108,16 @@ Click **Edit report** (top-right when viewing a report) or choose **Edit** from 
 
 - **Named Queries** — a collapsible section for defining reusable Cypher strings that panels can reference by key.
 - **Rows** — add, rename, and delete rows. Rows hold panels in a horizontal grid.
-- **Panels** — within each row, drag a panel by its body to reposition it, or grab the bottom-right resize handle to change both width and height. The − / + buttons in the panel toolbar adjust width by one grid column at a time, and the pencil / trash icons open the panel editor or remove the panel.
+- **Panels** — within each row, drag a panel by its body to reposition it, or grab the bottom-right resize handle to change both width and height. The pencil and trash icons open the panel editor or remove the panel. When a report has multiple rows, the move icon opens a row picker for moving a panel to another row.
 - **Add panel** — opens the panel editor where you select the panel type and fill in the relevant fields. The form adapts to show only the fields applicable to the chosen type, and exposes Width and Height sliders plus the Cypher / settings specific to that type.
 
-Cross-row panel moves are not supported in the current editor; delete the panel and re-add it in the destination row.
+Drag and resize changes are saved with the next report version.
 
 Click **Save version** to commit your changes. Every save creates a new numbered version; existing versions are never overwritten.
 
 ### Deleting a report
 
-Choose **Delete** from the ⋮ menu in the Reports list and confirm. This permanently removes the report and all its versions. If the report was set as the dashboard, the dashboard pointer is also cleared.
+Choose **Delete** from the ⋮ menu in the Reports list and confirm. This permanently removes the report and all its versions. If the report is pinned, unpin it first. If the report is currently set as the dashboard, set another public report as the dashboard before deleting it.
 
 ## Panels
 
@@ -124,12 +130,11 @@ Panels are positioned and sized on a 12-column grid (each row of the grid is 48 
 
 | Field | Description |
 |-------|-------------|
-| w | Width in grid columns (1–12). Supersedes the legacy ``size`` field when both are set. |
+| w | Width in grid columns (1–12). |
 | h | Height in grid rows. When unset, a per-type default is used (e.g. 4 for ``count``, 8 for charts, 10 for tables). |
 | x | Optional column index (0-based). When unset, panels pack left-to-right within the row. |
 | y | Optional row index within the row's grid. Reserved for future multi-row layouts; usually ``0``. |
 | min_h | Optional minimum height in grid rows. Enforced when the user resizes the panel. |
-| size | (Legacy) The original width-only sizing field. Still read as a fallback when ``w`` is unset; new reports should set ``w`` instead. |
 
 The ``markdown`` and ``vertical-table`` panel types also accept ``auto_height`` (boolean). When ``true``, the panel renders at its natural content height instead of filling the assigned grid cell — useful for short, content-driven panels where clipping or scrolling looks wrong.
 
@@ -146,7 +151,7 @@ To simply display a count of a particular query, use a ``count`` panel.
 | params | A list of parameters to pass into the query. See [the PanelParam schema](schema.html#panelparam) for more info. |
 | caption | The caption to show as the title of this panel. |
 | type | The type of panel. ``count``, for this panel type. |
-| size, w, h, x, y, min_h | Layout fields. See [Panel layout](#panel-layout). |
+| w, h, x, y, min_h | Layout fields. See [Panel layout](#panel-layout). |
 
 #### Example
 
@@ -173,7 +178,7 @@ By default, this panel will color the progress data based on a threshold of <70%
 | caption | The caption to show as the title of this panel. |
 | type | The type of panel. ``progress``, for this panel type. |
 | threshold | The lower threshold percentage to consider this result an error. Set to `0` to disable threshold. Default: ``70`` |
-| size, w, h, x, y, min_h | Layout fields. See [Panel layout](#panel-layout). |
+| w, h, x, y, min_h | Layout fields. See [Panel layout](#panel-layout). |
 
 #### Example
 
@@ -204,7 +209,7 @@ To display a pie graph, use a ``pie`` panel.
 | type | The type of panel. ``pie``, for this panel type. |
 | pie\_settings | An object of settings specific to pie panels. |
 | pie\_settings.legend | Orientation of the legend. ``row`` or ``column``. If legend is not set, no legend will be shown, and arc labels will be shown instead. |
-| size, w, h, x, y, min_h | Layout fields. See [Panel layout](#panel-layout). |
+| w, h, x, y, min_h | Layout fields. See [Panel layout](#panel-layout). |
 
 #### Example
 
@@ -232,7 +237,7 @@ To display a bar graph, use a ``bar`` panel.
 | type | The type of panel. ``bar``, for this panel type. |
 | bar\_settings | An object of settings specific to bar panels. |
 | bar\_settings.legend | Orientation of the legend. ``row`` or ``column``. |
-| size, w, h, x, y, min_h | Layout fields. See [Panel layout](#panel-layout). |
+| w, h, x, y, min_h | Layout fields. See [Panel layout](#panel-layout). |
 
 #### Example
 
@@ -266,7 +271,7 @@ When `columns` is specified in the panel config, those column names are read dir
 | params | A list of parameters to pass into the query. See [the PanelParam schema](schema.html#panelparam) for more info. |
 | caption | The caption to show as the title of this panel. |
 | type | The type of panel. ``table``, for this panel type. |
-| size, w, h, x, y, min_h | Layout fields. See [Panel layout](#panel-layout). |
+| w, h, x, y, min_h | Layout fields. See [Panel layout](#panel-layout). |
 
 #### Example
 
@@ -297,7 +302,7 @@ Supports the same return formats as the ``table`` panel (named columns, map, or 
 | caption | The caption to show as the title of this panel. |
 | type | The type of panel. ``vertical-table``, for this panel type. |
 | table\_id | The attribute in the result row to use as a caption for each row. If not set, row captions will show as ``undefined``. |
-| size, w, h, x, y, min_h | Layout fields. See [Panel layout](#panel-layout). |
+| w, h, x, y, min_h | Layout fields. See [Panel layout](#panel-layout). |
 | auto_height | When ``true``, the panel grows to fit its content rather than scrolling within a fixed grid cell. |
 
 #### Example
@@ -358,7 +363,7 @@ If the query does not return graph-compatible data (e.g. ``RETURN n`` or a plain
 | graph\_settings | An object of settings specific to graph panels. |
 | graph\_settings.node\_label | The node property to display as the node label. Defaults to ``label`` (explicit map) or ``name`` then node id (path format). |
 | graph\_settings.node\_color\_by | The node property to use for color grouping. Defaults to ``group`` (explicit map) or the first label (path format). |
-| size, w, h, x, y, min_h | Layout fields. See [Panel layout](#panel-layout). |
+| w, h, x, y, min_h | Layout fields. See [Panel layout](#panel-layout). |
 
 #### Example
 
@@ -389,7 +394,7 @@ The WYSIWYG editor recognizes Markdoc variable syntax and displays each variable
 |-------|-------------|
 | markdown | The markdown content to render. Supports Markdoc variables, tags, and standard Markdown (headings, lists, links, code, tables). |
 | type | The type of panel. ``markdown``, for this panel type. |
-| size, w, h, x, y, min_h | Layout fields. See [Panel layout](#panel-layout). |
+| w, h, x, y, min_h | Layout fields. See [Panel layout](#panel-layout). |
 | auto_height | When ``true``, the panel grows to fit its content rather than scrolling within a fixed grid cell. |
 
 #### Variables
@@ -555,7 +560,7 @@ Panel re-renders are debounced: connected panels only update 300 ms after the us
         size: 2
 ```
 
-## Example Configuration
+## Details Data
 
 All panel types with a `cypher` query have an info button that shows extra details about the panel, such as the query used, the parameters to the query, metrics that may be pushed with it, etc.
 For `count`, `progress`, `pie`, `bar`, `graph`, and `vertical-table` panels, the info button appears in the top-right corner of the panel and is only visible on hover.
@@ -564,7 +569,34 @@ Non-table panel types that also have a `details_cypher` configured will show a d
 
 ![a details view example](/images/details-view.png)
 
-Example configuration
+Use `details_cypher` when a summary panel should let users inspect the rows behind the aggregate. The details query can be a key from the report's `queries` dict or a direct Cypher string. It receives the same `params` as the panel query and supports the same return formats as a `table` panel.
 
-.. literalinclude:: ../../../.config/dev/seizu/reporting-dashboard.yaml
-   :language: yaml
+```yaml
+reports:
+  dashboard:
+    name: Dashboard
+    queries:
+      cves-severity-fraction: |-
+        MATCH (c:CVE)
+        WITH COUNT(DISTINCT c.id) AS denominator
+        MATCH (c:CVE)
+        WHERE c.base_severity = $base_severity
+        RETURN count(DISTINCT c.id) AS numerator, denominator
+      cves-severity-fraction-details: |-
+        MATCH (c:CVE)
+        WHERE c.base_severity = $base_severity
+        RETURN c AS details
+    rows:
+      - name: Progress panels
+        panels:
+          - cypher: cves-severity-fraction
+            details_cypher: cves-severity-fraction-details
+            type: progress
+            params:
+              - name: base_severity
+                value: CRITICAL
+            caption: Critical CVEs
+            w: 3
+            h: 4
+            threshold: 0
+```
