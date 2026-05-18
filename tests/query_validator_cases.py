@@ -269,6 +269,20 @@ USE_CLAUSE_FUZZ_CASES = [
         "CYPHER 25 WHEN true THEN USE end MATCH (n) RETURN n ELSE RETURN null AS n",
         id="use-after-then-database-named-end",
     ),
+    pytest.param("CYPHER 25 USE otherdb FOR x IN [1, 2] RETURN x", id="use-followed-by-for"),
+    pytest.param("CYPHER 25 USE otherdb LET x = 1 RETURN x", id="use-followed-by-let"),
+    pytest.param(
+        "CYPHER 25 USE otherdb WHEN true THEN RETURN 1 AS n ELSE RETURN 2 AS n",
+        id="use-followed-by-when",
+    ),
+    pytest.param(
+        "USE otherdb OPTIONAL CALL { RETURN 1 AS n } RETURN n",
+        id="use-followed-by-optional-call",
+    ),
+    pytest.param(
+        "CYPHER 25 RETURN 1 AS x NEXT USE otherdb FOR y IN [1] RETURN y",
+        id="use-after-next-followed-by-for",
+    ),
 ]
 
 # Legitimate read-only queries that place a variable named `use` right after a

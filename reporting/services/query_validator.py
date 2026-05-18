@@ -50,38 +50,41 @@ _LOAD_CSV_RE = re.compile(r"\bLOAD\s+CSV\b", re.IGNORECASE)
 # caller escape Seizu's configured graph and read any other database in the
 # DBMS (including `system`) via `USE other`, `USE composite.constituent`, or
 # `USE graph.byName(...)`. Seizu queries always target the default graph, so
-# USE is blocked outright. It is matched only at clause-start positions — query
-# start, after UNION/NEXT/conditional branch keywords, or at the start of a
-# CALL {} subquery — optionally after a CYPHER version prefix, and only when
-# followed by a real graph reference, so a map key or variable named `use` is
-# not a false positive.
+# every USE clause is blocked. It is matched only at clause-start positions —
+# query start, after UNION/NEXT/conditional-branch keywords, or at the start of
+# a CALL {} subquery — optionally after a CYPHER version prefix.
 #
-# THEN and ELSE are anchors because a Cypher 25 conditional-query branch can
-# start with USE, but they are also CASE-expression keywords. To avoid treating
-# a CASE result variable named `use` as a USE clause, the match consumes a graph
-# reference and requires the next token to be a Cypher clause keyword.
+# The detector has two branches so that the keyword USE is told apart from an
+# identifier named `use`, without depending on a closed list of the clauses
+# that may follow a USE clause (Cypher keeps adding query-initial clauses):
+#
+#  1. `USE` followed by an ordinary graph reference — anything not starting
+#     with a CASE/branch keyword. This is unambiguous: nothing other than a USE
+#     clause has that shape at a clause-start position, so no following clause
+#     needs to be matched.
+#  2. `USE` followed by a reference whose name collides with ELSE/END/WHEN/THEN
+#     (a database literally named that). Here the negative lookahead in branch 1
+#     cannot fire, so the reference is disambiguated from a CASE result variable
+#     (`... THEN use ELSE alt END`) by requiring a real clause keyword next.
 #
 # Known gap: a USE clause following an importing WITH inside an old-style
 # subquery is not matched; that form only works on composite databases.
-_USE_GRAPH_REFERENCE = (
-    r"(?:"
-    r"graph\s*\.\s*(?:byName|byElementId)\s*\([^)]*\)|"
-    r"`[^`]*`(?:\s*\.\s*`[^`]*`)*|"
-    r"[A-Za-z_]\w*(?:\s*\.\s*[A-Za-z_]\w*)*"
-    r")"
-)
 _USE_FOLLOWING_CLAUSE = (
     r"(?:"
-    r"OPTIONAL\s+MATCH|LOAD\s+CSV|DETACH\s+DELETE|"
+    r"OPTIONAL\s+(?:MATCH|CALL)|LOAD\s+CSV|DETACH\s+DELETE|"
     r"MATCH|CALL|RETURN|WITH|UNWIND|CREATE|MERGE|DELETE|SET|REMOVE|FOREACH|"
     r"SHOW|START|STOP|DROP|ALTER|GRANT|DENY|REVOKE|TERMINATE|"
-    r"NEXT|UNION|FINISH|INSERT"
+    r"NEXT|UNION|FINISH|INSERT|FOR|LET|WHEN"
     r")\b"
 )
 _USE_CLAUSE_RE = re.compile(
     r"(?:^|\b(?:UNION|NEXT|THEN|ELSE)\b|\{)\s*"
     r"(?:CYPHER\s+[\w.]+(?:\s+\w+\s*=\s*\w+)*\s+)?"
-    rf"USE\s+{_USE_GRAPH_REFERENCE}\s+{_USE_FOLLOWING_CLAUSE}",
+    r"USE\s+(?:"
+    r"(?!(?:ELSE|END|WHEN|THEN)\b)(?:graph\s*\.|`|[A-Za-z_])"
+    r"|"
+    rf"(?:ELSE|END|WHEN|THEN)\b\s+{_USE_FOLLOWING_CLAUSE}"
+    r")",
     re.IGNORECASE,
 )
 
