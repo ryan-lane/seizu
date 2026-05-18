@@ -7,18 +7,18 @@ from hypothesis import strategies as st
 from reporting.services.query_validator import validate_query
 
 
-def _mock_read_only_explain() -> MagicMock:
+def _mock_explain(query_type: str = "r") -> MagicMock:
     mock_driver = MagicMock()
     mock_summary = MagicMock()
     mock_summary.notifications = []
-    mock_summary.query_type = "r"
+    mock_summary.query_type = query_type
     mock_driver.execute_query = AsyncMock(return_value=([], mock_summary, []))
     return mock_driver
 
 
-async def _validate_with_mocked_neo4j(query: str):
+async def _validate_with_mocked_neo4j(query: str, query_type: str = "r"):
     with (
-        patch("reporting.services.query_validator._get_async_neo4j_client", return_value=_mock_read_only_explain()),
+        patch("reporting.services.query_validator._get_async_neo4j_client", return_value=_mock_explain(query_type)),
         patch("reporting.services.query_validator.SchemaValidator") as schema_validator,
         patch("reporting.services.query_validator.PropertiesValidator") as properties_validator,
     ):
@@ -81,6 +81,48 @@ use_following_clause = st.sampled_from(
 )
 
 case_operator = st.sampled_from(["", " + alt", " * 2"])
+
+dangerous_subquery_payload = st.sampled_from(
+    [
+        "LOAD CSV FROM 'http://169.254.169.254/' AS row RETURN row AS value",
+        "SHOW SETTINGS YIELD name RETURN name AS value",
+        "USE otherdb MATCH (n) RETURN n AS value",
+        "CALL apoc.load.json('http://169.254.169.254/') YIELD value RETURN value",
+        "RETURN apoc.cypher.runFirstColumnSingle('SHOW SETTINGS YIELD name RETURN name LIMIT 1', {}) AS value",
+    ]
+)
+
+write_subquery_payload = st.sampled_from(
+    [
+        "CREATE (:SeizuFuzzProbe) RETURN 1 AS value",
+        "MERGE (:SeizuFuzzProbe {id: 1}) RETURN 1 AS value",
+        "MATCH (n) SET n.seizuFuzz = true RETURN 1 AS value",
+        "MATCH (n) DELETE n RETURN 1 AS value",
+    ]
+)
+
+read_only_subquery_payload = st.sampled_from(
+    [
+        "RETURN 1 AS value",
+        "WITH 1 AS value RETURN value",
+        "UNWIND [1, 2] AS value RETURN value",
+        "MATCH (n) RETURN count(n) AS value",
+        "CALL { RETURN 1 AS nested } RETURN nested AS value",
+    ]
+)
+
+subquery_wrapper = st.sampled_from(
+    [
+        ("CALL { ", " } RETURN value"),
+        ("CALL () { ", " } RETURN value"),
+        ("WITH 1 AS seed CALL (seed) { ", " } RETURN value"),
+        ("OPTIONAL CALL { ", " } RETURN value"),
+        ("CALL { CALL { ", " } RETURN value } RETURN value"),
+        ("UNWIND [1] AS seed CALL { WITH seed ", " } IN TRANSACTIONS RETURN value"),
+        ("CYPHER 25 RETURN 0 AS ignored NEXT CALL { ", " } RETURN value"),
+        ("CYPHER 25 WHEN true THEN CALL { ", " } RETURN value ELSE RETURN 0 AS value"),
+    ]
+)
 
 
 @settings(max_examples=75)
@@ -181,6 +223,57 @@ def test_case_expressions_with_use_variable_are_allowed(
 )
 def test_map_keys_named_use_are_allowed(key_separator: str, value: int) -> None:
     query = f"RETURN {{use:{key_separator}{value}}} AS item"
+
+    result = asyncio.run(_validate_with_mocked_neo4j(query))
+
+    assert not result.has_errors
+
+
+@settings(max_examples=150)
+@given(
+    wrapper=subquery_wrapper,
+    payload=dangerous_subquery_payload,
+)
+def test_dangerous_subquery_payload_variants_are_blocked(
+    wrapper: tuple[str, str],
+    payload: str,
+) -> None:
+    prefix, suffix = wrapper
+    query = f"{prefix}{payload}{suffix}"
+
+    result = asyncio.run(_validate_with_mocked_neo4j(query))
+
+    assert result.has_errors
+
+
+@settings(max_examples=100)
+@given(
+    wrapper=subquery_wrapper,
+    payload=write_subquery_payload,
+)
+def test_write_subquery_payload_variants_are_blocked_by_explain(
+    wrapper: tuple[str, str],
+    payload: str,
+) -> None:
+    prefix, suffix = wrapper
+    query = f"{prefix}{payload}{suffix}"
+
+    result = asyncio.run(_validate_with_mocked_neo4j(query, query_type="rw"))
+
+    assert result.has_errors
+
+
+@settings(max_examples=75)
+@given(
+    wrapper=subquery_wrapper,
+    payload=read_only_subquery_payload,
+)
+def test_read_only_subquery_payload_variants_are_allowed(
+    wrapper: tuple[str, str],
+    payload: str,
+) -> None:
+    prefix, suffix = wrapper
+    query = f"{prefix}{payload}{suffix}"
 
     result = asyncio.run(_validate_with_mocked_neo4j(query))
 

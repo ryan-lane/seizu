@@ -210,6 +210,7 @@ USE clause composite constituent,USE myComposite.myConstituent MATCH (n) RETURN 
 USE clause dynamic graph.byName,USE graph.byName($db) MATCH (n) RETURN n,BLOCKED,USE clause regex,graph.byName()/graph.byElementId() dynamic graph selection (manual p.164) blocked; also errors at EXPLAIN on a standard database
 USE clause after UNION,MATCH (n) RETURN count(n) AS c UNION USE otherdb MATCH (m) RETURN count(m) AS c,BLOCKED,USE clause regex,USE may prefix a UNION part; anchor covers post-UNION position
 USE clause inside CALL subquery,CALL { USE otherdb MATCH (n) RETURN n } RETURN n,BLOCKED,USE clause regex,USE may prefix a subquery; anchor covers the { position
+USE clause inside CALL subquery after importing WITH,CALL { WITH seed USE otherdb MATCH (n) RETURN n } RETURN n,BLOCKED,USE clause regex,USE after an old-style importing WITH in an unnamed subquery is blocked
 USE clause after CYPHER version prefix,CYPHER 25 USE otherdb MATCH (n) RETURN n,BLOCKED,USE clause regex,Anchor allows an optional CYPHER version prefix before USE
 USE clause map-key false-positive guard,MATCH (n {use: 1}) RETURN n,ALLOWED,—,"_USE_CLAUSE_RE requires a real graph reference after USE, so a map key or variable named `use` is not blocked"
 Procedure allowlist: apoc.load.json,CALL apoc.load.json('http://169.254.169.254/') YIELD value RETURN value,BLOCKED,Procedure allowlist,Procedure guarding moved from denylist to allowlist; apoc.* is no longer permitted by default

@@ -67,8 +67,6 @@ _LOAD_CSV_RE = re.compile(r"\bLOAD\s+CSV\b", re.IGNORECASE)
 #     cannot fire, so the reference is disambiguated from a CASE result variable
 #     (`... THEN use ELSE alt END`) by requiring a real clause keyword next.
 #
-# Known gap: a USE clause following an importing WITH inside an old-style
-# subquery is not matched; that form only works on composite databases.
 _USE_FOLLOWING_CLAUSE = (
     r"(?:"
     r"OPTIONAL\s+(?:MATCH|CALL)|LOAD\s+CSV|DETACH\s+DELETE|"
@@ -77,14 +75,24 @@ _USE_FOLLOWING_CLAUSE = (
     r"NEXT|UNION|FINISH|INSERT|FOR|LET|WHEN"
     r")\b"
 )
-_USE_CLAUSE_RE = re.compile(
-    r"(?:^|\b(?:UNION|NEXT|THEN|ELSE)\b|\{)\s*"
-    r"(?:CYPHER\s+[\w.]+(?:\s+\w+\s*=\s*\w+)*\s+)?"
+_USE_CLAUSE_BODY = (
     r"USE\s+(?:"
     r"(?!(?:ELSE|END|WHEN|THEN)\b)(?:graph\s*\.|`|[A-Za-z_])"
     r"|"
     rf"(?:ELSE|END|WHEN|THEN)\b\s+{_USE_FOLLOWING_CLAUSE}"
-    r")",
+    r")"
+)
+_IMPORTING_WITH = r"WITH\s+(?:`[^`]*`|[A-Za-z_]\w*)(?:\s*,\s*(?:`[^`]*`|[A-Za-z_]\w*))*\s+"
+_USE_CLAUSE_RE = re.compile(
+    r"(?:^|\b(?:UNION|NEXT|THEN|ELSE)\b|\{)\s*"
+    r"(?:CYPHER\s+[\w.]+(?:\s+\w+\s*=\s*\w+)*\s+)?"
+    rf"{_USE_CLAUSE_BODY}",
+    re.IGNORECASE,
+)
+_USE_AFTER_IMPORTING_WITH_RE = re.compile(
+    r"\{\s*"
+    r"(?:CYPHER\s+[\w.]+(?:\s+\w+\s*=\s*\w+)*\s+)?"
+    rf"{_IMPORTING_WITH}{_USE_CLAUSE_BODY}",
     re.IGNORECASE,
 )
 
@@ -257,7 +265,11 @@ def _scan_for_dangerous_constructs(query: str) -> str | None:
     dangerous_function_re = _build_dangerous_function_re()
 
     for target in _keyword_scan_targets(query):
-        if _ADMIN_COMMAND_RE.search(target) or _USE_CLAUSE_RE.search(target):
+        if (
+            _ADMIN_COMMAND_RE.search(target)
+            or _USE_CLAUSE_RE.search(target)
+            or _USE_AFTER_IMPORTING_WITH_RE.search(target)
+        ):
             return "Write queries are not allowed"
         if _LOAD_CSV_RE.search(target):
             return "Write queries are not allowed"
