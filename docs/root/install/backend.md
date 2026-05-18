@@ -62,6 +62,7 @@ Report and dashboard configurations are stored in the configured report store, w
 * ``NEO4J_PASSWORD``: the password to use to connect; default: ``None``
 * ``NEO4J_MAX_CONNECTION_LIFETIME``: maximum duration in seconds a driver will keep a connection before removing it from its pool; default: ``3600``
 * ``NEO4J_NOTIFICATIONS_MIN_SEVERITY``: minimum severity for Neo4j query notifications logged by the driver (``WARNING``, ``INFORMATION``, ``OFF``). Set to ``OFF`` to suppress schema warnings when the database is not fully populated; default: ``WARNING``
+* ``QUERY_VALIDATOR_ALLOWED_PROCEDURES``: comma-separated list of extra Neo4j procedures the Cypher validator permits in addition to Seizu's built-in read-only schema procedures. Entries are normalized lowercase and may be exact names such as ``apoc.meta.stats`` or namespace prefixes ending in a dot such as ``apoc.`` or ``gds.``. This setting only permits ``CALL`` procedure invocations; dangerous function namespaces such as ``apoc.cypher.*`` and ``gds.*`` remain blocked. Empty by default.
 
 ### Report storage configuration
 
