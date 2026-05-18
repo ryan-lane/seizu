@@ -35,6 +35,9 @@ jobs:
       - name: Enable Neo4j security-test plugins
         run: perl -pi -e 's/^NEO4J_PLUGINS=.*/NEO4J_PLUGINS=["apoc","graph-data-science"]/' .env
 
+      - name: Build Seizu dev test image
+        run: docker compose build seizu
+
       - name: Run live query validator tests
         run: make test_query_validator_live
 
