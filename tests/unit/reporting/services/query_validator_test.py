@@ -1,5 +1,7 @@
 from unittest.mock import AsyncMock, MagicMock
 
+import pytest
+
 from reporting.services.query_validator import ValidationResult, validate_query
 
 
@@ -39,7 +41,269 @@ def _mock_cyver(
     )
 
 
+DANGEROUS_READ_PATH_FUZZ_CASES = [
+    pytest.param("LOAD\u00a0CSV FROM 'http://127.0.0.1:1/' AS row RETURN row", id="load-nbsp"),
+    pytest.param("LOAD\fCSV FROM 'http://127.0.0.1:1/' AS row RETURN row", id="load-formfeed"),
+    pytest.param("LOAD // comment\n CSV FROM 'http://127.0.0.1:1/' AS row RETURN row", id="load-line-comment"),
+    pytest.param(r"LO\u0041D/*x*/CSV FROM 'http://127.0.0.1:1/' AS row RETURN row", id="load-unicode-comment"),
+    pytest.param("SHOW\u00a0ALL INDEXES YIELD name RETURN name LIMIT 1", id="show-nbsp-modifier"),
+    pytest.param("SHOW // comment\n INDEXES YIELD name RETURN name LIMIT 1", id="show-line-comment"),
+    pytest.param(r"SH\u004fW /*x*/ CONSTRAINTS YIELD name RETURN name LIMIT 1", id="show-unicode-comment"),
+    pytest.param("CALL\u00a0apoc.help('text') YIELD name RETURN name LIMIT 1", id="call-apoc-nbsp"),
+    pytest.param("CALL `apoc`.`load`.`json`('http://127.0.0.1:1/') YIELD value RETURN value", id="call-apoc-quoted"),
+    pytest.param(r"C\u0041LL /*x*/ apoc.help('text') YIELD name RETURN name LIMIT 1", id="call-apoc-unicode"),
+    pytest.param("CALL `gds`.`list`() YIELD name RETURN name LIMIT 1", id="call-gds-quoted"),
+    pytest.param(r"CALL g\u0064s.list() YIELD name RETURN name LIMIT 1", id="call-gds-unicode"),
+    pytest.param(
+        "RETURN `apoc`.`cypher`.`runFirstColumnSingle`('RETURN 1', {}) AS r",
+        id="apoc-cypher-segment-quoted",
+    ),
+    pytest.param(
+        "RETURN apoc/*x*/.cypher.runFirstColumnSingle('RETURN 1', {}) AS r",
+        id="apoc-cypher-comment-before-dot",
+    ),
+    pytest.param(
+        "RETURN apoc./*x*/cypher.runFirstColumnSingle('RETURN 1', {}) AS r",
+        id="apoc-cypher-comment-after-dot",
+    ),
+    pytest.param(
+        "RETURN `apoc`/*x*/./*y*/`cypher`.`runFirstColumnSingle`('RETURN 1', {}) AS r",
+        id="apoc-cypher-quoted-comments",
+    ),
+    pytest.param(r"RETURN apoc.cyph\u0065r.runFirstColumnSingle('RETURN 1', {}) AS r", id="apoc-cypher-unicode"),
+    pytest.param("RETURN gds.version() AS version", id="gds-function"),
+    pytest.param("RETURN `gds`.`version`() AS version", id="gds-function-quoted"),
+    pytest.param(
+        "MATCH (s)-[r]->(t) WITH `gds`.`graph`.`project`('probe', s, t) AS graph RETURN graph",
+        id="gds-project-quoted",
+    ),
+    pytest.param(
+        "MATCH (s)-[r]->(t) WITH gds/*x*/.graph.project('probe', s, t) AS graph RETURN graph",
+        id="gds-comment-dot",
+    ),
+    pytest.param(
+        "RETURN ai.text.chunkByTokenLimit(n.description, 512, 'text-embedding-3-small', 32) AS chunks",
+        id="ai-text-chunk-function",
+    ),
+    pytest.param(
+        "RETURN `ai`.`text`.`tokenCount`('sensitive text', 'OpenAI', {}) AS tokens",
+        id="ai-text-token-count-quoted",
+    ),
+    pytest.param(
+        "CALL ai/*x*/.text.embedBatch(['secret'], 'OpenAI', {}) YIELD index, vector RETURN index, vector",
+        id="ai-text-procedure-comment-dot",
+    ),
+    pytest.param(
+        "RETURN ai./*x*/text.tokenCount('sensitive text', 'OpenAI', {}) AS tokens",
+        id="ai-text-comment-after-dot",
+    ),
+    pytest.param(
+        r"RETURN a\u0069.text.tokenCount('sensitive text', 'OpenAI', {}) AS tokens",
+        id="ai-text-unicode-namespace",
+    ),
+    pytest.param(
+        "CALL `ai.text.tokenCount.providers`() YIELD name RETURN name",
+        id="ai-text-full-quoted-procedure",
+    ),
+    pytest.param(
+        "RETURN `ai.text.completion`('summarize this', 'OpenAI', {}) AS response",
+        id="ai-text-full-quoted",
+    ),
+    pytest.param(
+        "RETURN genai.vector.encode('secret', 'OpenAI', {}) AS embedding",
+        id="genai-vector-function",
+    ),
+    pytest.param(
+        "CALL `genai`.`vector`.`encodeBatch`(['secret'], 'OpenAI', {}) YIELD index, vector RETURN index, vector",
+        id="genai-vector-procedure-quoted",
+    ),
+    pytest.param(
+        "RETURN genai/*x*/.vector.encode('secret', 'OpenAI', {}) AS embedding",
+        id="genai-vector-comment-before-dot",
+    ),
+    pytest.param(
+        "RETURN genai./*x*/vector.encode('secret', 'OpenAI', {}) AS embedding",
+        id="genai-vector-comment-after-dot",
+    ),
+    pytest.param(
+        r"RETURN gena\u0069.vector.encode('secret', 'OpenAI', {}) AS embedding",
+        id="genai-vector-unicode-namespace",
+    ),
+    pytest.param(
+        "RETURN `genai.vector.encode`('secret', 'OpenAI', {}) AS embedding",
+        id="genai-vector-full-quoted",
+    ),
+]
+
+WRITE_QUERY_TYPE_FUZZ_CASES = [
+    pytest.param("rw", "CYPHER 25 CREATE (:SeizuWriteProbe {id: 'x'})", id="cypher25-create"),
+    pytest.param("rw", "CYPHER 25 FOR x IN [1,2] CREATE (:SeizuWriteProbe {id: x})", id="cypher25-for-create"),
+    pytest.param(
+        "rw",
+        "CYPHER 25 FOR x IN [1,2] RETURN x NEXT CREATE (:SeizuWriteProbe {id: x})",
+        id="cypher25-for-next-create",
+    ),
+    pytest.param(
+        "rw",
+        "CYPHER 25 WHEN true THEN CREATE (:SeizuWriteProbe {id: 'when'}) RETURN 1 AS n ELSE RETURN 2 AS n",
+        id="cypher25-when-create",
+    ),
+    pytest.param(
+        "rw",
+        "CYPHER 25 RETURN 1 AS n NEXT RETURN n UNION CREATE (:SeizuWriteProbe {id: 'union'}) RETURN 2 AS n",
+        id="cypher25-next-union-create",
+    ),
+    pytest.param("rw", "INSERT (:SeizuWriteProbe {id: 'x'})", id="insert"),
+    pytest.param("w", "MATCH (n) NODETACH DELETE n", id="nodetach-delete"),
+    pytest.param("rw", "CALL { CREATE (:SeizuWriteProbe {id: 'sub'}) } RETURN 1", id="call-subquery-create"),
+    pytest.param(
+        "rw",
+        "UNWIND [1] AS x CALL { WITH x CREATE (:SeizuWriteProbe {id: x}) } IN TRANSACTIONS RETURN x",
+        id="call-in-transactions-create",
+    ),
+    pytest.param(
+        "rw",
+        "MATCH (n) WITH n LIMIT 1 OPTIONAL CALL { WITH n CREATE (:SeizuWriteProbe) RETURN n AS m } RETURN m",
+        id="optional-call-create",
+    ),
+    pytest.param(
+        "rw",
+        "MATCH (n) WITH n LIMIT 1 CALL (n) { CREATE (n)-[:SEIZU_SCOPE_PROBE]->(:SeizuWriteProbe) } RETURN n",
+        id="scoped-call-create",
+    ),
+    pytest.param("rw", "CALL { CALL { CREATE (:SeizuWriteProbe) } RETURN 1 AS x } RETURN x", id="nested-call-create"),
+    pytest.param(
+        "rw",
+        "MATCH (n) RETURN count(n) AS c UNION CREATE (:SeizuWriteProbe) RETURN 1 AS c",
+        id="union-create",
+    ),
+    pytest.param("s", "CREATE INDEX seizu_probe IF NOT EXISTS FOR (n:SeizuWriteProbe) ON (n.id)", id="schema-index"),
+    pytest.param("w", "CALL db.createLabel('SeizuProbe')", id="builtin-write-procedure"),
+]
+
+READ_ONLY_CALL_SUBQUERY_CASES = [
+    pytest.param("CYPHER 25 FOR x IN [1,2] RETURN x", id="cypher25-for-read"),
+    pytest.param("CYPHER 25 UNWIND [1, 2] AS n LET doubled = n * 2 RETURN doubled", id="cypher25-let-read"),
+    pytest.param("CYPHER 25 RETURN 1 AS n NEXT RETURN n + 1 AS n", id="cypher25-next-read"),
+    pytest.param("CYPHER 25 WHEN true THEN RETURN 1 AS n ELSE RETURN 2 AS n", id="cypher25-when-read"),
+    pytest.param("CALL { MATCH (n) RETURN count(n) AS c } RETURN c", id="returning-read-subquery"),
+    pytest.param("CALL { CALL { RETURN 1 AS x } RETURN x } RETURN x", id="nested-read-subquery"),
+    pytest.param(
+        "CALL { MATCH (n) RETURN count(n) AS c UNION MATCH ()-[r]->() RETURN count(r) AS c } RETURN sum(c)",
+        id="union-read-subquery",
+    ),
+    pytest.param(
+        "MATCH (n) WITH n LIMIT 1 CALL (n) { RETURN labels(n) AS labels } RETURN labels",
+        id="scoped-read-subquery",
+    ),
+    pytest.param(
+        "MATCH (n) WITH n LIMIT 1 OPTIONAL CALL { WITH n MATCH (n)-->(m) RETURN m LIMIT 1 } RETURN m",
+        id="optional-read-subquery",
+    ),
+    pytest.param("UNWIND [1,2] AS x CALL { WITH x RETURN x AS y } IN TRANSACTIONS RETURN y", id="read-in-transactions"),
+]
+
+ADMIN_COMMAND_FUZZ_CASES = [
+    pytest.param("SHOW CURRENT USER YIELD user RETURN user", id="show-current-user"),
+    pytest.param("SHOW ROLES WITH USERS YIELD role, member RETURN role, member LIMIT 5", id="show-roles-with-users"),
+    pytest.param("SHOW ALL PRIVILEGES AS COMMANDS YIELD command RETURN command LIMIT 5", id="show-privileges-commands"),
+    pytest.param("SHOW ALIASES FOR DATABASE YIELD name RETURN name", id="show-aliases"),
+    pytest.param("SHOW // comment\n USERS YIELD user RETURN user LIMIT 1", id="show-line-comment-users"),
+    pytest.param(r"SH\u004fW PRIVILEGES YIELD action RETURN action LIMIT 1", id="show-unicode-privileges"),
+    pytest.param(
+        "TERMINATE\u00a0TRANSACTION 'neo4j-transaction-0' YIELD transactionId RETURN transactionId",
+        id="terminate-nbsp",
+    ),
+    pytest.param("CREATE DATABASE seizu_probe IF NOT EXISTS", id="create-database"),
+    pytest.param("CREATE OR REPLACE DATABASE seizu_probe", id="create-or-replace-database"),
+    pytest.param("DROP DATABASE seizu_probe IF EXISTS", id="drop-database"),
+    pytest.param("ALTER DATABASE neo4j SET ACCESS READ ONLY", id="alter-database"),
+    pytest.param("START /*x*/ DATABASE neo4j", id="start-database-comment"),
+    pytest.param(r"ST\u004fP DATABASE neo4j", id="stop-database-unicode"),
+    pytest.param("CREATE ALIAS seizu_alias IF NOT EXISTS FOR DATABASE neo4j", id="create-alias"),
+    pytest.param(
+        "CREATE ALIAS seizu_remote IF NOT EXISTS FOR DATABASE neo4j "
+        "AT 'neo4j://127.0.0.1:7687' USER neo4j PASSWORD 'password'",
+        id="create-remote-alias",
+    ),
+    pytest.param("CREATE USER seizu_probe IF NOT EXISTS SET PASSWORD 'password' CHANGE NOT REQUIRED", id="create-user"),
+    pytest.param("ALTER CURRENT USER SET PASSWORD FROM 'password' TO 'password2'", id="alter-current-user"),
+    pytest.param("RENAME USER seizu_probe TO seizu_probe2", id="rename-user"),
+    pytest.param("CREATE ROLE seizu_probe_role IF NOT EXISTS AS COPY OF reader", id="create-role-copy"),
+    pytest.param("GRANT ROLE reader TO seizu_probe", id="grant-role"),
+    pytest.param("GRANT IMMUTABLE ACCESS ON DATABASE neo4j TO reader", id="grant-immutable"),
+    pytest.param("DENY EXECUTE FUNCTION * ON DBMS TO reader", id="deny-execute-function"),
+    pytest.param("REVOKE CREATE USER ON DBMS FROM reader", id="revoke-dbms-privilege"),
+    pytest.param("ENABLE SERVER 'server-id'", id="enable-server"),
+    pytest.param("DEALLOCATE DATABASES FROM SERVER 'server-id'", id="deallocate-databases"),
+    pytest.param("CREATE COMPOSITE DATABASE seizu_composite IF NOT EXISTS", id="create-composite-database"),
+    pytest.param(
+        "ALTER CURRENT GRAPH TYPE SET { (:Person => {name :: STRING IS KEY}) }",
+        id="alter-current-graph-type-set",
+    ),
+    pytest.param(
+        "ALTER CURRENT GRAPH TYPE ADD { (:Company => {name :: STRING IS UNIQUE}) }",
+        id="alter-current-graph-type-add",
+    ),
+    pytest.param(
+        "ALTER /*x*/ CURRENT GRAPH TYPE ADD { (:Pet => {name :: STRING}) }",
+        id="alter-current-graph-type-comment",
+    ),
+    pytest.param(
+        r"ALTER CURRENT GR\u0041PH TYPE ADD { (:Pet => {name :: STRING}) }",
+        id="alter-current-graph-type-unicode",
+    ),
+    pytest.param(
+        "ALTER CURRENT\u00a0GRAPH TYPE ADD { (:Pet => {name :: STRING}) }",
+        id="alter-current-graph-type-nbsp",
+    ),
+    pytest.param(
+        "USE system CREATE USER seizu_probe IF NOT EXISTS SET PASSWORD 'password' CHANGE NOT REQUIRED",
+        id="use-system-create-user",
+    ),
+    pytest.param("CALL dbms.listConfig() YIELD name, value RETURN name, value LIMIT 5", id="dbms-list-config"),
+    pytest.param(
+        "CALL dbms.killConnection('bogus') YIELD connectionId, message RETURN connectionId, message",
+        id="dbms-kill-connection",
+    ),
+    pytest.param("CALL db.clearQueryCaches() YIELD value RETURN value", id="db-clear-query-caches"),
+    pytest.param("CALL tx.setMetaData({seizu_probe: true})", id="tx-set-metadata"),
+]
+
+
 # --- validate_query returns ValidationResult ---
+
+
+@pytest.mark.parametrize("query", DANGEROUS_READ_PATH_FUZZ_CASES)
+async def test_dangerous_read_path_fuzz_cases_are_blocked(mocker, query):
+    """Regex guards should block read-classified dangerous surfaces after EXPLAIN."""
+    _mock_cyver(mocker)
+    result = await validate_query(query)
+    assert result.has_errors
+
+
+@pytest.mark.parametrize(("query_type", "query"), WRITE_QUERY_TYPE_FUZZ_CASES)
+async def test_write_query_type_fuzz_cases_are_blocked(mocker, query_type, query):
+    """Neo4j EXPLAIN classifications should block write/schema procedure variants."""
+    _mock_cyver(mocker, query_type=query_type)
+    result = await validate_query(query)
+    assert result.has_errors
+
+
+@pytest.mark.parametrize("query", READ_ONLY_CALL_SUBQUERY_CASES)
+async def test_read_only_call_subquery_fuzz_cases_are_allowed(mocker, query):
+    """Keep legitimate read-only CALL subquery shapes allowed while write forms block."""
+    _mock_cyver(mocker)
+    result = await validate_query(query)
+    assert not result.has_errors
+
+
+@pytest.mark.parametrize("query", ADMIN_COMMAND_FUZZ_CASES)
+async def test_admin_command_fuzz_cases_are_blocked(mocker, query):
+    """Admin and DBMS-management surfaces should not validate as user queries."""
+    _mock_cyver(mocker)
+    result = await validate_query(query)
+    assert result.has_errors
 
 
 async def test_validate_query_success(mocker):
@@ -323,6 +587,23 @@ class TestAdminCommandsBlocked:
         result = await validate_query("SHOW INDEXES YIELD name RETURN name LIMIT 5")
         assert result.has_errors
 
+    async def test_show_constraints_is_blocked(self, mocker):
+        _mock_cyver(mocker)
+        result = await validate_query("SHOW CONSTRAINTS YIELD name, type RETURN name, type LIMIT 5")
+        assert result.has_errors
+
+    async def test_show_all_indexes_modifier_is_blocked(self, mocker):
+        _mock_cyver(mocker)
+        result = await validate_query("SHOW ALL INDEXES YIELD name, type RETURN name, type LIMIT 5")
+        assert result.has_errors
+
+    async def test_show_typed_indexes_modifier_is_blocked(self, mocker):
+        _mock_cyver(mocker)
+        index_types = ("RANGE", "LOOKUP", "TEXT", "POINT", "VECTOR", "FULLTEXT")
+        for index_type in index_types:
+            result = await validate_query(f"SHOW {index_type} INDEXES YIELD name, type RETURN name, type LIMIT 5")
+            assert result.has_errors
+
     async def test_stop_database_is_blocked_if_explain_classifies_read(self, mocker):
         _mock_cyver(mocker)
         result = await validate_query("STOP DATABASE neo4j")
@@ -331,6 +612,79 @@ class TestAdminCommandsBlocked:
     async def test_start_database_is_blocked_if_explain_classifies_read(self, mocker):
         _mock_cyver(mocker)
         result = await validate_query("START DATABASE neo4j")
+        assert result.has_errors
+
+
+class TestGDSBlocked:
+    """GDS procedures/functions with side effects outside normal Cypher writes."""
+
+    async def test_gds_graph_project_procedure_is_blocked(self, mocker):
+        _mock_cyver(mocker)
+        result = await validate_query("CALL gds.graph.project('probe', '*', '*') YIELD graphName RETURN graphName")
+        assert result.has_errors
+
+    async def test_gds_graph_project_function_is_blocked(self, mocker):
+        _mock_cyver(mocker)
+        result = await validate_query(
+            "MATCH (source)-[r]->(target) "
+            "WITH gds.graph.project('probe', source, target) AS graph "
+            "RETURN graph.graphName"
+        )
+        assert result.has_errors
+
+    async def test_gds_quoted_graph_project_function_is_blocked(self, mocker):
+        _mock_cyver(mocker)
+        result = await validate_query(
+            "MATCH (source)-[r]->(target) "
+            "WITH `gds`.`graph`.`project`('probe', source, target) AS graph "
+            "RETURN graph.graphName"
+        )
+        assert result.has_errors
+
+    async def test_gds_full_quoted_function_namespace_is_blocked(self, mocker):
+        _mock_cyver(mocker)
+        result = await validate_query("RETURN `gds.version`() AS version")
+        assert result.has_errors
+
+    async def test_gds_version_function_is_blocked(self, mocker):
+        _mock_cyver(mocker)
+        result = await validate_query("RETURN gds.version() AS version")
+        assert result.has_errors
+
+    async def test_gds_write_mode_is_blocked(self, mocker):
+        _mock_cyver(mocker)
+        result = await validate_query(
+            "CALL gds.pageRank.write('probe', {writeProperty: 'pagerank'}) "
+            "YIELD nodePropertiesWritten RETURN nodePropertiesWritten"
+        )
+        assert result.has_errors
+
+    async def test_gds_mutate_mode_is_blocked(self, mocker):
+        _mock_cyver(mocker)
+        result = await validate_query(
+            "CALL gds.pageRank.mutate('probe', {mutateProperty: 'pagerank'}) "
+            "YIELD nodePropertiesWritten RETURN nodePropertiesWritten"
+        )
+        assert result.has_errors
+
+    async def test_gds_comment_bypass_is_blocked(self, mocker):
+        _mock_cyver(mocker)
+        result = await validate_query("CALL /* hide */ gds.graph.list() YIELD graphName RETURN graphName")
+        assert result.has_errors
+
+    async def test_gds_quoted_namespace_bypass_is_blocked(self, mocker):
+        _mock_cyver(mocker)
+        result = await validate_query("CALL `gds`.`graph`.`list`() YIELD graphName RETURN graphName")
+        assert result.has_errors
+
+    async def test_apoc_quoted_namespace_bypass_is_blocked(self, mocker):
+        _mock_cyver(mocker)
+        result = await validate_query("CALL `apoc`.`load`.`json`('http://169.254.169.254/') YIELD value RETURN value")
+        assert result.has_errors
+
+    async def test_gds_unicode_bypass_is_blocked(self, mocker):
+        _mock_cyver(mocker)
+        result = await validate_query(r"C\u0041LL gds.graph.list() YIELD graphName RETURN graphName")
         assert result.has_errors
 
 
@@ -557,6 +911,20 @@ class TestNeo4jectionCloudMetadata:
         )
         assert result.has_errors
 
+    async def test_apoc_cypher_segment_quoted_function_bypass(self, mocker):
+        _mock_cyver(mocker)
+        result = await validate_query(
+            "RETURN `apoc`.`cypher`.`runFirstColumnSingle`('MATCH (n) RETURN n.id LIMIT 1', {}) AS r"
+        )
+        assert result.has_errors
+
+    async def test_apoc_cypher_comment_before_dot_bypass(self, mocker):
+        _mock_cyver(mocker)
+        result = await validate_query(
+            "RETURN apoc/*hide*/.cypher.runFirstColumnSingle('MATCH (n) RETURN n.id LIMIT 1', {}) AS r"
+        )
+        assert result.has_errors
+
     async def test_apoc_cypher_run_first_column_many(self, mocker):
         _mock_cyver(mocker)
         result = await validate_query("RETURN apoc.cypher.runFirstColumnMany('MATCH (n) RETURN n', {}) AS r")
@@ -635,4 +1003,65 @@ class TestNeo4jectionWriteClauses:
     async def test_remove_labels(self, mocker):
         _mock_cyver(mocker, query_type="rw")
         result = await validate_query("MATCH (n:Admin) REMOVE n:Admin RETURN n")
+        assert result.has_errors
+
+    async def test_insert_node(self, mocker):
+        _mock_cyver(mocker, query_type="rw")
+        result = await validate_query("INSERT (:SeizuWriteProbe {id: 'x'})")
+        assert result.has_errors
+
+    async def test_nodetach_delete(self, mocker):
+        _mock_cyver(mocker, query_type="w")
+        result = await validate_query("MATCH (n) NODETACH DELETE n")
+        assert result.has_errors
+
+    async def test_call_subquery_write(self, mocker):
+        _mock_cyver(mocker, query_type="rw")
+        result = await validate_query("CALL { CREATE (:SeizuWriteProbe {id: 'sub'}) } RETURN 1")
+        assert result.has_errors
+
+    async def test_call_subquery_in_transactions_write(self, mocker):
+        _mock_cyver(mocker, query_type="rw")
+        result = await validate_query(
+            "UNWIND [1] AS x CALL { WITH x CREATE (:SeizuWriteProbe {id: x}) } IN TRANSACTIONS RETURN x"
+        )
+        assert result.has_errors
+
+    async def test_optional_call_subquery_write(self, mocker):
+        _mock_cyver(mocker, query_type="rw")
+        result = await validate_query(
+            "MATCH (n) WITH n LIMIT 1 OPTIONAL CALL { WITH n "
+            "CREATE (n)-[:SEIZU_OPTIONAL_PROBE]->(:SeizuWriteProbe) RETURN n AS m } RETURN m"
+        )
+        assert result.has_errors
+
+    async def test_variable_scope_call_subquery_write(self, mocker):
+        _mock_cyver(mocker, query_type="rw")
+        result = await validate_query(
+            "MATCH (n) WITH n LIMIT 1 CALL (n) { CREATE (n)-[:SEIZU_SCOPE_PROBE]->(:SeizuWriteProbe) } RETURN n"
+        )
+        assert result.has_errors
+
+    async def test_nested_call_subquery_write(self, mocker):
+        _mock_cyver(mocker, query_type="rw")
+        result = await validate_query(
+            "CALL { CALL { CREATE (:SeizuWriteProbe {id: 'nested'}) } RETURN 1 AS x } RETURN x"
+        )
+        assert result.has_errors
+
+    async def test_union_branch_write(self, mocker):
+        _mock_cyver(mocker, query_type="rw")
+        query = "MATCH (n) RETURN count(n) AS c UNION CREATE (:SeizuWriteProbe) RETURN 1 AS c"
+        result = await validate_query(query)
+        assert result.has_errors
+
+    async def test_schema_command(self, mocker):
+        _mock_cyver(mocker, query_type="s")
+        query = "CREATE INDEX seizu_probe_index IF NOT EXISTS FOR (n:SeizuWriteProbe) ON (n.id)"
+        result = await validate_query(query)
+        assert result.has_errors
+
+    async def test_write_procedure(self, mocker):
+        _mock_cyver(mocker, query_type="w")
+        result = await validate_query("CALL db.createLabel('SeizuProbe')")
         assert result.has_errors

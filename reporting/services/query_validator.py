@@ -12,37 +12,51 @@ _UNICODE_ESCAPE_RE = re.compile(r"\\u([0-9a-fA-F]{4})")
 # Keyword scan for dangerous read-path operations that Neo4j classifies as
 # query_type='r' but can be used for SSRF or data exfiltration.
 #
-# \bCALL\s+apoc\.     — APOC procedure calls (e.g. CALL apoc.load.json)
-# \bapoc\.cypher\.    — APOC Cypher-execution functions used without CALL
-#                       (apoc.cypher.runFirstColumnSingle/Many execute
-#                       arbitrary inner Cypher, bypassing this validator)
+# \bCALL ... apoc/gds — APOC/GDS procedure calls, including segment-quoted
+#                       namespaces (e.g. CALL `gds`.`graph`.`list`())
+# apoc.cypher namespace — APOC Cypher-execution functions used without CALL,
+#                         including comments around dots and segment-quoted
+#                         namespaces (`apoc`.`cypher`.`run...`)
 # \bLOAD\s+CSV\b      — built-in LOAD CSV (also covers SSRF to file://)
+# gds namespace functions — includes gds.graph.project(), a Cypher projection
+#                           aggregation function that creates graph catalog
+#                           state without a CALL procedure
+# ai.text / genai.vector — GenAI plugin calls can send graph data to external
+#                          model providers while still being read-classified.
 _DANGEROUS_RE = re.compile(
-    r"\bLOAD\s+CSV\b|\bCALL\s+apoc\.|\bapoc\.cypher\.",
+    r"\bLOAD\s+CSV\b|"
+    r"\bCALL\s+(?:`?(?:apoc|gds)`?\s*\.|`(?:apoc|gds)\.)|"
+    r"(?:\bapoc\b|`apoc`)\s*\.\s*(?:cypher\b|`cypher`)\s*\.|"
+    r"`apoc\.cypher\.|"
+    r"(?:\bgds\b\s*\.|`gds`\s*\.|`gds\.)|"
+    r"(?:\bai\b|`ai`)\s*\.\s*(?:text\b|`text`)\s*\.|"
+    r"`ai\.text\.|"
+    r"(?:\bgenai\b|`genai`)\s*\.\s*(?:vector\b|`vector`)\s*\.|"
+    r"`genai\.vector\.",
     re.IGNORECASE,
 )
 
 # Neo4j administration/catalog commands can be classified as read-only by
 # EXPLAIN while still exposing operational metadata or causing side effects
-# such as terminating transactions.
+# such as terminating transactions. Block SHOW as a top-level admin/catalog
+# entry point rather than enumerating every Cypher 5 modifier form
+# (SHOW ALL INDEXES, SHOW RANGE INDEXES, SHOW CONSTRAINTS, etc.).
 _ADMIN_COMMAND_RE = re.compile(
-    r"\bSHOW\s+("
-    r"ALIASES?|"
-    r"CURRENT\s+USER|"
-    r"DATABASES?|"
-    r"FUNCTIONS?|"
-    r"INDEX(?:ES)?|"
-    r"PRIVILEGES?|"
-    r"PROCEDURES?|"
-    r"ROLES?|"
-    r"SERVERS?|"
-    r"SETTINGS?|"
-    r"SUPPORTED\s+PRIVILEGES|"
-    r"TRANSACTIONS?|"
-    r"USERS?"
-    r")\b|"
+    r"\bSHOW\b|"
     r"\bTERMINATE\s+TRANSACTIONS?\b|"
-    r"\b(?:START|STOP)\s+DATABASE\b",
+    r"\b(?:START|STOP)\s+DATABASE\b|"
+    r"\bCREATE\s+(?:OR\s+REPLACE\s+)?(?:DATABASE|COMPOSITE\s+DATABASE|ALIAS|USER|ROLE)\b|"
+    r"\bDROP\s+(?:DATABASE|COMPOSITE\s+DATABASE|ALIAS|USER|ROLE|SERVER)\b|"
+    r"\bALTER\s+(?:DATABASE|ALIAS|USER|CURRENT\s+USER|SERVER)\b|"
+    r"\bALTER\s+CURRENT\s+GRAPH(?:\s+TYPE)?\b|"
+    r"\bRENAME\s+(?:USER|ROLE|SERVER)\b|"
+    r"\b(?:GRANT|DENY|REVOKE)\b|"
+    r"\b(?:ENABLE|DEALLOCATE)\s+(?:SERVER|DATABASES?)\b|"
+    r"\bREALLOCATE\s+DATABASES\b|"
+    r"\bUSE\s+system\b|"
+    r"\bCALL\s+(?:dbms\.|db\.clearQueryCaches\b|db\.create(?:Label|Property|RelationshipType)\b|"
+    r"db\.index\.vector\.createNodeIndex\b|db\.create\.set(?:Node|Relationship)?VectorProperty\b|"
+    r"tx\.setMetaData\b)",
     re.IGNORECASE,
 )
 

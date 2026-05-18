@@ -1,0 +1,43 @@
+name: Live Query Validator
+
+on:
+  pull_request:
+    branches:
+      - master
+  push:
+    branches:
+      - master
+  workflow_dispatch: {}
+
+# Deny all permissions by default; grant only what each job needs.
+permissions: {}
+
+jobs:
+  live-query-validator:
+    name: Neo4j ${{ matrix.neo4j }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - neo4j: current
+            target: neo4j_current
+          - neo4j: latest
+            target: neo4j_latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Select Neo4j version
+        run: make ${{ matrix.target }}
+
+      - name: Enable Neo4j security-test plugins
+        run: perl -pi -e 's/^NEO4J_PLUGINS=.*/NEO4J_PLUGINS=["apoc","graph-data-science"]/' .env
+
+      - name: Run live query validator tests
+        run: make test_query_validator_live
+
+      - name: Show service logs on failure
+        if: failure()
+        run: docker compose logs neo4j seizu
