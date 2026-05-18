@@ -10,6 +10,7 @@ from tests.query_validator_cases import (
     DANGEROUS_READ_PATH_FUZZ_CASES,
     DISALLOWED_PROCEDURE_CASES,
     READ_ONLY_CALL_SUBQUERY_CASES,
+    USE_CLAUSE_FALSE_POSITIVE_CASES,
     USE_CLAUSE_FUZZ_CASES,
     WRITE_QUERY_TYPE_FUZZ_CASES,
 )
@@ -92,6 +93,14 @@ async def test_use_clause_fuzz_cases_are_blocked(mocker, query):
     _mock_cyver(mocker)
     result = await validate_query(query)
     assert result.has_errors
+
+
+@pytest.mark.parametrize("query", USE_CLAUSE_FALSE_POSITIVE_CASES)
+async def test_use_clause_false_positive_cases_are_allowed(mocker, query):
+    """A `use` variable after a CASE THEN/ELSE must not trip the USE-clause guard."""
+    _mock_cyver(mocker)
+    result = await validate_query(query)
+    assert not result.has_errors
 
 
 @pytest.mark.parametrize("query", DISALLOWED_PROCEDURE_CASES)

@@ -263,6 +263,24 @@ USE_CLAUSE_FUZZ_CASES = [
     ),
 ]
 
+# Legitimate read-only queries that place a variable named `use` right after a
+# CASE THEN/ELSE keyword. The USE-clause guard anchors on THEN/ELSE (Cypher 25
+# conditional branches), so these must not be misread as a USE clause.
+USE_CLAUSE_FALSE_POSITIVE_CASES = [
+    pytest.param(
+        "WITH 1 AS use, 2 AS alt RETURN CASE WHEN use > 0 THEN use ELSE alt END AS v",
+        id="case-then-use-variable",
+    ),
+    pytest.param(
+        "WITH 1 AS use RETURN CASE WHEN false THEN 0 ELSE use END AS v",
+        id="case-else-use-variable",
+    ),
+    pytest.param(
+        "WITH 1 AS use RETURN CASE 1 WHEN 1 THEN use ELSE 0 END AS v",
+        id="simple-case-then-use-variable",
+    ),
+]
+
 # Procedure calls blocked by default — the allowlist only covers side-effect-free
 # built-in schema procedures.
 DISALLOWED_PROCEDURE_CASES = [

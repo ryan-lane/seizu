@@ -56,12 +56,18 @@ _LOAD_CSV_RE = re.compile(r"\bLOAD\s+CSV\b", re.IGNORECASE)
 # followed by a real graph reference, so a map key or variable named `use` is
 # not a false positive.
 #
+# THEN and ELSE are anchors because a Cypher 25 conditional-query branch can
+# start with USE, but they are also CASE-expression keywords: `... THEN use
+# ELSE alt END` with a variable named `use` would otherwise match. The negative
+# lookahead drops that case — a USE clause is never followed by ELSE/END/WHEN
+# (those are CASE-internal keywords, not graph references).
+#
 # Known gap: a USE clause following an importing WITH inside an old-style
 # subquery is not matched; that form only works on composite databases.
 _USE_CLAUSE_RE = re.compile(
     r"(?:^|\b(?:UNION|NEXT|THEN|ELSE)\b|\{)\s*"
     r"(?:CYPHER\s+[\w.]+(?:\s+\w+\s*=\s*\w+)*\s+)?"
-    r"USE\s+(?:graph\s*\.|`|[A-Za-z_])",
+    r"USE\s+(?!(?:ELSE|END|WHEN|THEN)\b)(?:graph\s*\.|`|[A-Za-z_])",
     re.IGNORECASE,
 )
 
