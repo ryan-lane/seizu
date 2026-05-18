@@ -2,11 +2,15 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from reporting import settings
 from reporting.services.query_validator import ValidationResult, validate_query
 from tests.query_validator_cases import (
     ADMIN_COMMAND_FUZZ_CASES,
+    ALLOWED_PROCEDURE_CASES,
     DANGEROUS_READ_PATH_FUZZ_CASES,
+    DISALLOWED_PROCEDURE_CASES,
     READ_ONLY_CALL_SUBQUERY_CASES,
+    USE_CLAUSE_FUZZ_CASES,
     WRITE_QUERY_TYPE_FUZZ_CASES,
 )
 
@@ -80,6 +84,84 @@ async def test_admin_command_fuzz_cases_are_blocked(mocker, query):
     _mock_cyver(mocker)
     result = await validate_query(query)
     assert result.has_errors
+
+
+@pytest.mark.parametrize("query", USE_CLAUSE_FUZZ_CASES)
+async def test_use_clause_fuzz_cases_are_blocked(mocker, query):
+    """The USE clause escapes Seizu's configured graph and is always blocked."""
+    _mock_cyver(mocker)
+    result = await validate_query(query)
+    assert result.has_errors
+
+
+@pytest.mark.parametrize("query", DISALLOWED_PROCEDURE_CASES)
+async def test_disallowed_procedure_cases_are_blocked(mocker, query):
+    """Procedures outside the default allowlist are blocked after EXPLAIN."""
+    _mock_cyver(mocker)
+    result = await validate_query(query)
+    assert result.has_errors
+
+
+@pytest.mark.parametrize("query", ALLOWED_PROCEDURE_CASES)
+async def test_allowed_procedure_cases_are_permitted(mocker, query):
+    """Side-effect-free built-in schema procedures validate cleanly by default."""
+    _mock_cyver(mocker)
+    result = await validate_query(query)
+    assert not result.has_errors
+
+
+class TestProcedureAllowlist:
+    """QUERY_VALIDATOR_ALLOWED_PROCEDURES extends the default procedure allowlist."""
+
+    async def test_apoc_procedure_blocked_by_default(self, mocker):
+        _mock_cyver(mocker)
+        result = await validate_query("CALL apoc.meta.stats() YIELD labelCount RETURN labelCount")
+        assert result.has_errors
+
+    async def test_exact_procedure_name_is_allowed_when_configured(self, mocker):
+        _mock_cyver(mocker)
+        mocker.patch.object(settings, "QUERY_VALIDATOR_ALLOWED_PROCEDURES", ["apoc.meta.stats"])
+        result = await validate_query("CALL apoc.meta.stats() YIELD labelCount RETURN labelCount")
+        assert not result.has_errors
+
+    async def test_exact_procedure_name_does_not_allow_siblings(self, mocker):
+        _mock_cyver(mocker)
+        mocker.patch.object(settings, "QUERY_VALIDATOR_ALLOWED_PROCEDURES", ["apoc.meta.stats"])
+        result = await validate_query("CALL apoc.load.json('http://attacker/') YIELD value RETURN value")
+        assert result.has_errors
+
+    async def test_namespace_prefix_allows_whole_namespace(self, mocker):
+        _mock_cyver(mocker)
+        mocker.patch.object(settings, "QUERY_VALIDATOR_ALLOWED_PROCEDURES", ["apoc."])
+        result = await validate_query("CALL apoc.coll.sum([1, 2, 3]) YIELD value RETURN value")
+        assert not result.has_errors
+
+    async def test_apoc_namespace_prefix_also_unblocks_apoc_cypher_functions(self, mocker):
+        """Opting a namespace in drops its dangerous-function guard too."""
+        _mock_cyver(mocker)
+        mocker.patch.object(settings, "QUERY_VALIDATOR_ALLOWED_PROCEDURES", ["apoc."])
+        result = await validate_query("RETURN apoc.cypher.runFirstColumnSingle('RETURN 1', {}) AS r")
+        assert not result.has_errors
+
+    async def test_gds_namespace_prefix_unblocks_gds_functions(self, mocker):
+        _mock_cyver(mocker)
+        mocker.patch.object(settings, "QUERY_VALIDATOR_ALLOWED_PROCEDURES", ["gds."])
+        result = await validate_query("RETURN gds.version() AS version")
+        assert not result.has_errors
+
+    async def test_narrow_apoc_prefix_keeps_apoc_cypher_guarded(self, mocker):
+        """A sub-namespace prefix must not drop the apoc.cypher.* guard."""
+        _mock_cyver(mocker)
+        mocker.patch.object(settings, "QUERY_VALIDATOR_ALLOWED_PROCEDURES", ["apoc.coll."])
+        result = await validate_query("RETURN apoc.cypher.runFirstColumnSingle('RETURN 1', {}) AS r")
+        assert result.has_errors
+
+    async def test_allowlist_cannot_override_explain_write_check(self, mocker):
+        """Even an allowlisted namespace cannot permit a non-read procedure."""
+        _mock_cyver(mocker, query_type="w")
+        mocker.patch.object(settings, "QUERY_VALIDATOR_ALLOWED_PROCEDURES", ["apoc."])
+        result = await validate_query("CALL apoc.create.node(['X'], {}) YIELD node RETURN node")
+        assert result.has_errors
 
 
 async def test_validate_query_success(mocker):

@@ -15,11 +15,14 @@ from reporting.services.query_validator import validate_query
 from reporting.services.reporting_neo4j import _get_async_neo4j_client
 from tests.query_validator_cases import (
     ADMIN_COMMAND_FUZZ_CASES,
+    ALLOWED_PROCEDURE_CASES,
     CYPHER_25_BLOCKED_EXTRA_QUERIES,
     DANGEROUS_READ_PATH_FUZZ_CASES,
+    DISALLOWED_PROCEDURE_CASES,
     LIVE_READ_ONLY_QUERIES,
     NEO4JECTION_BLOCKED_QUERIES,
     READ_ONLY_CALL_SUBQUERY_CASES,
+    USE_CLAUSE_FUZZ_CASES,
     WRITE_QUERY_TYPE_FUZZ_CASES,
 )
 
@@ -87,6 +90,9 @@ UNIT_DANGEROUS_READ_PATH_QUERIES = _as_query_params(DANGEROUS_READ_PATH_FUZZ_CAS
 UNIT_WRITE_QUERIES = _as_query_params(WRITE_QUERY_TYPE_FUZZ_CASES, value_index=1)
 UNIT_READ_ONLY_CALL_SUBQUERY_QUERIES = _as_query_params(READ_ONLY_CALL_SUBQUERY_CASES)
 UNIT_ADMIN_COMMAND_QUERIES = _as_query_params(ADMIN_COMMAND_FUZZ_CASES)
+UNIT_USE_CLAUSE_QUERIES = _as_query_params(USE_CLAUSE_FUZZ_CASES)
+UNIT_DISALLOWED_PROCEDURE_QUERIES = _as_query_params(DISALLOWED_PROCEDURE_CASES)
+UNIT_ALLOWED_PROCEDURE_QUERIES = _as_query_params(ALLOWED_PROCEDURE_CASES)
 
 
 @pytest.mark.parametrize("query", LIVE_READ_ONLY_QUERIES)
@@ -118,6 +124,22 @@ async def test_live_unit_admin_command_family_queries_are_blocked(query: str) ->
 @pytest.mark.parametrize("query", NEO4JECTION_BLOCKED_QUERIES)
 async def test_live_neo4jection_family_queries_are_blocked(query: str) -> None:
     await _assert_blocked(query)
+
+
+@pytest.mark.parametrize("query", UNIT_USE_CLAUSE_QUERIES)
+async def test_live_use_clause_family_queries_are_blocked(query: str) -> None:
+    params = {"db": "neo4j", "id": "4:abc:0"} if "$" in query else None
+    await _assert_blocked(query, params=params)
+
+
+@pytest.mark.parametrize("query", UNIT_DISALLOWED_PROCEDURE_QUERIES)
+async def test_live_disallowed_procedure_family_queries_are_blocked(query: str) -> None:
+    await _assert_blocked(query)
+
+
+@pytest.mark.parametrize("query", UNIT_ALLOWED_PROCEDURE_QUERIES)
+async def test_live_allowed_procedure_family_queries_are_allowed(query: str) -> None:
+    await _assert_allowed(query)
 
 
 @pytest.mark.parametrize("query", UNIT_READ_ONLY_CALL_SUBQUERY_QUERIES)

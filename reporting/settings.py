@@ -115,6 +115,18 @@ NEO4J_CONNECTION_TIMEOUT = int_env("NEO4J_CONNECTION_TIMEOUT", 10)
 # Timeout in seconds for Neo4j query execution (server-side transaction timeout).
 NEO4J_QUERY_TIMEOUT = int_env("NEO4J_QUERY_TIMEOUT", 30)
 
+# Procedures the Cypher query validator permits, in addition to the built-in
+# read-only schema procedures allowed by default (db.labels, db.propertyKeys,
+# db.schema.*, etc.). Each comma-separated entry is either an exact procedure
+# name (e.g. "apoc.meta.stats") or a namespace prefix ending in a dot (e.g.
+# "apoc." or "gds."). A namespace prefix allows every procedure in that
+# namespace and also drops the matching dangerous-function guard, so
+# `apoc.cypher.*` / `gds.*` functions become permitted too.
+# Empty by default — only side-effect-free schema procedures are allowed.
+# Note: write/schema/DBMS procedures stay blocked by the EXPLAIN read-only
+# check regardless of this setting.
+QUERY_VALIDATOR_ALLOWED_PROCEDURES = list_env("QUERY_VALIDATOR_ALLOWED_PROCEDURES", [])
+
 # Shared secret used to sign report-query capability tokens.
 # Required in normal authenticated deployments. Use a cryptographically random
 # value with at least 32 bytes of entropy; 64 bytes is preferred. Encode as hex

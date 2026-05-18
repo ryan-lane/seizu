@@ -5,34 +5,62 @@ from typing import Any
 
 from CyVer import PropertiesValidator, SchemaValidator
 
+from reporting import settings
 from reporting.services.reporting_neo4j import _get_async_neo4j_client, _get_sync_neo4j_client
 
 _UNICODE_ESCAPE_RE = re.compile(r"\\u([0-9a-fA-F]{4})")
 
-# Keyword scan for dangerous read-path operations that Neo4j classifies as
-# query_type='r' but can be used for SSRF or data exfiltration.
+# Built-in Neo4j procedures that are read-only, side-effect-free, and perform no
+# network or filesystem I/O. These are the only procedures permitted by default.
+# Operators can allow more (apoc.*, gds.*, custom plugins) via the
+# QUERY_VALIDATOR_ALLOWED_PROCEDURES setting. Names are normalized lowercase.
 #
-# \bCALL ... apoc/gds — APOC/GDS procedure calls, including segment-quoted
-#                       namespaces (e.g. CALL `gds`.`graph`.`list`())
-# apoc.cypher namespace — APOC Cypher-execution functions used without CALL,
-#                         including comments around dots and segment-quoted
-#                         namespaces (`apoc`.`cypher`.`run...`)
-# \bLOAD\s+CSV\b      — built-in LOAD CSV (also covers SSRF to file://)
-# gds namespace functions — includes gds.graph.project(), a Cypher projection
-#                           aggregation function that creates graph catalog
-#                           state without a CALL procedure
-# ai.text / genai.vector — GenAI plugin calls can send graph data to external
-#                          model providers while still being read-classified.
-_DANGEROUS_RE = re.compile(
-    r"\bLOAD\s+CSV\b|"
-    r"\bCALL\s+(?:`?(?:apoc|gds)`?\s*\.|`(?:apoc|gds)\.)|"
-    r"(?:\bapoc\b|`apoc`)\s*\.\s*(?:cypher\b|`cypher`)\s*\.|"
-    r"`apoc\.cypher\.|"
-    r"(?:\bgds\b\s*\.|`gds`\s*\.|`gds\.)|"
-    r"(?:\bai\b|`ai`)\s*\.\s*(?:text\b|`text`)\s*\.|"
-    r"`ai\.text\.|"
-    r"(?:\bgenai\b|`genai`)\s*\.\s*(?:vector\b|`vector`)\s*\.|"
-    r"`genai\.vector\.",
+# Procedure guarding is an allowlist rather than a denylist: any installed
+# plugin procedure that Neo4j classifies as read-only but performs I/O (e.g.
+# neosemantics `n10s.rdf.import.fetch`, custom HTTP procedures) would otherwise
+# bypass both the EXPLAIN write check and the SSRF regex.
+_DEFAULT_ALLOWED_PROCEDURES = frozenset(
+    {
+        "db.labels",
+        "db.relationshiptypes",
+        "db.propertykeys",
+        "db.schema.visualization",
+        "db.schema.nodetypeproperties",
+        "db.schema.reltypeproperties",
+        "db.ping",
+    }
+)
+
+# A procedure invocation: the CALL keyword followed by a dotted procedure name.
+# Each segment is a bare identifier or a backtick-quoted segment, with optional
+# whitespace around the dots (comments are stripped to spaces before scanning).
+# `CALL {...}` and `CALL (...) {...}` subqueries have no name token here and so
+# are not matched.
+_PROCEDURE_CALL_RE = re.compile(
+    r"\bCALL\s+((?:`[^`]*`|[A-Za-z_]\w*)(?:\s*\.\s*(?:`[^`]*`|[A-Za-z_]\w*))*)",
+    re.IGNORECASE,
+)
+
+_BACKTICK_OR_SPACE_RE = re.compile(r"[`\s]")
+
+# Built-in LOAD CSV — an SSRF/exfiltration vector (also covers file://).
+_LOAD_CSV_RE = re.compile(r"\bLOAD\s+CSV\b", re.IGNORECASE)
+
+# The USE clause routes a query to a specific graph in the DBMS, letting a
+# caller escape Seizu's configured graph and read any other database in the
+# DBMS (including `system`) via `USE other`, `USE composite.constituent`, or
+# `USE graph.byName(...)`. Seizu queries always target the default graph, so
+# USE is blocked outright. It is matched only at clause-start positions — query
+# start, after UNION, or at the start of a CALL {} subquery — optionally after
+# a CYPHER version prefix, and only when followed by a real graph reference, so
+# a map key or variable named `use` is not a false positive.
+#
+# Known gap: a USE clause following an importing WITH inside an old-style
+# subquery is not matched; that form only works on composite databases.
+_USE_CLAUSE_RE = re.compile(
+    r"(?:^|\bUNION\b|\{)\s*"
+    r"(?:CYPHER\s+[\w.]+(?:\s+\w+\s*=\s*\w+)*\s+)?"
+    r"USE\s+(?:graph\s*\.|`|[A-Za-z_])",
     re.IGNORECASE,
 )
 
@@ -41,6 +69,11 @@ _DANGEROUS_RE = re.compile(
 # such as terminating transactions. Block SHOW as a top-level admin/catalog
 # entry point rather than enumerating every Cypher 5 modifier form
 # (SHOW ALL INDEXES, SHOW RANGE INDEXES, SHOW CONSTRAINTS, etc.).
+#
+# Administration *procedures* (`CALL dbms.*`, `CALL db.createLabel`,
+# `CALL tx.setMetaData`, etc.) are not listed here — they are blocked by the
+# EXPLAIN write check (DBMS/WRITE/SCHEMA modes are non-read) and, as a backstop,
+# by the procedure allowlist below.
 _ADMIN_COMMAND_RE = re.compile(
     r"\bSHOW\b|"
     r"\bTERMINATE\s+TRANSACTIONS?\b|"
@@ -52,12 +85,41 @@ _ADMIN_COMMAND_RE = re.compile(
     r"\bRENAME\s+(?:USER|ROLE|SERVER)\b|"
     r"\b(?:GRANT|DENY|REVOKE)\b|"
     r"\b(?:ENABLE|DEALLOCATE)\s+(?:SERVER|DATABASES?)\b|"
-    r"\bREALLOCATE\s+DATABASES\b|"
-    r"\bUSE\s+system\b|"
-    r"\bCALL\s+(?:dbms\.|db\.clearQueryCaches\b|db\.create(?:Label|Property|RelationshipType)\b|"
-    r"db\.index\.vector\.createNodeIndex\b|db\.create\.set(?:Node|Relationship)?VectorProperty\b|"
-    r"tx\.setMetaData\b)",
+    r"\bREALLOCATE\s+DATABASES\b",
     re.IGNORECASE,
+)
+
+# Dangerous function namespaces invoked WITHOUT a CALL keyword. `apoc.cypher.*`
+# executes arbitrary inner Cypher; `gds.*` functions create graph-catalog
+# state; `ai.*` / `genai.*` functions send graph-derived data to external model
+# providers. These cannot be allowlisted per-procedure because they are
+# functions, not procedures, so they are blocked by namespace.
+#
+# Each entry is (namespace_prefix, regex). An arm is dropped when its namespace
+# is covered by QUERY_VALIDATOR_ALLOWED_PROCEDURES, so an operator who opts a
+# namespace in gets both its procedures and its functions. Procedure-call
+# (`CALL ...`) name spans are masked out before these patterns run, so an
+# allowlisted `CALL` into one of these namespaces is not re-flagged here.
+#
+# apoc is guarded only at the `apoc.cypher.` namespace: APOC's pure-computation
+# functions (`apoc.text.*`, `apoc.convert.*`, ...) are safe and widely used.
+_DANGEROUS_FUNCTION_NAMESPACES: tuple[tuple[str, str], ...] = (
+    (
+        "apoc.cypher.",
+        r"(?:\bapoc\b|`apoc`)\s*\.\s*(?:cypher\b|`cypher`)\s*\.|`apoc\.cypher\.",
+    ),
+    (
+        "gds.",
+        r"\bgds\b\s*\.|`gds`\s*\.|`gds\.",
+    ),
+    (
+        "ai.",
+        r"(?:\bai\b|`ai`)\s*\.\s*(?:[A-Za-z_]\w*|`[^`]*`)\s*\.|`ai\.[^`]*\.",
+    ),
+    (
+        "genai.",
+        r"(?:\bgenai\b|`genai`)\s*\.\s*(?:[A-Za-z_]\w*|`[^`]*`)\s*\.|`genai\.[^`]*\.",
+    ),
 )
 
 
@@ -113,6 +175,96 @@ def _keyword_scan_targets(query: str) -> tuple[str, ...]:
     return query, stripped, decoded, stripped_decoded, decoded_stripped
 
 
+def _normalize_procedure(raw_name: str) -> str:
+    """Normalize a matched procedure name: drop backticks/whitespace, lowercase.
+
+    `\\`apoc\\`.\\`load\\`.\\`json\\`` and `apoc . load . json` both normalize
+    to `apoc.load.json`.
+    """
+
+    return _BACKTICK_OR_SPACE_RE.sub("", raw_name).lower()
+
+
+def _resolve_allowed_procedures() -> tuple[frozenset[str], tuple[str, ...]]:
+    """Combine the default safe procedures with the configured extras.
+
+    Returns (exact_names, namespace_prefixes). A configured entry ending in `.`
+    is treated as a namespace prefix (e.g. `apoc.` allows every apoc procedure);
+    any other entry is an exact procedure name.
+    """
+
+    exact = set(_DEFAULT_ALLOWED_PROCEDURES)
+    prefixes: list[str] = []
+    for entry in settings.QUERY_VALIDATOR_ALLOWED_PROCEDURES:
+        normalized = _normalize_procedure(entry)
+        if not normalized:
+            continue
+        if normalized.endswith("."):
+            prefixes.append(normalized)
+        else:
+            exact.add(normalized)
+    return frozenset(exact), tuple(prefixes)
+
+
+def _procedure_allowed(name: str, allowed_exact: frozenset[str], allowed_prefixes: tuple[str, ...]) -> bool:
+    if name in allowed_exact:
+        return True
+    return any(name.startswith(prefix) for prefix in allowed_prefixes)
+
+
+def _build_dangerous_function_re(allowed_prefixes: tuple[str, ...]) -> re.Pattern[str] | None:
+    """Compile the dangerous-function-namespace regex, dropping any namespace an
+    operator has opted into via the procedure allowlist."""
+
+    arms = [
+        pattern
+        for namespace, pattern in _DANGEROUS_FUNCTION_NAMESPACES
+        if not any(namespace.startswith(prefix) for prefix in allowed_prefixes)
+    ]
+    if not arms:
+        return None
+    return re.compile("|".join(arms), re.IGNORECASE)
+
+
+def _scan_for_dangerous_constructs(query: str) -> str | None:
+    """Scan a read-classified query for SSRF, admin, and disallowed-procedure
+    constructs that Neo4j does not block on its own.
+
+    Returns an error message if the query must be blocked, otherwise None. The
+    original, comment-stripped, and unicode-decoded forms are all scanned (see
+    validate_query for the rationale).
+    """
+
+    allowed_exact, allowed_prefixes = _resolve_allowed_procedures()
+    dangerous_function_re = _build_dangerous_function_re(allowed_prefixes)
+
+    for target in _keyword_scan_targets(query):
+        if _ADMIN_COMMAND_RE.search(target) or _USE_CLAUSE_RE.search(target):
+            return "Write queries are not allowed"
+        if _LOAD_CSV_RE.search(target):
+            return "Write queries are not allowed"
+
+        # Enforce the procedure allowlist, masking each allowed procedure name
+        # so an allowlisted CALL is not re-flagged by the function-namespace
+        # check below.
+        masked_segments: list[str] = []
+        cursor = 0
+        for match in _PROCEDURE_CALL_RE.finditer(target):
+            name = _normalize_procedure(match.group(1))
+            if not _procedure_allowed(name, allowed_exact, allowed_prefixes):
+                return f"Procedure '{name}' is not permitted"
+            masked_segments.append(target[cursor : match.start(1)])
+            masked_segments.append(" " * (match.end(1) - match.start(1)))
+            cursor = match.end(1)
+        masked_segments.append(target[cursor:])
+        masked = "".join(masked_segments)
+
+        if dangerous_function_re is not None and dangerous_function_re.search(masked):
+            return "Write queries are not allowed"
+
+    return None
+
+
 @dataclass
 class ValidationResult:
     errors: list = field(default_factory=list)
@@ -165,8 +317,9 @@ async def validate_query(query: str, params: dict[str, Any] | None = None) -> Va
     if result.has_errors:
         return result
 
-    # SSRF / exfiltration guard — Neo4j classifies LOAD CSV and APOC HTTP
-    # procedures as query_type='r', so they pass the check above.
+    # SSRF / exfiltration / admin / procedure guard — Neo4j classifies LOAD CSV,
+    # APOC HTTP procedures, and many catalog commands as query_type='r', so they
+    # pass the check above.
     #
     # We check original, comment-stripped, and unicode-decoded forms:
     # - Stripped catches comment injection (CALL /* x */ apoc., LOAD /* x */ CSV)
@@ -174,9 +327,10 @@ async def validate_query(query: str, params: dict[str, Any] | None = None) -> Va
     #   literal (e.g. a URL like http://...) that the comment stripper would
     #   incorrectly consume, hiding a dangerous token that follows it.
     # - Unicode-decoded catches Cypher escapes in keywords and procedure names
-    #   (e.g. SH\u004fW, C\u0041LL apoc., apoc.cyph\u0065r.).
-    if any(_DANGEROUS_RE.search(target) or _ADMIN_COMMAND_RE.search(target) for target in _keyword_scan_targets(query)):
-        result.errors.append("Write queries are not allowed")
+    #   (e.g. SHOW, CALL apoc., apoc.cypher.).
+    dangerous = _scan_for_dangerous_constructs(query)
+    if dangerous is not None:
+        result.errors.append(dangerous)
         return result
 
     # Schema validation — warning, query still executes

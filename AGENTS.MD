@@ -126,7 +126,7 @@ FastAPI, Python 3.12, Gunicorn + UvicornWorker (ASGI). All I/O is async (neo4j a
 
 **Query validation** (`reporting/services/query_validator.py`): `async def validate_query()` returns `ValidationResult(errors, warnings)`. Errors block execution; warnings don't.
 1. Syntax + read-only check via `EXPLAIN` (async Neo4j driver)
-2. SSRF/exfiltration guard (regex)
+2. SSRF / admin / procedure guard (regex + procedure allowlist) — blocks `LOAD CSV`, the `USE` clause, administration/catalog commands (`SHOW`, `TERMINATE`, database/user/role/privilege commands), and `apoc.cypher.*` / `gds.*` / `ai.*` / `genai.*` function namespaces. Every `CALL <procedure>` is checked against an allowlist; only side-effect-free built-in schema procedures (`db.labels`, `db.propertyKeys`, `db.schema.*`, …) are permitted by default. Extend it with `QUERY_VALIDATOR_ALLOWED_PROCEDURES` (exact names or namespace prefixes like `apoc.`/`gds.`); a namespace prefix also drops that namespace's dangerous-function guard.
 3. Schema warnings (CyVer `SchemaValidator` via `asyncio.to_thread` with sync driver)
 4. Property warnings (CyVer `PropertiesValidator` via `asyncio.to_thread` with sync driver)
 
@@ -361,7 +361,7 @@ Setup is fully automated via `.config/dev/authentik/blueprints/seizu.yaml`. Devi
 
 The query validator (`reporting/services/query_validator.py`) enforces three layers:
 1. **EXPLAIN write check** — `query_type != 'r'` blocks all write/schema queries
-2. **SSRF regex guard** — `_DANGEROUS_RE` scanned against both the original query and the comment-stripped version (see below)
+2. **SSRF / admin / procedure guard** — `_scan_for_dangerous_constructs()` scans the original, comment-stripped, and unicode-decoded forms (see below) for `LOAD CSV`, the `USE` clause (`_USE_CLAUSE_RE`), admin/catalog commands (`_ADMIN_COMMAND_RE`), and the `apoc.cypher.*` / `gds.*` / `ai.*` / `genai.*` function namespaces (`_DANGEROUS_FUNCTION_NAMESPACES`). Every `CALL <procedure>` is matched against an allowlist — `_DEFAULT_ALLOWED_PROCEDURES` (side-effect-free schema procedures) plus `QUERY_VALIDATOR_ALLOWED_PROCEDURES`. A configured namespace prefix (e.g. `apoc.`) both widens the allowlist and drops that namespace's dangerous-function guard.
 3. **CyVer warnings** — schema and property checks; never block execution
 
 **Running the validator test suite:**
@@ -385,13 +385,11 @@ make apoc_disable && make down && make up   # restore default
 |---|---|---|
 | Write queries (`CREATE`, `MERGE`, `DELETE`, etc.) | `CREATE (n:Test)` | EXPLAIN write check |
 | DDL / schema (`CREATE INDEX`, `DROP CONSTRAINT`) | `CREATE INDEX FOR (n:Test) ON (n.id)` | EXPLAIN write check (type `s`) |
-| Built-in procedures (`CALL db.clearQueryCaches`) | `CALL db.clearQueryCaches()` | EXPLAIN write check |
-| `LOAD CSV` SSRF | `LOAD CSV FROM 'http://169.254.169.254/...' AS row RETURN row` | SSRF regex (original query) |
-| `LOAD CSV` comment injection | `LOAD /* bypass */ CSV FROM '...' AS row RETURN row` | SSRF regex (comment-stripped query) |
-| APOC procedure SSRF | `CALL apoc.load.json('http://169.254.169.254/...')` | SSRF regex (original query) |
-| APOC procedure comment injection | `CALL /* x */ apoc.load.json('...')` | SSRF regex (comment-stripped query) |
-| APOC cypher functions (no `CALL`) | `RETURN apoc.cypher.runFirstColumnSingle('SHOW PROCEDURES', {})` | SSRF regex (`\bapoc\.cypher\.`) |
-| Dynamic string construction | `WITH 'apoc.load.json(...)' AS q RETURN apoc.cypher.runFirstColumnSingle(q, {})` | SSRF regex (`\bapoc\.cypher\.` matches outer call) |
+| Disallowed procedures (`CALL apoc.*`, `gds.*`, `dbms.*`, custom) | `CALL apoc.load.json('http://...')` | Procedure allowlist |
+| `USE` clause (escape configured graph) | `USE system MATCH (n) RETURN n`, `USE graph.byName($d) …` | `_USE_CLAUSE_RE` |
+| Admin / catalog commands | `SHOW SETTINGS`, `TERMINATE TRANSACTION '…'` | `_ADMIN_COMMAND_RE` |
+| `LOAD CSV` SSRF / comment injection | `LOAD /* bypass */ CSV FROM 'http://169.254.169.254/...'` | `_LOAD_CSV_RE` (original + comment-stripped) |
+| APOC cypher / GDS / GenAI functions (no `CALL`) | `RETURN apoc.cypher.runFirstColumnSingle('…', {})` | `_DANGEROUS_FUNCTION_NAMESPACES` |
 | Unicode/homoglyph bypass | Zero-width spaces in `CALL`, Cyrillic chars | Neo4j rejects unknown identifiers; still checked |
 
 **Two-sided comment check rationale:**

@@ -231,6 +231,69 @@ ADMIN_COMMAND_FUZZ_CASES = [
     pytest.param("CALL tx.setMetaData({seizu_probe: true})", id="tx-set-metadata"),
 ]
 
+# USE clause variants that escape Seizu's configured graph. All are blocked
+# regardless of EXPLAIN classification.
+USE_CLAUSE_FUZZ_CASES = [
+    pytest.param("USE system MATCH (n) RETURN n", id="use-system"),
+    pytest.param("USE otherdb MATCH (n) RETURN n", id="use-other-database"),
+    pytest.param("USE myComposite.myConstituent MATCH (n) RETURN n", id="use-composite-constituent"),
+    pytest.param("USE graph.byName('system') MATCH (n) RETURN n", id="use-graph-by-name-literal"),
+    pytest.param("USE graph.byName($db) MATCH (n) RETURN n", id="use-graph-by-name-param"),
+    pytest.param("USE graph.byElementId($id) MATCH (n) RETURN n", id="use-graph-by-element-id"),
+    pytest.param("USE `my-other-db` MATCH (n) RETURN n", id="use-backtick-database"),
+    pytest.param("CYPHER 25 USE otherdb MATCH (n) RETURN n", id="use-after-cypher-version"),
+    pytest.param("USE /* hide */ otherdb MATCH (n) RETURN n", id="use-block-comment"),
+    pytest.param(r"\u0055SE otherdb MATCH (n) RETURN n", id="use-unicode-keyword"),
+    pytest.param(
+        "MATCH (n) RETURN count(n) AS c UNION USE otherdb MATCH (m) RETURN count(m) AS c",
+        id="use-after-union",
+    ),
+    pytest.param("CALL { USE otherdb MATCH (n) RETURN n } RETURN n", id="use-in-subquery"),
+]
+
+# Procedure calls blocked by default — the allowlist only covers side-effect-free
+# built-in schema procedures.
+DISALLOWED_PROCEDURE_CASES = [
+    pytest.param("CALL apoc.load.json('http://169.254.169.254/') YIELD value RETURN value", id="apoc-load-json"),
+    pytest.param("CALL apoc.coll.sum([1, 2, 3]) YIELD value RETURN value", id="apoc-coll-sum"),
+    pytest.param("CALL gds.graph.list() YIELD graphName RETURN graphName", id="gds-graph-list"),
+    pytest.param(
+        "CALL n10s.rdf.import.fetch('http://attacker/', 'Turtle') YIELD terminationStatus RETURN terminationStatus",
+        id="neosemantics-rdf-import-fetch",
+    ),
+    pytest.param("CALL dbms.listConfig() YIELD name RETURN name", id="dbms-list-config-proc"),
+    pytest.param(
+        "CALL db.index.fulltext.queryNodes('idx', 'term') YIELD node RETURN node",
+        id="db-index-fulltext-query",
+    ),
+    pytest.param(
+        "CALL `apoc`.`load`.`json`('http://attacker/') YIELD value RETURN value",
+        id="apoc-load-json-quoted",
+    ),
+    pytest.param(r"C\u0041LL apoc.help('text') YIELD name RETURN name", id="apoc-help-unicode-call"),
+    pytest.param(
+        "MATCH (n) CALL custom.exfil(n) YIELD result RETURN result LIMIT 1",
+        id="embedded-custom-procedure",
+    ),
+]
+
+# Procedure calls permitted by default — side-effect-free built-in schema
+# introspection procedures.
+ALLOWED_PROCEDURE_CASES = [
+    pytest.param("CALL db.labels() YIELD label RETURN label ORDER BY label", id="db-labels"),
+    pytest.param("CALL db.relationshipTypes() YIELD relationshipType RETURN relationshipType", id="db-rel-types"),
+    pytest.param("CALL db.propertyKeys() YIELD propertyKey RETURN propertyKey", id="db-property-keys"),
+    pytest.param("CALL db.schema.visualization()", id="db-schema-visualization"),
+    pytest.param(
+        "CALL db.schema.nodeTypeProperties() YIELD nodeType, propertyName RETURN nodeType, propertyName",
+        id="db-schema-node-type-properties",
+    ),
+    pytest.param(
+        "MATCH (n) CALL db.labels() YIELD label RETURN n, label LIMIT 1",
+        id="embedded-allowed-procedure",
+    ),
+]
+
 LIVE_READ_ONLY_QUERIES = [
     pytest.param("MATCH (n) RETURN n LIMIT 1", id="match-limit"),
     pytest.param("OPTIONAL MATCH (n)-[r]->(m) RETURN n, r, m LIMIT 1", id="optional-match"),
