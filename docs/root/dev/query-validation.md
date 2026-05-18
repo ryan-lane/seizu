@@ -43,11 +43,50 @@ For each new risky Cypher feature or bypass attempt:
 
 1. Add the query to the appropriate case family in `tests/query_validator_cases.py`.
 2. Add or update targeted unit tests in `tests/unit/reporting/services/query_validator_test.py` when the behavior depends on settings or validator internals.
-3. Append a row to `tests/data/query-fuzzing.csv` with the technique, query, observed result, blocking layer, and notes.
-4. Update `reporting/services/query_validator.py`.
-5. If you add or change a setting, update `.env.example` and the backend configuration docs.
+3. Add or update Hypothesis coverage in `tests/unit/reporting/fuzz/query_validator_fuzz_test.py` when the rule can be expressed as generated permutations.
+4. Append a row to `tests/data/query-fuzzing.csv` with the technique, query, observed result, blocking layer, and notes.
+5. Update `reporting/services/query_validator.py`.
+6. If you add or change a setting, update `.env.example` and the backend configuration docs.
 
 Prefer tests that show both sides of a rule: the dangerous form is blocked, and a nearby legitimate read-only form remains allowed. This is especially important for clause-start regexes and procedure-call parsing.
+
+## Hypothesis fuzz coverage
+
+`tests/unit/reporting/fuzz/query_validator_fuzz_test.py` uses Hypothesis to generate families of validation inputs. These tests mock Neo4j `EXPLAIN` as read-only, so they exercise Seizu's own guard logic directly instead of relying on Neo4j syntax errors or query classification.
+
+The current fuzz tests cover generated variants of:
+
+- `LOAD CSV` separators and obfuscation.
+- `CALL apoc.*` separators and obfuscation.
+- `SHOW` administration commands with arbitrary prefix/suffix text.
+- `USE` clauses across clause-start anchors, graph reference forms, following clauses, casing, comments, newlines, and Unicode escapes.
+- Allowed false positives near the `USE` guard, such as CASE expressions using a variable named `use` and map keys named `use`.
+
+Use Hypothesis when a validator rule has meaningful dimensions to permute. Good strategy dimensions include:
+
+- Keyword spelling: uppercase, lowercase, and Cypher Unicode escapes.
+- Separators: spaces, tabs, newlines, block comments, and Unicode whitespace escapes.
+- Clause anchors: query start, `UNION`, `NEXT`, conditional-query branches, and `CALL {}` subqueries.
+- Identifier forms: bare names, dotted names, backtick-quoted names, and names that collide with Cypher keywords.
+- Adjacent safe forms that should stay allowed.
+
+Keep generated examples focused. Prefer small `sampled_from(...)` vocabularies that describe known Cypher shapes over unconstrained text generation. A focused strategy gives better signal and avoids spending examples on syntax that Neo4j would never accept.
+
+When extending Hypothesis coverage:
+
+1. Add reusable strategies near the top of `tests/unit/reporting/fuzz/query_validator_fuzz_test.py`.
+2. Mock `EXPLAIN` as read-only with `_validate_with_mocked_neo4j(...)`.
+3. Assert dangerous generated variants produce `result.has_errors`.
+4. Add a paired allowed test for nearby legitimate Cypher when false positives are plausible.
+5. Keep `max_examples` large enough to combine the important dimensions but small enough for the unit suite to remain fast.
+
+Run the fuzz module directly while developing:
+
+```bash
+docker compose run --rm seizu uv run --frozen --no-sync pytest tests/unit/reporting/fuzz/query_validator_fuzz_test.py -q
+```
+
+If Hypothesis finds a counterexample, add the minimized query to `tests/query_validator_cases.py` or `tests/data/query-fuzzing.csv` when it represents a meaningful regression.
 
 ## Validator test workflow
 
@@ -55,6 +94,12 @@ Run the unit regression suite after any validator change:
 
 ```bash
 docker compose run --rm seizu uv run --frozen --no-sync pytest tests/unit/reporting/services/query_validator_test.py -v
+```
+
+Run the generated fuzz tests when changing regex guards or keyword scanning:
+
+```bash
+docker compose run --rm seizu uv run --frozen --no-sync pytest tests/unit/reporting/fuzz/query_validator_fuzz_test.py -q
 ```
 
 Run the live Neo4j-backed suite when the change depends on real Cypher parsing, query classification, Neo4j version behavior, or plugin behavior:

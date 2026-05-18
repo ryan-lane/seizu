@@ -36,6 +36,52 @@ separator = st.one_of(
     st.just(r"\u0020"),
 )
 
+plain_whitespace = st.sampled_from([" ", "\t", "\n"])
+
+use_anchor = st.sampled_from(
+    [
+        ("", ""),
+        ("CYPHER 25 ", ""),
+        ("MATCH (n) RETURN count(n) AS c UNION ", ""),
+        ("CYPHER 25 RETURN 1 AS x NEXT ", ""),
+        ("CYPHER 25 WHEN true THEN ", ""),
+        ("CYPHER 25 WHEN false THEN RETURN 0 AS n ELSE ", ""),
+        ("CALL { ", " } RETURN n"),
+    ]
+)
+
+use_graph_reference = st.sampled_from(
+    [
+        "otherdb",
+        "myComposite.myConstituent",
+        "`my-other-db`",
+        "`my-composite`.`my-constituent`",
+        "graph.byName('system')",
+        "graph.byElementId($id)",
+        "else",
+        "end",
+        "when",
+        "then",
+    ]
+)
+
+use_following_clause = st.sampled_from(
+    [
+        "MATCH (n) RETURN n",
+        "RETURN 1 AS n",
+        "WITH 1 AS n RETURN n",
+        "UNWIND [1, 2] AS n RETURN n",
+        "FOR x IN [1, 2] RETURN x",
+        "LET x = 1 RETURN x",
+        "OPTIONAL CALL { RETURN 1 AS n } RETURN n",
+        "CALL { RETURN 1 AS n } RETURN n",
+        "LOAD CSV FROM 'http://127.0.0.1:1/' AS row RETURN row",
+        "SHOW SETTINGS YIELD name RETURN name",
+    ]
+)
+
+case_operator = st.sampled_from(["", " + alt", " * 2"])
+
 
 @settings(max_examples=75)
 @given(separator=separator)
@@ -75,3 +121,67 @@ def test_admin_command_variants_are_blocked(
     result = asyncio.run(_validate_with_mocked_neo4j(query))
 
     assert result.has_errors
+
+
+@settings(max_examples=200)
+@given(
+    anchor=use_anchor,
+    use_keyword=st.sampled_from(["USE", "use", r"\u0055SE"]),
+    first_separator=separator,
+    graph_reference=use_graph_reference,
+    second_separator=separator,
+    following_clause=use_following_clause,
+)
+def test_use_clause_variants_are_blocked(
+    anchor: tuple[str, str],
+    use_keyword: str,
+    first_separator: str,
+    graph_reference: str,
+    second_separator: str,
+    following_clause: str,
+) -> None:
+    prefix, suffix = anchor
+    query = f"{prefix}{use_keyword}{first_separator}{graph_reference}{second_separator}{following_clause}{suffix}"
+
+    result = asyncio.run(_validate_with_mocked_neo4j(query))
+
+    assert result.has_errors
+
+
+@settings(max_examples=100)
+@given(
+    before_use=st.integers(min_value=-5, max_value=5),
+    alternate=st.integers(min_value=-5, max_value=5),
+    then_separator=plain_whitespace,
+    else_separator=plain_whitespace,
+    operator=case_operator,
+)
+def test_case_expressions_with_use_variable_are_allowed(
+    before_use: int,
+    alternate: int,
+    then_separator: str,
+    else_separator: str,
+    operator: str,
+) -> None:
+    query = (
+        f"WITH {before_use} AS use, {alternate} AS alt "
+        f"RETURN CASE WHEN use >= 0 THEN{then_separator}use{operator}"
+        f"{else_separator}ELSE alt END AS value"
+    )
+
+    result = asyncio.run(_validate_with_mocked_neo4j(query))
+
+    assert not result.has_errors
+
+
+@settings(max_examples=75)
+@given(
+    key_separator=plain_whitespace,
+    value=st.integers(min_value=-100, max_value=100),
+)
+def test_map_keys_named_use_are_allowed(key_separator: str, value: int) -> None:
+    query = f"RETURN {{use:{key_separator}{value}}} AS item"
+
+    result = asyncio.run(_validate_with_mocked_neo4j(query))
+
+    assert not result.has_errors
