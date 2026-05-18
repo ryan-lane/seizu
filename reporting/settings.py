@@ -119,9 +119,8 @@ NEO4J_QUERY_TIMEOUT = int_env("NEO4J_QUERY_TIMEOUT", 30)
 # read-only schema procedures allowed by default (db.labels, db.propertyKeys,
 # db.schema.*, etc.). Each comma-separated entry is either an exact procedure
 # name (e.g. "apoc.meta.stats") or a namespace prefix ending in a dot (e.g.
-# "apoc." or "gds."). A namespace prefix allows every procedure in that
-# namespace and also drops the matching dangerous-function guard, so
-# `apoc.cypher.*` / `gds.*` functions become permitted too.
+# "apoc." or "gds."). This only permits CALL procedure invocations; dangerous
+# function namespaces such as `apoc.cypher.*` / `gds.*` remain blocked.
 # Empty by default — only side-effect-free schema procedures are allowed.
 # Note: write/schema/DBMS procedures stay blocked by the EXPLAIN read-only
 # check regardless of this setting.

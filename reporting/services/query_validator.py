@@ -12,8 +12,8 @@ _UNICODE_ESCAPE_RE = re.compile(r"\\u([0-9a-fA-F]{4})")
 
 # Built-in Neo4j procedures that are read-only, side-effect-free, and perform no
 # network or filesystem I/O. These are the only procedures permitted by default.
-# Operators can allow more (apoc.*, gds.*, custom plugins) via the
-# QUERY_VALIDATOR_ALLOWED_PROCEDURES setting. Names are normalized lowercase.
+# Operators can allow more CALL procedures (apoc.*, gds.*, custom plugins) via
+# the QUERY_VALIDATOR_ALLOWED_PROCEDURES setting. Names are normalized lowercase.
 #
 # Procedure guarding is an allowlist rather than a denylist: any installed
 # plugin procedure that Neo4j classifies as read-only but performs I/O (e.g.
@@ -51,14 +51,15 @@ _LOAD_CSV_RE = re.compile(r"\bLOAD\s+CSV\b", re.IGNORECASE)
 # DBMS (including `system`) via `USE other`, `USE composite.constituent`, or
 # `USE graph.byName(...)`. Seizu queries always target the default graph, so
 # USE is blocked outright. It is matched only at clause-start positions — query
-# start, after UNION, or at the start of a CALL {} subquery — optionally after
-# a CYPHER version prefix, and only when followed by a real graph reference, so
-# a map key or variable named `use` is not a false positive.
+# start, after UNION/NEXT/conditional branch keywords, or at the start of a
+# CALL {} subquery — optionally after a CYPHER version prefix, and only when
+# followed by a real graph reference, so a map key or variable named `use` is
+# not a false positive.
 #
 # Known gap: a USE clause following an importing WITH inside an old-style
 # subquery is not matched; that form only works on composite databases.
 _USE_CLAUSE_RE = re.compile(
-    r"(?:^|\bUNION\b|\{)\s*"
+    r"(?:^|\b(?:UNION|NEXT|THEN|ELSE)\b|\{)\s*"
     r"(?:CYPHER\s+[\w.]+(?:\s+\w+\s*=\s*\w+)*\s+)?"
     r"USE\s+(?:graph\s*\.|`|[A-Za-z_])",
     re.IGNORECASE,
@@ -95,11 +96,10 @@ _ADMIN_COMMAND_RE = re.compile(
 # providers. These cannot be allowlisted per-procedure because they are
 # functions, not procedures, so they are blocked by namespace.
 #
-# Each entry is (namespace_prefix, regex). An arm is dropped when its namespace
-# is covered by QUERY_VALIDATOR_ALLOWED_PROCEDURES, so an operator who opts a
-# namespace in gets both its procedures and its functions. Procedure-call
-# (`CALL ...`) name spans are masked out before these patterns run, so an
-# allowlisted `CALL` into one of these namespaces is not re-flagged here.
+# Procedure-call (`CALL ...`) name spans are masked out before these patterns
+# run, so an allowlisted `CALL` into one of these namespaces is not re-flagged
+# here. QUERY_VALIDATOR_ALLOWED_PROCEDURES only affects procedure calls; it does
+# not permit dangerous functions in the same namespace.
 #
 # apoc is guarded only at the `apoc.cypher.` namespace: APOC's pure-computation
 # functions (`apoc.text.*`, `apoc.convert.*`, ...) are safe and widely used.
@@ -212,18 +212,13 @@ def _procedure_allowed(name: str, allowed_exact: frozenset[str], allowed_prefixe
     return any(name.startswith(prefix) for prefix in allowed_prefixes)
 
 
-def _build_dangerous_function_re(allowed_prefixes: tuple[str, ...]) -> re.Pattern[str] | None:
-    """Compile the dangerous-function-namespace regex, dropping any namespace an
-    operator has opted into via the procedure allowlist."""
+def _build_dangerous_function_re() -> re.Pattern[str]:
+    """Compile the dangerous-function-namespace regex."""
 
-    arms = [
-        pattern
-        for namespace, pattern in _DANGEROUS_FUNCTION_NAMESPACES
-        if not any(namespace.startswith(prefix) for prefix in allowed_prefixes)
-    ]
-    if not arms:
-        return None
-    return re.compile("|".join(arms), re.IGNORECASE)
+    return re.compile(
+        "|".join(pattern for _, pattern in _DANGEROUS_FUNCTION_NAMESPACES),
+        re.IGNORECASE,
+    )
 
 
 def _scan_for_dangerous_constructs(query: str) -> str | None:
@@ -236,7 +231,7 @@ def _scan_for_dangerous_constructs(query: str) -> str | None:
     """
 
     allowed_exact, allowed_prefixes = _resolve_allowed_procedures()
-    dangerous_function_re = _build_dangerous_function_re(allowed_prefixes)
+    dangerous_function_re = _build_dangerous_function_re()
 
     for target in _keyword_scan_targets(query):
         if _ADMIN_COMMAND_RE.search(target) or _USE_CLAUSE_RE.search(target):
@@ -259,7 +254,7 @@ def _scan_for_dangerous_constructs(query: str) -> str | None:
         masked_segments.append(target[cursor:])
         masked = "".join(masked_segments)
 
-        if dangerous_function_re is not None and dangerous_function_re.search(masked):
+        if dangerous_function_re.search(masked):
             return "Write queries are not allowed"
 
     return None

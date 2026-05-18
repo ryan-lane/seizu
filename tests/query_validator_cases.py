@@ -249,6 +249,18 @@ USE_CLAUSE_FUZZ_CASES = [
         id="use-after-union",
     ),
     pytest.param("CALL { USE otherdb MATCH (n) RETURN n } RETURN n", id="use-in-subquery"),
+    pytest.param(
+        "CYPHER 25 RETURN 1 AS x NEXT USE otherdb MATCH (n) RETURN n",
+        id="use-after-next",
+    ),
+    pytest.param(
+        "CYPHER 25 WHEN true THEN USE otherdb MATCH (n) RETURN n ELSE RETURN null AS n",
+        id="use-after-then",
+    ),
+    pytest.param(
+        "CYPHER 25 WHEN false THEN RETURN null AS n ELSE USE otherdb MATCH (n) RETURN n",
+        id="use-after-else",
+    ),
 ]
 
 # Procedure calls blocked by default — the allowlist only covers side-effect-free

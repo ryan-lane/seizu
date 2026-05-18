@@ -136,18 +136,24 @@ class TestProcedureAllowlist:
         result = await validate_query("CALL apoc.coll.sum([1, 2, 3]) YIELD value RETURN value")
         assert not result.has_errors
 
-    async def test_apoc_namespace_prefix_also_unblocks_apoc_cypher_functions(self, mocker):
-        """Opting a namespace in drops its dangerous-function guard too."""
+    async def test_apoc_namespace_prefix_does_not_unblock_apoc_cypher_functions(self, mocker):
+        """Procedure allowlisting does not permit arbitrary-Cypher functions."""
         _mock_cyver(mocker)
         mocker.patch.object(settings, "QUERY_VALIDATOR_ALLOWED_PROCEDURES", ["apoc."])
         result = await validate_query("RETURN apoc.cypher.runFirstColumnSingle('RETURN 1', {}) AS r")
+        assert result.has_errors
+
+    async def test_gds_namespace_prefix_allows_gds_procedure_calls(self, mocker):
+        _mock_cyver(mocker)
+        mocker.patch.object(settings, "QUERY_VALIDATOR_ALLOWED_PROCEDURES", ["gds."])
+        result = await validate_query("CALL gds.graph.list() YIELD graphName RETURN graphName")
         assert not result.has_errors
 
-    async def test_gds_namespace_prefix_unblocks_gds_functions(self, mocker):
+    async def test_gds_namespace_prefix_does_not_unblock_gds_functions(self, mocker):
         _mock_cyver(mocker)
         mocker.patch.object(settings, "QUERY_VALIDATOR_ALLOWED_PROCEDURES", ["gds."])
         result = await validate_query("RETURN gds.version() AS version")
-        assert not result.has_errors
+        assert result.has_errors
 
     async def test_narrow_apoc_prefix_keeps_apoc_cypher_guarded(self, mocker):
         """A sub-namespace prefix must not drop the apoc.cypher.* guard."""
