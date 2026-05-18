@@ -82,7 +82,9 @@ _USE_CLAUSE_BODY = (
     rf"(?:ELSE|END|WHEN|THEN)\b\s+{_USE_FOLLOWING_CLAUSE}"
     r")"
 )
-_IMPORTING_WITH = r"WITH\s+(?:`[^`]*`|[A-Za-z_]\w*)(?:\s*,\s*(?:`[^`]*`|[A-Za-z_]\w*))*\s+"
+# An importing WITH in an old-style subquery: a bare variable list or `WITH *`
+# (Neo4j accepts both as the import boundary). No projections/aliasing allowed.
+_IMPORTING_WITH = r"WITH\s+(?:\*|(?:`[^`]*`|[A-Za-z_]\w*)(?:\s*,\s*(?:`[^`]*`|[A-Za-z_]\w*))*)\s+"
 _USE_CLAUSE_RE = re.compile(
     r"(?:^|\b(?:UNION|NEXT|THEN|ELSE)\b|\{)\s*"
     r"(?:CYPHER\s+[\w.]+(?:\s+\w+\s*=\s*\w+)*\s+)?"

@@ -231,3 +231,4 @@ USE clause followed by Cypher 25 FOR,"CYPHER 25 USE otherdb FOR x IN [1, 2] RETU
 USE clause followed by Cypher 25 LET,CYPHER 25 USE otherdb LET x = 1 RETURN x,BLOCKED,USE clause regex,USE with an ordinary database name is blocked without needing the following clause enumerated
 USE clause followed by Cypher 25 OPTIONAL CALL,USE otherdb OPTIONAL CALL { RETURN 1 AS n } RETURN n,BLOCKED,USE clause regex,OPTIONAL CALL is a Cypher 25 query-initial clause; USE before it is blocked
 USE clause after NEXT followed by FOR,CYPHER 25 RETURN 1 AS x NEXT USE otherdb FOR y IN [1] RETURN y,BLOCKED,USE clause regex,"USE beginning a NEXT-composed query part, followed by FOR, is blocked"
+USE clause after WITH * importing clause,MATCH (n) CALL { WITH * USE otherdb MATCH (m) RETURN m } RETURN m,BLOCKED,USE clause regex,"Neo4j accepts WITH * as a subquery importing clause; the importing-WITH USE guard now matches the star form, not just an explicit variable list"

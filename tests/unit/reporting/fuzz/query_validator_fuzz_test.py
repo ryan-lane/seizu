@@ -119,6 +119,7 @@ subquery_wrapper = st.sampled_from(
         ("OPTIONAL CALL { ", " } RETURN value"),
         ("CALL { CALL { ", " } RETURN value } RETURN value"),
         ("UNWIND [1] AS seed CALL { WITH seed ", " } IN TRANSACTIONS RETURN value"),
+        ("MATCH (seed) CALL { WITH * ", " } RETURN value"),
         ("CYPHER 25 RETURN 0 AS ignored NEXT CALL { ", " } RETURN value"),
         ("CYPHER 25 WHEN true THEN CALL { ", " } RETURN value ELSE RETURN 0 AS value"),
     ]

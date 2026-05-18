@@ -251,6 +251,10 @@ USE_CLAUSE_FUZZ_CASES = [
     pytest.param("CALL { USE otherdb MATCH (n) RETURN n } RETURN n", id="use-in-subquery"),
     pytest.param("CALL { WITH seed USE otherdb MATCH (n) RETURN n } RETURN n", id="use-in-subquery-after-with"),
     pytest.param(
+        "MATCH (n) CALL { WITH * USE otherdb MATCH (m) RETURN m } RETURN m",
+        id="use-in-subquery-after-with-star",
+    ),
+    pytest.param(
         "CYPHER 25 RETURN 1 AS x NEXT USE otherdb MATCH (n) RETURN n",
         id="use-after-next",
     ),
