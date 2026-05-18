@@ -261,6 +261,14 @@ USE_CLAUSE_FUZZ_CASES = [
         "CYPHER 25 WHEN false THEN RETURN null AS n ELSE USE otherdb MATCH (n) RETURN n",
         id="use-after-else",
     ),
+    pytest.param(
+        "CYPHER 25 WHEN true THEN USE else MATCH (n) RETURN n ELSE RETURN null AS n",
+        id="use-after-then-database-named-else",
+    ),
+    pytest.param(
+        "CYPHER 25 WHEN true THEN USE end MATCH (n) RETURN n ELSE RETURN null AS n",
+        id="use-after-then-database-named-end",
+    ),
 ]
 
 # Legitimate read-only queries that place a variable named `use` right after a
@@ -278,6 +286,14 @@ USE_CLAUSE_FALSE_POSITIVE_CASES = [
     pytest.param(
         "WITH 1 AS use RETURN CASE 1 WHEN 1 THEN use ELSE 0 END AS v",
         id="simple-case-then-use-variable",
+    ),
+    pytest.param(
+        "WITH 1 AS use, 2 AS alt RETURN CASE WHEN use > 0 THEN use + alt ELSE alt END AS v",
+        id="case-then-use-variable-expression",
+    ),
+    pytest.param(
+        "WITH 1 AS use RETURN CASE WHEN false THEN 0 ELSE use * 2 END AS v",
+        id="case-else-use-variable-expression",
     ),
 ]
 

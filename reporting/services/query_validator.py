@@ -57,17 +57,31 @@ _LOAD_CSV_RE = re.compile(r"\bLOAD\s+CSV\b", re.IGNORECASE)
 # not a false positive.
 #
 # THEN and ELSE are anchors because a Cypher 25 conditional-query branch can
-# start with USE, but they are also CASE-expression keywords: `... THEN use
-# ELSE alt END` with a variable named `use` would otherwise match. The negative
-# lookahead drops that case — a USE clause is never followed by ELSE/END/WHEN
-# (those are CASE-internal keywords, not graph references).
+# start with USE, but they are also CASE-expression keywords. To avoid treating
+# a CASE result variable named `use` as a USE clause, the match consumes a graph
+# reference and requires the next token to be a Cypher clause keyword.
 #
 # Known gap: a USE clause following an importing WITH inside an old-style
 # subquery is not matched; that form only works on composite databases.
+_USE_GRAPH_REFERENCE = (
+    r"(?:"
+    r"graph\s*\.\s*(?:byName|byElementId)\s*\([^)]*\)|"
+    r"`[^`]*`(?:\s*\.\s*`[^`]*`)*|"
+    r"[A-Za-z_]\w*(?:\s*\.\s*[A-Za-z_]\w*)*"
+    r")"
+)
+_USE_FOLLOWING_CLAUSE = (
+    r"(?:"
+    r"OPTIONAL\s+MATCH|LOAD\s+CSV|DETACH\s+DELETE|"
+    r"MATCH|CALL|RETURN|WITH|UNWIND|CREATE|MERGE|DELETE|SET|REMOVE|FOREACH|"
+    r"SHOW|START|STOP|DROP|ALTER|GRANT|DENY|REVOKE|TERMINATE|"
+    r"NEXT|UNION|FINISH|INSERT"
+    r")\b"
+)
 _USE_CLAUSE_RE = re.compile(
     r"(?:^|\b(?:UNION|NEXT|THEN|ELSE)\b|\{)\s*"
     r"(?:CYPHER\s+[\w.]+(?:\s+\w+\s*=\s*\w+)*\s+)?"
-    r"USE\s+(?!(?:ELSE|END|WHEN|THEN)\b)(?:graph\s*\.|`|[A-Za-z_])",
+    rf"USE\s+{_USE_GRAPH_REFERENCE}\s+{_USE_FOLLOWING_CLAUSE}",
     re.IGNORECASE,
 )
 
