@@ -214,3 +214,7 @@ sync_github:
 .PHONY: sync_cve
 sync_cve:
 	docker compose run cartography --neo4j-uri=bolt://neo4j:7687 --selected-modules=create-indexes,cve,analysis --cve-enabled
+
+.PHONY: sync_cve_metadata
+sync_cve_metadata:
+	docker compose run cartography --neo4j-uri=bolt://neo4j:7687 --selected-modules=create-indexes,cve_metadata,analysis --cve-metadata-nist-api-key-env-var=NIST_NVD_TOKEN
