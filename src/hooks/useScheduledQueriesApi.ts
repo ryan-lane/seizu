@@ -84,7 +84,9 @@ export function useScheduledQueriesList(): {
 } {
   const { accessToken } = useContext(AuthContext);
   const { auth_required } = useContext(AuthConfigContext);
-  const [scheduledQueries, setScheduledQueries] = useState<ScheduledQueryItem[]>([]);
+  const [scheduledQueries, setScheduledQueries] = useState<
+    ScheduledQueryItem[]
+  >([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
   const [tick, setTick] = useState(0);
@@ -97,7 +99,8 @@ export function useScheduledQueriesList(): {
     setLoading(true);
     fetch('/api/v1/scheduled-queries', { headers: getApiHeaders(accessToken) })
       .then((res) => {
-        if (!res.ok) throw new Error(`Failed to load scheduled queries: ${res.status}`);
+        if (!res.ok)
+          throw new Error(`Failed to load scheduled queries: ${res.status}`);
         return res.json();
       })
       .then((data: { scheduled_queries: ScheduledQueryItem[] }) => {
@@ -130,11 +133,13 @@ export function useScheduledQueryVersionsList(sqId: string | null): {
 
     setLoading(true);
     fetch(`/api/v1/scheduled-queries/${sqId}/versions`, {
-      headers: getApiHeaders(accessToken)
+      headers: getApiHeaders(accessToken),
     })
       .then((res) => {
         if (!res.ok)
-          throw new Error(`Failed to load scheduled query versions: ${res.status}`);
+          throw new Error(
+            `Failed to load scheduled query versions: ${res.status}`,
+          );
         return res.json();
       })
       .then((data: { versions: ScheduledQueryVersion[] }) => {
@@ -151,8 +156,13 @@ export function useScheduledQueryVersionsList(sqId: string | null): {
 }
 
 export function useScheduledQueriesMutations(): {
-  createScheduledQuery: (req: ScheduledQueryRequest) => Promise<ScheduledQueryItem>;
-  updateScheduledQuery: (id: string, req: ScheduledQueryRequest) => Promise<ScheduledQueryItem>;
+  createScheduledQuery: (
+    req: ScheduledQueryRequest,
+  ) => Promise<ScheduledQueryItem>;
+  updateScheduledQuery: (
+    id: string,
+    req: ScheduledQueryRequest,
+  ) => Promise<ScheduledQueryItem>;
   deleteScheduledQuery: (id: string) => Promise<void>;
 } {
   const { accessToken } = useContext(AuthContext);
@@ -161,37 +171,49 @@ export function useScheduledQueriesMutations(): {
     async (req: ScheduledQueryRequest): Promise<ScheduledQueryItem> => {
       const res = await fetch('/api/v1/scheduled-queries', {
         method: 'POST',
-        headers: { ...getApiHeaders(accessToken), 'Content-Type': 'application/json' },
-        body: JSON.stringify(req)
+        headers: {
+          ...getApiHeaders(accessToken),
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(req),
       });
-      if (!res.ok) throw new Error(`Failed to create scheduled query: ${res.status}`);
+      if (!res.ok)
+        throw new Error(`Failed to create scheduled query: ${res.status}`);
       return res.json();
     },
-    [accessToken]
+    [accessToken],
   );
 
   const updateScheduledQuery = useCallback(
-    async (id: string, req: ScheduledQueryRequest): Promise<ScheduledQueryItem> => {
+    async (
+      id: string,
+      req: ScheduledQueryRequest,
+    ): Promise<ScheduledQueryItem> => {
       const res = await fetch(`/api/v1/scheduled-queries/${id}`, {
         method: 'PUT',
-        headers: { ...getApiHeaders(accessToken), 'Content-Type': 'application/json' },
-        body: JSON.stringify(req)
+        headers: {
+          ...getApiHeaders(accessToken),
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(req),
       });
-      if (!res.ok) throw new Error(`Failed to update scheduled query: ${res.status}`);
+      if (!res.ok)
+        throw new Error(`Failed to update scheduled query: ${res.status}`);
       return res.json();
     },
-    [accessToken]
+    [accessToken],
   );
 
   const deleteScheduledQuery = useCallback(
     async (id: string): Promise<void> => {
       const res = await fetch(`/api/v1/scheduled-queries/${id}`, {
         method: 'DELETE',
-        headers: getApiHeaders(accessToken)
+        headers: getApiHeaders(accessToken),
       });
-      if (!res.ok) throw new Error(`Failed to delete scheduled query: ${res.status}`);
+      if (!res.ok)
+        throw new Error(`Failed to delete scheduled query: ${res.status}`);
     },
-    [accessToken]
+    [accessToken],
   );
 
   return { createScheduledQuery, updateScheduledQuery, deleteScheduledQuery };

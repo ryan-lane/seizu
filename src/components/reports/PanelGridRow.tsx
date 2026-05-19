@@ -3,7 +3,7 @@ import {
   ResponsiveGridLayout,
   useContainerWidth,
   type Layout,
-  type ResponsiveLayouts
+  type ResponsiveLayouts,
 } from 'react-grid-layout';
 import { Panel } from 'src/config.context';
 import {
@@ -11,7 +11,7 @@ import {
   RESPONSIVE_BREAKPOINTS,
   RESPONSIVE_COLS,
   type LayoutCoords,
-  type ResponsiveBreakpoint
+  type ResponsiveBreakpoint,
 } from 'src/components/reports/panelLayout';
 
 const ROW_HEIGHT = 48;
@@ -26,7 +26,7 @@ export interface PanelGridRowProps {
   renderPanel: (panel: Panel, index: number) => ReactNode;
   isEditing?: boolean;
   onLayoutChange?: (
-    layoutsByBreakpoint: ResponsiveLayouts<ResponsiveBreakpoint>
+    layoutsByBreakpoint: ResponsiveLayouts<ResponsiveBreakpoint>,
   ) => void;
   className?: string;
 }
@@ -52,7 +52,10 @@ interface AutoHeightWrapperProps {
  * naturally-flowing div (no height clamp) and reports the rendered height
  * via ``ResizeObserver`` so the parent can grow the rgl cell to match.
  */
-function AutoHeightWrapper({ children, onHeightChange }: AutoHeightWrapperProps) {
+function AutoHeightWrapper({
+  children,
+  onHeightChange,
+}: AutoHeightWrapperProps) {
   const observe = useCallback(
     (node: HTMLDivElement | null) => {
       if (!node || typeof ResizeObserver === 'undefined') return;
@@ -66,7 +69,7 @@ function AutoHeightWrapper({ children, onHeightChange }: AutoHeightWrapperProps)
       // callback with null on unmount, but the observer will already have
       // detached because the node is gone.
     },
-    [onHeightChange]
+    [onHeightChange],
   );
 
   return (
@@ -84,13 +87,15 @@ function PanelGridRow({
   renderPanel,
   isEditing = false,
   onLayoutChange,
-  className
+  className,
 }: PanelGridRowProps) {
   const baseLayouts = useMemo(() => buildResponsiveLayouts(panels), [panels]);
   const { width, containerRef, mounted } = useContainerWidth();
 
   // Pixel heights measured for ``auto_height`` panels, keyed by panel index.
-  const [autoHeightsPx, setAutoHeightsPx] = useState<Record<number, number>>({});
+  const [autoHeightsPx, setAutoHeightsPx] = useState<Record<number, number>>(
+    {},
+  );
 
   const setAutoHeightForIdx = useCallback((idx: number, heightPx: number) => {
     setAutoHeightsPx((prev) => {
@@ -129,7 +134,9 @@ function PanelGridRow({
         style={{ display: 'flex', flexDirection: 'column', minHeight: 0 }}
       >
         {useAutoHeight ? (
-          <AutoHeightWrapper onHeightChange={(h) => setAutoHeightForIdx(idx, h)}>
+          <AutoHeightWrapper
+            onHeightChange={(h) => setAutoHeightForIdx(idx, h)}
+          >
             {renderPanel(panel, idx)}
           </AutoHeightWrapper>
         ) : (
@@ -140,7 +147,10 @@ function PanelGridRow({
   });
 
   return (
-    <div ref={containerRef} className={`report-row${className ? ` ${className}` : ''}`}>
+    <div
+      ref={containerRef}
+      className={`report-row${className ? ` ${className}` : ''}`}
+    >
       {mounted && (
         <ResponsiveGridLayout<ResponsiveBreakpoint>
           width={width}
@@ -152,12 +162,13 @@ function PanelGridRow({
           containerPadding={CONTAINER_PADDING}
           dragConfig={{
             enabled: isEditing,
-            cancel: isEditing ? DRAG_CANCEL_SELECTOR : undefined
+            cancel: isEditing ? DRAG_CANCEL_SELECTOR : undefined,
           }}
           resizeConfig={{ enabled: isEditing }}
-          onLayoutChange={(_current: Layout, all: ResponsiveLayouts<ResponsiveBreakpoint>) =>
-            onLayoutChange?.(all)
-          }
+          onLayoutChange={(
+            _current: Layout,
+            all: ResponsiveLayouts<ResponsiveBreakpoint>,
+          ) => onLayoutChange?.(all)}
         >
           {items}
         </ResponsiveGridLayout>

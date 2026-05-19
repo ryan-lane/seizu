@@ -11,7 +11,7 @@ import {
   Popover,
   TextField,
   Tooltip,
-  Typography
+  Typography,
 } from '@mui/material';
 import {
   DataGrid,
@@ -20,7 +20,7 @@ import {
   GridPreferencePanelsValue,
   GridRowsProp,
   GridToolbarContainer,
-  useGridApiContext
+  useGridApiContext,
 } from '@mui/x-data-grid';
 import Info from '@mui/icons-material/Info';
 import Fullscreen from '@mui/icons-material/Fullscreen';
@@ -54,7 +54,11 @@ export function formatValue(val: unknown): string {
   const obj = val as Record<string, unknown>;
 
   // Neo4j node: {id, labels: [...], properties: {...}}
-  if (Array.isArray(obj.labels) && typeof obj.properties === 'object' && obj.properties !== null) {
+  if (
+    Array.isArray(obj.labels) &&
+    typeof obj.properties === 'object' &&
+    obj.properties !== null
+  ) {
     const label = (obj.labels as string[])[0] ?? '';
     const props = obj.properties as Record<string, unknown>;
     const name = props['name'] ?? props['id'] ?? obj['id'];
@@ -92,7 +96,11 @@ export function flattenRecord(record: QueryRecord): QueryRecord {
     const val = record[keys[0]];
     if (val && typeof val === 'object' && !Array.isArray(val)) {
       const obj = val as QueryRecord;
-      if (obj.properties && typeof obj.properties === 'object' && !Array.isArray(obj.properties)) {
+      if (
+        obj.properties &&
+        typeof obj.properties === 'object' &&
+        !Array.isArray(obj.properties)
+      ) {
         return obj.properties as QueryRecord;
       }
       return obj;
@@ -102,7 +110,6 @@ export function flattenRecord(record: QueryRecord): QueryRecord {
 }
 import CypherDetails from 'src/components/reports/CypherDetails';
 import QueryValidationBadge from 'src/components/reports/QueryValidationBadge';
-
 
 // Approximate height consumed by panel chrome outside the Data Grid. The grid
 // owns its toolbar, column header, rows, and pagination inside this height.
@@ -120,39 +127,39 @@ const fillSx = {
   '& .MuiToolbar-root': {
     minHeight: 44,
     paddingLeft: 1,
-    paddingRight: 1
+    paddingRight: 1,
   },
   '& .MuiTableCell-head': {
     paddingTop: 0.5,
     paddingBottom: 0.5,
-    lineHeight: 1.2
+    lineHeight: 1.2,
   },
   '& .MuiTablePagination-root': {
-    minHeight: 40
+    minHeight: 40,
   },
   '& .MuiTablePagination-toolbar': {
     minHeight: 40,
     paddingLeft: 1,
-    paddingRight: 1
+    paddingRight: 1,
   },
   '& .MuiIconButton-root': {
-    padding: 0.5
+    padding: 0.5,
   },
   '& .MuiDataGrid-root': {
-    border: 0
+    border: 0,
   },
   '& .MuiDataGrid-columnHeader': {
     minHeight: '40px !important',
-    maxHeight: '40px !important'
+    maxHeight: '40px !important',
   },
   '& .MuiDataGrid-cell': {
     alignItems: 'center',
-    display: 'flex'
+    display: 'flex',
   },
   '& .MuiDataGrid-cellContent': {
     display: 'flex',
-    alignItems: 'center'
-  }
+    alignItems: 'center',
+  },
 };
 
 interface CypherTableProps {
@@ -174,7 +181,9 @@ interface GridRow extends Record<string, unknown> {
   __rowId: string;
 }
 
-function makeGridColumns(columns: Array<{ name: string; label: string }>): GridColDef[] {
+function makeGridColumns(
+  columns: Array<{ name: string; label: string }>,
+): GridColDef[] {
   return columns.map((column) => ({
     field: column.name,
     headerName: column.label,
@@ -190,18 +199,26 @@ function makeGridColumns(columns: Array<{ name: string; label: string }>): GridC
           height: '100%',
           overflow: 'hidden',
           textOverflow: 'ellipsis',
-          whiteSpace: 'nowrap'
+          whiteSpace: 'nowrap',
         }}
       >
         {params.formattedValue}
       </Typography>
-    )
+    ),
   }));
 }
 
 function EmptyOverlay({ message }: { message: string }) {
   return (
-    <Box sx={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', p: 2 }}>
+    <Box
+      sx={{
+        height: '100%',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        p: 2,
+      }}
+    >
       <Typography variant="body2" color="text.secondary">
         {message}
       </Typography>
@@ -235,7 +252,9 @@ function GridActionToolbar({
   onCloseExpand,
 }: GridActionToolbarProps) {
   const apiRef = useGridApiContext();
-  const [searchAnchorEl, setSearchAnchorEl] = useState<HTMLElement | null>(null);
+  const [searchAnchorEl, setSearchAnchorEl] = useState<HTMLElement | null>(
+    null,
+  );
   const [searchText, setSearchText] = useState('');
 
   const showColumns = () => {
@@ -251,7 +270,12 @@ function GridActionToolbar({
   };
 
   const cycleDensity = () => {
-    const nextDensity = density === 'compact' ? 'standard' : density === 'standard' ? 'comfortable' : 'compact';
+    const nextDensity =
+      density === 'compact'
+        ? 'standard'
+        : density === 'standard'
+          ? 'comfortable'
+          : 'compact';
     onDensityChange(nextDensity);
   };
 
@@ -388,8 +412,20 @@ export default function CypherTable({
   const [containerHeight, setContainerHeight] = useState<number | null>(null);
   const observerRef = useRef<ResizeObserver | null>(null);
   // When preloadedRecords is provided, pass undefined cypher so the hook never fetches.
-  const [runQuery, { loading: fetchLoading, error, records: fetchedRecords, warnings, queryErrors, tokenExpired }] =
-    useLazyCypherQuery(preloadedRecords !== undefined ? undefined : cypher, reportQueryToken);
+  const [
+    runQuery,
+    {
+      loading: fetchLoading,
+      error,
+      records: fetchedRecords,
+      warnings,
+      queryErrors,
+      tokenExpired,
+    },
+  ] = useLazyCypherQuery(
+    preloadedRecords !== undefined ? undefined : cypher,
+    reportQueryToken,
+  );
 
   const records = preloadedRecords ?? fetchedRecords;
   const first = records?.[0];
@@ -436,7 +472,10 @@ export default function CypherTable({
   needInputsRef.current = needInputs;
 
   useEffect(() => {
-    if (needInputsRef.current === undefined || needInputsRef.current.length === 0) {
+    if (
+      needInputsRef.current === undefined ||
+      needInputsRef.current.length === 0
+    ) {
       runQueryRef.current(params, { force: (refreshKey ?? 0) > 0 });
     }
   }, [cypher, params, refreshKey]);
@@ -470,7 +509,11 @@ export default function CypherTable({
   if (queryErrors.length > 0) {
     return (
       <Box ref={containerRef} sx={fillSx}>
-        <Typography variant="subtitle1" component="div" sx={{ fontWeight: 500, mb: 0.5 }}>
+        <Typography
+          variant="subtitle1"
+          component="div"
+          sx={{ fontWeight: 500, mb: 0.5 }}
+        >
           {caption}
           <QueryValidationBadge errors={queryErrors} warnings={warnings} />
         </Typography>
@@ -491,9 +534,12 @@ export default function CypherTable({
     setExpandOpen(false);
   };
 
-  let tableBodyHeight = '';
-  let tableBodySkeletonHeight = '';
+  let tableBodyHeight: string;
+  let tableBodySkeletonHeight: string;
 
+  // Defined inline so it can close over the panel's toolbar state; passed to
+  // the MUI DataGrid `toolbar` slot, which expects a component reference.
+  // eslint-disable-next-line @eslint-react/no-nested-component-definitions
   const ToolbarActions = () => (
     <GridActionToolbar
       caption={caption}
@@ -519,7 +565,8 @@ export default function CypherTable({
   } else if (containerHeight !== null) {
     // Fill the parent cell, leaving room for the Data Grid chrome and
     // (when present) the caption rendered above the table.
-    const chrome = TABLE_CHROME_HEIGHT + (loading && caption ? CAPTION_HEIGHT : 0);
+    const chrome =
+      TABLE_CHROME_HEIGHT + (loading && caption ? CAPTION_HEIGHT : 0);
     const bodyPx = Math.max(containerHeight - chrome, MIN_TABLE_BODY_HEIGHT);
     tableBodyHeight = `${bodyPx}px`;
     tableBodySkeletonHeight = tableBodyHeight;
@@ -532,9 +579,12 @@ export default function CypherTable({
   const renderGrid = (
     rows: GridRowsProp,
     gridColumns: GridColDef[],
-    noRowsMessage = 'No rows'
+    noRowsMessage = 'No rows',
   ) => (
-    <Paper variant="outlined" sx={{ minHeight: 0, display: 'flex', flexDirection: 'column', flex: 1 }}>
+    <Paper
+      variant="outlined"
+      sx={{ minHeight: 0, display: 'flex', flexDirection: 'column', flex: 1 }}
+    >
       <Box sx={{ height: tableBodyHeight, minHeight: MIN_TABLE_BODY_HEIGHT }}>
         <DataGrid
           rows={rows}
@@ -548,13 +598,13 @@ export default function CypherTable({
           showToolbar
           initialState={{
             pagination: {
-              paginationModel: { page: 0, pageSize: expandOpen ? 100 : 10 }
-            }
+              paginationModel: { page: 0, pageSize: expandOpen ? 100 : 10 },
+            },
           }}
           slots={{
             toolbar: ToolbarActions,
             noColumnsOverlay: () => <EmptyOverlay message={noRowsMessage} />,
-            noRowsOverlay: () => <EmptyOverlay message={noRowsMessage} />
+            noRowsOverlay: () => <EmptyOverlay message={noRowsMessage} />,
           }}
         />
       </Box>
@@ -584,7 +634,11 @@ export default function CypherTable({
   if (loading || records === undefined) {
     return (
       <Box ref={containerRef} sx={fillSx}>
-        {caption && <Typography variant="subtitle1" sx={{ fontWeight: 500, mb: 0.5 }}>{caption}</Typography>}
+        {caption && (
+          <Typography variant="subtitle1" sx={{ fontWeight: 500, mb: 0.5 }}>
+            {caption}
+          </Typography>
+        )}
         <TablePanelSkeleton height={tableBodySkeletonHeight} />
       </Box>
     );
@@ -617,7 +671,8 @@ export default function CypherTable({
 
   const mungedRecords: GridRow[] = [];
   for (let i = 0; i < records.length; i++) {
-    const mungedData = columns === undefined ? flattenRecord(records[i]) : { ...records[i] };
+    const mungedData =
+      columns === undefined ? flattenRecord(records[i]) : { ...records[i] };
     Object.keys(mungedData).forEach((key) => {
       const val = mungedData[key];
       if (typeof val === 'object' && val !== null) {
@@ -639,9 +694,7 @@ export default function CypherTable({
         />
       )}
       <Dialog fullScreen open={expandOpen} onClose={setClosedExpand}>
-        <DialogContent>
-          {renderGrid(mungedRecords, gridColumns)}
-        </DialogContent>
+        <DialogContent>{renderGrid(mungedRecords, gridColumns)}</DialogContent>
         <DialogActions>
           <Button onClick={setClosedExpand} color="primary" autoFocus>
             Close

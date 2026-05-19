@@ -7,7 +7,7 @@ import {
   Stack,
   TextField,
   Tooltip,
-  Typography
+  Typography,
 } from '@mui/material';
 import Add from '@mui/icons-material/Add';
 import DeleteIcon from '@mui/icons-material/Delete';
@@ -42,7 +42,7 @@ function ColorSwatchPicker({ color, onChange }: ColorSwatchPickerProps) {
             borderColor: 'divider',
             borderRadius: 1,
             p: 0,
-            bgcolor: color || 'transparent'
+            bgcolor: color || 'transparent',
           }}
         />
       </Tooltip>
@@ -60,7 +60,7 @@ function ColorSwatchPicker({ color, onChange }: ColorSwatchPickerProps) {
             sx={{
               display: 'grid',
               gridTemplateColumns: 'repeat(5, 24px)',
-              gap: 0.75
+              gap: 0.75,
             }}
           >
             {THRESHOLD_PRESET_COLORS.map((preset) => (
@@ -76,30 +76,49 @@ function ColorSwatchPicker({ color, onChange }: ColorSwatchPickerProps) {
                     bgcolor: preset.hex,
                     borderRadius: 0.5,
                     cursor: 'pointer',
-                    outline: color.toLowerCase() === preset.hex.toLowerCase() ? '2px solid' : 'none',
+                    outline:
+                      color.toLowerCase() === preset.hex.toLowerCase()
+                        ? '2px solid'
+                        : 'none',
                     outlineColor: 'primary.main',
-                    outlineOffset: 1
+                    outlineOffset: 1,
                   }}
                 />
               </Tooltip>
             ))}
           </Box>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 0.5 }}>
-            <Typography variant="caption" color="text.secondary" sx={{ flex: 1 }}>
+            <Typography
+              variant="caption"
+              color="text.secondary"
+              sx={{ flex: 1 }}
+            >
               Custom
             </Typography>
             <input
               type="color"
               value={color || '#000000'}
               onChange={(e) => onChange(e.target.value)}
-              style={{ width: 40, height: 28, border: 'none', padding: 0, background: 'transparent', cursor: 'pointer' }}
+              style={{
+                width: 40,
+                height: 28,
+                border: 'none',
+                padding: 0,
+                background: 'transparent',
+                cursor: 'pointer',
+              }}
             />
             <TextField
               size="small"
               value={color}
               onChange={(e) => onChange(e.target.value)}
               placeholder="#FFFFFF"
-              slotProps={{ htmlInput: { style: { fontFamily: 'monospace', fontSize: '0.75rem' }, 'aria-label': 'Hex color' } }}
+              slotProps={{
+                htmlInput: {
+                  style: { fontFamily: 'monospace', fontSize: '0.75rem' },
+                  'aria-label': 'Hex color',
+                },
+              }}
               sx={{ width: 100 }}
             />
           </Box>
@@ -124,7 +143,7 @@ interface ThresholdRowProps {
  */
 function ThresholdRow({ threshold, onChange, onDelete }: ThresholdRowProps) {
   const [valueText, setValueText] = useState<string>(
-    Number.isFinite(threshold.value) ? String(threshold.value) : ''
+    Number.isFinite(threshold.value) ? String(threshold.value) : '',
   );
 
   // If the parent sets a different finite value (e.g. via legacy-threshold
@@ -141,7 +160,6 @@ function ThresholdRow({ threshold, onChange, onDelete }: ThresholdRowProps) {
     }
     // We intentionally only want this to fire when the *external* value
     // changes; ``valueText`` shouldn't trigger a re-sync.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [threshold.value]);
 
   return (
@@ -169,7 +187,11 @@ function ThresholdRow({ threshold, onChange, onDelete }: ThresholdRowProps) {
       />
       <Box sx={{ flex: 1 }} />
       <Tooltip title="Remove threshold">
-        <IconButton size="small" aria-label="Remove threshold" onClick={onDelete}>
+        <IconButton
+          size="small"
+          aria-label="Remove threshold"
+          onClick={onDelete}
+        >
           <DeleteIcon fontSize="small" />
         </IconButton>
       </Tooltip>
@@ -189,7 +211,11 @@ interface ThresholdsEditorProps {
  * sorted by ``value`` ascending on every change so the resolver semantics
  * (highest matching threshold wins) are obvious to the editor.
  */
-function ThresholdsEditor({ thresholds, onChange, helperText }: ThresholdsEditorProps) {
+function ThresholdsEditor({
+  thresholds,
+  onChange,
+  helperText,
+}: ThresholdsEditorProps) {
   function setRow(idx: number, next: PanelThreshold) {
     const updated = thresholds.map((t, i) => (i === idx ? next : t));
     onChange(updated);
@@ -204,7 +230,7 @@ function ThresholdsEditor({ thresholds, onChange, helperText }: ThresholdsEditor
     // intended number directly without first clearing a default.
     onChange([
       ...thresholds,
-      { value: Number.NaN, color: THRESHOLD_PRESET_COLORS[0].hex }
+      { value: Number.NaN, color: THRESHOLD_PRESET_COLORS[0].hex },
     ]);
   }
 
@@ -214,14 +240,19 @@ function ThresholdsEditor({ thresholds, onChange, helperText }: ThresholdsEditor
         Thresholds
       </Typography>
       {helperText && (
-        <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
+        <Typography
+          variant="caption"
+          color="text.secondary"
+          sx={{ display: 'block', mb: 1 }}
+        >
           {helperText}
         </Typography>
       )}
       <Stack spacing={1}>
         {thresholds.length === 0 && (
           <Typography variant="caption" color="text.secondary">
-            No thresholds configured. Click "Add threshold" to color the metric based on its value.
+            No thresholds configured. Click "Add threshold" to color the metric
+            based on its value.
           </Typography>
         )}
         {thresholds.map((t, idx) => (

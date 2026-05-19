@@ -25,7 +25,7 @@ import RoleHistory from 'src/pages/RoleHistory';
 const routes = [
   {
     path: '/auth/callback',
-    element: <OidcCallback />
+    element: <OidcCallback />,
   },
   {
     path: 'app',
@@ -38,19 +38,28 @@ const routes = [
       { path: 'reports/:id/versions/:version', element: <ReportVersionView /> },
       { path: 'query-console', element: <QueryConsole /> },
       { path: 'scheduled-queries', element: <ScheduledQueries /> },
-      { path: 'scheduled-queries/:id/history', element: <ScheduledQueryHistory /> },
+      {
+        path: 'scheduled-queries/:id/history',
+        element: <ScheduledQueryHistory />,
+      },
       { path: 'toolsets', element: <Toolsets /> },
       { path: 'toolsets/:toolsetId/tools', element: <ToolsetTools /> },
       { path: 'toolsets/:toolsetId/history', element: <ToolsetHistory /> },
-      { path: 'toolsets/:toolsetId/tools/:toolId/history', element: <ToolHistory /> },
+      {
+        path: 'toolsets/:toolsetId/tools/:toolId/history',
+        element: <ToolHistory />,
+      },
       { path: 'skillsets', element: <Skillsets /> },
       { path: 'skillsets/:skillsetId/skills', element: <SkillsetSkills /> },
       { path: 'skillsets/:skillsetId/history', element: <SkillsetHistory /> },
-      { path: 'skillsets/:skillsetId/skills/:skillId/history', element: <SkillHistory /> },
+      {
+        path: 'skillsets/:skillsetId/skills/:skillId/history',
+        element: <SkillHistory />,
+      },
       { path: 'roles', element: <Roles /> },
       { path: 'roles/:roleId/history', element: <RoleHistory /> },
-      { path: '*', element: <Navigate to="/404" /> }
-    ]
+      { path: '*', element: <Navigate to="/404" /> },
+    ],
   },
   {
     path: '/',
@@ -58,9 +67,9 @@ const routes = [
     children: [
       { path: '404', element: <NotFound /> },
       { path: '/', element: <Navigate to="/app/dashboard" /> },
-      { path: '*', element: <Navigate to="/404" /> }
-    ]
-  }
+      { path: '*', element: <Navigate to="/404" /> },
+    ],
+  },
 ];
 
 export default routes;

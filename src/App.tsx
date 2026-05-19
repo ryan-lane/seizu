@@ -10,7 +10,11 @@ import typography from 'src/theme/typography';
 import { brand } from 'src/theme/brand';
 import { contentContainerRootStyles } from 'src/theme/layout';
 import routes from 'src/routes';
-import { AuthConfigContext, type AuthConfig, type OidcConfig } from 'src/authConfig.context';
+import {
+  AuthConfigContext,
+  type AuthConfig,
+  type OidcConfig,
+} from 'src/authConfig.context';
 import { createUserManager } from 'src/userManager';
 import { CurrentUserProvider } from 'src/hooks/useCurrentUser';
 import 'react-grid-layout/css/styles.css';
@@ -21,7 +25,7 @@ function App() {
   const [authConfig, setAuthConfig] = useState<AuthConfig>({
     auth_required: true,
     oidc: null,
-    userManager: null
+    userManager: null,
   });
 
   useEffect(() => {
@@ -29,7 +33,8 @@ function App() {
       .then((r) => r.json())
       .then((data: { auth_required: boolean; oidc: OidcConfig | null }) => {
         const oidc = data.oidc ?? null;
-        const userManager = (data.auth_required && oidc) ? createUserManager(oidc) : null;
+        const userManager =
+          data.auth_required && oidc ? createUserManager(oidc) : null;
         setAuthConfig({ auth_required: data.auth_required, oidc, userManager });
       })
       .catch(() => {
@@ -47,7 +52,7 @@ function App() {
               secondary: { main: brand.ember, contrastText: brand.space },
               background: { default: brand.space, paper: '#111a33' },
               text: { primary: brand.paper, secondary: '#aab8d6' },
-              divider: 'rgba(143, 180, 255, 0.15)'
+              divider: 'rgba(143, 180, 255, 0.15)',
             }
           : {
               mode: 'light',
@@ -55,7 +60,7 @@ function App() {
               secondary: { main: brand.emberDark, contrastText: '#ffffff' },
               background: { default: brand.paper, paper: '#ffffff' },
               text: { primary: brand.space, secondary: '#3b4a6b' },
-              divider: 'rgba(58, 90, 165, 0.16)'
+              divider: 'rgba(58, 90, 165, 0.16)',
             },
         shadows,
         typography,
@@ -66,14 +71,14 @@ function App() {
                 ...contentContainerRootStyles(theme),
                 ...(ownerState.disableGutters && {
                   paddingLeft: 0,
-                  paddingRight: 0
-                })
-              })
-            }
-          }
-        }
+                  paddingRight: 0,
+                }),
+              }),
+            },
+          },
+        },
       }),
-    [prefersDarkMode]
+    [prefersDarkMode],
   );
 
   const routing = useRoutes(routes);

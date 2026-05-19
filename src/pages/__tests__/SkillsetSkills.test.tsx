@@ -1,4 +1,11 @@
-import { render, screen, fireEvent, cleanup, within, waitFor } from '@testing-library/react';
+import {
+  render,
+  screen,
+  fireEvent,
+  cleanup,
+  within,
+  waitFor,
+} from '@testing-library/react';
 import { MemoryRouter, Routes, Route } from 'react-router-dom';
 import { ThemeProvider, createTheme } from '@mui/material/styles';
 import SkillsetSkills from 'src/pages/SkillsetSkills';
@@ -15,7 +22,10 @@ jest.mock('src/components/UserDisplay', () => ({
   default: ({ userId }: { userId: string }) => <>{userId}</>,
 }));
 
-const mockUsePermissions = usePermissionsModule.usePermissions as jest.MockedFunction<typeof usePermissionsModule.usePermissions>;
+const mockUsePermissions =
+  usePermissionsModule.usePermissions as jest.MockedFunction<
+    typeof usePermissionsModule.usePermissions
+  >;
 const theme = createTheme();
 
 function Wrapper({ children }: { children: React.ReactNode }) {
@@ -23,7 +33,10 @@ function Wrapper({ children }: { children: React.ReactNode }) {
     <MemoryRouter initialEntries={['/app/skillsets/responders/skills']}>
       <ThemeProvider theme={theme}>
         <Routes>
-          <Route path="/app/skillsets/:skillsetId/skills" element={<>{children}</>} />
+          <Route
+            path="/app/skillsets/:skillsetId/skills"
+            element={<>{children}</>}
+          />
         </Routes>
       </ThemeProvider>
     </MemoryRouter>
@@ -47,7 +60,10 @@ describe('SkillsetSkills', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockUsePermissions.mockReturnValue(() => true);
-    useSkillsList = jest.spyOn(skillsetsApiModule, 'useSkillsList') as unknown as jest.Mock;
+    useSkillsList = jest.spyOn(
+      skillsetsApiModule,
+      'useSkillsList',
+    ) as unknown as jest.Mock;
     useSkillsList.mockReturnValue({
       skills: [
         {
@@ -68,7 +84,10 @@ describe('SkillsetSkills', () => {
       error: null,
       refresh: jest.fn(),
     });
-    useSkillMutations = jest.spyOn(skillsetsApiModule, 'useSkillMutations') as unknown as jest.Mock;
+    useSkillMutations = jest.spyOn(
+      skillsetsApiModule,
+      'useSkillMutations',
+    ) as unknown as jest.Mock;
     mockCreateSkill = jest.fn();
     mockUpdateSkill = jest.fn();
     mockRenderSkill = jest.fn().mockResolvedValue({ text: 'Rendered output' });
@@ -78,7 +97,10 @@ describe('SkillsetSkills', () => {
       deleteSkill: jest.fn(),
       renderSkill: mockRenderSkill,
     });
-    useToolCatalog = jest.spyOn(toolsetsApiModule, 'useToolCatalog') as unknown as jest.Mock;
+    useToolCatalog = jest.spyOn(
+      toolsetsApiModule,
+      'useToolCatalog',
+    ) as unknown as jest.Mock;
     useToolCatalog.mockReturnValue({ tools: [], loading: false, error: null });
   });
 
@@ -109,8 +131,20 @@ describe('SkillsetSkills', () => {
           description: 'Summarize an incident.',
           template: 'Summarize {{incident_id}} in {{count}} bullets',
           parameters: [
-            { name: 'incident_id', type: 'string', description: 'Incident identifier', required: true, default: null },
-            { name: 'count', type: 'integer', description: 'Bullet count', required: false, default: 3 },
+            {
+              name: 'incident_id',
+              type: 'string',
+              description: 'Incident identifier',
+              required: true,
+              default: null,
+            },
+            {
+              name: 'count',
+              type: 'integer',
+              description: 'Bullet count',
+              required: false,
+              default: 3,
+            },
           ],
           enabled: true,
           current_version: 1,
@@ -135,14 +169,20 @@ describe('SkillsetSkills', () => {
     expect(within(dialog).getAllByText('Required')).toHaveLength(1);
     expect(within(dialog).getAllByText('Optional')).toHaveLength(1);
 
-    fireEvent.change(within(dialog).getByLabelText(/incident_id/), { target: { value: 'INC-1' } });
+    fireEvent.change(within(dialog).getByLabelText(/incident_id/), {
+      target: { value: 'INC-1' },
+    });
     fireEvent.click(within(dialog).getByRole('button', { name: /render/i }));
 
-    await waitFor(() => expect(mockRenderSkill).toHaveBeenCalledWith('triage', {
-      incident_id: 'INC-1',
-      count: 3,
-    }));
-    expect(await within(dialog).findByText('Rendered output')).toBeInTheDocument();
+    await waitFor(() =>
+      expect(mockRenderSkill).toHaveBeenCalledWith('triage', {
+        incident_id: 'INC-1',
+        count: 3,
+      }),
+    );
+    expect(
+      await within(dialog).findByText('Rendered output'),
+    ).toBeInTheDocument();
   });
 
   it('opens the new skill dialog with the markdown editor instead of a template textbox', () => {
@@ -151,8 +191,12 @@ describe('SkillsetSkills', () => {
     fireEvent.click(screen.getByRole('button', { name: /new skill/i }));
 
     const dialog = screen.getByRole('dialog', { name: 'New Skill' });
-    expect(within(dialog).getByRole('button', { name: /WYSIWYG editor/i })).toHaveAttribute('aria-pressed', 'true');
-    expect(within(dialog).getByRole('button', { name: 'Bold' })).toBeInTheDocument();
+    expect(
+      within(dialog).getByRole('button', { name: /WYSIWYG editor/i }),
+    ).toHaveAttribute('aria-pressed', 'true');
+    expect(
+      within(dialog).getByRole('button', { name: 'Bold' }),
+    ).toBeInTheDocument();
     expect(within(dialog).queryByLabelText('Template')).not.toBeInTheDocument();
   });
 
@@ -163,9 +207,13 @@ describe('SkillsetSkills', () => {
     fireEvent.click(screen.getByRole('menuitem', { name: /edit/i }));
 
     const dialog = screen.getByRole('dialog', { name: 'Edit Skill' });
-    fireEvent.click(within(dialog).getByRole('button', { name: /Markdown source/i }));
+    fireEvent.click(
+      within(dialog).getByRole('button', { name: /Markdown source/i }),
+    );
 
-    expect(within(dialog).getByLabelText('Template')).toHaveValue('Summarize {{incident_id}}');
+    expect(within(dialog).getByLabelText('Template')).toHaveValue(
+      'Summarize {{incident_id}}',
+    );
   });
 
   it('warns before editing a skill with missing tool references and strips them on save', async () => {
@@ -178,7 +226,13 @@ describe('SkillsetSkills', () => {
           description: 'Summarize an incident.',
           template: 'Summarize {{incident_id}}',
           parameters: [
-            { name: 'incident_id', type: 'string', description: 'Incident identifier', required: true, default: null },
+            {
+              name: 'incident_id',
+              type: 'string',
+              description: 'Incident identifier',
+              required: true,
+              default: null,
+            },
           ],
           tools_required: ['graph__query', 'graph_tools__missing'],
           enabled: true,
@@ -212,17 +266,28 @@ describe('SkillsetSkills', () => {
     fireEvent.click(screen.getByRole('button', { name: /more actions/i }));
     fireEvent.click(screen.getByRole('menuitem', { name: /edit/i }));
 
-    const confirmDialog = screen.getByRole('dialog', { name: 'Remove missing tool references?' });
-    expect(within(confirmDialog).getByText('graph_tools__missing')).toBeInTheDocument();
+    const confirmDialog = screen.getByRole('dialog', {
+      name: 'Remove missing tool references?',
+    });
+    expect(
+      within(confirmDialog).getByText('graph_tools__missing'),
+    ).toBeInTheDocument();
 
-    fireEvent.click(within(confirmDialog).getByRole('button', { name: /continue editing/i }));
+    fireEvent.click(
+      within(confirmDialog).getByRole('button', { name: /continue editing/i }),
+    );
 
     const editDialog = screen.getByRole('dialog', { name: 'Edit Skill' });
     fireEvent.click(within(editDialog).getByRole('button', { name: 'Save' }));
 
-    await waitFor(() => expect(mockUpdateSkill).toHaveBeenCalledWith('triage', expect.objectContaining({
-      tools_required: ['graph__query'],
-    })));
+    await waitFor(() =>
+      expect(mockUpdateSkill).toHaveBeenCalledWith(
+        'triage',
+        expect.objectContaining({
+          tools_required: ['graph__query'],
+        }),
+      ),
+    );
   });
 
   it('saves the raw markdown template string for a new skill', async () => {
@@ -231,22 +296,38 @@ describe('SkillsetSkills', () => {
     fireEvent.click(screen.getByRole('button', { name: /new skill/i }));
     const dialog = screen.getByRole('dialog', { name: 'New Skill' });
 
-    fireEvent.change(within(dialog).getByLabelText(/^ID/), { target: { value: 'respond_to_incident' } });
-    fireEvent.change(within(dialog).getByLabelText(/^Name/), { target: { value: 'Respond to incident' } });
-    fireEvent.click(within(dialog).getByRole('button', { name: /Markdown source/i }));
+    fireEvent.change(within(dialog).getByLabelText(/^ID/), {
+      target: { value: 'respond_to_incident' },
+    });
+    fireEvent.change(within(dialog).getByLabelText(/^Name/), {
+      target: { value: 'Respond to incident' },
+    });
+    fireEvent.click(
+      within(dialog).getByRole('button', { name: /Markdown source/i }),
+    );
     fireEvent.change(within(dialog).getByLabelText('Template'), {
       target: { value: '## Incident\n\nSummarize {% $incident_id %}.' },
     });
-    fireEvent.click(within(dialog).getByRole('button', { name: 'Add parameter' }));
-    fireEvent.change(within(dialog).getAllByLabelText(/^Name/)[1], { target: { value: 'incident_id' } });
+    fireEvent.click(
+      within(dialog).getByRole('button', { name: 'Add parameter' }),
+    );
+    fireEvent.change(within(dialog).getAllByLabelText(/^Name/)[1], {
+      target: { value: 'incident_id' },
+    });
     fireEvent.click(within(dialog).getByRole('button', { name: 'Save' }));
 
-    await waitFor(() => expect(mockCreateSkill).toHaveBeenCalledWith(expect.objectContaining({
-      skill_id: 'respond_to_incident',
-      name: 'Respond to incident',
-      template: '## Incident\n\nSummarize {% $incident_id %}.',
-      parameters: [expect.objectContaining({ name: 'incident_id', type: 'string' })],
-    })));
+    await waitFor(() =>
+      expect(mockCreateSkill).toHaveBeenCalledWith(
+        expect.objectContaining({
+          skill_id: 'respond_to_incident',
+          name: 'Respond to incident',
+          template: '## Incident\n\nSummarize {% $incident_id %}.',
+          parameters: [
+            expect.objectContaining({ name: 'incident_id', type: 'string' }),
+          ],
+        }),
+      ),
+    );
     expect(mockUpdateSkill).not.toHaveBeenCalled();
   });
 
@@ -256,15 +337,25 @@ describe('SkillsetSkills', () => {
     fireEvent.click(screen.getByRole('button', { name: /new skill/i }));
     const dialog = screen.getByRole('dialog', { name: 'New Skill' });
 
-    fireEvent.change(within(dialog).getByLabelText(/^ID/), { target: { value: 'bad_placeholder' } });
-    fireEvent.change(within(dialog).getByLabelText(/^Name/), { target: { value: 'Bad placeholder' } });
-    fireEvent.click(within(dialog).getByRole('button', { name: /Markdown source/i }));
+    fireEvent.change(within(dialog).getByLabelText(/^ID/), {
+      target: { value: 'bad_placeholder' },
+    });
+    fireEvent.change(within(dialog).getByLabelText(/^Name/), {
+      target: { value: 'Bad placeholder' },
+    });
+    fireEvent.click(
+      within(dialog).getByRole('button', { name: /Markdown source/i }),
+    );
     fireEvent.change(within(dialog).getByLabelText('Template'), {
       target: { value: 'Summarize {% $missing_param %}' },
     });
     fireEvent.click(within(dialog).getByRole('button', { name: 'Save' }));
 
-    expect(within(dialog).getByText('Variable $missing_param must match a declared parameter.')).toBeInTheDocument();
+    expect(
+      within(dialog).getByText(
+        'Variable $missing_param must match a declared parameter.',
+      ),
+    ).toBeInTheDocument();
     expect(mockCreateSkill).not.toHaveBeenCalled();
   });
 });

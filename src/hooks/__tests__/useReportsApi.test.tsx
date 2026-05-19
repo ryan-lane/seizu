@@ -9,16 +9,24 @@ import {
   useReportsMutations,
   useReport,
   useDashboardReport,
-  clearCapabilitiesCache
+  clearCapabilitiesCache,
 } from 'src/hooks/useReportsApi';
 
-const AUTH_CONFIG_NO_OIDC = { auth_required: false, oidc: null, userManager: null };
+const AUTH_CONFIG_NO_OIDC = {
+  auth_required: false,
+  oidc: null,
+  userManager: null,
+};
 
 function makeWrapper(authRequired: boolean, accessToken: string | null) {
   return function Wrapper({ children }: { children: React.ReactNode }) {
     return (
-      <AuthConfigContext.Provider value={{ ...AUTH_CONFIG_NO_OIDC, auth_required: authRequired }}>
-        <AuthContext.Provider value={{ user: null, accessToken, isLoading: false }}>
+      <AuthConfigContext.Provider
+        value={{ ...AUTH_CONFIG_NO_OIDC, auth_required: authRequired }}
+      >
+        <AuthContext.Provider
+          value={{ user: null, accessToken, isLoading: false }}
+        >
           {children}
         </AuthContext.Provider>
       </AuthConfigContext.Provider>
@@ -34,7 +42,7 @@ const VERSIONS = [
     config: { rows: [] },
     created_at: '2024-01-01T00:00:00Z',
     created_by: 'alice@example.com',
-    comment: 'Initial version'
+    comment: 'Initial version',
   },
   {
     report_id: 'r1',
@@ -43,8 +51,8 @@ const VERSIONS = [
     config: { rows: [] },
     created_at: '2024-01-02T00:00:00Z',
     created_by: 'bob@example.com',
-    comment: null
-  }
+    comment: null,
+  },
 ];
 
 // ---------------------------------------------------------------------------
@@ -63,11 +71,11 @@ describe('useReportVersionsList', () => {
   it('fetches versions for a report', async () => {
     mockFetch.mockResolvedValue({
       ok: true,
-      json: () => Promise.resolve({ versions: VERSIONS })
+      json: () => Promise.resolve({ versions: VERSIONS }),
     });
 
     const { result } = renderHook(() => useReportVersionsList('r1'), {
-      wrapper: makeWrapper(false, null)
+      wrapper: makeWrapper(false, null),
     });
 
     await waitFor(() => expect(result.current.loading).toBe(false));
@@ -75,13 +83,13 @@ describe('useReportVersionsList', () => {
     expect(result.current.error).toBeNull();
     expect(mockFetch).toHaveBeenCalledWith(
       '/api/v1/reports/r1/versions',
-      expect.any(Object)
+      expect.any(Object),
     );
   });
 
   it('does not fetch when auth_required and accessToken is null', () => {
     renderHook(() => useReportVersionsList('r1'), {
-      wrapper: makeWrapper(true, null)
+      wrapper: makeWrapper(true, null),
     });
 
     expect(mockFetch).not.toHaveBeenCalled();
@@ -89,7 +97,7 @@ describe('useReportVersionsList', () => {
 
   it('does not fetch when reportId is undefined', () => {
     renderHook(() => useReportVersionsList(undefined), {
-      wrapper: makeWrapper(false, null)
+      wrapper: makeWrapper(false, null),
     });
 
     expect(mockFetch).not.toHaveBeenCalled();
@@ -98,19 +106,19 @@ describe('useReportVersionsList', () => {
   it('includes Authorization header when accessToken is set', async () => {
     mockFetch.mockResolvedValue({
       ok: true,
-      json: () => Promise.resolve({ versions: VERSIONS })
+      json: () => Promise.resolve({ versions: VERSIONS }),
     });
 
     renderHook(() => useReportVersionsList('r1'), {
-      wrapper: makeWrapper(true, 'mytoken')
+      wrapper: makeWrapper(true, 'mytoken'),
     });
 
     await waitFor(() => expect(mockFetch).toHaveBeenCalled());
     expect(mockFetch).toHaveBeenCalledWith(
       '/api/v1/reports/r1/versions',
       expect.objectContaining({
-        headers: expect.objectContaining({ Authorization: 'Bearer mytoken' })
-      })
+        headers: expect.objectContaining({ Authorization: 'Bearer mytoken' }),
+      }),
     );
   });
 
@@ -118,7 +126,7 @@ describe('useReportVersionsList', () => {
     mockFetch.mockResolvedValue({ ok: false, status: 500 });
 
     const { result } = renderHook(() => useReportVersionsList('r1'), {
-      wrapper: makeWrapper(false, null)
+      wrapper: makeWrapper(false, null),
     });
 
     await waitFor(() => expect(result.current.loading).toBe(false));
@@ -130,7 +138,7 @@ describe('useReportVersionsList', () => {
     mockFetch.mockRejectedValue(new Error('network error'));
 
     const { result } = renderHook(() => useReportVersionsList('r1'), {
-      wrapper: makeWrapper(false, null)
+      wrapper: makeWrapper(false, null),
     });
 
     await waitFor(() => expect(result.current.loading).toBe(false));
@@ -154,11 +162,11 @@ describe('useReportVersion', () => {
   it('fetches a specific version', async () => {
     mockFetch.mockResolvedValue({
       ok: true,
-      json: () => Promise.resolve(VERSIONS[0])
+      json: () => Promise.resolve(VERSIONS[0]),
     });
 
     const { result } = renderHook(() => useReportVersion('r1', '1'), {
-      wrapper: makeWrapper(false, null)
+      wrapper: makeWrapper(false, null),
     });
 
     await waitFor(() => expect(result.current.loading).toBe(false));
@@ -166,13 +174,13 @@ describe('useReportVersion', () => {
     expect(result.current.error).toBeNull();
     expect(mockFetch).toHaveBeenCalledWith(
       '/api/v1/reports/r1/versions/1?include_query_capabilities=true',
-      expect.any(Object)
+      expect.any(Object),
     );
   });
 
   it('does not fetch when auth_required and accessToken is null', () => {
     renderHook(() => useReportVersion('r1', '1'), {
-      wrapper: makeWrapper(true, null)
+      wrapper: makeWrapper(true, null),
     });
 
     expect(mockFetch).not.toHaveBeenCalled();
@@ -180,7 +188,7 @@ describe('useReportVersion', () => {
 
   it('does not fetch when reportId is undefined', () => {
     renderHook(() => useReportVersion(undefined, '1'), {
-      wrapper: makeWrapper(false, null)
+      wrapper: makeWrapper(false, null),
     });
 
     expect(mockFetch).not.toHaveBeenCalled();
@@ -188,7 +196,7 @@ describe('useReportVersion', () => {
 
   it('does not fetch when versionNum is undefined', () => {
     renderHook(() => useReportVersion('r1', undefined), {
-      wrapper: makeWrapper(false, null)
+      wrapper: makeWrapper(false, null),
     });
 
     expect(mockFetch).not.toHaveBeenCalled();
@@ -197,19 +205,19 @@ describe('useReportVersion', () => {
   it('includes Authorization header when accessToken is set', async () => {
     mockFetch.mockResolvedValue({
       ok: true,
-      json: () => Promise.resolve(VERSIONS[1])
+      json: () => Promise.resolve(VERSIONS[1]),
     });
 
     renderHook(() => useReportVersion('r1', '2'), {
-      wrapper: makeWrapper(true, 'mytoken')
+      wrapper: makeWrapper(true, 'mytoken'),
     });
 
     await waitFor(() => expect(mockFetch).toHaveBeenCalled());
     expect(mockFetch).toHaveBeenCalledWith(
       '/api/v1/reports/r1/versions/2?include_query_capabilities=true',
       expect.objectContaining({
-        headers: expect.objectContaining({ Authorization: 'Bearer mytoken' })
-      })
+        headers: expect.objectContaining({ Authorization: 'Bearer mytoken' }),
+      }),
     );
   });
 
@@ -217,7 +225,7 @@ describe('useReportVersion', () => {
     mockFetch.mockResolvedValue({ ok: false, status: 404 });
 
     const { result } = renderHook(() => useReportVersion('r1', '99'), {
-      wrapper: makeWrapper(false, null)
+      wrapper: makeWrapper(false, null),
     });
 
     await waitFor(() => expect(result.current.loading).toBe(false));
@@ -228,15 +236,15 @@ describe('useReportVersion', () => {
   it('resets reportVersion when reportId changes', async () => {
     mockFetch.mockResolvedValue({
       ok: true,
-      json: () => Promise.resolve(VERSIONS[0])
+      json: () => Promise.resolve(VERSIONS[0]),
     });
 
     const { result, rerender } = renderHook(
       ({ id, ver }: { id: string; ver: string }) => useReportVersion(id, ver),
       {
         initialProps: { id: 'r1', ver: '1' },
-        wrapper: makeWrapper(false, null)
-      }
+        wrapper: makeWrapper(false, null),
+      },
     );
 
     await waitFor(() => expect(result.current.loading).toBe(false));
@@ -244,13 +252,15 @@ describe('useReportVersion', () => {
 
     mockFetch.mockResolvedValue({
       ok: true,
-      json: () => Promise.resolve(VERSIONS[1])
+      json: () => Promise.resolve(VERSIONS[1]),
     });
 
     rerender({ id: 'r2', ver: '1' });
 
     // Wait for new data to load after the reportId change
-    await waitFor(() => expect(result.current.reportVersion).toEqual(VERSIONS[1]));
+    await waitFor(() =>
+      expect(result.current.reportVersion).toEqual(VERSIONS[1]),
+    );
     expect(result.current.loading).toBe(false);
   });
 });
@@ -267,7 +277,7 @@ const REPORTS = [
     current_version: 2,
     created_at: '2024-01-01T00:00:00Z',
     updated_at: '2024-01-02T00:00:00Z',
-    pinned: false
+    pinned: false,
   },
   {
     report_id: 'r2',
@@ -276,8 +286,8 @@ const REPORTS = [
     current_version: 1,
     created_at: '2024-01-03T00:00:00Z',
     updated_at: '2024-01-03T00:00:00Z',
-    pinned: true
-  }
+    pinned: true,
+  },
 ];
 
 describe('useReportsList', () => {
@@ -292,11 +302,12 @@ describe('useReportsList', () => {
   it('fetches and returns reports list', async () => {
     mockFetch.mockResolvedValue({
       ok: true,
-      json: () => Promise.resolve({ reports: REPORTS, total: 2, page: 1, per_page: 500 })
+      json: () =>
+        Promise.resolve({ reports: REPORTS, total: 2, page: 1, per_page: 500 }),
     });
 
     const { result } = renderHook(() => useReportsList(), {
-      wrapper: makeWrapper(false, null)
+      wrapper: makeWrapper(false, null),
     });
 
     await waitFor(() => expect(result.current.loading).toBe(false));
@@ -307,7 +318,7 @@ describe('useReportsList', () => {
     expect(result.current.error).toBeNull();
     expect(mockFetch).toHaveBeenCalledWith(
       '/api/v1/reports?page=1&per_page=500',
-      expect.any(Object)
+      expect.any(Object),
     );
   });
 
@@ -322,7 +333,7 @@ describe('useReportsList', () => {
       created_by: 'alice@example.com',
       updated_by: 'alice@example.com',
       access: { scope: 'public' as const },
-      pinned: false
+      pinned: false,
     }));
     const page2Reports = [
       {
@@ -335,20 +346,20 @@ describe('useReportsList', () => {
         created_by: 'bob@example.com',
         updated_by: 'bob@example.com',
         access: { scope: 'private' as const },
-        pinned: true
-      }
+        pinned: true,
+      },
     ];
     const page1 = {
       reports: page1Reports,
       total: 501,
       page: 1,
-      per_page: 500
+      per_page: 500,
     };
     const page2 = {
       reports: page2Reports,
       total: 501,
       page: 2,
-      per_page: 500
+      per_page: 500,
     };
 
     mockFetch
@@ -356,34 +367,37 @@ describe('useReportsList', () => {
       .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(page2) });
 
     const { result } = renderHook(() => useReportsList(), {
-      wrapper: makeWrapper(false, null)
+      wrapper: makeWrapper(false, null),
     });
 
     await waitFor(() => expect(result.current.loading).toBe(false));
-    expect(result.current.reports).toEqual([...page1.reports, ...page2.reports]);
+    expect(result.current.reports).toEqual([
+      ...page1.reports,
+      ...page2.reports,
+    ]);
     expect(result.current.total).toBe(501);
     expect(result.current.page).toBe(1);
     expect(result.current.perPage).toBe(500);
     expect(mockFetch).toHaveBeenNthCalledWith(
       1,
       '/api/v1/reports?page=1&per_page=500',
-      expect.any(Object)
+      expect.any(Object),
     );
     expect(mockFetch).toHaveBeenNthCalledWith(
       2,
       '/api/v1/reports?page=2&per_page=500',
-      expect.any(Object)
+      expect.any(Object),
     );
   });
 
   it('includes pinned field in returned items', async () => {
     mockFetch.mockResolvedValue({
       ok: true,
-      json: () => Promise.resolve({ reports: REPORTS })
+      json: () => Promise.resolve({ reports: REPORTS }),
     });
 
     const { result } = renderHook(() => useReportsList(), {
-      wrapper: makeWrapper(false, null)
+      wrapper: makeWrapper(false, null),
     });
 
     await waitFor(() => expect(result.current.loading).toBe(false));
@@ -393,7 +407,7 @@ describe('useReportsList', () => {
 
   it('does not fetch when auth_required and no token', () => {
     renderHook(() => useReportsList(), {
-      wrapper: makeWrapper(true, null)
+      wrapper: makeWrapper(true, null),
     });
 
     expect(mockFetch).not.toHaveBeenCalled();
@@ -402,11 +416,11 @@ describe('useReportsList', () => {
   it('refresh dispatches the seizu:reports-updated event', async () => {
     mockFetch.mockResolvedValue({
       ok: true,
-      json: () => Promise.resolve({ reports: REPORTS })
+      json: () => Promise.resolve({ reports: REPORTS }),
     });
 
     const { result } = renderHook(() => useReportsList(), {
-      wrapper: makeWrapper(false, null)
+      wrapper: makeWrapper(false, null),
     });
 
     await waitFor(() => expect(result.current.loading).toBe(false));
@@ -418,12 +432,11 @@ describe('useReportsList', () => {
     window.removeEventListener('seizu:reports-updated', handler);
   });
 
-
   it('sets error state on non-ok response', async () => {
     mockFetch.mockResolvedValue({ ok: false, status: 500 });
 
     const { result } = renderHook(() => useReportsList(), {
-      wrapper: makeWrapper(false, null)
+      wrapper: makeWrapper(false, null),
     });
 
     await waitFor(() => expect(result.current.loading).toBe(false));
@@ -448,19 +461,20 @@ describe('useReportsMutations (saveReportVersion)', () => {
   it('sends the report config name as the single write-side report name', async () => {
     mockFetch.mockResolvedValue({
       ok: true,
-      json: () => Promise.resolve({
-        report_id: 'r1',
-        name: 'Renamed Report',
-        version: 2,
-        config: { name: 'Renamed Report', rows: [] },
-        created_at: '2024-01-02T00:00:00Z',
-        created_by: 'alice@example.com',
-        comment: 'rename'
-      })
+      json: () =>
+        Promise.resolve({
+          report_id: 'r1',
+          name: 'Renamed Report',
+          version: 2,
+          config: { name: 'Renamed Report', rows: [] },
+          created_at: '2024-01-02T00:00:00Z',
+          created_by: 'alice@example.com',
+          comment: 'rename',
+        }),
     });
 
     const { result } = renderHook(() => useReportsMutations(), {
-      wrapper: makeWrapper(false, null)
+      wrapper: makeWrapper(false, null),
     });
 
     const config: Report = { name: 'Renamed Report', rows: [] };
@@ -474,9 +488,9 @@ describe('useReportsMutations (saveReportVersion)', () => {
         method: 'POST',
         body: JSON.stringify({
           config,
-          comment: 'rename'
-        })
-      })
+          comment: 'rename',
+        }),
+      }),
     );
   });
 });
@@ -497,21 +511,22 @@ describe('useReportsMutations (updateReportVisibility)', () => {
   it('updateReportVisibility calls PUT /api/v1/reports/:id/visibility', async () => {
     mockFetch.mockResolvedValue({
       ok: true,
-      json: () => Promise.resolve({
-        report_id: 'r1',
-        name: 'My Report',
-        current_version: 2,
-        created_at: '2024-01-01T00:00:00Z',
-        updated_at: '2024-01-02T00:00:00Z',
-        created_by: 'alice@example.com',
-        updated_by: 'alice@example.com',
-        access: { scope: 'public' },
-        pinned: false
-      })
+      json: () =>
+        Promise.resolve({
+          report_id: 'r1',
+          name: 'My Report',
+          current_version: 2,
+          created_at: '2024-01-01T00:00:00Z',
+          updated_at: '2024-01-02T00:00:00Z',
+          created_by: 'alice@example.com',
+          updated_by: 'alice@example.com',
+          access: { scope: 'public' },
+          pinned: false,
+        }),
     });
 
     const { result } = renderHook(() => useReportsMutations(), {
-      wrapper: makeWrapper(false, null)
+      wrapper: makeWrapper(false, null),
     });
 
     await act(async () => {
@@ -522,8 +537,8 @@ describe('useReportsMutations (updateReportVisibility)', () => {
       '/api/v1/reports/r1/visibility',
       expect.objectContaining({
         method: 'PUT',
-        body: JSON.stringify({ access: { scope: 'public' } })
-      })
+        body: JSON.stringify({ access: { scope: 'public' } }),
+      }),
     );
   });
 
@@ -531,15 +546,17 @@ describe('useReportsMutations (updateReportVisibility)', () => {
     mockFetch.mockResolvedValue({
       ok: false,
       status: 400,
-      json: () => Promise.resolve({ error: 'Report must be unpinned first' })
+      json: () => Promise.resolve({ error: 'Report must be unpinned first' }),
     });
 
     const { result } = renderHook(() => useReportsMutations(), {
-      wrapper: makeWrapper(false, null)
+      wrapper: makeWrapper(false, null),
     });
 
     await act(async () => {
-      await expect(result.current.updateReportVisibility('r1', 'private')).rejects.toThrow('Report must be unpinned first');
+      await expect(
+        result.current.updateReportVisibility('r1', 'private'),
+      ).rejects.toThrow('Report must be unpinned first');
     });
   });
 });
@@ -561,9 +578,8 @@ describe('useReportsMutations (pinReport)', () => {
     mockFetch.mockResolvedValue({ ok: true });
 
     const { result } = renderHook(() => useReportsMutations(), {
-      wrapper: makeWrapper(false, null)
+      wrapper: makeWrapper(false, null),
     });
-
 
     await act(async () => {
       await result.current.pinReport('r1', true);
@@ -573,8 +589,8 @@ describe('useReportsMutations (pinReport)', () => {
       '/api/v1/reports/r1/pin',
       expect.objectContaining({
         method: 'PUT',
-        body: JSON.stringify({ pinned: true })
-      })
+        body: JSON.stringify({ pinned: true }),
+      }),
     );
   });
 
@@ -582,9 +598,8 @@ describe('useReportsMutations (pinReport)', () => {
     mockFetch.mockResolvedValue({ ok: true });
 
     const { result } = renderHook(() => useReportsMutations(), {
-      wrapper: makeWrapper(false, null)
+      wrapper: makeWrapper(false, null),
     });
-
 
     await act(async () => {
       await result.current.pinReport('r1', false);
@@ -594,8 +609,8 @@ describe('useReportsMutations (pinReport)', () => {
       '/api/v1/reports/r1/pin',
       expect.objectContaining({
         method: 'PUT',
-        body: JSON.stringify({ pinned: false })
-      })
+        body: JSON.stringify({ pinned: false }),
+      }),
     );
   });
 
@@ -603,9 +618,8 @@ describe('useReportsMutations (pinReport)', () => {
     mockFetch.mockResolvedValue({ ok: false, status: 403 });
 
     const { result } = renderHook(() => useReportsMutations(), {
-      wrapper: makeWrapper(false, null)
+      wrapper: makeWrapper(false, null),
     });
-
 
     await act(async () => {
       await expect(result.current.pinReport('r1', true)).rejects.toThrow();
@@ -630,15 +644,20 @@ describe('useReportsMutations (deleteReport)', () => {
     mockFetch.mockResolvedValue({
       ok: false,
       status: 400,
-      json: () => Promise.resolve({ error: 'Report must be unpinned before it can be deleted' })
+      json: () =>
+        Promise.resolve({
+          error: 'Report must be unpinned before it can be deleted',
+        }),
     });
 
     const { result } = renderHook(() => useReportsMutations(), {
-      wrapper: makeWrapper(false, null)
+      wrapper: makeWrapper(false, null),
     });
 
     await act(async () => {
-      await expect(result.current.deleteReport('r1')).rejects.toThrow('Report must be unpinned before it can be deleted');
+      await expect(result.current.deleteReport('r1')).rejects.toThrow(
+        'Report must be unpinned before it can be deleted',
+      );
     });
   });
 });
@@ -649,7 +668,18 @@ describe('useReportsMutations (deleteReport)', () => {
 
 const REPORT_CONFIG: Report = {
   name: 'My Report',
-  rows: [{ name: 'Row 1', panels: [{ type: 'count', cypher: 'MATCH (n) RETURN count(n) AS total', caption: 'Total' }] }]
+  rows: [
+    {
+      name: 'Row 1',
+      panels: [
+        {
+          type: 'count',
+          cypher: 'MATCH (n) RETURN count(n) AS total',
+          caption: 'Total',
+        },
+      ],
+    },
+  ],
 };
 
 const REPORT_VERSION = {
@@ -663,7 +693,7 @@ const REPORT_VERSION = {
   report_updated_by: 'alice@example.com',
   access: { scope: 'public' as const },
   comment: null,
-  query_capabilities: { 'tok-1': 'signed-abc' }
+  query_capabilities: { 'tok-1': 'signed-abc' },
 };
 
 // ---------------------------------------------------------------------------
@@ -683,11 +713,11 @@ describe('useReport', () => {
   it('fetches and returns report data on first mount', async () => {
     mockFetch.mockResolvedValue({
       ok: true,
-      json: () => Promise.resolve(REPORT_VERSION)
+      json: () => Promise.resolve(REPORT_VERSION),
     });
 
     const { result } = renderHook(() => useReport('r1'), {
-      wrapper: makeWrapper(false, null)
+      wrapper: makeWrapper(false, null),
     });
 
     await waitFor(() => expect(result.current.loading).toBe(false));
@@ -697,19 +727,19 @@ describe('useReport', () => {
     expect(result.current.error).toBeNull();
     expect(mockFetch).toHaveBeenCalledWith(
       '/api/v1/reports/r1?include_query_capabilities=true',
-      expect.any(Object)
+      expect.any(Object),
     );
   });
 
   it('serves from cache on remount without fetching again', async () => {
     mockFetch.mockResolvedValue({
       ok: true,
-      json: () => Promise.resolve(REPORT_VERSION)
+      json: () => Promise.resolve(REPORT_VERSION),
     });
 
     // First mount populates the cache.
     const { result: first, unmount } = renderHook(() => useReport('r1'), {
-      wrapper: makeWrapper(false, null)
+      wrapper: makeWrapper(false, null),
     });
     await waitFor(() => expect(first.current.loading).toBe(false));
     expect(mockFetch).toHaveBeenCalledTimes(1);
@@ -717,7 +747,7 @@ describe('useReport', () => {
 
     // Second mount should read from cache: loading starts false, no new fetch.
     const { result: second } = renderHook(() => useReport('r1'), {
-      wrapper: makeWrapper(false, null)
+      wrapper: makeWrapper(false, null),
     });
     expect(second.current.loading).toBe(false);
     expect(second.current.report).toEqual(REPORT_CONFIG);
@@ -725,18 +755,27 @@ describe('useReport', () => {
   });
 
   it('refresh() busts the cache and re-fetches', async () => {
-    const v2 = { ...REPORT_VERSION, version: 4, query_capabilities: { 'tok-2': 'signed-xyz' } };
+    const v2 = {
+      ...REPORT_VERSION,
+      version: 4,
+      query_capabilities: { 'tok-2': 'signed-xyz' },
+    };
     mockFetch
-      .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(REPORT_VERSION) })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(REPORT_VERSION),
+      })
       .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(v2) });
 
     const { result } = renderHook(() => useReport('r1'), {
-      wrapper: makeWrapper(false, null)
+      wrapper: makeWrapper(false, null),
     });
     await waitFor(() => expect(result.current.loading).toBe(false));
     expect(result.current.queryCapabilities).toEqual({ 'tok-1': 'signed-abc' });
 
-    act(() => { result.current.refresh(); });
+    act(() => {
+      result.current.refresh();
+    });
     await waitFor(() => expect(result.current.loading).toBe(false));
     expect(result.current.queryCapabilities).toEqual({ 'tok-2': 'signed-xyz' });
     expect(mockFetch).toHaveBeenCalledTimes(2);
@@ -744,14 +783,14 @@ describe('useReport', () => {
 
   it('does not fetch when reportId is undefined', () => {
     renderHook(() => useReport(undefined), {
-      wrapper: makeWrapper(false, null)
+      wrapper: makeWrapper(false, null),
     });
     expect(mockFetch).not.toHaveBeenCalled();
   });
 
   it('does not fetch when auth_required and accessToken is null', () => {
     renderHook(() => useReport('r1'), {
-      wrapper: makeWrapper(true, null)
+      wrapper: makeWrapper(true, null),
     });
     expect(mockFetch).not.toHaveBeenCalled();
   });
@@ -760,7 +799,7 @@ describe('useReport', () => {
     mockFetch.mockResolvedValue({ ok: false, status: 404 });
 
     const { result } = renderHook(() => useReport('r1'), {
-      wrapper: makeWrapper(false, null)
+      wrapper: makeWrapper(false, null),
     });
 
     await waitFor(() => expect(result.current.loading).toBe(false));
@@ -786,11 +825,11 @@ describe('useDashboardReport', () => {
   it('fetches and returns dashboard report on first mount', async () => {
     mockFetch.mockResolvedValue({
       ok: true,
-      json: () => Promise.resolve(REPORT_VERSION)
+      json: () => Promise.resolve(REPORT_VERSION),
     });
 
     const { result } = renderHook(() => useDashboardReport(), {
-      wrapper: makeWrapper(false, null)
+      wrapper: makeWrapper(false, null),
     });
 
     await waitFor(() => expect(result.current.loading).toBe(false));
@@ -799,25 +838,25 @@ describe('useDashboardReport', () => {
     expect(result.current.notConfigured).toBe(false);
     expect(mockFetch).toHaveBeenCalledWith(
       '/api/v1/reports/dashboard?include_query_capabilities=true',
-      expect.any(Object)
+      expect.any(Object),
     );
   });
 
   it('serves from cache on remount without fetching again', async () => {
     mockFetch.mockResolvedValue({
       ok: true,
-      json: () => Promise.resolve(REPORT_VERSION)
+      json: () => Promise.resolve(REPORT_VERSION),
     });
 
     const { result: first, unmount } = renderHook(() => useDashboardReport(), {
-      wrapper: makeWrapper(false, null)
+      wrapper: makeWrapper(false, null),
     });
     await waitFor(() => expect(first.current.loading).toBe(false));
     expect(mockFetch).toHaveBeenCalledTimes(1);
     unmount();
 
     const { result: second } = renderHook(() => useDashboardReport(), {
-      wrapper: makeWrapper(false, null)
+      wrapper: makeWrapper(false, null),
     });
     expect(second.current.loading).toBe(false);
     expect(second.current.report).toEqual(REPORT_CONFIG);
@@ -825,20 +864,30 @@ describe('useDashboardReport', () => {
   });
 
   it('refresh() busts the cache and re-fetches', async () => {
-    const v2 = { ...REPORT_VERSION, query_capabilities: { 'tok-new': 'signed-new' } };
+    const v2 = {
+      ...REPORT_VERSION,
+      query_capabilities: { 'tok-new': 'signed-new' },
+    };
     mockFetch
-      .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(REPORT_VERSION) })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(REPORT_VERSION),
+      })
       .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(v2) });
 
     const { result } = renderHook(() => useDashboardReport(), {
-      wrapper: makeWrapper(false, null)
+      wrapper: makeWrapper(false, null),
     });
     await waitFor(() => expect(result.current.loading).toBe(false));
     expect(result.current.queryCapabilities).toEqual({ 'tok-1': 'signed-abc' });
 
-    act(() => { result.current.refresh(); });
+    act(() => {
+      result.current.refresh();
+    });
     await waitFor(() => expect(result.current.loading).toBe(false));
-    expect(result.current.queryCapabilities).toEqual({ 'tok-new': 'signed-new' });
+    expect(result.current.queryCapabilities).toEqual({
+      'tok-new': 'signed-new',
+    });
     expect(mockFetch).toHaveBeenCalledTimes(2);
   });
 
@@ -846,7 +895,7 @@ describe('useDashboardReport', () => {
     mockFetch.mockResolvedValue({ ok: false, status: 404 });
 
     const { result } = renderHook(() => useDashboardReport(), {
-      wrapper: makeWrapper(false, null)
+      wrapper: makeWrapper(false, null),
     });
 
     await waitFor(() => expect(result.current.loading).toBe(false));
@@ -856,7 +905,7 @@ describe('useDashboardReport', () => {
 
   it('does not fetch when auth_required and accessToken is null', () => {
     renderHook(() => useDashboardReport(), {
-      wrapper: makeWrapper(true, null)
+      wrapper: makeWrapper(true, null),
     });
     expect(mockFetch).not.toHaveBeenCalled();
   });

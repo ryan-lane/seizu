@@ -3,21 +3,21 @@ import { ThemeProvider, createTheme } from '@mui/material/styles';
 import CypherCount from '../CypherCount';
 
 jest.mock('src/hooks/useCypherQuery', () => ({
-  useLazyCypherQuery: jest.fn()
+  useLazyCypherQuery: jest.fn(),
 }));
 
 jest.mock('src/components/reports/CypherDetails', () => ({
   __esModule: true,
   default: function MockCypherDetails({ open }: { open: boolean }) {
     return open ? <div data-testid="details-dialog">Details</div> : null;
-  }
+  },
 }));
 
 jest.mock('src/components/reports/QueryValidationBadge', () => ({
   __esModule: true,
   default: function MockQueryValidationBadge() {
     return null;
-  }
+  },
 }));
 
 const { useLazyCypherQuery } = require('src/hooks/useCypherQuery');
@@ -28,7 +28,14 @@ function Wrapper({ children }) {
   return <ThemeProvider theme={theme}>{children}</ThemeProvider>;
 }
 
-const defaultState = { loading: false, error: null, records: undefined, first: undefined, warnings: [], queryErrors: [] };
+const defaultState = {
+  loading: false,
+  error: null,
+  records: undefined,
+  first: undefined,
+  warnings: [],
+  queryErrors: [],
+};
 
 describe('CypherCount', () => {
   const mockRunQuery = jest.fn();
@@ -44,7 +51,7 @@ describe('CypherCount', () => {
     render(
       <Wrapper>
         <CypherCount caption="Test Count" />
-      </Wrapper>
+      </Wrapper>,
     );
     expect(screen.getByText('Missing cypher query')).toBeInTheDocument();
   });
@@ -52,7 +59,7 @@ describe('CypherCount', () => {
   it('shows N/A with needInputs message when needInputs is provided', () => {
     useLazyCypherQuery.mockReturnValue([
       mockRunQuery,
-      { ...defaultState, records: [], first: undefined }
+      { ...defaultState, records: [], first: undefined },
     ]);
     render(
       <Wrapper>
@@ -61,7 +68,7 @@ describe('CypherCount', () => {
           caption="Test Count"
           needInputs={['param1', 'param2']}
         />
-      </Wrapper>
+      </Wrapper>,
     );
     expect(screen.getByText('N/A')).toBeInTheDocument();
     expect(screen.getByText('(Set param1, param2)')).toBeInTheDocument();
@@ -70,7 +77,7 @@ describe('CypherCount', () => {
   it('shows a count skeleton when loading', () => {
     useLazyCypherQuery.mockReturnValue([
       mockRunQuery,
-      { ...defaultState, loading: true }
+      { ...defaultState, loading: true },
     ]);
     render(
       <Wrapper>
@@ -78,16 +85,18 @@ describe('CypherCount', () => {
           cypher="MATCH (n) RETURN count(n) as total"
           caption="Test Count"
         />
-      </Wrapper>
+      </Wrapper>,
     );
-    expect(screen.getByTestId('count-panel-loading-skeleton')).toBeInTheDocument();
+    expect(
+      screen.getByTestId('count-panel-loading-skeleton'),
+    ).toBeInTheDocument();
     expect(screen.queryByRole('progressbar')).not.toBeInTheDocument();
   });
 
   it('shows error message when query fails', () => {
     useLazyCypherQuery.mockReturnValue([
       mockRunQuery,
-      { ...defaultState, error: new Error('Query failed') }
+      { ...defaultState, error: new Error('Query failed') },
     ]);
     render(
       <Wrapper>
@@ -95,17 +104,17 @@ describe('CypherCount', () => {
           cypher="MATCH (n) RETURN count(n) as total"
           caption="Test Count"
         />
-      </Wrapper>
+      </Wrapper>,
     );
     expect(
-      screen.getByText(/failed to load requested data/i)
+      screen.getByText(/failed to load requested data/i),
     ).toBeInTheDocument();
   });
 
   it('shows N/A when records exist but first is undefined', () => {
     useLazyCypherQuery.mockReturnValue([
       mockRunQuery,
-      { ...defaultState, records: [], first: undefined }
+      { ...defaultState, records: [], first: undefined },
     ]);
     render(
       <Wrapper>
@@ -113,7 +122,7 @@ describe('CypherCount', () => {
           cypher="MATCH (n) RETURN count(n) as total"
           caption="Test Count"
         />
-      </Wrapper>
+      </Wrapper>,
     );
     expect(screen.getByText('N/A')).toBeInTheDocument();
   });
@@ -121,7 +130,7 @@ describe('CypherCount', () => {
   it('renders the count value when data is loaded', () => {
     useLazyCypherQuery.mockReturnValue([
       mockRunQuery,
-      { ...defaultState, records: [{ total: 42 }], first: { total: 42 } }
+      { ...defaultState, records: [{ total: 42 }], first: { total: 42 } },
     ]);
     render(
       <Wrapper>
@@ -129,7 +138,7 @@ describe('CypherCount', () => {
           cypher="MATCH (n) RETURN count(n) as total"
           caption="Test Count"
         />
-      </Wrapper>
+      </Wrapper>,
     );
     expect(screen.getByText('Test Count')).toBeInTheDocument();
     expect(screen.getByText('42')).toBeInTheDocument();
@@ -138,12 +147,15 @@ describe('CypherCount', () => {
   it('renders the info button in the top-right when data is loaded', () => {
     useLazyCypherQuery.mockReturnValue([
       mockRunQuery,
-      { ...defaultState, records: [{ total: 5 }], first: { total: 5 } }
+      { ...defaultState, records: [{ total: 5 }], first: { total: 5 } },
     ]);
     const { container } = render(
       <Wrapper>
-        <CypherCount cypher="MATCH (n) RETURN count(n) as total" caption="Test Count" />
-      </Wrapper>
+        <CypherCount
+          cypher="MATCH (n) RETURN count(n) as total"
+          caption="Test Count"
+        />
+      </Wrapper>,
     );
     expect(container.querySelector('.panel-info-btn')).toBeInTheDocument();
   });
@@ -151,7 +163,7 @@ describe('CypherCount', () => {
   it('opens the details dialog when the info button is clicked', () => {
     useLazyCypherQuery.mockReturnValue([
       mockRunQuery,
-      { ...defaultState, records: [{ total: 5 }], first: { total: 5 } }
+      { ...defaultState, records: [{ total: 5 }], first: { total: 5 } },
     ]);
     const { container } = render(
       <Wrapper>
@@ -160,7 +172,7 @@ describe('CypherCount', () => {
           caption="Test Count"
           details={{ type: 'count', caption: 'Test Count' }}
         />
-      </Wrapper>
+      </Wrapper>,
     );
     fireEvent.click(container.querySelector('.panel-info-btn')!);
     expect(screen.getByTestId('details-dialog')).toBeInTheDocument();
@@ -169,15 +181,12 @@ describe('CypherCount', () => {
   it('shows validation error state when queryErrors are present', () => {
     useLazyCypherQuery.mockReturnValue([
       mockRunQuery,
-      { ...defaultState, queryErrors: ['Write queries are not allowed'] }
+      { ...defaultState, queryErrors: ['Write queries are not allowed'] },
     ]);
     render(
       <Wrapper>
-        <CypherCount
-          cypher="CREATE (n) RETURN n"
-          caption="Test Count"
-        />
-      </Wrapper>
+        <CypherCount cypher="CREATE (n) RETURN n" caption="Test Count" />
+      </Wrapper>,
     );
     expect(screen.getByText('Query validation failed')).toBeInTheDocument();
   });

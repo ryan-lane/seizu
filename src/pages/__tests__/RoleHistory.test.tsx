@@ -1,4 +1,10 @@
-import { render, screen, fireEvent, cleanup, waitFor } from '@testing-library/react';
+import {
+  render,
+  screen,
+  fireEvent,
+  cleanup,
+  waitFor,
+} from '@testing-library/react';
 import { MemoryRouter, Routes, Route, useLocation } from 'react-router-dom';
 import { ThemeProvider, createTheme } from '@mui/material/styles';
 import RoleHistory from 'src/pages/RoleHistory';
@@ -26,9 +32,14 @@ jest.mock('react-helmet', () => ({
   Helmet: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 }));
 
-const mockUsePermissionState = usePermissionsModule.usePermissionState as jest.MockedFunction<typeof usePermissionsModule.usePermissionState>;
-const mockUseRoleVersionsList = rolesApiModule.useRoleVersionsList as unknown as jest.Mock;
-const mockUseRoleMutations = rolesApiModule.useRoleMutations as unknown as jest.Mock;
+const mockUsePermissionState =
+  usePermissionsModule.usePermissionState as jest.MockedFunction<
+    typeof usePermissionsModule.usePermissionState
+  >;
+const mockUseRoleVersionsList =
+  rolesApiModule.useRoleVersionsList as unknown as jest.Mock;
+const mockUseRoleMutations =
+  rolesApiModule.useRoleMutations as unknown as jest.Mock;
 const theme = createTheme();
 
 const VERSION_1: rolesApiModule.RoleVersion = {
@@ -55,7 +66,11 @@ const VERSION_2: rolesApiModule.RoleVersion = {
 
 function TestLocation() {
   const { pathname } = useLocation();
-  return <div data-testid="nav-location" style={{ display: 'none' }}>{pathname}</div>;
+  return (
+    <div data-testid="nav-location" style={{ display: 'none' }}>
+      {pathname}
+    </div>
+  );
 }
 
 function Wrapper({ children }: { children: React.ReactNode }) {
@@ -103,7 +118,10 @@ describe('RoleHistory', () => {
 
     fireEvent.click(screen.getAllByRole('button', { name: 'More actions' })[1]);
 
-    expect(screen.getByRole('menuitem', { name: /restore/i })).toHaveAttribute('aria-disabled', 'true');
+    expect(screen.getByRole('menuitem', { name: /restore/i })).toHaveAttribute(
+      'aria-disabled',
+      'true',
+    );
   });
 
   it('restores a non-current version by saving a new role version', async () => {
@@ -121,7 +139,9 @@ describe('RoleHistory', () => {
       });
     });
     await waitFor(() => {
-      expect(screen.getByTestId('nav-location')).toHaveTextContent('/app/roles');
+      expect(screen.getByTestId('nav-location')).toHaveTextContent(
+        '/app/roles',
+      );
     });
   });
 });

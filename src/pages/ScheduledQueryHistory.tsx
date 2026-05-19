@@ -11,7 +11,7 @@ import {
   Menu,
   MenuItem,
   Tooltip,
-  Typography
+  Typography,
 } from '@mui/material';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import HistoryIcon from '@mui/icons-material/History';
@@ -22,16 +22,16 @@ import Error from '@mui/icons-material/Error';
 import {
   ScheduledQueryVersion,
   useScheduledQueryVersionsList,
-  useScheduledQueriesMutations
+  useScheduledQueriesMutations,
 } from 'src/hooks/useScheduledQueriesApi';
 import ListTable, {
   ListTableColumn,
   listTableActionColumnSx,
-  listTableSecondaryCellSx
+  listTableSecondaryCellSx,
 } from 'src/components/ListTable';
 import UserDisplay from 'src/components/UserDisplay';
 import ScheduledQueryDetailDialog, {
-  ScheduledQueryViewData
+  ScheduledQueryViewData,
 } from 'src/components/ScheduledQueryDetailDialog';
 import { usePermissions } from 'src/hooks/usePermissions';
 import type { BackState } from 'src/navigation';
@@ -67,7 +67,11 @@ function RowMenu({ version: _version, isCurrent, onRestore }: RowMenuProps) {
   return (
     <>
       <Tooltip title="More actions">
-        <IconButton aria-label="More actions" size="small" onClick={(e) => setAnchor(e.currentTarget)}>
+        <IconButton
+          aria-label="More actions"
+          size="small"
+          onClick={(e) => setAnchor(e.currentTarget)}
+        >
           <MoreVertIcon fontSize="small" />
         </IconButton>
       </Tooltip>
@@ -83,11 +87,17 @@ function RowMenu({ version: _version, isCurrent, onRestore }: RowMenuProps) {
         <Tooltip title={restoreTooltip} placement="left">
           <span>
             <MenuItem
-              onClick={() => { onRestore(); close(); }}
+              onClick={() => {
+                onRestore();
+                close();
+              }}
               disabled={restoreDisabled}
             >
               <ListItemIcon>
-                <RestoreIcon fontSize="small" color={restoreDisabled ? 'disabled' : 'inherit'} />
+                <RestoreIcon
+                  fontSize="small"
+                  color={restoreDisabled ? 'disabled' : 'inherit'}
+                />
               </ListItemIcon>
               <ListItemText>Restore</ListItemText>
             </MenuItem>
@@ -108,9 +118,13 @@ function ScheduledQueryHistory() {
   const location = useLocation();
   const { fromLabel } = (location.state ?? {}) as BackState;
 
-  const { versions, loading, error } = useScheduledQueryVersionsList(id ?? null);
+  const { versions, loading, error } = useScheduledQueryVersionsList(
+    id ?? null,
+  );
   const { updateScheduledQuery } = useScheduledQueriesMutations();
-  const [detailData, setDetailData] = useState<ScheduledQueryViewData | null>(null);
+  const [detailData, setDetailData] = useState<ScheduledQueryViewData | null>(
+    null,
+  );
 
   const sorted = [...versions].sort((a, b) => b.version - a.version);
   const latestVersion = sorted[0]?.version;
@@ -125,7 +139,11 @@ function ScheduledQueryHistory() {
         return (
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
             <Typography
-              sx={{ cursor: 'pointer', fontWeight: isCurrent ? 'bold' : 'medium', '&:hover': { textDecoration: 'underline' } }}
+              sx={{
+                cursor: 'pointer',
+                fontWeight: isCurrent ? 'bold' : 'medium',
+                '&:hover': { textDecoration: 'underline' },
+              }}
               onClick={() =>
                 setDetailData({
                   name: version.name,
@@ -148,34 +166,34 @@ function ScheduledQueryHistory() {
             )}
           </Box>
         );
-      }
+      },
     },
     {
       key: 'name',
       label: 'Name',
       cellSx: { width: '24%' },
-      render: (version) => version.name
+      render: (version) => version.name,
     },
     {
       key: 'saved',
       label: 'Saved',
       hideBelow: 'sm',
       cellSx: savedColumnSx,
-      render: (version) => new Date(version.created_at).toLocaleString()
+      render: (version) => new Date(version.created_at).toLocaleString(),
     },
     {
       key: 'created_by',
       label: 'Created by',
       hideBelow: 'md',
       cellSx: authorColumnSx,
-      render: (version) => <UserDisplay userId={version.created_by} />
+      render: (version) => <UserDisplay userId={version.created_by} />,
     },
     {
       key: 'comment',
       label: 'Comment',
       hideBelow: 'lg',
       cellSx: commentColumnSx,
-      render: (version) => version.comment || '—'
+      render: (version) => version.comment || '—',
     },
     {
       key: 'actions',
@@ -187,8 +205,8 @@ function ScheduledQueryHistory() {
           isCurrent={version.version === latestVersion}
           onRestore={() => handleRestore(version)}
         />
-      )
-    }
+      ),
+    },
   ];
 
   async function handleRestore(version: ScheduledQueryVersion) {
@@ -201,7 +219,7 @@ function ScheduledQueryHistory() {
       watch_scans: version.watch_scans,
       enabled: version.enabled,
       actions: version.actions,
-      comment: `Restored from version ${version.version}`
+      comment: `Restored from version ${version.version}`,
     });
     navigate(`/app/scheduled-queries`);
   }
@@ -209,7 +227,9 @@ function ScheduledQueryHistory() {
   return (
     <>
       <Helmet>
-        <title>{queryName ? `History – ${queryName} | Seizu` : `History | Seizu`}</title>
+        <title>
+          {queryName ? `History – ${queryName} | Seizu` : `History | Seizu`}
+        </title>
       </Helmet>
       <Box sx={pageContentSx}>
         {fromLabel && (

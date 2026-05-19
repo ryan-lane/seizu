@@ -55,11 +55,25 @@ export default [
       // Project overrides — carried over from the legacy .eslintrc.
       '@eslint-react/exhaustive-deps': 'off',
       'jsx-a11y/anchor-is-valid': 'off',
+      // autoFocus is used intentionally to focus inputs when dialogs open.
+      'jsx-a11y/no-autofocus': 'off',
+      // IIFEs in JSX are a deliberate pattern here; @eslint-react simply
+      // cannot statically analyse them, which is not a code-quality issue.
+      '@eslint-react/unsupported-syntax': 'off',
       'no-console': 'off',
       'no-plusplus': 'off',
       'no-unused-expressions': 'error',
+      'no-unused-vars': 'off',
       '@typescript-eslint/no-explicit-any': 'warn',
       '@typescript-eslint/no-unused-expressions': 'off',
+      '@typescript-eslint/no-unused-vars': [
+        'error',
+        {
+          argsIgnorePattern: '^_',
+          varsIgnorePattern: '^_',
+          caughtErrorsIgnorePattern: '^_',
+        },
+      ],
       'import-x/extensions': [
         'error',
         'ignorePackages',
@@ -75,6 +89,8 @@ export default [
     rules: {
       'import-x/no-extraneous-dependencies': ['error', { devDependencies: true }],
       '@typescript-eslint/no-explicit-any': 'off',
+      // Tests use require() after jest.mock() to grab the mocked module.
+      '@typescript-eslint/no-require-imports': 'off',
     },
   },
   prettierRecommended,

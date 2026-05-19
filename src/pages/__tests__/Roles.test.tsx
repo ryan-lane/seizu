@@ -1,4 +1,11 @@
-import { act, render, screen, fireEvent, cleanup, within } from '@testing-library/react';
+import {
+  act,
+  render,
+  screen,
+  fireEvent,
+  cleanup,
+  within,
+} from '@testing-library/react';
 import { MemoryRouter, Routes, Route } from 'react-router-dom';
 import { ThemeProvider, createTheme } from '@mui/material/styles';
 import Roles from 'src/pages/Roles';
@@ -24,11 +31,19 @@ jest.mock('src/components/UserDisplay', () => ({
   default: ({ userId }: { userId: string }) => <>{userId}</>,
 }));
 
-const mockUsePermissions = usePermissionsModule.usePermissions as jest.MockedFunction<typeof usePermissionsModule.usePermissions>;
-const mockUsePermissionState = usePermissionsModule.usePermissionState as jest.MockedFunction<typeof usePermissionsModule.usePermissionState>;
-const mockUseBuiltinRolesList = rolesApiModule.useBuiltinRolesList as unknown as jest.Mock;
+const mockUsePermissions =
+  usePermissionsModule.usePermissions as jest.MockedFunction<
+    typeof usePermissionsModule.usePermissions
+  >;
+const mockUsePermissionState =
+  usePermissionsModule.usePermissionState as jest.MockedFunction<
+    typeof usePermissionsModule.usePermissionState
+  >;
+const mockUseBuiltinRolesList =
+  rolesApiModule.useBuiltinRolesList as unknown as jest.Mock;
 const mockUseRolesList = rolesApiModule.useRolesList as unknown as jest.Mock;
-const mockUseRoleMutations = rolesApiModule.useRoleMutations as unknown as jest.Mock;
+const mockUseRoleMutations =
+  rolesApiModule.useRoleMutations as unknown as jest.Mock;
 const theme = createTheme();
 
 const BUILTIN_ROLE: rolesApiModule.RoleItem = {
@@ -68,9 +83,14 @@ function Wrapper({ children }: { children: React.ReactNode }) {
 }
 
 function setPermissions(permissions: string[]) {
-  const hasPermission = (permission: string) => permissions.includes(permission);
+  const hasPermission = (permission: string) =>
+    permissions.includes(permission);
   mockUsePermissions.mockReturnValue(hasPermission);
-  mockUsePermissionState.mockReturnValue({ hasPermission, loading: false, currentUser: null });
+  mockUsePermissionState.mockReturnValue({
+    hasPermission,
+    loading: false,
+    currentUser: null,
+  });
 }
 
 describe('Roles', () => {
@@ -106,23 +126,35 @@ describe('Roles', () => {
 
     render(<Roles />, { wrapper: Wrapper });
 
-    expect(screen.getByText('You do not have access to role management.')).toBeInTheDocument();
+    expect(
+      screen.getByText('You do not have access to role management.'),
+    ).toBeInTheDocument();
   });
 
   it('shows a spinner while permissions are loading', () => {
-    mockUsePermissionState.mockReturnValue({ hasPermission: () => false, loading: true, currentUser: null });
+    mockUsePermissionState.mockReturnValue({
+      hasPermission: () => false,
+      loading: true,
+      currentUser: null,
+    });
 
     render(<Roles />, { wrapper: Wrapper });
 
     expect(screen.getByRole('progressbar')).toBeInTheDocument();
-    expect(screen.queryByText('You do not have access to role management.')).not.toBeInTheDocument();
+    expect(
+      screen.queryByText('You do not have access to role management.'),
+    ).not.toBeInTheDocument();
   });
 
   it('renders built-in and user-defined roles together', () => {
     render(<Roles />, { wrapper: Wrapper });
 
-    expect(screen.getByRole('button', { name: 'seizu-viewer' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Security Operator' })).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: 'seizu-viewer' }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: 'Security Operator' }),
+    ).toBeInTheDocument();
     expect(screen.getByText('Built-in')).toBeInTheDocument();
     expect(screen.getByText('User-defined')).toBeInTheDocument();
     expect(screen.getByText('v2')).toBeInTheDocument();
@@ -134,7 +166,9 @@ describe('Roles', () => {
     fireEvent.click(screen.getByRole('button', { name: 'seizu-viewer' }));
 
     const dialog = screen.getByRole('dialog', { name: 'seizu-viewer' });
-    expect(within(dialog).getByText('Built-in role: seizu-viewer.')).toBeInTheDocument();
+    expect(
+      within(dialog).getByText('Built-in role: seizu-viewer.'),
+    ).toBeInTheDocument();
     expect(within(dialog).getByText('reports:read')).toBeInTheDocument();
     expect(within(dialog).getByText('roles:read')).toBeInTheDocument();
   });
@@ -144,34 +178,60 @@ describe('Roles', () => {
 
     fireEvent.click(screen.getAllByRole('button', { name: 'More actions' })[0]);
 
-    expect(screen.getByRole('menuitem', { name: /view detail/i })).not.toHaveAttribute('aria-disabled', 'true');
-    expect(screen.getByRole('menuitem', { name: /^edit$/i })).toHaveAttribute('aria-disabled', 'true');
-    expect(screen.getByRole('menuitem', { name: /view history/i })).toHaveAttribute('aria-disabled', 'true');
-    expect(screen.getByRole('menuitem', { name: /^delete$/i })).toHaveAttribute('aria-disabled', 'true');
+    expect(
+      screen.getByRole('menuitem', { name: /view detail/i }),
+    ).not.toHaveAttribute('aria-disabled', 'true');
+    expect(screen.getByRole('menuitem', { name: /^edit$/i })).toHaveAttribute(
+      'aria-disabled',
+      'true',
+    );
+    expect(
+      screen.getByRole('menuitem', { name: /view history/i }),
+    ).toHaveAttribute('aria-disabled', 'true');
+    expect(screen.getByRole('menuitem', { name: /^delete$/i })).toHaveAttribute(
+      'aria-disabled',
+      'true',
+    );
   });
 
   it('hides and disables user-defined role controls based on write/delete permissions', () => {
     setPermissions(['roles:read']);
     render(<Roles />, { wrapper: Wrapper });
 
-    expect(screen.queryByRole('button', { name: /new role/i })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: /new role/i }),
+    ).not.toBeInTheDocument();
 
     fireEvent.click(screen.getAllByRole('button', { name: 'More actions' })[1]);
 
-    expect(screen.getByRole('menuitem', { name: /^edit$/i })).toHaveAttribute('aria-disabled', 'true');
-    expect(screen.getByRole('menuitem', { name: /^delete$/i })).toHaveAttribute('aria-disabled', 'true');
-    expect(screen.getByRole('menuitem', { name: /view history/i })).not.toHaveAttribute('aria-disabled', 'true');
+    expect(screen.getByRole('menuitem', { name: /^edit$/i })).toHaveAttribute(
+      'aria-disabled',
+      'true',
+    );
+    expect(screen.getByRole('menuitem', { name: /^delete$/i })).toHaveAttribute(
+      'aria-disabled',
+      'true',
+    );
+    expect(
+      screen.getByRole('menuitem', { name: /view history/i }),
+    ).not.toHaveAttribute('aria-disabled', 'true');
   });
 
   it('enables create, edit, and delete controls with write/delete permissions', () => {
     render(<Roles />, { wrapper: Wrapper });
 
-    expect(screen.getByRole('button', { name: /new role/i })).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: /new role/i }),
+    ).toBeInTheDocument();
 
     fireEvent.click(screen.getAllByRole('button', { name: 'More actions' })[1]);
 
-    expect(screen.getByRole('menuitem', { name: /^edit$/i })).not.toHaveAttribute('aria-disabled', 'true');
-    expect(screen.getByRole('menuitem', { name: /^delete$/i })).not.toHaveAttribute('aria-disabled', 'true');
+    expect(
+      screen.getByRole('menuitem', { name: /^edit$/i }),
+    ).not.toHaveAttribute('aria-disabled', 'true');
+    expect(
+      screen.getByRole('menuitem', { name: /^delete$/i }),
+    ).not.toHaveAttribute('aria-disabled', 'true');
   });
 
   // Two confirm dialogs and an edit dialog with several act() blocks.
@@ -195,11 +255,19 @@ describe('Roles', () => {
     fireEvent.click(screen.getAllByRole('button', { name: 'More actions' })[1]);
     fireEvent.click(screen.getByRole('menuitem', { name: /^edit$/i }));
 
-    const confirmDialog = screen.getByRole('dialog', { name: 'Remove unrecognized permissions?' });
-    expect(within(confirmDialog).getByText('custom:manage')).toBeInTheDocument();
+    const confirmDialog = screen.getByRole('dialog', {
+      name: 'Remove unrecognized permissions?',
+    });
+    expect(
+      within(confirmDialog).getByText('custom:manage'),
+    ).toBeInTheDocument();
 
     await act(async () => {
-      fireEvent.click(within(confirmDialog).getByRole('button', { name: /continue editing/i }));
+      fireEvent.click(
+        within(confirmDialog).getByRole('button', {
+          name: /continue editing/i,
+        }),
+      );
     });
 
     const editDialog = screen.getByRole('dialog', { name: 'Edit Role' });
@@ -208,8 +276,11 @@ describe('Roles', () => {
       fireEvent.click(within(editDialog).getByRole('button', { name: 'Save' }));
     });
 
-    expect(mockUpdateRole).toHaveBeenCalledWith('role1', expect.objectContaining({
-      permissions: ['reports:read'],
-    }));
+    expect(mockUpdateRole).toHaveBeenCalledWith(
+      'role1',
+      expect.objectContaining({
+        permissions: ['reports:read'],
+      }),
+    );
   }, 15_000);
 });

@@ -1,4 +1,10 @@
-import { render, screen, fireEvent, waitFor, cleanup } from '@testing-library/react';
+import {
+  render,
+  screen,
+  fireEvent,
+  waitFor,
+  cleanup,
+} from '@testing-library/react';
 import { MemoryRouter, Routes, Route, useLocation } from 'react-router-dom';
 import { ThemeProvider, createTheme } from '@mui/material/styles';
 import ReportVersionView from 'src/pages/ReportVersionView';
@@ -9,10 +15,13 @@ jest.mock('src/hooks/usePermissions', () => ({
   usePermissionState: jest.fn(),
 }));
 
-const mockUsePermissionState = usePermissionsModule.usePermissionState as jest.MockedFunction<typeof usePermissionsModule.usePermissionState>;
+const mockUsePermissionState =
+  usePermissionsModule.usePermissionState as jest.MockedFunction<
+    typeof usePermissionsModule.usePermissionState
+  >;
 
 jest.mock('react-helmet', () => ({
-  Helmet: ({ children }: { children: React.ReactNode }) => <>{children}</>
+  Helmet: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 }));
 
 // Prevent ReportView's panel sub-components from making real HTTP calls.
@@ -29,7 +38,11 @@ const theme = createTheme();
 // Tracks the current location so tests can observe navigate() calls.
 function TestLocation() {
   const { pathname } = useLocation();
-  return <div data-testid="nav-location" style={{ display: 'none' }}>{pathname}</div>;
+  return (
+    <div data-testid="nav-location" style={{ display: 'none' }}>
+      {pathname}
+    </div>
+  );
 }
 
 function makeWrapper(initialPath: string = '/app/reports/r1/versions/1') {
@@ -39,7 +52,10 @@ function makeWrapper(initialPath: string = '/app/reports/r1/versions/1') {
         <ThemeProvider theme={theme}>
           <TestLocation />
           <Routes>
-            <Route path="/app/reports/:id/versions/:version" element={<>{children}</>} />
+            <Route
+              path="/app/reports/:id/versions/:version"
+              element={<>{children}</>}
+            />
           </Routes>
         </ThemeProvider>
       </MemoryRouter>
@@ -57,7 +73,7 @@ const VERSION_1 = {
   created_at: '2024-01-01T00:00:00Z',
   created_by: 'alice@example.com',
   comment: 'Initial version',
-  query_capabilities: {}
+  query_capabilities: {},
 };
 
 const VERSION_2 = {
@@ -68,7 +84,7 @@ const VERSION_2 = {
   created_at: '2024-01-02T00:00:00Z',
   created_by: 'bob@example.com',
   comment: null,
-  query_capabilities: {}
+  query_capabilities: {},
 };
 
 const ALL_VERSIONS = [VERSION_1, VERSION_2];
@@ -87,13 +103,36 @@ describe('ReportVersionView', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     // Default: user has reports:write permission.
-    mockUsePermissionState.mockReturnValue({ hasPermission: () => true, loading: false, currentUser: null });
-    useReportVersion = jest.spyOn(reportsApiModule, 'useReportVersion') as unknown as jest.Mock;
-    useReportVersion.mockReturnValue({ reportVersion: VERSION_1, loading: false, error: null });
-    useReportVersionsList = jest.spyOn(reportsApiModule, 'useReportVersionsList') as unknown as jest.Mock;
-    useReportVersionsList.mockReturnValue({ versions: ALL_VERSIONS, loading: false, error: null });
-    useReportsMutations = jest.spyOn(reportsApiModule, 'useReportsMutations') as unknown as jest.Mock;
-    useReportsMutations.mockReturnValue({ saveReportVersion: mockSaveReportVersion });
+    mockUsePermissionState.mockReturnValue({
+      hasPermission: () => true,
+      loading: false,
+      currentUser: null,
+    });
+    useReportVersion = jest.spyOn(
+      reportsApiModule,
+      'useReportVersion',
+    ) as unknown as jest.Mock;
+    useReportVersion.mockReturnValue({
+      reportVersion: VERSION_1,
+      loading: false,
+      error: null,
+    });
+    useReportVersionsList = jest.spyOn(
+      reportsApiModule,
+      'useReportVersionsList',
+    ) as unknown as jest.Mock;
+    useReportVersionsList.mockReturnValue({
+      versions: ALL_VERSIONS,
+      loading: false,
+      error: null,
+    });
+    useReportsMutations = jest.spyOn(
+      reportsApiModule,
+      'useReportsMutations',
+    ) as unknown as jest.Mock;
+    useReportsMutations.mockReturnValue({
+      saveReportVersion: mockSaveReportVersion,
+    });
   });
 
   afterEach(cleanup);
@@ -103,7 +142,11 @@ describe('ReportVersionView', () => {
   // ---------------------------------------------------------------------------
 
   it('shows loading spinner while fetching', () => {
-    useReportVersion.mockReturnValue({ reportVersion: undefined, loading: true, error: null });
+    useReportVersion.mockReturnValue({
+      reportVersion: undefined,
+      loading: true,
+      error: null,
+    });
     render(<ReportVersionView />, { wrapper: Wrapper });
 
     expect(screen.getByRole('progressbar')).toBeInTheDocument();
@@ -113,7 +156,7 @@ describe('ReportVersionView', () => {
     useReportVersion.mockReturnValue({
       reportVersion: undefined,
       loading: false,
-      error: new Error('oops')
+      error: new Error('oops'),
     });
     render(<ReportVersionView />, { wrapper: Wrapper });
 
@@ -159,17 +202,23 @@ describe('ReportVersionView', () => {
               state: {
                 fromLabel: 'History – My Report',
                 returnTo: '/app/reports/r1/history',
-                originReturnTo: '/app/reports/r1'
-              }
-            }
+                originReturnTo: '/app/reports/r1',
+              },
+            },
           ]}
           initialIndex={1}
         >
           <ThemeProvider theme={theme}>
             <TestLocation />
             <Routes>
-              <Route path="/app/reports/:id/history" element={<div>history</div>} />
-              <Route path="/app/reports/:id/versions/:version" element={<>{children}</>} />
+              <Route
+                path="/app/reports/:id/history"
+                element={<div>history</div>}
+              />
+              <Route
+                path="/app/reports/:id/versions/:version"
+                element={<>{children}</>}
+              />
             </Routes>
           </ThemeProvider>
         </MemoryRouter>
@@ -178,10 +227,14 @@ describe('ReportVersionView', () => {
 
     render(<ReportVersionView />, { wrapper: BackWrapper });
 
-    fireEvent.click(screen.getByRole('button', { name: /back to history – my report/i }));
+    fireEvent.click(
+      screen.getByRole('button', { name: /back to history – my report/i }),
+    );
 
     await waitFor(() => {
-      expect(screen.getByTestId('nav-location')).toHaveTextContent('/app/reports/r1/history');
+      expect(screen.getByTestId('nav-location')).toHaveTextContent(
+        '/app/reports/r1/history',
+      );
     });
   });
 
@@ -196,17 +249,23 @@ describe('ReportVersionView', () => {
               state: {
                 fromLabel: 'History – My Report',
                 returnTo: '/app/reports/r1/history',
-                originReturnTo: '/app/reports/r1'
-              }
-            }
+                originReturnTo: '/app/reports/r1',
+              },
+            },
           ]}
           initialIndex={1}
         >
           <ThemeProvider theme={theme}>
             <TestLocation />
             <Routes>
-              <Route path="/app/reports/:id/history" element={<div>history</div>} />
-              <Route path="/app/reports/:id/versions/:version" element={<>{children}</>} />
+              <Route
+                path="/app/reports/:id/history"
+                element={<div>history</div>}
+              />
+              <Route
+                path="/app/reports/:id/versions/:version"
+                element={<>{children}</>}
+              />
             </Routes>
           </ThemeProvider>
         </MemoryRouter>
@@ -218,22 +277,32 @@ describe('ReportVersionView', () => {
     fireEvent.click(screen.getByRole('button', { name: /v2/i }));
 
     await waitFor(() => {
-      expect(screen.getByTestId('nav-location')).toHaveTextContent('/app/reports/r1/versions/2');
+      expect(screen.getByTestId('nav-location')).toHaveTextContent(
+        '/app/reports/r1/versions/2',
+      );
     });
 
-    expect(screen.getByRole('button', { name: /back to history – my report/i })).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: /back to history – my report/i }),
+    ).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: /back to history – my report/i }));
+    fireEvent.click(
+      screen.getByRole('button', { name: /back to history – my report/i }),
+    );
 
     await waitFor(() => {
-      expect(screen.getByTestId('nav-location')).toHaveTextContent('/app/reports/r1/history');
+      expect(screen.getByTestId('nav-location')).toHaveTextContent(
+        '/app/reports/r1/history',
+      );
     });
   });
 
   it('hides back button when navigated directly (no fromLabel in state)', () => {
     render(<ReportVersionView />, { wrapper: Wrapper });
 
-    expect(screen.queryByRole('button', { name: /back to/i })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: /back to/i }),
+    ).not.toBeInTheDocument();
   });
 
   // ---------------------------------------------------------------------------
@@ -243,39 +312,59 @@ describe('ReportVersionView', () => {
   it('Restore button is enabled when viewing a non-latest version', () => {
     render(<ReportVersionView />, { wrapper: Wrapper });
 
-    expect(screen.getByRole('button', { name: /restore this version/i })).not.toBeDisabled();
+    expect(
+      screen.getByRole('button', { name: /restore this version/i }),
+    ).not.toBeDisabled();
   });
 
   it('Restore button is disabled when viewing the latest version', () => {
-    useReportVersion.mockReturnValue({ reportVersion: VERSION_2, loading: false, error: null });
-    render(<ReportVersionView />, { wrapper: makeWrapper('/app/reports/r1/versions/2') });
+    useReportVersion.mockReturnValue({
+      reportVersion: VERSION_2,
+      loading: false,
+      error: null,
+    });
+    render(<ReportVersionView />, {
+      wrapper: makeWrapper('/app/reports/r1/versions/2'),
+    });
 
-    expect(screen.getByRole('button', { name: /restore this version/i })).toBeDisabled();
+    expect(
+      screen.getByRole('button', { name: /restore this version/i }),
+    ).toBeDisabled();
   });
 
   it('Restore button is disabled when user lacks reports:write', () => {
-    mockUsePermissionState.mockReturnValue({ hasPermission: () => false, loading: false, currentUser: null });
+    mockUsePermissionState.mockReturnValue({
+      hasPermission: () => false,
+      loading: false,
+      currentUser: null,
+    });
     render(<ReportVersionView />, { wrapper: Wrapper });
 
-    expect(screen.getByRole('button', { name: /restore this version/i })).toBeDisabled();
+    expect(
+      screen.getByRole('button', { name: /restore this version/i }),
+    ).toBeDisabled();
   });
 
   it('calls saveReportVersion with correct args and navigates on Restore', async () => {
     mockSaveReportVersion.mockResolvedValue({});
     render(<ReportVersionView />, { wrapper: Wrapper });
 
-    fireEvent.click(screen.getByRole('button', { name: /restore this version/i }));
+    fireEvent.click(
+      screen.getByRole('button', { name: /restore this version/i }),
+    );
 
     await waitFor(() => {
       expect(mockSaveReportVersion).toHaveBeenCalledWith(
         'r1',
         VERSION_1.config,
-        'Restored from version 1'
+        'Restored from version 1',
       );
     });
 
     await waitFor(() => {
-      expect(screen.getByTestId('nav-location')).toHaveTextContent('/app/reports/r1');
+      expect(screen.getByTestId('nav-location')).toHaveTextContent(
+        '/app/reports/r1',
+      );
     });
   });
 
@@ -283,13 +372,17 @@ describe('ReportVersionView', () => {
     mockSaveReportVersion.mockRejectedValue(new Error('save failed'));
     render(<ReportVersionView />, { wrapper: Wrapper });
 
-    fireEvent.click(screen.getByRole('button', { name: /restore this version/i }));
+    fireEvent.click(
+      screen.getByRole('button', { name: /restore this version/i }),
+    );
 
     await waitFor(() => {
       expect(screen.getByText('save failed')).toBeInTheDocument();
     });
     // Should NOT navigate on failure — still on original path
-    expect(screen.getByTestId('nav-location')).toHaveTextContent('/app/reports/r1/versions/1');
+    expect(screen.getByTestId('nav-location')).toHaveTextContent(
+      '/app/reports/r1/versions/1',
+    );
   });
 
   // ---------------------------------------------------------------------------
@@ -313,13 +406,21 @@ describe('ReportVersionView', () => {
     fireEvent.click(newerBtn);
 
     await waitFor(() => {
-      expect(screen.getByTestId('nav-location')).toHaveTextContent('/app/reports/r1/versions/2');
+      expect(screen.getByTestId('nav-location')).toHaveTextContent(
+        '/app/reports/r1/versions/2',
+      );
     });
   });
 
   it('newer button is disabled and labeled "Newer" on the latest version', () => {
-    useReportVersion.mockReturnValue({ reportVersion: VERSION_2, loading: false, error: null });
-    render(<ReportVersionView />, { wrapper: makeWrapper('/app/reports/r1/versions/2') });
+    useReportVersion.mockReturnValue({
+      reportVersion: VERSION_2,
+      loading: false,
+      error: null,
+    });
+    render(<ReportVersionView />, {
+      wrapper: makeWrapper('/app/reports/r1/versions/2'),
+    });
 
     const newerBtn = screen.getByRole('button', { name: /newer/i });
     expect(newerBtn).toBeDisabled();
@@ -327,15 +428,23 @@ describe('ReportVersionView', () => {
 
   it('older button shows the previous version number and navigates on click', async () => {
     // VERSION_2 → prev is VERSION_1
-    useReportVersion.mockReturnValue({ reportVersion: VERSION_2, loading: false, error: null });
-    render(<ReportVersionView />, { wrapper: makeWrapper('/app/reports/r1/versions/2') });
+    useReportVersion.mockReturnValue({
+      reportVersion: VERSION_2,
+      loading: false,
+      error: null,
+    });
+    render(<ReportVersionView />, {
+      wrapper: makeWrapper('/app/reports/r1/versions/2'),
+    });
 
     const olderBtn = screen.getByRole('button', { name: /v1/i });
     expect(olderBtn).not.toBeDisabled();
     fireEvent.click(olderBtn);
 
     await waitFor(() => {
-      expect(screen.getByTestId('nav-location')).toHaveTextContent('/app/reports/r1/versions/1');
+      expect(screen.getByTestId('nav-location')).toHaveTextContent(
+        '/app/reports/r1/versions/1',
+      );
     });
   });
 
@@ -343,7 +452,7 @@ describe('ReportVersionView', () => {
     useReportVersionsList.mockReturnValue({
       versions: [VERSION_1],
       loading: false,
-      error: null
+      error: null,
     });
     render(<ReportVersionView />, { wrapper: Wrapper });
 

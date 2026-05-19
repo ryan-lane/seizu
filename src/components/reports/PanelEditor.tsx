@@ -18,11 +18,16 @@ import {
   Stack,
   TextField,
   Tooltip,
-  Typography
+  Typography,
 } from '@mui/material';
 import Add from '@mui/icons-material/Add';
 import DeleteIcon from '@mui/icons-material/Delete';
-import { Panel, PanelParam, PanelThreshold, ColumnDef } from 'src/config.context';
+import {
+  Panel,
+  PanelParam,
+  PanelThreshold,
+  ColumnDef,
+} from 'src/config.context';
 import MarkdownPanelEditor from 'src/components/reports/MarkdownPanelEditor';
 import type { MarkdocVariableOption } from 'src/components/MarkdownEditor';
 import ThresholdsEditor from 'src/components/reports/ThresholdsEditor';
@@ -40,13 +45,13 @@ const PANEL_TYPES = [
   { value: 'pie', label: 'Pie Chart' },
   { value: 'graph', label: 'Graph' },
   { value: 'progress', label: 'Progress' },
-  { value: 'markdown', label: 'Markdown' }
+  { value: 'markdown', label: 'Markdown' },
 ];
 
 const LEGEND_OPTIONS = [
   { value: '', label: 'None' },
   { value: 'row', label: 'Row' },
-  { value: 'column', label: 'Column' }
+  { value: 'column', label: 'Column' },
 ];
 
 export interface EditablePanel extends Panel {
@@ -68,7 +73,7 @@ interface PanelEditorProps {
 function ParamRow({
   param,
   onChange,
-  onDelete
+  onDelete,
 }: {
   param: PanelParam;
   onChange: (p: PanelParam) => void;
@@ -87,14 +92,26 @@ function ParamRow({
         size="small"
         label="Value"
         value={param.value ?? ''}
-        onChange={(e) => onChange({ ...param, value: e.target.value || undefined, input_id: undefined })}
+        onChange={(e) =>
+          onChange({
+            ...param,
+            value: e.target.value || undefined,
+            input_id: undefined,
+          })
+        }
         sx={{ flex: 1 }}
       />
       <TextField
         size="small"
         label="Input ID"
         value={param.input_id ?? ''}
-        onChange={(e) => onChange({ ...param, input_id: e.target.value || undefined, value: undefined })}
+        onChange={(e) =>
+          onChange({
+            ...param,
+            input_id: e.target.value || undefined,
+            value: undefined,
+          })
+        }
         sx={{ flex: 1 }}
       />
       <Tooltip title="Remove param">
@@ -109,7 +126,7 @@ function ParamRow({
 function ColumnRow({
   col,
   onChange,
-  onDelete
+  onDelete,
 }: {
   col: ColumnDef;
   onChange: (c: ColumnDef) => void;
@@ -140,7 +157,13 @@ function ColumnRow({
   );
 }
 
-function PanelEditor({ open, panel, onClose, onSave, availableVariables }: PanelEditorProps) {
+function PanelEditor({
+  open,
+  panel,
+  onClose,
+  onSave,
+  availableVariables,
+}: PanelEditorProps) {
   const [form, setForm] = useState<Panel>(emptyPanel('count'));
   const [id, setId] = useState('');
 
@@ -152,7 +175,8 @@ function PanelEditor({ open, panel, onClose, onSave, availableVariables }: Panel
       // is dropped on save (see cleanPanel).
       const migrated: Panel = { ...rest };
       if (
-        (migrated.thresholds === undefined || migrated.thresholds.length === 0) &&
+        (migrated.thresholds === undefined ||
+          migrated.thresholds.length === 0) &&
         migrated.threshold != null &&
         (migrated.type === 'count' || migrated.type === 'progress')
       ) {
@@ -185,11 +209,16 @@ function PanelEditor({ open, panel, onClose, onSave, availableVariables }: Panel
       x: form.x,
       y: form.y,
       min_h: form.min_h,
-      auto_height: TYPES_WITH_AUTO_HEIGHT.has(newType) ? form.auto_height : undefined,
-      progress_settings: newType === 'progress' ? form.progress_settings : undefined,
+      auto_height: TYPES_WITH_AUTO_HEIGHT.has(newType)
+        ? form.auto_height
+        : undefined,
+      progress_settings:
+        newType === 'progress' ? form.progress_settings : undefined,
       thresholds:
-        newType === 'count' || newType === 'progress' ? form.thresholds : undefined,
-      cypher: newType === 'markdown' ? undefined : form.cypher
+        newType === 'count' || newType === 'progress'
+          ? form.thresholds
+          : undefined,
+      cypher: newType === 'markdown' ? undefined : form.cypher,
     });
   }
 
@@ -205,7 +234,8 @@ function PanelEditor({ open, panel, onClose, onSave, availableVariables }: Panel
   const hasProgressSettings = form.type === 'progress';
   const hasColumns = form.type === 'table';
   const hasTableId = form.type === 'vertical-table';
-  const hasDetailsQuery = form.type === 'table' || form.type === 'vertical-table';
+  const hasDetailsQuery =
+    form.type === 'table' || form.type === 'vertical-table';
 
   const params: PanelParam[] = form.params ?? [];
   const columns: ColumnDef[] = form.columns ?? [];
@@ -260,7 +290,9 @@ function PanelEditor({ open, panel, onClose, onSave, availableVariables }: Panel
               <Checkbox
                 size="small"
                 checked={form.hide_caption === true}
-                onChange={(e) => set('hide_caption', e.target.checked || undefined)}
+                onChange={(e) =>
+                  set('hide_caption', e.target.checked || undefined)
+                }
               />
             }
             label="Hide caption"
@@ -302,7 +334,9 @@ function PanelEditor({ open, panel, onClose, onSave, availableVariables }: Panel
                   <Checkbox
                     size="small"
                     checked={form.auto_height === true}
-                    onChange={(e) => set('auto_height', e.target.checked || undefined)}
+                    onChange={(e) =>
+                      set('auto_height', e.target.checked || undefined)
+                    }
                   />
                 }
                 label="Fit content (auto-height)"
@@ -336,7 +370,9 @@ function PanelEditor({ open, panel, onClose, onSave, availableVariables }: Panel
               multiline
               minRows={2}
               value={form.details_cypher ?? ''}
-              onChange={(e) => set('details_cypher', e.target.value || undefined)}
+              onChange={(e) =>
+                set('details_cypher', e.target.value || undefined)
+              }
               helperText="Used for the expandable details row."
             />
           )}
@@ -378,7 +414,7 @@ function PanelEditor({ open, panel, onClose, onSave, availableVariables }: Panel
                       'progress_settings',
                       e.target.checked
                         ? { ...form.progress_settings, show_label: undefined }
-                        : { ...form.progress_settings, show_label: false }
+                        : { ...form.progress_settings, show_label: false },
                     )
                   }
                 />
@@ -415,7 +451,7 @@ function PanelEditor({ open, panel, onClose, onSave, availableVariables }: Panel
                 onChange={(e) =>
                   set('graph_settings', {
                     ...form.graph_settings,
-                    node_label: e.target.value || undefined
+                    node_label: e.target.value || undefined,
                   })
                 }
                 helperText="Node property to display as label (default: label)."
@@ -428,7 +464,7 @@ function PanelEditor({ open, panel, onClose, onSave, availableVariables }: Panel
                 onChange={(e) =>
                   set('graph_settings', {
                     ...form.graph_settings,
-                    node_color_by: e.target.value || undefined
+                    node_color_by: e.target.value || undefined,
                   })
                 }
                 helperText="Node property to use for color grouping (default: group)."
@@ -454,7 +490,14 @@ function PanelEditor({ open, panel, onClose, onSave, availableVariables }: Panel
             <>
               <Divider />
               <Box>
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
+                <Box
+                  sx={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    mb: 1,
+                  }}
+                >
                   <Typography variant="body2" sx={{ fontWeight: 'medium' }}>
                     Parameters
                   </Typography>
@@ -468,7 +511,6 @@ function PanelEditor({ open, panel, onClose, onSave, availableVariables }: Panel
                 </Box>
                 <Stack spacing={1}>
                   {params.map((p, i) => (
-                    // eslint-disable-next-line @eslint-react/no-array-index-key
                     <ParamRow
                       key={i}
                       param={p}
@@ -493,21 +535,29 @@ function PanelEditor({ open, panel, onClose, onSave, availableVariables }: Panel
             <>
               <Divider />
               <Box>
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
+                <Box
+                  sx={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    mb: 1,
+                  }}
+                >
                   <Typography variant="body2" sx={{ fontWeight: 'medium' }}>
                     Columns (leave empty to auto-detect)
                   </Typography>
                   <Button
                     size="small"
                     startIcon={<Add />}
-                    onClick={() => set('columns', [...columns, { name: '', label: '' }])}
+                    onClick={() =>
+                      set('columns', [...columns, { name: '', label: '' }])
+                    }
                   >
                     Add column
                   </Button>
                 </Box>
                 <Stack spacing={1}>
                   {columns.map((c, i) => (
-                    // eslint-disable-next-line @eslint-react/no-array-index-key
                     <ColumnRow
                       key={i}
                       col={c}
@@ -544,7 +594,8 @@ function cleanPanel(panel: Panel): Panel {
   if (panel.caption) result.caption = panel.caption;
   if (panel.hide_caption) result.hide_caption = true;
   if (panel.w != null) result.w = Math.max(1, Math.min(12, panel.w));
-  if (panel.h != null) result.h = Math.max(1, Math.min(MAX_HEIGHT_ROWS, panel.h));
+  if (panel.h != null)
+    result.h = Math.max(1, Math.min(MAX_HEIGHT_ROWS, panel.h));
   if (panel.x != null) result.x = Math.max(0, panel.x);
   if (panel.y != null) result.y = Math.max(0, panel.y);
   if (panel.min_h != null) result.min_h = Math.max(1, panel.min_h);

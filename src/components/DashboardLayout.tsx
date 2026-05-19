@@ -8,7 +8,7 @@ import {
   DASHBOARD_SIDEBAR_COLLAPSED_STORAGE_KEY,
   DASHBOARD_SIDEBAR_COLLAPSED_WIDTH,
   DASHBOARD_SIDEBAR_EXPANDED_WIDTH,
-  DASHBOARD_SIDEBAR_WIDTH_VAR
+  DASHBOARD_SIDEBAR_WIDTH_VAR,
 } from 'src/components/dashboardLayoutConstants';
 
 const DashboardLayoutRoot = styled('div')(({ theme }) => ({
@@ -16,7 +16,7 @@ const DashboardLayoutRoot = styled('div')(({ theme }) => ({
   display: 'flex',
   height: '100%',
   overflow: 'hidden',
-  width: '100%'
+  width: '100%',
 }));
 
 const DashboardLayoutWrapper = styled('div')(({ theme }) => ({
@@ -25,29 +25,32 @@ const DashboardLayoutWrapper = styled('div')(({ theme }) => ({
   overflow: 'hidden',
   paddingTop: DASHBOARD_NAVBAR_HEIGHT,
   transition: theme.transitions.create('padding-left', {
-    duration: theme.transitions.duration.shorter
+    duration: theme.transitions.duration.shorter,
   }),
   [theme.breakpoints.up('lg')]: {
-    paddingLeft: `var(${DASHBOARD_SIDEBAR_WIDTH_VAR})`
-  }
+    paddingLeft: `var(${DASHBOARD_SIDEBAR_WIDTH_VAR})`,
+  },
 }));
 
 const DashboardLayoutContainer = styled('div')({
   display: 'flex',
   flex: '1 1 auto',
-  overflow: 'hidden'
+  overflow: 'hidden',
 });
 
 const DashboardLayoutContent = styled('div')({
   flex: '1 1 auto',
   height: '100%',
-  overflow: 'auto'
+  overflow: 'auto',
 });
 
 function getInitialSidebarCollapsed(): boolean {
   if (typeof window === 'undefined') return false;
   try {
-    return window.localStorage.getItem(DASHBOARD_SIDEBAR_COLLAPSED_STORAGE_KEY) === 'true';
+    return (
+      window.localStorage.getItem(DASHBOARD_SIDEBAR_COLLAPSED_STORAGE_KEY) ===
+      'true'
+    );
   } catch {
     return false;
   }
@@ -56,7 +59,10 @@ function getInitialSidebarCollapsed(): boolean {
 function persistSidebarCollapsed(collapsed: boolean): void {
   if (typeof window === 'undefined') return;
   try {
-    window.localStorage.setItem(DASHBOARD_SIDEBAR_COLLAPSED_STORAGE_KEY, String(collapsed));
+    window.localStorage.setItem(
+      DASHBOARD_SIDEBAR_COLLAPSED_STORAGE_KEY,
+      String(collapsed),
+    );
   } catch {
     // Ignore storage failures so the layout still behaves normally in private mode.
   }
@@ -64,7 +70,9 @@ function persistSidebarCollapsed(collapsed: boolean): void {
 
 function DashboardLayout() {
   const [isMobileNavOpen, setMobileNavOpen] = useState(false);
-  const [isSidebarCollapsed, setSidebarCollapsed] = useState(getInitialSidebarCollapsed);
+  const [isSidebarCollapsed, setSidebarCollapsed] = useState(
+    getInitialSidebarCollapsed,
+  );
   const sidebarWidth = isSidebarCollapsed
     ? DASHBOARD_SIDEBAR_COLLAPSED_WIDTH
     : DASHBOARD_SIDEBAR_EXPANDED_WIDTH;
@@ -79,7 +87,9 @@ function DashboardLayout() {
 
   return (
     <DashboardLayoutRoot
-      style={{ [DASHBOARD_SIDEBAR_WIDTH_VAR]: `${sidebarWidth}px` } as CSSProperties}
+      style={
+        { [DASHBOARD_SIDEBAR_WIDTH_VAR]: `${sidebarWidth}px` } as CSSProperties
+      }
     >
       <DashboardNavbar
         onMobileNavOpen={() => setMobileNavOpen(true)}

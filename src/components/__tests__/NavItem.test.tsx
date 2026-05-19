@@ -20,7 +20,7 @@ describe('NavItem', () => {
     render(
       <Wrapper>
         <NavItem href="/dashboard" title="Dashboard" />
-      </Wrapper>
+      </Wrapper>,
     );
     expect(screen.getByText('Dashboard')).toBeInTheDocument();
   });
@@ -32,18 +32,22 @@ describe('NavItem', () => {
     render(
       <Wrapper>
         <NavItem href="/reports" title="Reports" icon={MockIcon as any} />
-      </Wrapper>
+      </Wrapper>,
     );
     expect(screen.getByTestId('mock-icon')).toBeInTheDocument();
   });
 
   it('truncates long labels instead of wrapping them', () => {
-    const longTitle = 'A very long pinned report name that should not wrap in the sidebar';
+    const longTitle =
+      'A very long pinned report name that should not wrap in the sidebar';
 
     render(
       <Wrapper>
-        <NavItem title="Parent" subItems={[{ href: '/sub1', title: longTitle }]} />
-      </Wrapper>
+        <NavItem
+          title="Parent"
+          subItems={[{ href: '/sub1', title: longTitle }]}
+        />
+      </Wrapper>,
     );
 
     const label = screen.getByText(longTitle);
@@ -58,12 +62,12 @@ describe('NavItem', () => {
   it('renders sub-items when subItems prop is provided', () => {
     const subItems = [
       { href: '/sub1', title: 'Sub Item 1' },
-      { href: '/sub2', title: 'Sub Item 2' }
+      { href: '/sub2', title: 'Sub Item 2' },
     ];
     render(
       <Wrapper>
         <NavItem title="Parent" subItems={subItems} />
-      </Wrapper>
+      </Wrapper>,
     );
     expect(screen.getByText('Parent')).toBeInTheDocument();
     expect(screen.getByText('Sub Item 1')).toBeInTheDocument();
@@ -75,7 +79,7 @@ describe('NavItem', () => {
     render(
       <Wrapper>
         <NavItem title="Parent" subItems={subItems} />
-      </Wrapper>
+      </Wrapper>,
     );
 
     // When open=true, ExpandMore icon is shown (open indicator)
@@ -90,7 +94,7 @@ describe('NavItem', () => {
     render(
       <Wrapper>
         <NavItem href="/settings" title="Settings" />
-      </Wrapper>
+      </Wrapper>,
     );
     expect(screen.getByRole('link', { name: /settings/i })).toBeInTheDocument();
   });
@@ -102,8 +106,13 @@ describe('NavItem', () => {
 
     render(
       <Wrapper>
-        <NavItem collapsed href="/reports" title="Reports" icon={MockIcon as any} />
-      </Wrapper>
+        <NavItem
+          collapsed
+          href="/reports"
+          title="Reports"
+          icon={MockIcon as any}
+        />
+      </Wrapper>,
     );
 
     expect(screen.getByRole('link', { name: /reports/i })).toBeInTheDocument();

@@ -19,9 +19,14 @@ jest.mock('src/components/UserDisplay', () => ({
   default: ({ userId }: { userId: string }) => <>{userId}</>,
 }));
 
-const mockUsePermissions = permissionsModule.usePermissions as jest.MockedFunction<typeof permissionsModule.usePermissions>;
-const mockUseScheduledQueriesList = scheduledQueriesApiModule.useScheduledQueriesList as unknown as jest.Mock;
-const mockUseScheduledQueriesMutations = scheduledQueriesApiModule.useScheduledQueriesMutations as unknown as jest.Mock;
+const mockUsePermissions =
+  permissionsModule.usePermissions as jest.MockedFunction<
+    typeof permissionsModule.usePermissions
+  >;
+const mockUseScheduledQueriesList =
+  scheduledQueriesApiModule.useScheduledQueriesList as unknown as jest.Mock;
+const mockUseScheduledQueriesMutations =
+  scheduledQueriesApiModule.useScheduledQueriesMutations as unknown as jest.Mock;
 const theme = createTheme();
 
 const SCHEDULED_QUERY: scheduledQueriesApiModule.ScheduledQueryItem = {
@@ -65,7 +70,9 @@ describe('ScheduledQueries', () => {
         scheduled_query_action_schemas: {},
       }),
     } as Response);
-    mockUsePermissions.mockReturnValue((permission: string) => permission.startsWith('scheduled_queries:'));
+    mockUsePermissions.mockReturnValue((permission: string) =>
+      permission.startsWith('scheduled_queries:'),
+    );
     mockUseScheduledQueriesList.mockReturnValue({
       scheduledQueries: [SCHEDULED_QUERY],
       loading: false,
@@ -96,6 +103,8 @@ describe('ScheduledQueries', () => {
     expect(screen.getByText('v4')).toBeInTheDocument();
     expect(screen.getByText('bob')).toBeInTheDocument();
 
-    await waitFor(() => expect(global.fetch).toHaveBeenCalledWith('/api/v1/config'));
+    await waitFor(() =>
+      expect(global.fetch).toHaveBeenCalledWith('/api/v1/config'),
+    );
   });
 });

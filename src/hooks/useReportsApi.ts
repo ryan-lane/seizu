@@ -22,7 +22,10 @@ interface DashboardCacheEntry {
 const reportCapabilitiesCache = new Map<string, ReportCacheEntry>();
 let dashboardCacheEntry: DashboardCacheEntry | null = null;
 
-export function updateCachedReportCapabilities(reportId: string, entry: ReportCacheEntry): void {
+export function updateCachedReportCapabilities(
+  reportId: string,
+  entry: ReportCacheEntry,
+): void {
   reportCapabilitiesCache.set(reportId, entry);
 }
 
@@ -80,7 +83,10 @@ async function errorMessage(res: Response, fallback: string): Promise<string> {
   const error = (data as { error?: unknown }).error;
   if (typeof error === 'string' && error.trim()) return error;
   const errors = (data as { errors?: unknown }).errors;
-  if (Array.isArray(errors) && errors.every((error) => typeof error === 'string')) {
+  if (
+    Array.isArray(errors) &&
+    errors.every((error) => typeof error === 'string')
+  ) {
     return errors.join(', ');
   }
   return fallback;
@@ -122,16 +128,23 @@ export function useReportsList(): {
   useEffect(() => {
     let cancelled = false;
 
-    async function loadReportsPage(pageNum: number, perPageNum: number): Promise<{
+    async function loadReportsPage(
+      pageNum: number,
+      perPageNum: number,
+    ): Promise<{
       reports: ReportListItem[];
       total?: number;
       page?: number;
       per_page?: number;
     }> {
-      const res = await fetch(`/api/v1/reports?page=${pageNum}&per_page=${perPageNum}`, {
-        headers: getApiHeaders(accessToken)
-      });
-      if (!res.ok) throw new Error(`Failed to load reports list: ${res.status}`);
+      const res = await fetch(
+        `/api/v1/reports?page=${pageNum}&per_page=${perPageNum}`,
+        {
+          headers: getApiHeaders(accessToken),
+        },
+      );
+      if (!res.ok)
+        throw new Error(`Failed to load reports list: ${res.status}`);
       return res.json();
     }
 
@@ -153,12 +166,14 @@ export function useReportsList(): {
         let allReports = firstReports;
         if (totalPages > 1) {
           const remainingPages = await Promise.all(
-            Array.from({ length: totalPages - 1 }, (_, index) => loadReportsPage(index + 2, pageSize))
+            Array.from({ length: totalPages - 1 }, (_, index) =>
+              loadReportsPage(index + 2, pageSize),
+            ),
           );
           if (cancelled) return;
           allReports = [
             ...firstReports,
-            ...remainingPages.flatMap((response) => response.reports ?? [])
+            ...remainingPages.flatMap((response) => response.reports ?? []),
           ];
         }
 
@@ -191,7 +206,9 @@ export function useDashboardReportId(): {
 } {
   const { accessToken } = useContext(AuthContext);
   const { auth_required } = useContext(AuthConfigContext);
-  const [dashboardReportId, setDashboardReportId] = useState<string | null>(null);
+  const [dashboardReportId, setDashboardReportId] = useState<string | null>(
+    null,
+  );
   const [loading, setLoading] = useState(true);
   const [tick, setTick] = useState(0);
 
@@ -234,8 +251,12 @@ export function useDashboardReport(): {
   const { accessToken } = useContext(AuthContext);
   const { auth_required } = useContext(AuthConfigContext);
   // Initialize from cache immediately to skip the loading flash on repeat visits
-  const [report, setReport] = useState<Report | undefined>(dashboardCacheEntry?.report);
-  const [queryCapabilities, setQueryCapabilities] = useState<Record<string, string> | undefined>(dashboardCacheEntry?.queryCapabilities);
+  const [report, setReport] = useState<Report | undefined>(
+    dashboardCacheEntry?.report,
+  );
+  const [queryCapabilities, setQueryCapabilities] = useState<
+    Record<string, string> | undefined
+  >(dashboardCacheEntry?.queryCapabilities);
   const [loading, setLoading] = useState(!dashboardCacheEntry);
   const [notConfigured, setNotConfigured] = useState(false);
   const [tick, setTick] = useState(0);
@@ -263,30 +284,42 @@ export function useDashboardReport(): {
     let cancelled = false;
 
     fetch(`/api/v1/reports/dashboard${REPORT_QUERY_CAPABILITIES_QUERY}`, {
-      headers: getApiHeaders(accessToken)
+      headers: getApiHeaders(accessToken),
     })
       .then((res) => {
         if (res.status === 404) {
-          if (!cancelled) { setNotConfigured(true); setLoading(false); }
+          if (!cancelled) {
+            setNotConfigured(true);
+            setLoading(false);
+          }
           return null;
         }
-        if (!res.ok) throw new Error(`Failed to load dashboard report: ${res.status}`);
+        if (!res.ok)
+          throw new Error(`Failed to load dashboard report: ${res.status}`);
         return res.json();
       })
       .then((data: ReportVersion | null) => {
         if (cancelled) return;
         if (data) {
-          dashboardCacheEntry = { report: data.config, queryCapabilities: data.query_capabilities };
+          dashboardCacheEntry = {
+            report: data.config,
+            queryCapabilities: data.query_capabilities,
+          };
           setReport(data.config);
           setQueryCapabilities(data.query_capabilities);
         }
         setLoading(false);
       })
       .catch(() => {
-        if (!cancelled) { setNotConfigured(true); setLoading(false); }
+        if (!cancelled) {
+          setNotConfigured(true);
+          setLoading(false);
+        }
       });
 
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [accessToken, auth_required, tick]);
 
   return { report, queryCapabilities, loading, notConfigured, refresh };
@@ -308,7 +341,8 @@ export function useAllReports(): {
 
     fetch('/api/v1/reports', { headers: getApiHeaders(accessToken) })
       .then((res) => {
-        if (!res.ok) throw new Error(`Failed to load reports list: ${res.status}`);
+        if (!res.ok)
+          throw new Error(`Failed to load reports list: ${res.status}`);
         return res.json();
       })
       .then((data: { reports: ReportListItem[] }) => {
@@ -316,11 +350,11 @@ export function useAllReports(): {
         return Promise.all(
           items.map((item) =>
             fetch(`/api/v1/reports/${item.report_id}`, {
-              headers: getApiHeaders(accessToken)
+              headers: getApiHeaders(accessToken),
             })
               .then((res) => res.json())
-              .then((v: ReportVersion) => v.config)
-          )
+              .then((v: ReportVersion) => v.config),
+          ),
         );
       })
       .then((allReports: Report[]) => {
@@ -338,12 +372,15 @@ export function useAllReports(): {
 export function useReportsMutations(): {
   createReport: (name: string) => Promise<ReportListItem>;
   cloneReport: (reportId: string, name: string) => Promise<ReportListItem>;
-  updateReportVisibility: (reportId: string, scope: ReportAccess['scope']) => Promise<ReportListItem>;
+  updateReportVisibility: (
+    reportId: string,
+    scope: ReportAccess['scope'],
+  ) => Promise<ReportListItem>;
   saveReportVersion: (
     reportId: string,
     config: Report,
     comment?: string,
-    includeQueryCapabilities?: boolean
+    includeQueryCapabilities?: boolean,
   ) => Promise<ReportVersion>;
   setDashboardReport: (reportId: string) => Promise<void>;
   pinReport: (reportId: string, pinned: boolean) => Promise<void>;
@@ -357,14 +394,14 @@ export function useReportsMutations(): {
         method: 'POST',
         headers: {
           ...getApiHeaders(accessToken),
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ name })
+        body: JSON.stringify({ name }),
       });
       if (!res.ok) throw new Error(`Failed to create report: ${res.status}`);
       return res.json();
     },
-    [accessToken]
+    [accessToken],
   );
 
   const cloneReport = useCallback(
@@ -373,14 +410,14 @@ export function useReportsMutations(): {
         method: 'POST',
         headers: {
           ...getApiHeaders(accessToken),
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ name })
+        body: JSON.stringify({ name }),
       });
       if (!res.ok) throw new Error(`Failed to clone report: ${res.status}`);
       return res.json();
     },
-    [accessToken]
+    [accessToken],
   );
 
   const saveReportVersion = useCallback(
@@ -388,47 +425,60 @@ export function useReportsMutations(): {
       reportId: string,
       config: Report,
       comment?: string,
-      includeQueryCapabilities: boolean = false
+      includeQueryCapabilities: boolean = false,
     ): Promise<ReportVersion> => {
-      const res = await fetch(`/api/v1/reports/${reportId}/versions?include_query_capabilities=${includeQueryCapabilities}`, {
-        method: 'POST',
-        headers: {
-          ...getApiHeaders(accessToken),
-          'Content-Type': 'application/json'
+      const res = await fetch(
+        `/api/v1/reports/${reportId}/versions?include_query_capabilities=${includeQueryCapabilities}`,
+        {
+          method: 'POST',
+          headers: {
+            ...getApiHeaders(accessToken),
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ config, comment: comment ?? null }),
         },
-        body: JSON.stringify({ config, comment: comment ?? null })
-      });
-      if (!res.ok) throw new Error(`Failed to save report version: ${res.status}`);
+      );
+      if (!res.ok)
+        throw new Error(`Failed to save report version: ${res.status}`);
       return res.json();
     },
-    [accessToken]
+    [accessToken],
   );
 
   const updateReportVisibility = useCallback(
-    async (reportId: string, scope: ReportAccess['scope']): Promise<ReportListItem> => {
+    async (
+      reportId: string,
+      scope: ReportAccess['scope'],
+    ): Promise<ReportListItem> => {
       const res = await fetch(`/api/v1/reports/${reportId}/visibility`, {
         method: 'PUT',
         headers: {
           ...getApiHeaders(accessToken),
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ access: { scope } })
+        body: JSON.stringify({ access: { scope } }),
       });
-      if (!res.ok) throw new Error(await errorMessage(res, `Failed to update report visibility: ${res.status}`));
+      if (!res.ok)
+        throw new Error(
+          await errorMessage(
+            res,
+            `Failed to update report visibility: ${res.status}`,
+          ),
+        );
       return res.json();
     },
-    [accessToken]
+    [accessToken],
   );
 
   const setDashboardReport = useCallback(
     async (reportId: string): Promise<void> => {
       const res = await fetch(`/api/v1/reports/${reportId}/dashboard`, {
         method: 'PUT',
-        headers: getApiHeaders(accessToken)
+        headers: getApiHeaders(accessToken),
       });
       if (!res.ok) throw new Error(`Failed to set dashboard: ${res.status}`);
     },
-    [accessToken]
+    [accessToken],
   );
 
   const pinReport = useCallback(
@@ -437,24 +487,27 @@ export function useReportsMutations(): {
         method: 'PUT',
         headers: {
           ...getApiHeaders(accessToken),
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ pinned })
+        body: JSON.stringify({ pinned }),
       });
       if (!res.ok) throw new Error(`Failed to update pin: ${res.status}`);
     },
-    [accessToken]
+    [accessToken],
   );
 
   const deleteReport = useCallback(
     async (reportId: string): Promise<void> => {
       const res = await fetch(`/api/v1/reports/${reportId}`, {
         method: 'DELETE',
-        headers: getApiHeaders(accessToken)
+        headers: getApiHeaders(accessToken),
       });
-      if (!res.ok) throw new Error(await errorMessage(res, `Failed to delete report: ${res.status}`));
+      if (!res.ok)
+        throw new Error(
+          await errorMessage(res, `Failed to delete report: ${res.status}`),
+        );
     },
-    [accessToken]
+    [accessToken],
   );
 
   return {
@@ -464,7 +517,7 @@ export function useReportsMutations(): {
     saveReportVersion,
     setDashboardReport,
     pinReport,
-    deleteReport
+    deleteReport,
   };
 }
 
@@ -484,7 +537,9 @@ export function useReportVersionsList(reportId: string | undefined): {
     if (auth_required && !accessToken) return;
 
     setLoading(true);
-    fetch(`/api/v1/reports/${reportId}/versions`, { headers: getApiHeaders(accessToken) })
+    fetch(`/api/v1/reports/${reportId}/versions`, {
+      headers: getApiHeaders(accessToken),
+    })
       .then((res) => {
         if (!res.ok) throw new Error(`Failed to load versions: ${res.status}`);
         return res.json();
@@ -504,7 +559,7 @@ export function useReportVersionsList(reportId: string | undefined): {
 
 export function useReportVersion(
   reportId: string | undefined,
-  versionNum: string | undefined
+  versionNum: string | undefined,
 ): {
   reportVersion: ReportVersion | undefined;
   loading: boolean;
@@ -512,7 +567,9 @@ export function useReportVersion(
 } {
   const { accessToken } = useContext(AuthContext);
   const { auth_required } = useContext(AuthConfigContext);
-  const [reportVersion, setReportVersion] = useState<ReportVersion | undefined>(undefined);
+  const [reportVersion, setReportVersion] = useState<ReportVersion | undefined>(
+    undefined,
+  );
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
 
@@ -524,9 +581,12 @@ export function useReportVersion(
     setReportVersion(undefined);
     setError(null);
 
-    fetch(`/api/v1/reports/${reportId}/versions/${versionNum}${REPORT_QUERY_CAPABILITIES_QUERY}`, {
-      headers: getApiHeaders(accessToken)
-    })
+    fetch(
+      `/api/v1/reports/${reportId}/versions/${versionNum}${REPORT_QUERY_CAPABILITIES_QUERY}`,
+      {
+        headers: getApiHeaders(accessToken),
+      },
+    )
       .then((res) => {
         if (!res.ok) throw new Error(`Failed to load version: ${res.status}`);
         return res.json();
@@ -559,8 +619,12 @@ export function useReport(reportId: string | undefined): {
   const cached = reportId ? reportCapabilitiesCache.get(reportId) : undefined;
   const [report, setReport] = useState<Report | undefined>(cached?.report);
   const [name, setName] = useState<string | undefined>(cached?.name);
-  const [reportVersion, setReportVersion] = useState<ReportVersion | undefined>(cached?.reportVersion);
-  const [queryCapabilities, setQueryCapabilities] = useState<Record<string, string> | undefined>(cached?.queryCapabilities);
+  const [reportVersion, setReportVersion] = useState<ReportVersion | undefined>(
+    cached?.reportVersion,
+  );
+  const [queryCapabilities, setQueryCapabilities] = useState<
+    Record<string, string> | undefined
+  >(cached?.queryCapabilities);
   const [loading, setLoading] = useState(!cached);
   const [error, setError] = useState<Error | null>(null);
   const [tick, setTick] = useState(0);
@@ -592,7 +656,7 @@ export function useReport(reportId: string | undefined): {
     setError(null);
 
     fetch(`/api/v1/reports/${reportId}${REPORT_QUERY_CAPABILITIES_QUERY}`, {
-      headers: getApiHeaders(accessToken)
+      headers: getApiHeaders(accessToken),
     })
       .then((res) => {
         if (!res.ok) throw new Error(`Failed to load report: ${res.status}`);
@@ -619,8 +683,18 @@ export function useReport(reportId: string | undefined): {
         setLoading(false);
       });
 
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [reportId, accessToken, auth_required, tick]);
 
-  return { report, name, reportVersion, queryCapabilities, loading, error, refresh };
+  return {
+    report,
+    name,
+    reportVersion,
+    queryCapabilities,
+    loading,
+    error,
+    refresh,
+  };
 }

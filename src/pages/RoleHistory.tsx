@@ -12,7 +12,7 @@ import {
   Menu,
   MenuItem,
   Tooltip,
-  Typography
+  Typography,
 } from '@mui/material';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import HistoryIcon from '@mui/icons-material/History';
@@ -23,12 +23,12 @@ import {
   RoleVersion,
   isBuiltinRole,
   useRoleMutations,
-  useRoleVersionsList
+  useRoleVersionsList,
 } from 'src/hooks/useRolesApi';
 import ListTable, {
   ListTableColumn,
   listTableActionColumnSx,
-  listTableSecondaryCellSx
+  listTableSecondaryCellSx,
 } from 'src/components/ListTable';
 import UserDisplay from 'src/components/UserDisplay';
 import { usePermissionState } from 'src/hooks/usePermissions';
@@ -61,7 +61,11 @@ function RowMenu({ isCurrent, hasPermission, onRestore }: RowMenuProps) {
   return (
     <>
       <Tooltip title="More actions">
-        <IconButton aria-label="More actions" size="small" onClick={(e) => setAnchor(e.currentTarget)}>
+        <IconButton
+          aria-label="More actions"
+          size="small"
+          onClick={(e) => setAnchor(e.currentTarget)}
+        >
           <MoreVertIcon fontSize="small" />
         </IconButton>
       </Tooltip>
@@ -75,9 +79,18 @@ function RowMenu({ isCurrent, hasPermission, onRestore }: RowMenuProps) {
       >
         <Tooltip title={restoreTooltip} placement="left">
           <span>
-            <MenuItem onClick={() => { onRestore(); close(); }} disabled={restoreDisabled}>
+            <MenuItem
+              onClick={() => {
+                onRestore();
+                close();
+              }}
+              disabled={restoreDisabled}
+            >
               <ListItemIcon>
-                <RestoreIcon fontSize="small" color={restoreDisabled ? 'disabled' : 'inherit'} />
+                <RestoreIcon
+                  fontSize="small"
+                  color={restoreDisabled ? 'disabled' : 'inherit'}
+                />
               </ListItemIcon>
               <ListItemText>Restore</ListItemText>
             </MenuItem>
@@ -93,14 +106,28 @@ function permissionSummary(version: RoleVersion) {
   const remaining = version.permissions.length - visible.length;
   const hidden = version.permissions.slice(visible.length);
   return (
-    <Box sx={{ display: 'flex', flexWrap: 'nowrap', gap: 0.5, overflow: 'hidden' }}>
+    <Box
+      sx={{ display: 'flex', flexWrap: 'nowrap', gap: 0.5, overflow: 'hidden' }}
+    >
       {visible.map((permission) => (
-        <Chip key={permission} label={permission} size="small" variant="outlined" />
+        <Chip
+          key={permission}
+          label={permission}
+          size="small"
+          variant="outlined"
+        />
       ))}
       {remaining > 0 && (
         <Tooltip
           title={
-            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5, py: 0.5 }}>
+            <Box
+              sx={{
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 0.5,
+                py: 0.5,
+              }}
+            >
               {hidden.map((permission) => (
                 <Typography key={permission} variant="body2">
                   {permission}
@@ -126,7 +153,10 @@ function RoleHistory() {
   const canRead = hasPermission('roles:read');
   const builtin = !!roleId && isBuiltinRole(roleId);
 
-  const { versions, loading, error } = useRoleVersionsList(roleId ?? null, canRead && !builtin);
+  const { versions, loading, error } = useRoleVersionsList(
+    roleId ?? null,
+    canRead && !builtin,
+  );
   const { updateRole } = useRoleMutations();
 
   const sorted = [...versions].sort((a, b) => b.version - a.version);
@@ -151,41 +181,41 @@ function RoleHistory() {
             )}
           </Box>
         );
-      }
+      },
     },
     {
       key: 'name',
       label: 'Name',
       cellSx: { width: '24%' },
-      render: (version) => version.name
+      render: (version) => version.name,
     },
     {
       key: 'saved',
       label: 'Saved',
       hideBelow: 'sm',
       cellSx: savedColumnSx,
-      render: (version) => new Date(version.created_at).toLocaleString()
+      render: (version) => new Date(version.created_at).toLocaleString(),
     },
     {
       key: 'created_by',
       label: 'Created by',
       hideBelow: 'md',
       cellSx: authorColumnSx,
-      render: (version) => <UserDisplay userId={version.created_by} />
+      render: (version) => <UserDisplay userId={version.created_by} />,
     },
     {
       key: 'permissions',
       label: 'Permissions',
       hideBelow: 'lg',
       cellSx: permissionsColumnSx,
-      render: (version) => permissionSummary(version)
+      render: (version) => permissionSummary(version),
     },
     {
       key: 'comment',
       label: 'Comment',
       hideBelow: 'xl',
       cellSx: commentColumnSx,
-      render: (version) => version.comment || '—'
+      render: (version) => version.comment || '—',
     },
     {
       key: 'actions',
@@ -197,8 +227,8 @@ function RoleHistory() {
           hasPermission={hasPermission}
           onRestore={() => handleRestore(version)}
         />
-      )
-    }
+      ),
+    },
   ];
 
   async function handleRestore(version: RoleVersion) {
@@ -207,7 +237,7 @@ function RoleHistory() {
       name: version.name,
       description: version.description,
       permissions: version.permissions,
-      comment: `Restored from version ${version.version}`
+      comment: `Restored from version ${version.version}`,
     });
     navigate('/app/roles');
   }
@@ -247,7 +277,9 @@ function RoleHistory() {
   return (
     <>
       <Helmet>
-        <title>{roleName ? `History - ${roleName} | Seizu` : 'History | Seizu'}</title>
+        <title>
+          {roleName ? `History - ${roleName} | Seizu` : 'History | Seizu'}
+        </title>
       </Helmet>
       <Box sx={pageContentSx}>
         {fromLabel && (

@@ -77,7 +77,8 @@ export function useBuiltinRolesList(enabled = true): {
     setError(null);
     fetch('/api/v1/roles/builtin', { headers: getApiHeaders(accessToken) })
       .then((res) => {
-        if (!res.ok) throw new Error(`Failed to load built-in roles: ${res.status}`);
+        if (!res.ok)
+          throw new Error(`Failed to load built-in roles: ${res.status}`);
         return res.json();
       })
       .then((data: { roles: RoleItem[] }) => {
@@ -135,7 +136,10 @@ export function useRolesList(enabled = true): {
   return { roles, loading, error, refresh };
 }
 
-export function useRoleVersionsList(roleId: string | null, enabled = true): {
+export function useRoleVersionsList(
+  roleId: string | null,
+  enabled = true,
+): {
   versions: RoleVersion[];
   loading: boolean;
   error: Error | null;
@@ -156,10 +160,11 @@ export function useRoleVersionsList(roleId: string | null, enabled = true): {
     setLoading(true);
     setError(null);
     fetch(`/api/v1/roles/${roleId}/versions`, {
-      headers: getApiHeaders(accessToken)
+      headers: getApiHeaders(accessToken),
     })
       .then((res) => {
-        if (!res.ok) throw new Error(`Failed to load role versions: ${res.status}`);
+        if (!res.ok)
+          throw new Error(`Failed to load role versions: ${res.status}`);
         return res.json();
       })
       .then((data: { versions: RoleVersion[] }) => {
@@ -186,37 +191,43 @@ export function useRoleMutations(): {
     async (req: CreateRoleRequest): Promise<RoleItem> => {
       const res = await fetch('/api/v1/roles', {
         method: 'POST',
-        headers: { ...getApiHeaders(accessToken), 'Content-Type': 'application/json' },
-        body: JSON.stringify(req)
+        headers: {
+          ...getApiHeaders(accessToken),
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(req),
       });
       if (!res.ok) throw new Error(`Failed to create role: ${res.status}`);
       return res.json();
     },
-    [accessToken]
+    [accessToken],
   );
 
   const updateRole = useCallback(
     async (id: string, req: UpdateRoleRequest): Promise<RoleItem> => {
       const res = await fetch(`/api/v1/roles/${id}`, {
         method: 'PUT',
-        headers: { ...getApiHeaders(accessToken), 'Content-Type': 'application/json' },
-        body: JSON.stringify(req)
+        headers: {
+          ...getApiHeaders(accessToken),
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(req),
       });
       if (!res.ok) throw new Error(`Failed to update role: ${res.status}`);
       return res.json();
     },
-    [accessToken]
+    [accessToken],
   );
 
   const deleteRole = useCallback(
     async (id: string): Promise<void> => {
       const res = await fetch(`/api/v1/roles/${id}`, {
         method: 'DELETE',
-        headers: getApiHeaders(accessToken)
+        headers: getApiHeaders(accessToken),
       });
       if (!res.ok) throw new Error(`Failed to delete role: ${res.status}`);
     },
-    [accessToken]
+    [accessToken],
   );
 
   return { createRole, updateRole, deleteRole };

@@ -19,9 +19,14 @@ jest.mock('src/components/UserDisplay', () => ({
   default: ({ userId }: { userId: string }) => <>{userId}</>,
 }));
 
-const mockUsePermissions = permissionsModule.usePermissions as jest.MockedFunction<typeof permissionsModule.usePermissions>;
-const mockUseSkillsetsList = skillsetsApiModule.useSkillsetsList as unknown as jest.Mock;
-const mockUseSkillsetMutations = skillsetsApiModule.useSkillsetMutations as unknown as jest.Mock;
+const mockUsePermissions =
+  permissionsModule.usePermissions as jest.MockedFunction<
+    typeof permissionsModule.usePermissions
+  >;
+const mockUseSkillsetsList =
+  skillsetsApiModule.useSkillsetsList as unknown as jest.Mock;
+const mockUseSkillsetMutations =
+  skillsetsApiModule.useSkillsetMutations as unknown as jest.Mock;
 const theme = createTheme();
 
 const SKILLSET: skillsetsApiModule.SkillsetListItem = {
@@ -51,7 +56,9 @@ function Wrapper({ children }: { children: React.ReactNode }) {
 describe('Skillsets', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    mockUsePermissions.mockReturnValue((permission: string) => permission.startsWith('skillsets:'));
+    mockUsePermissions.mockReturnValue((permission: string) =>
+      permission.startsWith('skillsets:'),
+    );
     mockUseSkillsetsList.mockReturnValue({
       skillsets: [SKILLSET],
       loading: false,

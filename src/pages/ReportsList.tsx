@@ -1,5 +1,9 @@
 import { useMemo, useState } from 'react';
-import { Link as RouterLink, useNavigate, useSearchParams } from 'react-router-dom';
+import {
+  Link as RouterLink,
+  useNavigate,
+  useSearchParams,
+} from 'react-router-dom';
 import { Helmet } from 'react-helmet';
 import {
   Box,
@@ -20,7 +24,7 @@ import {
   MenuItem,
   TextField,
   Tooltip,
-  Typography
+  Typography,
 } from '@mui/material';
 import Add from '@mui/icons-material/Add';
 import BadgeIcon from '@mui/icons-material/Badge';
@@ -43,7 +47,7 @@ import {
   ReportListItem,
   useDashboardReportId,
   useReportsList,
-  useReportsMutations
+  useReportsMutations,
 } from 'src/hooks/useReportsApi';
 import { usePermissionState } from 'src/hooks/usePermissions';
 import ListTable, {
@@ -51,7 +55,7 @@ import ListTable, {
   ListTableFilterGroup,
   listTableActionColumnSx,
   listTablePrimaryCellSx,
-  listTableSecondaryCellSx
+  listTableSecondaryCellSx,
 } from 'src/components/ListTable';
 import UserDisplay from 'src/components/UserDisplay';
 import type { BackState } from 'src/navigation';
@@ -86,7 +90,7 @@ function RowMenu({
   onToggleAccess,
   onDelete,
   isOwner,
-  hasPermission
+  hasPermission,
 }: RowMenuProps) {
   const [anchor, setAnchor] = useState<null | HTMLElement>(null);
 
@@ -113,47 +117,88 @@ function RowMenu({
         transformOrigin={{ vertical: 'top', horizontal: 'right' }}
         slotProps={{ paper: { sx: { minWidth: 200 } } }}
       >
-        <Tooltip title={!canWrite ? 'You do not have permission to edit reports' : ''} placement="left">
+        <Tooltip
+          title={!canWrite ? 'You do not have permission to edit reports' : ''}
+          placement="left"
+        >
           <span>
             <MenuItem
-              onClick={() => { onEdit(); close(); }}
+              onClick={() => {
+                onEdit();
+                close();
+              }}
               disabled={!canWrite}
             >
-              <ListItemIcon><EditIcon fontSize="small" /></ListItemIcon>
+              <ListItemIcon>
+                <EditIcon fontSize="small" />
+              </ListItemIcon>
               <ListItemText>Edit</ListItemText>
             </MenuItem>
           </span>
         </Tooltip>
 
         <MenuItem
-          onClick={() => { onHistory(); close(); }}
+          onClick={() => {
+            onHistory();
+            close();
+          }}
         >
-          <ListItemIcon><HistoryIcon fontSize="small" /></ListItemIcon>
+          <ListItemIcon>
+            <HistoryIcon fontSize="small" />
+          </ListItemIcon>
           <ListItemText>View history</ListItemText>
         </MenuItem>
 
-        <Tooltip title={!canWrite ? 'You do not have permission to clone reports' : ''} placement="left">
+        <Tooltip
+          title={!canWrite ? 'You do not have permission to clone reports' : ''}
+          placement="left"
+        >
           <span>
             <MenuItem
-              onClick={() => { onClone(); close(); }}
+              onClick={() => {
+                onClone();
+                close();
+              }}
               disabled={!canWrite}
             >
-              <ListItemIcon><ContentCopyIcon fontSize="small" /></ListItemIcon>
+              <ListItemIcon>
+                <ContentCopyIcon fontSize="small" />
+              </ListItemIcon>
               <ListItemText>Clone</ListItemText>
             </MenuItem>
           </span>
         </Tooltip>
 
-        <Tooltip title={!canSetDashboard ? 'You do not have permission to set the dashboard' : ''} placement="left">
+        <Tooltip
+          title={
+            !canSetDashboard
+              ? 'You do not have permission to set the dashboard'
+              : ''
+          }
+          placement="left"
+        >
           <span>
             <MenuItem
-              onClick={() => { onSetDashboard(); close(); }}
-              disabled={isDashboard || !canSetDashboard || report.access.scope !== 'public'}
+              onClick={() => {
+                onSetDashboard();
+                close();
+              }}
+              disabled={
+                isDashboard ||
+                !canSetDashboard ||
+                report.access.scope !== 'public'
+              }
             >
               <ListItemIcon>
-                {isDashboard ? <DashboardIcon fontSize="small" color="primary" /> : <DashboardOutlinedIcon fontSize="small" />}
+                {isDashboard ? (
+                  <DashboardIcon fontSize="small" color="primary" />
+                ) : (
+                  <DashboardOutlinedIcon fontSize="small" />
+                )}
               </ListItemIcon>
-              <ListItemText>{isDashboard ? 'Current dashboard' : 'Set as dashboard'}</ListItemText>
+              <ListItemText>
+                {isDashboard ? 'Current dashboard' : 'Set as dashboard'}
+              </ListItemText>
             </MenuItem>
           </span>
         </Tooltip>
@@ -168,43 +213,75 @@ function RowMenu({
         >
           <span>
             <MenuItem
-              onClick={() => { onToggleAccess(); close(); }}
+              onClick={() => {
+                onToggleAccess();
+                close();
+              }}
               disabled={!canUpdateAccess}
             >
               <ListItemIcon>
-                {report.access.scope === 'public'
-                  ? <LockIcon fontSize="small" />
-                  : <PublicIcon fontSize="small" />}
+                {report.access.scope === 'public' ? (
+                  <LockIcon fontSize="small" />
+                ) : (
+                  <PublicIcon fontSize="small" />
+                )}
               </ListItemIcon>
-              <ListItemText>{report.access.scope === 'public' ? 'Unpublish' : 'Publish'}</ListItemText>
+              <ListItemText>
+                {report.access.scope === 'public' ? 'Unpublish' : 'Publish'}
+              </ListItemText>
             </MenuItem>
           </span>
         </Tooltip>
 
-        <Tooltip title={!canWrite ? 'You do not have permission to pin reports' : ''} placement="left">
+        <Tooltip
+          title={!canWrite ? 'You do not have permission to pin reports' : ''}
+          placement="left"
+        >
           <span>
             <MenuItem
-              onClick={() => { onPin(); close(); }}
+              onClick={() => {
+                onPin();
+                close();
+              }}
               disabled={!canWrite}
             >
               <ListItemIcon>
-                {report.pinned ? <PushPinIcon fontSize="small" color="primary" /> : <PushPinOutlinedIcon fontSize="small" />}
+                {report.pinned ? (
+                  <PushPinIcon fontSize="small" color="primary" />
+                ) : (
+                  <PushPinOutlinedIcon fontSize="small" />
+                )}
               </ListItemIcon>
-              <ListItemText>{report.pinned ? 'Unpin from sidebar' : 'Pin to sidebar'}</ListItemText>
+              <ListItemText>
+                {report.pinned ? 'Unpin from sidebar' : 'Pin to sidebar'}
+              </ListItemText>
             </MenuItem>
           </span>
         </Tooltip>
 
         <Divider />
 
-        <Tooltip title={!canDelete ? 'You do not have permission to delete reports' : ''} placement="left">
+        <Tooltip
+          title={
+            !canDelete ? 'You do not have permission to delete reports' : ''
+          }
+          placement="left"
+        >
           <span>
             <MenuItem
-              onClick={() => { onDelete(); close(); }}
+              onClick={() => {
+                onDelete();
+                close();
+              }}
               disabled={!canDelete}
               sx={{ color: canDelete ? 'error.main' : undefined }}
             >
-              <ListItemIcon><DeleteIcon fontSize="small" color={canDelete ? 'error' : 'disabled'} /></ListItemIcon>
+              <ListItemIcon>
+                <DeleteIcon
+                  fontSize="small"
+                  color={canDelete ? 'error' : 'disabled'}
+                />
+              </ListItemIcon>
               <ListItemText>Delete</ListItemText>
             </MenuItem>
           </span>
@@ -220,14 +297,28 @@ function RowMenu({
 
 function ReportsList() {
   const { reports, loading, error, refresh } = useReportsList();
-  const { dashboardReportId, refresh: refreshDashboard } = useDashboardReportId();
-  const { createReport, cloneReport, saveReportVersion, setDashboardReport, pinReport, updateReportVisibility, deleteReport } =
-    useReportsMutations();
+  const { dashboardReportId, refresh: refreshDashboard } =
+    useDashboardReportId();
+  const {
+    createReport,
+    cloneReport,
+    saveReportVersion,
+    setDashboardReport,
+    pinReport,
+    updateReportVisibility,
+    deleteReport,
+  } = useReportsMutations();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
-  const { hasPermission, loading: permissionsLoading, currentUser } = usePermissionState();
+  const {
+    hasPermission,
+    loading: permissionsLoading,
+    currentUser,
+  } = usePermissionState();
 
-  const [createOpen, setCreateOpen] = useState(() => searchParams.get('new') === '1');
+  const [createOpen, setCreateOpen] = useState(
+    () => searchParams.get('new') === '1',
+  );
   const [newName, setNewName] = useState('');
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
@@ -240,10 +331,15 @@ function ReportsList() {
   const [deleteTarget, setDeleteTarget] = useState<ReportListItem | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
-  const [actionError, setActionError] = useState<{ title: string; message: string } | null>(null);
+  const [actionError, setActionError] = useState<{
+    title: string;
+    message: string;
+  } | null>(null);
 
   const messageFromError = (err: unknown, fallback: string): string => {
-    return err instanceof globalThis.Error && err.message ? err.message : fallback;
+    return err instanceof globalThis.Error && err.message
+      ? err.message
+      : fallback;
   };
 
   const handleCreate = async () => {
@@ -255,7 +351,7 @@ function ReportsList() {
       await saveReportVersion(
         item.report_id,
         { name: newName.trim(), rows: [], schema_version: 1 },
-        'Initial version'
+        'Initial version',
       );
       setCreateOpen(false);
       setNewName('');
@@ -288,13 +384,19 @@ function ReportsList() {
 
   const handleToggleAccess = async (report: ReportListItem) => {
     try {
-      await updateReportVisibility(report.report_id, report.access.scope === 'public' ? 'private' : 'public');
+      await updateReportVisibility(
+        report.report_id,
+        report.access.scope === 'public' ? 'private' : 'public',
+      );
       refresh();
       refreshDashboard();
     } catch (err) {
       setActionError({
-        title: report.access.scope === 'public' ? 'Could not unpublish report' : 'Could not publish report',
-        message: messageFromError(err, 'Failed to update report visibility')
+        title:
+          report.access.scope === 'public'
+            ? 'Could not unpublish report'
+            : 'Could not publish report',
+        message: messageFromError(err, 'Failed to update report visibility'),
       });
     }
   };
@@ -345,13 +447,31 @@ function ReportsList() {
       render: (report) => {
         const isDashboard = report.report_id === dashboardReportId;
         return (
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minWidth: 0, flexWrap: 'nowrap', overflow: 'hidden' }}>
+          <Box
+            sx={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 1,
+              minWidth: 0,
+              flexWrap: 'nowrap',
+              overflow: 'hidden',
+            }}
+          >
             <Link
               component={RouterLink}
               to={`/app/reports/${report.report_id}`}
               underline="hover"
               color="inherit"
-              sx={{ flex: '1 1 auto', minWidth: 0, maxWidth: '100%', display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontWeight: 'medium' }}
+              sx={{
+                flex: '1 1 auto',
+                minWidth: 0,
+                maxWidth: '100%',
+                display: 'block',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+                fontWeight: 'medium',
+              }}
             >
               {report.name}
             </Link>
@@ -370,7 +490,9 @@ function ReportsList() {
             {isDashboard && (
               <Tooltip title="Currently set as the dashboard">
                 <Chip
-                  icon={<DashboardIcon sx={{ fontSize: '0.85rem !important' }} />}
+                  icon={
+                    <DashboardIcon sx={{ fontSize: '0.85rem !important' }} />
+                  }
                   label="Dashboard"
                   size="small"
                   color="primary"
@@ -381,19 +503,27 @@ function ReportsList() {
             )}
           </Box>
         );
-      }
+      },
     },
     {
       key: 'visibility',
       label: 'Visibility',
       cellSx: { width: 104 },
       render: (report) => (
-        <Tooltip title={report.access.scope === 'public' ? 'Visible to report readers' : 'Private to the owner'}>
+        <Tooltip
+          title={
+            report.access.scope === 'public'
+              ? 'Visible to report readers'
+              : 'Private to the owner'
+          }
+        >
           <Chip
             icon={
-              report.access.scope === 'public'
-                ? <PublicIcon sx={{ fontSize: '0.85rem !important' }} />
-                : <LockIcon sx={{ fontSize: '0.85rem !important' }} />
+              report.access.scope === 'public' ? (
+                <PublicIcon sx={{ fontSize: '0.85rem !important' }} />
+              ) : (
+                <LockIcon sx={{ fontSize: '0.85rem !important' }} />
+              )
             }
             label={report.access.scope === 'public' ? 'Public' : 'Draft'}
             size="small"
@@ -401,28 +531,30 @@ function ReportsList() {
             variant="outlined"
           />
         </Tooltip>
-      )
+      ),
     },
     {
       key: 'version',
       label: 'Version',
       hideBelow: 'sm',
       cellSx: { ...listTableSecondaryCellSx, width: 96 },
-      render: (report) => `v${report.current_version}`
+      render: (report) => `v${report.current_version}`,
     },
     {
       key: 'updated_at',
       label: 'Last updated',
       hideBelow: 'md',
       cellSx: { ...listTableSecondaryCellSx, width: 200 },
-      render: (report) => new Date(report.updated_at).toLocaleString()
+      render: (report) => new Date(report.updated_at).toLocaleString(),
     },
     {
       key: 'updated_by',
       label: 'Updated by',
       hideBelow: 'lg',
       cellSx: { ...listTableSecondaryCellSx, width: 150 },
-      render: (report) => <UserDisplay userId={report.updated_by || report.created_by} />
+      render: (report) => (
+        <UserDisplay userId={report.updated_by || report.created_by} />
+      ),
     },
     {
       key: 'actions',
@@ -437,8 +569,14 @@ function ReportsList() {
             isDashboard={isDashboard}
             onSetDashboard={() => handleSetDashboard(report.report_id)}
             onPin={() => handlePin(report.report_id, !report.pinned)}
-            onEdit={() => navigate(`/app/reports/${report.report_id}?edit=true`)}
-            onHistory={() => navigate(`/app/reports/${report.report_id}/history`, { state: { fromLabel: 'Reports' } satisfies BackState })}
+            onEdit={() =>
+              navigate(`/app/reports/${report.report_id}?edit=true`)
+            }
+            onHistory={() =>
+              navigate(`/app/reports/${report.report_id}/history`, {
+                state: { fromLabel: 'Reports' } satisfies BackState,
+              })
+            }
             onClone={() => handleCloneOpen(report)}
             onToggleAccess={() => handleToggleAccess(report)}
             onDelete={() => {
@@ -449,55 +587,58 @@ function ReportsList() {
             hasPermission={hasPermission}
           />
         );
-      }
-    }
-  ];
-  const filterGroups: ListTableFilterGroup<ReportListItem>[] = useMemo(() => [
-    {
-      key: 'visibility',
-      label: 'Visibility',
-      icon: <PublicIcon fontSize="small" />,
-      options: [
-        {
-          key: 'draft',
-          label: 'Draft',
-          icon: <DraftsIcon fontSize="small" />,
-          matches: (report) => report.access.scope === 'private'
-        },
-        {
-          key: 'public',
-          label: 'Public',
-          icon: <PublicIcon fontSize="small" />,
-          matches: (report) => report.access.scope === 'public'
-        }
-      ]
+      },
     },
-    {
-      key: 'state',
-      label: 'State',
-      icon: <BadgeIcon fontSize="small" />,
-      options: [
-        {
-          key: 'pinned',
-          label: 'Pinned',
-          icon: <PinIcon fontSize="small" />,
-          matches: (report) => report.pinned
-        },
-        {
-          key: 'dashboard',
-          label: 'Dashboard',
-          icon: <DashboardIcon fontSize="small" />,
-          matches: (report) => report.report_id === dashboardReportId
-        },
-        {
-          key: 'unpinned',
-          label: 'Not pinned',
-          icon: <PushPinOutlinedIcon fontSize="small" />,
-          matches: (report) => !report.pinned
-        }
-      ]
-    }
-  ], [dashboardReportId]);
+  ];
+  const filterGroups: ListTableFilterGroup<ReportListItem>[] = useMemo(
+    () => [
+      {
+        key: 'visibility',
+        label: 'Visibility',
+        icon: <PublicIcon fontSize="small" />,
+        options: [
+          {
+            key: 'draft',
+            label: 'Draft',
+            icon: <DraftsIcon fontSize="small" />,
+            matches: (report) => report.access.scope === 'private',
+          },
+          {
+            key: 'public',
+            label: 'Public',
+            icon: <PublicIcon fontSize="small" />,
+            matches: (report) => report.access.scope === 'public',
+          },
+        ],
+      },
+      {
+        key: 'state',
+        label: 'State',
+        icon: <BadgeIcon fontSize="small" />,
+        options: [
+          {
+            key: 'pinned',
+            label: 'Pinned',
+            icon: <PinIcon fontSize="small" />,
+            matches: (report) => report.pinned,
+          },
+          {
+            key: 'dashboard',
+            label: 'Dashboard',
+            icon: <DashboardIcon fontSize="small" />,
+            matches: (report) => report.report_id === dashboardReportId,
+          },
+          {
+            key: 'unpinned',
+            label: 'Not pinned',
+            icon: <PushPinOutlinedIcon fontSize="small" />,
+            matches: (report) => !report.pinned,
+          },
+        ],
+      },
+    ],
+    [dashboardReportId],
+  );
 
   return (
     <>
@@ -506,11 +647,20 @@ function ReportsList() {
       </Helmet>
       <Box sx={pageContentSx}>
         <Box
-          sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}
+          sx={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            mb: 3,
+          }}
         >
           <Typography variant="h1">Reports</Typography>
           {!permissionsLoading && hasPermission('reports:write') && (
-            <Button variant="contained" startIcon={<Add />} onClick={() => setCreateOpen(true)}>
+            <Button
+              variant="contained"
+              startIcon={<Add />}
+              onClick={() => setCreateOpen(true)}
+            >
               New report
             </Button>
           )}
@@ -623,7 +773,12 @@ function ReportsList() {
       </Dialog>
 
       {/* Delete confirmation dialog */}
-      <Dialog open={!!deleteTarget} onClose={() => setDeleteTarget(null)} maxWidth="xs" fullWidth>
+      <Dialog
+        open={!!deleteTarget}
+        onClose={() => setDeleteTarget(null)}
+        maxWidth="xs"
+        fullWidth
+      >
         <DialogTitle>Delete report?</DialogTitle>
         <DialogContent>
           {deleteError && (
@@ -632,8 +787,8 @@ function ReportsList() {
             </Box>
           )}
           <DialogContentText>
-            Permanently delete <strong>{deleteTarget?.name}</strong> and all its versions? This
-            cannot be undone.
+            Permanently delete <strong>{deleteTarget?.name}</strong> and all its
+            versions? This cannot be undone.
           </DialogContentText>
         </DialogContent>
         <DialogActions>
@@ -651,7 +806,12 @@ function ReportsList() {
         </DialogActions>
       </Dialog>
 
-      <Dialog open={!!actionError} onClose={() => setActionError(null)} maxWidth="xs" fullWidth>
+      <Dialog
+        open={!!actionError}
+        onClose={() => setActionError(null)}
+        maxWidth="xs"
+        fullWidth
+      >
         <DialogTitle>{actionError?.title}</DialogTitle>
         <DialogContent>
           <DialogContentText>{actionError?.message}</DialogContentText>

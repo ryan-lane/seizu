@@ -9,14 +9,13 @@ import Schedule from '@mui/icons-material/Schedule';
 import Extension from '@mui/icons-material/Extension';
 import Psychology from '@mui/icons-material/Psychology';
 import AdminPanelSettings from '@mui/icons-material/AdminPanelSettings';
-import NavItem from 'src/components/NavItem';
+import NavItem, { NavItemData } from 'src/components/NavItem';
 import Hidden from 'src/components/Hidden';
-import { NavItemData } from 'src/components/NavItem';
 import { useReportsList } from 'src/hooks/useReportsApi';
 import { usePermissions } from 'src/hooks/usePermissions';
 import {
   DASHBOARD_SIDEBAR_EXPANDED_WIDTH,
-  DASHBOARD_SIDEBAR_WIDTH_VAR
+  DASHBOARD_SIDEBAR_WIDTH_VAR,
 } from 'src/components/dashboardLayoutConstants';
 
 interface DashboardSidebarProps {
@@ -28,67 +27,71 @@ interface DashboardSidebarProps {
 function DashboardSidebar({
   collapsed = false,
   onMobileClose = () => {},
-  openMobile = false
+  openMobile = false,
 }: DashboardSidebarProps) {
   const theme = useTheme();
   const { reports } = useReportsList();
   const hasPermission = usePermissions();
   const logoSrc = collapsed
-    ? (theme.palette.mode === 'dark'
-        ? '/static/images/logo-mark.svg'
-        : '/static/images/logo-mark-light.svg')
-    : (theme.palette.mode === 'dark'
-        ? '/static/images/logo-horizontal-white.svg'
-        : '/static/images/logo-horizontal-black.svg');
+    ? theme.palette.mode === 'dark'
+      ? '/static/images/logo-mark.svg'
+      : '/static/images/logo-mark-light.svg'
+    : theme.palette.mode === 'dark'
+      ? '/static/images/logo-horizontal-white.svg'
+      : '/static/images/logo-horizontal-black.svg';
   const reportSubitems: NavItemData[] = reports
     .filter((report) => report.pinned)
     .map((report) => ({
       href: `/app/reports/${report.report_id}`,
       title: report.name,
-      icon: Article
+      icon: Article,
     }));
 
   const items: NavItemData[] = [
     {
       href: '/app/dashboard',
       icon: Dashboard,
-      title: 'Dashboard'
+      title: 'Dashboard',
     },
     {
       href: '/app/reports',
       icon: Insights,
       title: 'Reports',
-      subItems: reportSubitems.length > 0 ? reportSubitems : undefined
+      subItems: reportSubitems.length > 0 ? reportSubitems : undefined,
     },
     ...(hasPermission('query:execute')
-      ? [{
-          href: '/app/query-console',
-          icon: Terminal,
-          title: 'Query Console'
-        }]
+      ? [
+          {
+            href: '/app/query-console',
+            icon: Terminal,
+            title: 'Query Console',
+          },
+        ]
       : []),
     {
       href: '/app/scheduled-queries',
       icon: Schedule,
-      title: 'Scheduled Queries'
+      title: 'Scheduled Queries',
     },
     {
       href: '/app/toolsets',
       icon: Extension,
-      title: 'MCP Toolsets'
+      title: 'MCP Toolsets',
     },
     {
       href: '/app/skillsets',
       icon: Psychology,
-      title: 'MCP Skillsets'
+      title: 'MCP Skillsets',
     },
     ...(hasPermission('roles:read')
-      ? [{
-          href: '/app/roles',
-          icon: AdminPanelSettings,
-          title: 'Roles'
-        }]
-      : [])
+      ? [
+          {
+            href: '/app/roles',
+            icon: AdminPanelSettings,
+            title: 'Roles',
+          },
+        ]
+      : []),
   ];
 
   const content = (isCollapsed: boolean) => (
@@ -97,7 +100,7 @@ function DashboardSidebar({
         display: 'flex',
         flexDirection: 'column',
         height: '100%',
-        overflowX: 'hidden'
+        overflowX: 'hidden',
       }}
     >
       <Box
@@ -109,7 +112,7 @@ function DashboardSidebar({
           height: 68,
           justifyContent: isCollapsed ? 'center' : 'flex-start',
           px: isCollapsed ? 1 : 2,
-          textDecoration: 'none'
+          textDecoration: 'none',
         }}
       >
         <Box
@@ -120,7 +123,7 @@ function DashboardSidebar({
             display: 'block',
             height: isCollapsed ? 34 : 42,
             maxWidth: '100%',
-            objectFit: 'contain'
+            objectFit: 'contain',
           }}
         />
       </Box>
@@ -152,9 +155,9 @@ function DashboardSidebar({
           slotProps={{
             paper: {
               sx: {
-                width: DASHBOARD_SIDEBAR_EXPANDED_WIDTH
-              }
-            }
+                width: DASHBOARD_SIDEBAR_EXPANDED_WIDTH,
+              },
+            },
           }}
         >
           {content(false)}
@@ -173,10 +176,10 @@ function DashboardSidebar({
                 height: '100%',
                 overflowX: 'hidden',
                 transition: theme.transitions.create('width', {
-                  duration: theme.transitions.duration.shorter
-                })
-              })
-            }
+                  duration: theme.transitions.duration.shorter,
+                }),
+              }),
+            },
           }}
         >
           {content(collapsed)}

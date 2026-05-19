@@ -7,16 +7,20 @@ import {
   CardContent,
   CircularProgress,
   TextField,
-  Typography
+  Typography,
 } from '@mui/material';
 import PlayArrow from '@mui/icons-material/PlayArrow';
 import CypherGraph from 'src/components/reports/CypherGraph';
 import QueryConsoleSchemaPanel from 'src/components/QueryConsoleSchemaPanel';
 import { usePermissionState } from 'src/hooks/usePermissions';
-import { useFetchHistoryItem, QueryHistoryItem } from 'src/hooks/useQueryHistory';
+import {
+  useFetchHistoryItem,
+  QueryHistoryItem,
+} from 'src/hooks/useQueryHistory';
 import { pageContentSx } from 'src/theme/layout';
 
-const QUERY_CONSOLE_SCHEMA_PANEL_STORAGE_KEY = 'seizu:query-console:schema-panel-open';
+const QUERY_CONSOLE_SCHEMA_PANEL_STORAGE_KEY =
+  'seizu:query-console:schema-panel-open';
 
 export default function QueryConsole() {
   const { hasPermission, loading: permissionsLoading } = usePermissionState();
@@ -24,12 +28,18 @@ export default function QueryConsole() {
   const location = useLocation();
   const fetchHistoryItem = useFetchHistoryItem();
   const [queryText, setQueryText] = useState('');
-  const [submittedQuery, setSubmittedQuery] = useState<string | undefined>(undefined);
-  const [submittedHistoryId, setSubmittedHistoryId] = useState<string | undefined>(undefined);
+  const [submittedQuery, setSubmittedQuery] = useState<string | undefined>(
+    undefined,
+  );
+  const [submittedHistoryId, setSubmittedHistoryId] = useState<
+    string | undefined
+  >(undefined);
   const [runKey, setRunKey] = useState(0);
   const [schemaPanelOpen, setSchemaPanelOpen] = useState(() => {
     if (typeof window === 'undefined') return true;
-    const storedValue = window.localStorage.getItem(QUERY_CONSOLE_SCHEMA_PANEL_STORAGE_KEY);
+    const storedValue = window.localStorage.getItem(
+      QUERY_CONSOLE_SCHEMA_PANEL_STORAGE_KEY,
+    );
     return storedValue === null ? true : storedValue === 'true';
   });
   const [historyRefreshTrigger, setHistoryRefreshTrigger] = useState(0);
@@ -41,13 +51,16 @@ export default function QueryConsole() {
   // so we can skip re-running when our own navigate() triggers a location change.
   const justPushedRef = useRef<string | null>(null);
 
-  const handleQueryComplete = useCallback((historyId: string | null) => {
-    if (historyId) {
-      setHistoryRefreshTrigger((n) => n + 1);
-      justPushedRef.current = historyId;
-      navigate(`?h=${historyId}`);
-    }
-  }, [navigate]);
+  const handleQueryComplete = useCallback(
+    (historyId: string | null) => {
+      if (historyId) {
+        setHistoryRefreshTrigger((n) => n + 1);
+        justPushedRef.current = historyId;
+        navigate(`?h=${historyId}`);
+      }
+    },
+    [navigate],
+  );
 
   // Restore and re-run query when URL changes via browser back/forward.
   useEffect(() => {
@@ -65,7 +78,9 @@ export default function QueryConsole() {
       if (cancelled || !item) return;
       setQueryText(item.query);
     });
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [location.search, fetchHistoryItem]);
 
   const queryTextRef = useRef(queryText);
@@ -79,11 +94,14 @@ export default function QueryConsole() {
     setRunKey((k) => k + 1);
   }, []);
 
-  const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
-      handleRun();
-    }
-  }, [handleRun]);
+  const handleKeyDown = useCallback(
+    (e: React.KeyboardEvent) => {
+      if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+        handleRun();
+      }
+    },
+    [handleRun],
+  );
 
   /** Insert a query from the schema browser and run it immediately. */
   const handleQuerySelect = useCallback((query: string) => {
@@ -94,14 +112,17 @@ export default function QueryConsole() {
   }, []);
 
   /** Load a query from history into the editor and re-execute by history ID. */
-  const handleHistorySelect = useCallback((item: QueryHistoryItem) => {
-    setQueryText(item.query);
-    setSubmittedHistoryId(item.history_id);
-    setSubmittedQuery(undefined);
-    setRunKey((k) => k + 1);
-    justPushedRef.current = item.history_id;
-    navigate(`?h=${item.history_id}`);
-  }, [navigate]);
+  const handleHistorySelect = useCallback(
+    (item: QueryHistoryItem) => {
+      setQueryText(item.query);
+      setSubmittedHistoryId(item.history_id);
+      setSubmittedQuery(undefined);
+      setRunKey((k) => k + 1);
+      justPushedRef.current = item.history_id;
+      navigate(`?h=${item.history_id}`);
+    },
+    [navigate],
+  );
 
   const handleSchemaPanelToggle = useCallback((tab?: 'schema' | 'history') => {
     if (tab) {
@@ -114,7 +135,7 @@ export default function QueryConsole() {
   useEffect(() => {
     window.localStorage.setItem(
       QUERY_CONSOLE_SCHEMA_PANEL_STORAGE_KEY,
-      String(schemaPanelOpen)
+      String(schemaPanelOpen),
     );
   }, [schemaPanelOpen]);
 
@@ -129,7 +150,7 @@ export default function QueryConsole() {
       const handleMouseMove = (ev: MouseEvent) => {
         const delta = dragStartY.current - ev.clientY;
         setQueryHeight(
-          Math.max(100, Math.min(600, dragStartHeight.current + delta))
+          Math.max(100, Math.min(600, dragStartHeight.current + delta)),
         );
       };
 
@@ -143,7 +164,7 @@ export default function QueryConsole() {
       document.addEventListener('mousemove', handleMouseMove);
       document.addEventListener('mouseup', handleMouseUp);
     },
-    [queryHeight]
+    [queryHeight],
   );
 
   if (permissionsLoading) {
@@ -184,12 +205,12 @@ export default function QueryConsole() {
           ...pageContentSx,
           boxSizing: 'border-box',
           minWidth: 0,
-          overflow: 'hidden'
+          overflow: 'hidden',
         }}
       >
         {/* Graph panel — detail panel open by default in the console */}
         <Box sx={{ flex: 1, minHeight: 0, overflow: 'hidden' }}>
-          {(submittedQuery || submittedHistoryId) ? (
+          {submittedQuery || submittedHistoryId ? (
             <CypherGraph
               cypher={submittedHistoryId ? undefined : submittedQuery}
               queryHistoryId={submittedHistoryId}
@@ -204,7 +225,7 @@ export default function QueryConsole() {
                 height: '100%',
                 display: 'flex',
                 alignItems: 'center',
-                justifyContent: 'center'
+                justifyContent: 'center',
               }}
             >
               <CardContent>
@@ -279,8 +300,8 @@ export default function QueryConsole() {
                 }}
                 slotProps={{
                   htmlInput: {
-                    style: { fontFamily: 'monospace', fontSize: 13 }
-                  }
+                    style: { fontFamily: 'monospace', fontSize: 13 },
+                  },
                 }}
               />
               <Box

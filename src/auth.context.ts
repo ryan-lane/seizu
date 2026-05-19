@@ -10,5 +10,5 @@ export interface AuthContextValue {
 export const AuthContext = createContext<AuthContextValue>({
   user: null,
   accessToken: null,
-  isLoading: false
+  isLoading: false,
 });

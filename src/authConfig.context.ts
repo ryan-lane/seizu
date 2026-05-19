@@ -19,5 +19,5 @@ export interface AuthConfig {
 export const AuthConfigContext = createContext<AuthConfig>({
   auth_required: true,
   oidc: null,
-  userManager: null
+  userManager: null,
 });

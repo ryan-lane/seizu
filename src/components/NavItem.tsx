@@ -2,11 +2,20 @@ import React from 'react';
 import {
   NavLink as RouterLink,
   matchPath,
-  useLocation
+  useLocation,
 } from 'react-router-dom';
 import ExpandLess from '@mui/icons-material/ExpandLess';
 import ExpandMore from '@mui/icons-material/ExpandMore';
-import { Box, Button, Collapse, List, ListItem, SxProps, Theme, Tooltip } from '@mui/material';
+import {
+  Box,
+  Button,
+  Collapse,
+  List,
+  ListItem,
+  SxProps,
+  Theme,
+  Tooltip,
+} from '@mui/material';
 import { SvgIconComponent } from '@mui/icons-material';
 
 export interface NavItemData {
@@ -21,7 +30,14 @@ interface NavItemProps extends NavItemData {
   sx?: SxProps<Theme>;
 }
 
-function NavItem({ collapsed = false, href, icon: Icon, title, subItems, ...rest }: NavItemProps) {
+function NavItem({
+  collapsed = false,
+  href,
+  icon: Icon,
+  title,
+  subItems,
+  ...rest
+}: NavItemProps) {
   const location = useLocation();
 
   const [open, setOpen] = React.useState(true);
@@ -29,9 +45,9 @@ function NavItem({ collapsed = false, href, icon: Icon, title, subItems, ...rest
     ? !!matchPath(
         {
           path: href,
-          end: true
+          end: true,
         },
-        location.pathname
+        location.pathname,
       )
     : false;
 
@@ -46,7 +62,7 @@ function NavItem({ collapsed = false, href, icon: Icon, title, subItems, ...rest
             minWidth: 0,
             overflow: 'hidden',
             textOverflow: 'ellipsis',
-            whiteSpace: 'nowrap'
+            whiteSpace: 'nowrap',
           }}
         >
           {title}
@@ -67,8 +83,8 @@ function NavItem({ collapsed = false, href, icon: Icon, title, subItems, ...rest
     textTransform: 'none',
     width: '100%',
     ...(active && {
-      color: 'primary.main'
-    })
+      color: 'primary.main',
+    }),
   };
 
   if (subItems === undefined) {
@@ -79,7 +95,7 @@ function NavItem({ collapsed = false, href, icon: Icon, title, subItems, ...rest
           sx={{
             display: 'flex',
             py: 0,
-            ...(rest.sx as object)
+            ...(rest.sx as object),
           }}
         >
           <Button
@@ -98,7 +114,9 @@ function NavItem({ collapsed = false, href, icon: Icon, title, subItems, ...rest
       <Tooltip title={title} placement="right">
         {item}
       </Tooltip>
-    ) : item;
+    ) : (
+      item
+    );
   }
 
   if (collapsed) {
@@ -109,7 +127,7 @@ function NavItem({ collapsed = false, href, icon: Icon, title, subItems, ...rest
           sx={{
             display: 'flex',
             py: 0,
-            ...(rest.sx as object)
+            ...(rest.sx as object),
           }}
         >
           <Button
@@ -137,7 +155,7 @@ function NavItem({ collapsed = false, href, icon: Icon, title, subItems, ...rest
         disableGutters
         sx={{
           display: 'flex',
-          py: 0
+          py: 0,
         }}
       >
         <Button
@@ -145,7 +163,7 @@ function NavItem({ collapsed = false, href, icon: Icon, title, subItems, ...rest
           to={href}
           sx={{
             ...buttonSx,
-            flex: 1
+            flex: 1,
           }}
         >
           {buttonContent}

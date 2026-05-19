@@ -12,7 +12,7 @@ import {
   ListItemIcon,
   ListItemText,
   Tooltip,
-  Typography
+  Typography,
 } from '@mui/material';
 import ErrorOutlineIcon from '@mui/icons-material/Error';
 import ErrorIcon from '@mui/icons-material/Error';
@@ -24,7 +24,10 @@ interface QueryValidationBadgeProps {
   warnings: string[];
 }
 
-export default function QueryValidationBadge({ errors, warnings }: QueryValidationBadgeProps) {
+export default function QueryValidationBadge({
+  errors,
+  warnings,
+}: QueryValidationBadgeProps) {
   const [open, setOpen] = useState(false);
 
   if (errors.length === 0 && warnings.length === 0) return null;
@@ -39,12 +42,19 @@ export default function QueryValidationBadge({ errors, warnings }: QueryValidati
           color={hasErrors ? 'error' : 'warning'}
           onClick={() => setOpen(true)}
         >
-          {hasErrors
-            ? <ErrorOutlineIcon fontSize="small" />
-            : <WarningAmberIcon fontSize="small" />}
+          {hasErrors ? (
+            <ErrorOutlineIcon fontSize="small" />
+          ) : (
+            <WarningAmberIcon fontSize="small" />
+          )}
         </IconButton>
       </Tooltip>
-      <Dialog open={open} onClose={() => setOpen(false)} maxWidth="sm" fullWidth>
+      <Dialog
+        open={open}
+        onClose={() => setOpen(false)}
+        maxWidth="sm"
+        fullWidth
+      >
         <DialogTitle>Query Validation Issues</DialogTitle>
         <DialogContent>
           {errors.length > 0 && (
@@ -65,7 +75,9 @@ export default function QueryValidationBadge({ errors, warnings }: QueryValidati
               </List>
             </>
           )}
-          {errors.length > 0 && warnings.length > 0 && <Divider sx={{ my: 1 }} />}
+          {errors.length > 0 && warnings.length > 0 && (
+            <Divider sx={{ my: 1 }} />
+          )}
           {warnings.length > 0 && (
             <>
               <Typography variant="subtitle1" color="warning.main" gutterBottom>

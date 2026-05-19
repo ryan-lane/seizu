@@ -4,7 +4,7 @@ import {
   defaultMinHeight,
   defaultPanelHeight,
   defaultPanelWidth,
-  deriveRowLayout
+  deriveRowLayout,
 } from '../panelLayout';
 
 describe('defaultPanelHeight', () => {
@@ -54,7 +54,7 @@ describe('deriveRowLayout', () => {
     const panels: Panel[] = [
       { type: 'count', w: 3 },
       { type: 'count', w: 4 },
-      { type: 'count', w: 5 }
+      { type: 'count', w: 5 },
     ];
     const layout = deriveRowLayout(panels);
 
@@ -67,7 +67,7 @@ describe('deriveRowLayout', () => {
   it('wraps to a new row when cumulative width exceeds cols', () => {
     const panels: Panel[] = [
       { type: 'count', w: 8 },
-      { type: 'count', w: 5 }
+      { type: 'count', w: 5 },
     ];
     const layout = deriveRowLayout(panels);
 
@@ -78,7 +78,7 @@ describe('deriveRowLayout', () => {
   it('honors explicit x and y coordinates', () => {
     const panels: Panel[] = [
       { type: 'count', w: 3, x: 6, y: 0 },
-      { type: 'count', w: 3, x: 9, y: 0 }
+      { type: 'count', w: 3, x: 9, y: 0 },
     ];
     const layout = deriveRowLayout(panels);
 
@@ -90,7 +90,7 @@ describe('deriveRowLayout', () => {
     const panels: Panel[] = [
       { type: 'count' },
       { type: 'table' },
-      { type: 'graph' }
+      { type: 'graph' },
     ];
     const layout = deriveRowLayout(panels);
 
@@ -125,7 +125,7 @@ describe('buildResponsiveLayouts', () => {
   it('doubles widths at xs to mirror legacy mobile behavior', () => {
     const panels: Panel[] = [
       { type: 'count', w: 3 },
-      { type: 'count', w: 4 }
+      { type: 'count', w: 4 },
     ];
     const layouts = buildResponsiveLayouts(panels);
 
@@ -145,7 +145,7 @@ describe('buildResponsiveLayouts', () => {
     const panels: Panel[] = [
       { type: 'count', w: 4 },
       { type: 'count', w: 4 },
-      { type: 'count', w: 4 }
+      { type: 'count', w: 4 },
     ];
     const layouts = buildResponsiveLayouts(panels);
 

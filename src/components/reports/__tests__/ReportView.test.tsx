@@ -23,34 +23,34 @@ import { Report } from 'src/config.context';
 // ---------------------------------------------------------------------------
 
 jest.mock('src/hooks/useCypherQuery', () => ({
-  useLazyCypherQuery: jest.fn()
+  useLazyCypherQuery: jest.fn(),
 }));
 
 // CypherAutocomplete calls useLazyCypherQuery for input options — mock it so
 // only the panel's hook call is counted.
 jest.mock('src/components/reports/CypherAutocomplete', () => ({
   __esModule: true,
-  default: () => null
+  default: () => null,
 }));
 
 // These panel types are not used in the tests below but imported by ReportView.
 jest.mock('src/components/reports/CypherPie', () => ({
   __esModule: true,
-  default: () => null
+  default: () => null,
 }));
 
 jest.mock('src/components/reports/CypherBar', () => ({
   __esModule: true,
-  default: () => null
+  default: () => null,
 }));
 
 jest.mock('src/components/reports/CypherVerticalTable', () => ({
   __esModule: true,
-  default: () => null
+  default: () => null,
 }));
 
 jest.mock('src/components/QueryString', () => ({
-  getQueryStringValue: () => undefined
+  getQueryStringValue: () => undefined,
 }));
 
 const { useLazyCypherQuery } = require('src/hooks/useCypherQuery');
@@ -66,16 +66,21 @@ const defaultState = {
   records: undefined,
   first: undefined,
   warnings: [],
-  queryErrors: []
+  queryErrors: [],
 };
 
 const QUERIES: Record<string, string> = {
   'cves-total': 'MATCH (c:CVE) RETURN count(c.id) AS total',
-  'cves-severity': 'MATCH (c:CVE) WHERE c.base_severity = $base_severity RETURN count(c) AS total',
-  'cves-list': 'MATCH (c:CVE) WHERE c.base_severity =~ ($base_severity) RETURN c'
+  'cves-severity':
+    'MATCH (c:CVE) WHERE c.base_severity = $base_severity RETURN count(c) AS total',
+  'cves-list':
+    'MATCH (c:CVE) WHERE c.base_severity =~ ($base_severity) RETURN c',
 };
 
-function makeReport(panels: Report['rows'][0]['panels'], queries?: Record<string, string>): Report {
+function makeReport(
+  panels: Report['rows'][0]['panels'],
+  queries?: Record<string, string>,
+): Report {
   return {
     name: 'Test',
     queries: queries ?? QUERIES,
@@ -84,10 +89,10 @@ function makeReport(panels: Report['rows'][0]['panels'], queries?: Record<string
         input_id: 'cve_severity',
         type: 'autocomplete',
         label: 'Base Severity',
-        cypher: 'MATCH (c:CVE) RETURN DISTINCT c.base_severity AS value'
-      }
+        cypher: 'MATCH (c:CVE) RETURN DISTINCT c.base_severity AS value',
+      },
     ],
-    rows: [{ name: 'Row 1', panels }]
+    rows: [{ name: 'Row 1', panels }],
   };
 }
 
@@ -110,17 +115,19 @@ describe('ReportView param building', () => {
       {
         type: 'count',
         cypher: 'cves-total',
-        caption: 'Total CVEs'
-      }
+        caption: 'Total CVEs',
+      },
     ]);
 
     render(
       <Wrapper>
         <ReportView report={report} title="Executive Risk Report" showTitle />
-      </Wrapper>
+      </Wrapper>,
     );
 
-    expect(screen.getByRole('heading', { name: 'Executive Risk Report', level: 1 })).toBeInTheDocument();
+    expect(
+      screen.getByRole('heading', { name: 'Executive Risk Report', level: 1 }),
+    ).toBeInTheDocument();
   });
 
   it('does not render the report title as a heading by default', () => {
@@ -128,17 +135,19 @@ describe('ReportView param building', () => {
       {
         type: 'count',
         cypher: 'cves-total',
-        caption: 'Total CVEs'
-      }
+        caption: 'Total CVEs',
+      },
     ]);
 
     render(
       <Wrapper>
         <ReportView report={report} title="Dashboard" />
-      </Wrapper>
+      </Wrapper>,
     );
 
-    expect(screen.queryByRole('heading', { name: 'Dashboard', level: 1 })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('heading', { name: 'Dashboard', level: 1 }),
+    ).not.toBeInTheDocument();
   });
 
   it('passes static value params correctly to panel', () => {
@@ -147,19 +156,22 @@ describe('ReportView param building', () => {
         type: 'count',
         cypher: 'cves-severity',
         caption: 'Critical CVEs',
-        params: [{ name: 'base_severity', value: 'CRITICAL' }]
-      }
+        params: [{ name: 'base_severity', value: 'CRITICAL' }],
+      },
     ]);
 
     render(
       <Wrapper>
         <ReportView report={report} title="Test" />
-      </Wrapper>
+      </Wrapper>,
     );
 
     // useLazyCypherQuery is called once for the panel (autocomplete is mocked).
     // runQuery is called by the panel's useEffect with the built params dict.
-    expect(mockRunQuery).toHaveBeenCalledWith({ base_severity: 'CRITICAL' }, { force: false });
+    expect(mockRunQuery).toHaveBeenCalledWith(
+      { base_severity: 'CRITICAL' },
+      { force: false },
+    );
   });
 
   it('adds to needInputs when value key is absent (as after DynamoDB _strip_none)', () => {
@@ -171,14 +183,14 @@ describe('ReportView param building', () => {
         type: 'count',
         cypher: 'cves-list',
         caption: 'CVE Table',
-        params: [{ name: 'base_severity', input_id: 'cve_severity' }]
-      }
+        params: [{ name: 'base_severity', input_id: 'cve_severity' }],
+      },
     ]);
 
     render(
       <Wrapper>
         <ReportView report={report} title="Test" />
-      </Wrapper>
+      </Wrapper>,
     );
 
     // No value in varData yet → panel should not execute the query.
@@ -195,14 +207,20 @@ describe('ReportView param building', () => {
         type: 'count',
         cypher: 'cves-list',
         caption: 'CVE Table',
-        params: [{ name: 'base_severity', value: null as unknown as string, input_id: 'cve_severity' }]
-      }
+        params: [
+          {
+            name: 'base_severity',
+            value: null as unknown as string,
+            input_id: 'cve_severity',
+          },
+        ],
+      },
     ]);
 
     render(
       <Wrapper>
         <ReportView report={report} title="Test" />
-      </Wrapper>
+      </Wrapper>,
     );
 
     expect(mockRunQuery).not.toHaveBeenCalled();
@@ -216,17 +234,20 @@ describe('ReportView param building', () => {
         cypher: 'cves-severity',
         caption: 'Critical CVEs',
         threshold: 0,
-        params: [{ name: 'base_severity', value: 'CRITICAL' }]
-      }
+        params: [{ name: 'base_severity', value: 'CRITICAL' }],
+      },
     ]);
 
     render(
       <Wrapper>
         <ReportView report={report} title="Test" />
-      </Wrapper>
+      </Wrapper>,
     );
 
-    expect(mockRunQuery).toHaveBeenCalledWith({ base_severity: 'CRITICAL' }, { force: false });
+    expect(mockRunQuery).toHaveBeenCalledWith(
+      { base_severity: 'CRITICAL' },
+      { force: false },
+    );
   });
 
   it('passes empty params when panel has no params defined', () => {
@@ -234,14 +255,14 @@ describe('ReportView param building', () => {
       {
         type: 'count',
         cypher: 'cves-total',
-        caption: 'Total CVEs'
-      }
+        caption: 'Total CVEs',
+      },
     ]);
 
     render(
       <Wrapper>
         <ReportView report={report} title="Test" />
-      </Wrapper>
+      </Wrapper>,
     );
 
     expect(mockRunQuery).toHaveBeenCalledWith({}, { force: false });
@@ -255,18 +276,21 @@ describe('ReportView param building', () => {
         caption: 'CVEs',
         params: [
           { name: 'base_severity', value: 'HIGH' },
-          { name: 'limit', value: '10' }
-        ]
-      }
+          { name: 'limit', value: '10' },
+        ],
+      },
     ]);
 
     render(
       <Wrapper>
         <ReportView report={report} title="Test" />
-      </Wrapper>
+      </Wrapper>,
     );
 
-    expect(mockRunQuery).toHaveBeenCalledWith({ base_severity: 'HIGH', limit: '10' }, { force: false });
+    expect(mockRunQuery).toHaveBeenCalledWith(
+      { base_severity: 'HIGH', limit: '10' },
+      { force: false },
+    );
   });
 
   it('resolves named query reference from report.queries', () => {
@@ -274,17 +298,20 @@ describe('ReportView param building', () => {
       {
         type: 'count',
         cypher: 'cves-total',
-        caption: 'Total CVEs'
-      }
+        caption: 'Total CVEs',
+      },
     ]);
 
     render(
       <Wrapper>
         <ReportView report={report} title="Test" />
-      </Wrapper>
+      </Wrapper>,
     );
 
-    expect(useLazyCypherQuery).toHaveBeenCalledWith('MATCH (c:CVE) RETURN count(c.id) AS total', undefined);
+    expect(useLazyCypherQuery).toHaveBeenCalledWith(
+      'MATCH (c:CVE) RETURN count(c.id) AS total',
+      undefined,
+    );
   });
 
   it('passes direct Cypher string to panel when not found in report.queries', () => {
@@ -294,16 +321,16 @@ describe('ReportView param building', () => {
         {
           type: 'count',
           cypher: directCypher,
-          caption: 'Total CVEs (direct)'
-        }
+          caption: 'Total CVEs (direct)',
+        },
       ],
-      {} // empty queries dict — no named references
+      {}, // empty queries dict — no named references
     );
 
     render(
       <Wrapper>
         <ReportView report={report} title="Test" />
-      </Wrapper>
+      </Wrapper>,
     );
 
     expect(useLazyCypherQuery).toHaveBeenCalledWith(directCypher, undefined);
@@ -312,20 +339,24 @@ describe('ReportView param building', () => {
   it('renders markdown panel content directly without a cypher query', () => {
     const report: Report = {
       name: 'Test',
-      rows: [{
-        name: 'Markdown Row',
-        panels: [{
-          type: 'markdown',
-          markdown: '## Hello\n\nSome **bold** text.',
-          w: 12
-        }]
-      }]
+      rows: [
+        {
+          name: 'Markdown Row',
+          panels: [
+            {
+              type: 'markdown',
+              markdown: '## Hello\n\nSome **bold** text.',
+              w: 12,
+            },
+          ],
+        },
+      ],
     };
 
     render(
       <Wrapper>
         <ReportView report={report} title="Test" />
-      </Wrapper>
+      </Wrapper>,
     );
 
     // useLazyCypherQuery should not be called for markdown panels
@@ -339,15 +370,15 @@ describe('ReportView param building', () => {
       {
         type: 'count',
         cypher: directCypher,
-        caption: 'All Nodes'
-      }
+        caption: 'All Nodes',
+      },
     ]);
     // QUERIES does not contain directCypher as a key, so it should be used as-is
 
     render(
       <Wrapper>
         <ReportView report={report} title="Test" />
-      </Wrapper>
+      </Wrapper>,
     );
 
     expect(useLazyCypherQuery).toHaveBeenCalledWith(directCypher, undefined);

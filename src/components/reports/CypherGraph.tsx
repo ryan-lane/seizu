@@ -10,7 +10,7 @@ import {
   Tab,
   Tabs,
   Tooltip,
-  Typography
+  Typography,
 } from '@mui/material';
 import CypherTable from 'src/components/reports/CypherTable';
 import { useTheme } from '@mui/material/styles';
@@ -42,10 +42,15 @@ import {
   useReactFlow,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
-import { useLazyCypherQuery, useLazyHistoryQuery } from 'src/hooks/useCypherQuery';
+import {
+  useLazyCypherQuery,
+  useLazyHistoryQuery,
+} from 'src/hooks/useCypherQuery';
 import QueryValidationBadge from 'src/components/reports/QueryValidationBadge';
 import { GraphPanelSkeleton } from 'src/components/reports/PanelLoadingSkeletons';
-import GraphDetailPanel, { GraphSummaryPanel } from 'src/components/reports/GraphDetailPanel';
+import GraphDetailPanel, {
+  GraphSummaryPanel,
+} from 'src/components/reports/GraphDetailPanel';
 import { chartPalette } from 'src/theme/brand';
 
 interface GraphSettings {
@@ -81,7 +86,8 @@ interface GraphData {
 function normalizeGraphData(value: unknown): GraphData | null {
   if (typeof value !== 'object' || value === null) return null;
   const graph = value as Record<string, unknown>;
-  if (!Array.isArray(graph['nodes']) || !Array.isArray(graph['links'])) return null;
+  if (!Array.isArray(graph['nodes']) || !Array.isArray(graph['links']))
+    return null;
   return {
     nodes: graph['nodes'] as GraphNode[],
     links: graph['links'] as GraphLink[],
@@ -117,7 +123,11 @@ function isPathValue(v: unknown): v is Neo4jPathValue {
 
 function readGraphValue(item: GraphNode | GraphLink, key: string): unknown {
   const properties = item.properties;
-  if (key !== 'group' && properties && Object.prototype.hasOwnProperty.call(properties, key)) {
+  if (
+    key !== 'group' &&
+    properties &&
+    Object.prototype.hasOwnProperty.call(properties, key)
+  ) {
     return properties[key];
   }
   if (Object.prototype.hasOwnProperty.call(item, key)) {
@@ -128,14 +138,18 @@ function readGraphValue(item: GraphNode | GraphLink, key: string): unknown {
 
 function graphNodeId(node: Neo4jPathNode): string | number {
   const propertyId = node.properties['id'];
-  if (typeof propertyId === 'string' && propertyId.length > 0) return propertyId;
+  if (typeof propertyId === 'string' && propertyId.length > 0)
+    return propertyId;
   if (typeof propertyId === 'number') return propertyId;
   return node.id;
 }
 
-export function graphNodeHoverId(node: Pick<GraphNode, 'id' | 'neo4j_id' | 'properties'>): string {
+export function graphNodeHoverId(
+  node: Pick<GraphNode, 'id' | 'neo4j_id' | 'properties'>,
+): string {
   const propertyId = node.properties?.['id'];
-  if (typeof propertyId === 'string' && propertyId.length > 0) return propertyId;
+  if (typeof propertyId === 'string' && propertyId.length > 0)
+    return propertyId;
   if (typeof propertyId === 'number') return String(propertyId);
   if (node.neo4j_id !== undefined) return String(node.neo4j_id);
   return String(node.id);
@@ -179,7 +193,9 @@ export function extractGraphData(
           nodeMap.set(id, {
             id,
             neo4j_id: n.id,
-            label: String(n.properties[nodeLabelKey] ?? n.properties['name'] ?? id),
+            label: String(
+              n.properties[nodeLabelKey] ?? n.properties['name'] ?? id,
+            ),
             group: n.labels[0] ?? 'default',
             labels: n.labels,
             properties: n.properties,
@@ -256,20 +272,29 @@ interface SegmentDistance {
   t: number;
 }
 
-export function pointToSegmentDistance(point: LayoutPoint, start: LayoutPoint, end: LayoutPoint): SegmentDistance {
+export function pointToSegmentDistance(
+  point: LayoutPoint,
+  start: LayoutPoint,
+  end: LayoutPoint,
+): SegmentDistance {
   const dx = end.x - start.x;
   const dy = end.y - start.y;
   const lengthSquared = dx * dx + dy * dy;
   if (lengthSquared === 0) {
-    const distance = Math.sqrt((point.x - start.x) ** 2 + (point.y - start.y) ** 2);
+    const distance = Math.sqrt(
+      (point.x - start.x) ** 2 + (point.y - start.y) ** 2,
+    );
     return { distance, closestX: start.x, closestY: start.y, t: 0 };
   }
 
-  const rawT = ((point.x - start.x) * dx + (point.y - start.y) * dy) / lengthSquared;
+  const rawT =
+    ((point.x - start.x) * dx + (point.y - start.y) * dy) / lengthSquared;
   const t = Math.max(0, Math.min(1, rawT));
   const closestX = start.x + t * dx;
   const closestY = start.y + t * dy;
-  const distance = Math.sqrt((point.x - closestX) ** 2 + (point.y - closestY) ** 2);
+  const distance = Math.sqrt(
+    (point.x - closestX) ** 2 + (point.y - closestY) ** 2,
+  );
   return { distance, closestX, closestY, t };
 }
 
@@ -280,8 +305,8 @@ export function computeLayout(
   height: number,
   repulsion: number = 1,
 ): Map<string, { x: number; y: number }> {
-  const graphNodes = Array.isArray(nodes) ? nodes as GraphNode[] : [];
-  const graphLinks = Array.isArray(links) ? links as GraphLink[] : [];
+  const graphNodes = Array.isArray(nodes) ? (nodes as GraphNode[]) : [];
+  const graphLinks = Array.isArray(links) ? (links as GraphLink[]) : [];
   if (graphNodes.length === 0) return new Map();
 
   // SPRING_LEN scales linearly with repulsion; the many-body force scales
@@ -295,7 +320,10 @@ export function computeLayout(
   const EDGE_AVOID_K = 0.2;
   const DAMPING = 0.82;
 
-  const positions = new Map<string, { x: number; y: number; vx: number; vy: number }>();
+  const positions = new Map<
+    string,
+    { x: number; y: number; vx: number; vy: number }
+  >();
   const cx = width / 2;
   const cy = height / 2;
   const r = Math.min(width, height) * 0.32;
@@ -309,23 +337,29 @@ export function computeLayout(
     });
   });
 
-  const nodeIds = graphNodes.map(n => String(n.id));
-  const edgePairs = graphLinks.map(l => ({
-    source: String(typeof l.source === 'object' ? (l.source as GraphNode).id : l.source),
-    target: String(typeof l.target === 'object' ? (l.target as GraphNode).id : l.target),
+  const nodeIds = graphNodes.map((n) => String(n.id));
+  const edgePairs = graphLinks.map((l) => ({
+    source: String(
+      typeof l.source === 'object' ? (l.source as GraphNode).id : l.source,
+    ),
+    target: String(
+      typeof l.target === 'object' ? (l.target as GraphNode).id : l.target,
+    ),
   }));
   const edgeKeys = new Set<string>();
   const adjacency = new Map<string, Set<string>>();
-  nodeIds.forEach(id => adjacency.set(id, new Set()));
+  nodeIds.forEach((id) => adjacency.set(id, new Set()));
   edgePairs.forEach(({ source, target }) => {
-    edgeKeys.add(source < target ? `${source}\0${target}` : `${target}\0${source}`);
+    edgeKeys.add(
+      source < target ? `${source}\0${target}` : `${target}\0${source}`,
+    );
     adjacency.get(source)?.add(target);
     adjacency.get(target)?.add(source);
   });
 
   const componentByNode = new Map<string, number>();
   let nextComponent = 0;
-  nodeIds.forEach(id => {
+  nodeIds.forEach((id) => {
     if (componentByNode.has(id)) return;
     const stack = [id];
     const component = nextComponent;
@@ -333,7 +367,7 @@ export function computeLayout(
     componentByNode.set(id, component);
     while (stack.length > 0) {
       const current = stack.pop()!;
-      adjacency.get(current)?.forEach(neighbor => {
+      adjacency.get(current)?.forEach((neighbor) => {
         if (componentByNode.has(neighbor)) return;
         componentByNode.set(neighbor, component);
         stack.push(neighbor);
@@ -344,7 +378,7 @@ export function computeLayout(
   for (let iter = 0; iter < 150; iter++) {
     const alpha = 1 - iter / 150;
 
-    nodeIds.forEach(id => {
+    nodeIds.forEach((id) => {
       const p = positions.get(id)!;
       p.vx = 0;
       p.vy = 0;
@@ -358,14 +392,24 @@ export function computeLayout(
         const dy = b.y - a.y;
         const d2 = Math.max(dx * dx + dy * dy, 1);
         const d = Math.sqrt(d2);
-        const edgeKey = nodeIds[i] < nodeIds[j] ? `${nodeIds[i]}\0${nodeIds[j]}` : `${nodeIds[j]}\0${nodeIds[i]}`;
+        const edgeKey =
+          nodeIds[i] < nodeIds[j]
+            ? `${nodeIds[i]}\0${nodeIds[j]}`
+            : `${nodeIds[j]}\0${nodeIds[i]}`;
         const directlyConnected = edgeKeys.has(edgeKey);
-        const sameComponent = componentByNode.get(nodeIds[i]) === componentByNode.get(nodeIds[j]);
-        const repulsionMultiplier = directlyConnected ? 1 : sameComponent ? 2.4 : 5.5;
-        const collisionForce = d < MIN_NODE_DISTANCE
-          ? (MIN_NODE_DISTANCE - d) * COLLISION_K * alpha
-          : 0;
-        const f = ((REPULSION * repulsionMultiplier * alpha) / d2) + collisionForce;
+        const sameComponent =
+          componentByNode.get(nodeIds[i]) === componentByNode.get(nodeIds[j]);
+        const repulsionMultiplier = directlyConnected
+          ? 1
+          : sameComponent
+            ? 2.4
+            : 5.5;
+        const collisionForce =
+          d < MIN_NODE_DISTANCE
+            ? (MIN_NODE_DISTANCE - d) * COLLISION_K * alpha
+            : 0;
+        const f =
+          (REPULSION * repulsionMultiplier * alpha) / d2 + collisionForce;
         a.vx -= (dx / d) * f;
         a.vy -= (dy / d) * f;
         b.vx += (dx / d) * f;
@@ -394,12 +438,20 @@ export function computeLayout(
 
       const edgeDx = b.x - a.x;
       const edgeDy = b.y - a.y;
-      const edgeDistance = Math.max(Math.sqrt(edgeDx * edgeDx + edgeDy * edgeDy), 1);
-      nodeIds.forEach(id => {
+      const edgeDistance = Math.max(
+        Math.sqrt(edgeDx * edgeDx + edgeDy * edgeDy),
+        1,
+      );
+      nodeIds.forEach((id) => {
         if (id === source || id === target) return;
         const p = positions.get(id)!;
         const segment = pointToSegmentDistance(p, a, b);
-        if (segment.t <= 0.08 || segment.t >= 0.92 || segment.distance >= EDGE_AVOID_DISTANCE) return;
+        if (
+          segment.t <= 0.08 ||
+          segment.t >= 0.92 ||
+          segment.distance >= EDGE_AVOID_DISTANCE
+        )
+          return;
 
         let nx = p.x - segment.closestX;
         let ny = p.y - segment.closestY;
@@ -412,19 +464,20 @@ export function computeLayout(
           ny = edgeDx / edgeDistance;
           const awayFromCenterX = p.x - cx;
           const awayFromCenterY = p.y - cy;
-          if ((nx * awayFromCenterX) + (ny * awayFromCenterY) < 0) {
+          if (nx * awayFromCenterX + ny * awayFromCenterY < 0) {
             nx *= -1;
             ny *= -1;
           }
         }
 
-        const f = (EDGE_AVOID_DISTANCE - segment.distance) * EDGE_AVOID_K * alpha;
+        const f =
+          (EDGE_AVOID_DISTANCE - segment.distance) * EDGE_AVOID_K * alpha;
         p.vx += nx * f;
         p.vy += ny * f;
       });
     });
 
-    nodeIds.forEach(id => {
+    nodeIds.forEach((id) => {
       const p = positions.get(id)!;
       p.x += p.vx * DAMPING;
       p.y += p.vy * DAMPING;
@@ -475,7 +528,10 @@ const HANDLE_SIDES: HandleSide[] = [
   'right-upper',
 ];
 
-const HANDLE_DEFINITIONS: Record<HandleSide, { position: Position; style: React.CSSProperties }> = {
+const HANDLE_DEFINITIONS: Record<
+  HandleSide,
+  { position: Position; style: React.CSSProperties }
+> = {
   right: { position: Position.Right, style: { top: '50%' } },
   'right-lower': { position: Position.Right, style: { top: '70%' } },
   'bottom-right': { position: Position.Bottom, style: { left: '78%' } },
@@ -507,7 +563,8 @@ const hiddenHandleStyle: React.CSSProperties = {
 
 function GraphNodeComponent({ data, selected }: NodeProps) {
   const theme = useTheme();
-  const palette = theme.palette.mode === 'dark' ? chartPalette.dark : chartPalette.light;
+  const palette =
+    theme.palette.mode === 'dark' ? chartPalette.dark : chartPalette.light;
   const color = colorForGroup(String(data['group'] ?? 'default'), palette);
   const typeLabel = String(data['group'] ?? data['label'] ?? data['id'] ?? '');
   const hoverId = graphNodeHoverId(data as unknown as GraphNode);
@@ -523,7 +580,7 @@ function GraphNodeComponent({ data, selected }: NodeProps) {
       placement="top"
     >
       <div style={{ cursor: 'pointer' }}>
-        {HANDLE_SIDES.map(side => {
+        {HANDLE_SIDES.map((side) => {
           const handle = HANDLE_DEFINITIONS[side];
           return (
             <Handle
@@ -543,7 +600,9 @@ function GraphNodeComponent({ data, selected }: NodeProps) {
             background: color,
             border: `2.5px solid ${selected ? theme.palette.primary.main : theme.palette.background.paper}`,
             boxSizing: 'border-box',
-            boxShadow: selected ? `0 0 0 2px ${theme.palette.primary.main}` : 'none',
+            boxShadow: selected
+              ? `0 0 0 2px ${theme.palette.primary.main}`
+              : 'none',
             color: theme.palette.getContrastText(color),
             display: 'flex',
             alignItems: 'center',
@@ -574,7 +633,7 @@ function GraphNodeComponent({ data, selected }: NodeProps) {
             {typeLabel}
           </span>
         </div>
-        {HANDLE_SIDES.map(side => {
+        {HANDLE_SIDES.map((side) => {
           const handle = HANDLE_DEFINITIONS[side];
           return (
             <Handle
@@ -597,7 +656,8 @@ const NODE_HOVER_ENTER_DELAY_MS = 150;
 
 const RELATIONSHIP_LABEL_FONT_SIZE = 9;
 const RELATIONSHIP_LABEL_GAP = 2;
-const RELATIONSHIP_LABEL_OFFSET = RELATIONSHIP_LABEL_FONT_SIZE / 2 + RELATIONSHIP_LABEL_GAP;
+const RELATIONSHIP_LABEL_OFFSET =
+  RELATIONSHIP_LABEL_FONT_SIZE / 2 + RELATIONSHIP_LABEL_GAP;
 
 export function relationshipLabelTransform(
   sourceX: number,
@@ -607,8 +667,10 @@ export function relationshipLabelTransform(
   labelX: number,
   labelY: number,
 ): string {
-  const rawAngle = Math.atan2(targetY - sourceY, targetX - sourceX) * 180 / Math.PI;
-  let readableAngle = rawAngle > 90 || rawAngle < -90 ? rawAngle + 180 : rawAngle;
+  const rawAngle =
+    (Math.atan2(targetY - sourceY, targetX - sourceX) * 180) / Math.PI;
+  let readableAngle =
+    rawAngle > 90 || rawAngle < -90 ? rawAngle + 180 : rawAngle;
   if (readableAngle >= 360) readableAngle -= 360;
   if (readableAngle <= -360) readableAngle += 360;
 
@@ -625,7 +687,9 @@ export function relationshipLabelTransform(
   return `translate(-50%, -50%) translate(${labelX + offsetX}px, ${labelY + offsetY}px) rotate(${readableAngle}deg)`;
 }
 
-function RelationshipEdge(props: EdgeProps & { labelStyle?: React.CSSProperties }) {
+function RelationshipEdge(
+  props: EdgeProps & { labelStyle?: React.CSSProperties },
+) {
   const {
     sourceX,
     sourceY,
@@ -636,12 +700,21 @@ function RelationshipEdge(props: EdgeProps & { labelStyle?: React.CSSProperties 
     label,
     labelStyle,
   } = props;
-  const [edgePath, labelX, labelY] = getStraightPath({ sourceX, sourceY, targetX, targetY });
-  const labelColor = (labelStyle as React.CSSProperties | undefined)?.color
-    ?? (labelStyle as React.CSSProperties | undefined)?.fill
-    ?? style?.stroke
-    ?? 'currentColor';
-  const labelOpacity = (labelStyle as React.CSSProperties | undefined)?.opacity ?? style?.opacity ?? 1;
+  const [edgePath, labelX, labelY] = getStraightPath({
+    sourceX,
+    sourceY,
+    targetX,
+    targetY,
+  });
+  const labelColor =
+    (labelStyle as React.CSSProperties | undefined)?.color ??
+    (labelStyle as React.CSSProperties | undefined)?.fill ??
+    style?.stroke ??
+    'currentColor';
+  const labelOpacity =
+    (labelStyle as React.CSSProperties | undefined)?.opacity ??
+    style?.opacity ??
+    1;
 
   return (
     <>
@@ -651,7 +724,14 @@ function RelationshipEdge(props: EdgeProps & { labelStyle?: React.CSSProperties 
           <div
             style={{
               position: 'absolute',
-              transform: relationshipLabelTransform(sourceX, sourceY, targetX, targetY, labelX, labelY),
+              transform: relationshipLabelTransform(
+                sourceX,
+                sourceY,
+                targetX,
+                targetY,
+                labelX,
+                labelY,
+              ),
               transformOrigin: 'center',
               pointerEvents: 'none',
               color: String(labelColor),
@@ -660,7 +740,8 @@ function RelationshipEdge(props: EdgeProps & { labelStyle?: React.CSSProperties 
               fontWeight: 500,
               lineHeight: 1,
               whiteSpace: 'nowrap',
-              textShadow: '0 0 2px var(--xy-edge-label-background-color, transparent)',
+              textShadow:
+                '0 0 2px var(--xy-edge-label-background-color, transparent)',
             }}
           >
             {label}
@@ -699,7 +780,7 @@ function buildXyNodes(
   nodeLabelKey: string,
   nodeColorByKey: string,
 ): Node[] {
-  return graphNodes.map(n => {
+  return graphNodes.map((n) => {
     const pos = positions.get(String(n.id)) ?? { x: 0, y: 0 };
     return {
       id: String(n.id),
@@ -721,11 +802,16 @@ export function buildXyEdges(
   positions?: Map<string, { x: number; y: number }>,
 ): Edge[] {
   return graphLinks.map((l, i) => {
-    const source = String(typeof l.source === 'object' ? (l.source as GraphNode).id : l.source);
-    const target = String(typeof l.target === 'object' ? (l.target as GraphNode).id : l.target);
-    const handles = positions?.has(source) && positions.has(target)
-      ? closestEdgeHandles(positions.get(source)!, positions.get(target)!)
-      : {};
+    const source = String(
+      typeof l.source === 'object' ? (l.source as GraphNode).id : l.source,
+    );
+    const target = String(
+      typeof l.target === 'object' ? (l.target as GraphNode).id : l.target,
+    );
+    const handles =
+      positions?.has(source) && positions.has(target)
+        ? closestEdgeHandles(positions.get(source)!, positions.get(target)!)
+        : {};
     return {
       id: `edge-${i}`,
       type: 'relationship',
@@ -734,7 +820,13 @@ export function buildXyEdges(
       ...handles,
       label: l.type ?? undefined,
       labelShowBg: false,
-      labelStyle: { fontSize: RELATIONSHIP_LABEL_FONT_SIZE, color: edgeColor, fill: edgeColor, fontWeight: 500, opacity: FULL_OPACITY },
+      labelStyle: {
+        fontSize: RELATIONSHIP_LABEL_FONT_SIZE,
+        color: edgeColor,
+        fill: edgeColor,
+        fontWeight: 500,
+        opacity: FULL_OPACITY,
+      },
       style: { stroke: edgeColor, strokeWidth: 1.4, opacity: FULL_OPACITY },
       markerEnd: { type: MarkerType.ArrowClosed, color: edgeColor },
       data: { original: l },
@@ -754,17 +846,25 @@ export function applyFocusOpacity(
 
   if (focusedId === null) {
     return {
-      nodes: nodes.map(n => ({ ...n, style: { ...n.style, opacity: FULL_OPACITY, transition } })),
-      edges: edges.map(e => ({
+      nodes: nodes.map((n) => ({
+        ...n,
+        style: { ...n.style, opacity: FULL_OPACITY, transition },
+      })),
+      edges: edges.map((e) => ({
         ...e,
-        style: { ...e.style, stroke: edgeColor, opacity: FULL_OPACITY, transition },
+        style: {
+          ...e.style,
+          stroke: edgeColor,
+          opacity: FULL_OPACITY,
+          transition,
+        },
         labelStyle: { ...e.labelStyle, opacity: FULL_OPACITY },
         labelBgStyle: { ...e.labelBgStyle, opacity: FULL_OPACITY },
       })),
     };
   }
 
-  const isNode = nodes.some(n => n.id === focusedId);
+  const isNode = nodes.some((n) => n.id === focusedId);
 
   if (isNode) {
     const connectedEdgeIds = new Set<string>();
@@ -776,7 +876,7 @@ export function applyFocusOpacity(
       }
     }
     return {
-      nodes: nodes.map(n => ({
+      nodes: nodes.map((n) => ({
         ...n,
         style: {
           ...n.style,
@@ -784,7 +884,7 @@ export function applyFocusOpacity(
           transition,
         },
       })),
-      edges: edges.map(e => ({
+      edges: edges.map((e) => ({
         ...e,
         style: {
           ...e.style,
@@ -805,11 +905,11 @@ export function applyFocusOpacity(
   }
 
   // Edge focused
-  const focusedEdge = edges.find(e => e.id === focusedId);
+  const focusedEdge = edges.find((e) => e.id === focusedId);
   if (!focusedEdge) return { nodes, edges };
   const litNodeIds = new Set([focusedEdge.source, focusedEdge.target]);
   return {
-    nodes: nodes.map(n => ({
+    nodes: nodes.map((n) => ({
       ...n,
       style: {
         ...n.style,
@@ -817,7 +917,7 @@ export function applyFocusOpacity(
         transition,
       },
     })),
-    edges: edges.map(e => ({
+    edges: edges.map((e) => ({
       ...e,
       style: {
         ...e.style,
@@ -939,14 +1039,22 @@ function GraphControls({ repulsion, onRepulsionChange }: GraphControlsProps) {
         <Box sx={{ height: '2px', bgcolor: 'divider' }} />
         <CtrlBtn
           title="Increase repulsion"
-          onClick={() => onRepulsionChange(Math.min(REPULSION_MAX, repulsion + REPULSION_STEP))}
+          onClick={() =>
+            onRepulsionChange(
+              Math.min(REPULSION_MAX, repulsion + REPULSION_STEP),
+            )
+          }
           disabled={repulsion >= REPULSION_MAX}
         >
           <ZoomOutMap style={{ width: ICON_SIZE, height: ICON_SIZE }} />
         </CtrlBtn>
         <CtrlBtn
           title="Decrease repulsion"
-          onClick={() => onRepulsionChange(Math.max(REPULSION_MIN, repulsion - REPULSION_STEP))}
+          onClick={() =>
+            onRepulsionChange(
+              Math.max(REPULSION_MIN, repulsion - REPULSION_STEP),
+            )
+          }
           disabled={repulsion <= REPULSION_MIN}
         >
           <ZoomInMap style={{ width: ICON_SIZE, height: ICON_SIZE }} />
@@ -983,13 +1091,19 @@ function CypherGraph({
   const [runHistoryQuery, historyQueryState] = useLazyHistoryQuery();
 
   const activeState = queryHistoryId ? historyQueryState : adhocState;
-  const { loading, error, records, warnings, queryErrors, tokenExpired } = activeState;
+  const { loading, error, records, warnings, queryErrors, tokenExpired } =
+    activeState;
   const completedHistoryId = activeState.historyId;
 
   // Call onQueryComplete once after each successful query (loading → false with records).
   const prevLoadingRef = useRef(false);
   useEffect(() => {
-    if (prevLoadingRef.current && !loading && records !== undefined && onQueryComplete) {
+    if (
+      prevLoadingRef.current &&
+      !loading &&
+      records !== undefined &&
+      onQueryComplete
+    ) {
       onQueryComplete(completedHistoryId);
     }
     prevLoadingRef.current = loading;
@@ -1000,9 +1114,11 @@ function CypherGraph({
   >(null);
 
   const [detailOpen, setDetailOpen] = useState(defaultDetailOpen);
-  const [preferredTab, setPreferredTab] = useState<'graph' | 'table' | 'raw' | null>(null);
+  const [preferredTab, setPreferredTab] = useState<
+    'graph' | 'table' | 'raw' | null
+  >(null);
   const [repulsion, setRepulsion] = useState(1);
-  const [focusedId, setFocusedId] = useState<string | null>(null);
+  const [_focusedId, setFocusedId] = useState<string | null>(null);
   const [fitViewTrigger, setFitViewTrigger] = useState(0);
 
   const [nodes, setNodes, onNodesChange] = useNodesState<Node>([]);
@@ -1014,7 +1130,10 @@ function CypherGraph({
 
   // Extract graph data from query results, supporting both explicit-graph and path formats.
   const graphData = useMemo(
-    () => normalizeGraphData(records ? extractGraphData(records, nodeLabelKey) : null),
+    () =>
+      normalizeGraphData(
+        records ? extractGraphData(records, nodeLabelKey) : null,
+      ),
     [records, nodeLabelKey],
   );
 
@@ -1029,9 +1148,10 @@ function CypherGraph({
   }, [records, graphData]);
 
   // Active tab: user preference if still valid, otherwise first available.
-  const activeTab = (preferredTab && availableTabs.includes(preferredTab))
-    ? preferredTab
-    : availableTabs[0] ?? 'table';
+  const activeTab =
+    preferredTab && availableTabs.includes(preferredTab)
+      ? preferredTab
+      : (availableTabs[0] ?? 'table');
 
   const runAdhocQueryRef = useRef(runAdhocQuery);
   runAdhocQueryRef.current = runAdhocQuery;
@@ -1070,14 +1190,32 @@ function CypherGraph({
       return;
     }
     setFocusedId(null);
-    const positions = computeLayout(graphData.nodes, graphData.links, 800, 450, repulsion);
-    setNodes(buildXyNodes(graphData.nodes, positions, nodeLabelKey, nodeColorByKey));
+    const positions = computeLayout(
+      graphData.nodes,
+      graphData.links,
+      800,
+      450,
+      repulsion,
+    );
+    setNodes(
+      buildXyNodes(graphData.nodes, positions, nodeLabelKey, nodeColorByKey),
+    );
     setEdges(buildXyEdges(graphData.links, edgeColor, positions));
-    setFitViewTrigger(n => n + 1);
-  }, [graphData, nodeLabelKey, nodeColorByKey, edgeColor, setNodes, setEdges, repulsion]);
+    setFitViewTrigger((n) => n + 1);
+  }, [
+    graphData,
+    nodeLabelKey,
+    nodeColorByKey,
+    edgeColor,
+    setNodes,
+    setEdges,
+    repulsion,
+  ]);
 
   const handleNodeClick = (_: React.MouseEvent, node: Node) => {
-    const original = node.data?.['original'] as GraphNode ?? node.data as unknown as GraphNode;
+    const original =
+      (node.data?.['original'] as GraphNode) ??
+      (node.data as unknown as GraphNode);
     setSelectedItem({ type: 'node', data: original });
     setDetailOpen(true);
     setFocusedId(node.id);
@@ -1087,7 +1225,10 @@ function CypherGraph({
   };
 
   const handleEdgeClick = (_: React.MouseEvent, edge: Edge) => {
-    const original = edge.data?.['original'] as GraphLink ?? { source: edge.source, target: edge.target };
+    const original = (edge.data?.['original'] as GraphLink) ?? {
+      source: edge.source,
+      target: edge.target,
+    };
     setSelectedItem({ type: 'link', data: original as GraphLink });
     setDetailOpen(true);
     setFocusedId(edge.id);
@@ -1111,13 +1252,21 @@ function CypherGraph({
       <Card>
         {caption && (
           <>
-            <Grid container spacing={0} sx={{ flexDirection: 'column', alignItems: 'center' }}>
+            <Grid
+              container
+              spacing={0}
+              sx={{ flexDirection: 'column', alignItems: 'center' }}
+            >
               <CardHeader title={caption} />
             </Grid>
             <Divider />
           </>
         )}
-        <Grid container spacing={0} sx={{ flexDirection: 'column', alignItems: 'center' }}>
+        <Grid
+          container
+          spacing={0}
+          sx={{ flexDirection: 'column', alignItems: 'center' }}
+        >
           <CardContent>
             <Error />
             <Typography variant="body2">Missing cypher query</Typography>
@@ -1132,13 +1281,21 @@ function CypherGraph({
       <Card>
         {caption && (
           <>
-            <Grid container spacing={0} sx={{ flexDirection: 'column', alignItems: 'center' }}>
+            <Grid
+              container
+              spacing={0}
+              sx={{ flexDirection: 'column', alignItems: 'center' }}
+            >
               <CardHeader title={caption} />
             </Grid>
             <Divider />
           </>
         )}
-        <Grid container spacing={0} sx={{ flexDirection: 'column', alignItems: 'center' }}>
+        <Grid
+          container
+          spacing={0}
+          sx={{ flexDirection: 'column', alignItems: 'center' }}
+        >
           <CardContent>
             <Typography variant="body2" align="center">
               (Set {needInputs.join(', ')})
@@ -1162,17 +1319,28 @@ function CypherGraph({
       <Card>
         {caption && (
           <>
-            <Grid container sx={{ flexDirection: 'column', alignItems: 'center' }}>
+            <Grid
+              container
+              sx={{ flexDirection: 'column', alignItems: 'center' }}
+            >
               <CardHeader title={caption} />
             </Grid>
             <Divider />
           </>
         )}
         <QueryValidationBadge errors={queryErrors} warnings={warnings} />
-        <Grid container spacing={0} sx={{ flexDirection: 'column', alignItems: 'center' }}>
+        <Grid
+          container
+          spacing={0}
+          sx={{ flexDirection: 'column', alignItems: 'center' }}
+        >
           <CardContent>
-            <Typography variant="h4" align="center">N/A</Typography>
-            <Typography variant="body2" align="center">Query validation failed</Typography>
+            <Typography variant="h4" align="center">
+              N/A
+            </Typography>
+            <Typography variant="body2" align="center">
+              Query validation failed
+            </Typography>
           </CardContent>
         </Grid>
       </Card>
@@ -1188,21 +1356,36 @@ function CypherGraph({
       <Card>
         {caption && (
           <>
-            <Grid container spacing={0} sx={{ flexDirection: 'column', alignItems: 'center' }}>
+            <Grid
+              container
+              spacing={0}
+              sx={{ flexDirection: 'column', alignItems: 'center' }}
+            >
               <CardHeader title={caption} />
             </Grid>
             <Divider />
           </>
         )}
         <CardContent>
-          <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1, mb: 2 }}>
-            <Error color="warning" fontSize="small" sx={{ mt: '2px', flexShrink: 0 }} />
+          <Box
+            sx={{ display: 'flex', alignItems: 'flex-start', gap: 1, mb: 2 }}
+          >
+            <Error
+              color="warning"
+              fontSize="small"
+              sx={{ mt: '2px', flexShrink: 0 }}
+            />
             <Typography variant="body2">
-              The query returned no results. If this is unexpected, check that the
-              query returns graph data and that the MATCH clause finds data.
+              The query returned no results. If this is unexpected, check that
+              the query returns graph data and that the MATCH clause finds data.
             </Typography>
           </Box>
-          <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }} gutterBottom>
+          <Typography
+            variant="caption"
+            color="text.secondary"
+            sx={{ display: 'block' }}
+            gutterBottom
+          >
             Supported return formats
           </Typography>
           <Box
@@ -1235,10 +1418,23 @@ function CypherGraph({
   }
 
   const canvasHeight = fillHeight ? '100%' : 450;
-  const contentFlex = fillHeight ? { flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' as const } : {};
+  const contentFlex = fillHeight
+    ? {
+        flex: 1,
+        minHeight: 0,
+        display: 'flex',
+        flexDirection: 'column' as const,
+      }
+    : {};
 
   return (
-    <Card sx={fillHeight ? { height: '100%', display: 'flex', flexDirection: 'column' } : {}}>
+    <Card
+      sx={
+        fillHeight
+          ? { height: '100%', display: 'flex', flexDirection: 'column' }
+          : {}
+      }
+    >
       {/* Header row: tabs left, optional spread control, caption right */}
       <Box sx={{ display: 'flex', alignItems: 'center', pl: 2, flexShrink: 0 }}>
         <Tabs
@@ -1248,12 +1444,19 @@ function CypherGraph({
           indicatorColor="primary"
           sx={{ minHeight: 48, '& .MuiTab-root': { minHeight: 48 } }}
         >
-          {availableTabs.includes('graph') && <Tab label="Graph" value="graph" />}
-          {availableTabs.includes('table') && <Tab label="Table" value="table" />}
+          {availableTabs.includes('graph') && (
+            <Tab label="Graph" value="graph" />
+          )}
+          {availableTabs.includes('table') && (
+            <Tab label="Table" value="table" />
+          )}
           {availableTabs.includes('raw') && <Tab label="Raw" value="raw" />}
         </Tabs>
         {caption && (
-          <Typography variant="subtitle1" sx={{ ml: 'auto', pr: 2, color: 'text.secondary' }}>
+          <Typography
+            variant="subtitle1"
+            sx={{ ml: 'auto', pr: 2, color: 'text.secondary' }}
+          >
             {caption}
           </Typography>
         )}
@@ -1294,11 +1497,14 @@ function CypherGraph({
 
         {/* ── Graph tab ─────────────────────────────────────────────── */}
         {activeTab === 'graph' && graphData && (
-          <Box sx={{ display: 'flex', ...(fillHeight ? { flex: 1, minHeight: 0 } : { height: 450 }) }}>
+          <Box
+            sx={{
+              display: 'flex',
+              ...(fillHeight ? { flex: 1, minHeight: 0 } : { height: 450 }),
+            }}
+          >
             {/* Graph canvas */}
-            <Box
-              sx={{ flex: 1, height: canvasHeight }}
-            >
+            <Box sx={{ flex: 1, height: canvasHeight }}>
               <ReactFlow
                 nodes={nodes}
                 edges={edges}
@@ -1317,7 +1523,10 @@ function CypherGraph({
                 style={{ background: theme.palette.background.paper }}
               >
                 <AutoFitEffect trigger={fitViewTrigger} />
-                <GraphControls repulsion={repulsion} onRepulsionChange={setRepulsion} />
+                <GraphControls
+                  repulsion={repulsion}
+                  onRepulsionChange={setRepulsion}
+                />
                 <Background
                   variant={BackgroundVariant.Dots}
                   color={theme.palette.divider}
@@ -1344,10 +1553,14 @@ function CypherGraph({
               <Tooltip title="Details" placement="left">
                 <IconButton
                   size="small"
-                  onClick={() => setDetailOpen(v => !v)}
+                  onClick={() => setDetailOpen((v) => !v)}
                   sx={{ color: detailOpen ? 'primary.main' : 'text.secondary' }}
                 >
-                  {detailOpen ? <Info fontSize="small" /> : <InfoOutlined fontSize="small" />}
+                  {detailOpen ? (
+                    <Info fontSize="small" />
+                  ) : (
+                    <InfoOutlined fontSize="small" />
+                  )}
                 </IconButton>
               </Tooltip>
             </Box>
@@ -1365,13 +1578,23 @@ function CypherGraph({
                 }}
               >
                 {selectedItem ? (
-                  <GraphDetailPanel type={selectedItem.type} data={selectedItem.data} />
+                  <GraphDetailPanel
+                    type={selectedItem.type}
+                    data={selectedItem.data}
+                  />
                 ) : (
                   <GraphSummaryPanel
                     nodes={graphData.nodes}
                     links={graphData.links}
                     nodeGroupKey={nodeColorByKey}
-                    getColor={(g) => colorForGroup(g, theme.palette.mode === 'dark' ? chartPalette.dark : chartPalette.light)}
+                    getColor={(g) =>
+                      colorForGroup(
+                        g,
+                        theme.palette.mode === 'dark'
+                          ? chartPalette.dark
+                          : chartPalette.light,
+                      )
+                    }
                   />
                 )}
               </Box>

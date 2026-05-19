@@ -1,4 +1,11 @@
-import { useState, useRef, useEffect, memo, useCallback, type Ref } from 'react';
+import {
+  useState,
+  useRef,
+  useEffect,
+  memo,
+  useCallback,
+  type Ref,
+} from 'react';
 import {
   Accordion,
   AccordionDetails,
@@ -26,7 +33,7 @@ import {
   Stack,
   TextField,
   Tooltip,
-  Typography
+  Typography,
 } from '@mui/material';
 import Add from '@mui/icons-material/Add';
 import CancelIcon from '@mui/icons-material/Cancel';
@@ -57,14 +64,20 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 
-import { Report, Row, Panel, ReportInput, InputValue } from 'src/config.context';
+import {
+  Report,
+  Row,
+  Panel,
+  ReportInput,
+  InputValue,
+} from 'src/config.context';
 import PanelEditor, { EditablePanel } from 'src/components/reports/PanelEditor';
 import { EditPanelSkeleton } from 'src/components/reports/PanelLoadingSkeletons';
 import PanelGridRow from 'src/components/reports/PanelGridRow';
 import type { ResponsiveBreakpoint } from 'src/components/reports/panelLayout';
 import {
   DASHBOARD_NAVBAR_HEIGHT,
-  DASHBOARD_SIDEBAR_WIDTH_VAR
+  DASHBOARD_SIDEBAR_WIDTH_VAR,
 } from 'src/components/dashboardLayoutConstants';
 import { contentContainerSx } from 'src/theme/layout';
 
@@ -90,14 +103,14 @@ function toEditableRows(rows: Row[]): EditableRow[] {
   return rows.map((row) => ({
     _id: uid(),
     ...row,
-    panels: row.panels.map((p) => ({ ...p, _id: uid() }))
+    panels: row.panels.map((p) => ({ ...p, _id: uid() })),
   }));
 }
 
 function fromEditableRows(rows: EditableRow[]): Row[] {
   return rows.map(({ _id: _rid, ...row }) => ({
     ...row,
-    panels: row.panels.map(({ _id: _pid, ...panel }) => panel as Panel)
+    panels: row.panels.map(({ _id: _pid, ...panel }) => panel as Panel),
   }));
 }
 
@@ -165,8 +178,16 @@ interface EditablePanelCardProps {
   onMoveToRow: (targetRowId: string) => void;
 }
 
-function EditablePanelCard({ panel, onEdit, onDelete, moveTargetRows, onMoveToRow }: EditablePanelCardProps) {
-  const [moveMenuAnchor, setMoveMenuAnchor] = useState<HTMLElement | null>(null);
+function EditablePanelCard({
+  panel,
+  onEdit,
+  onDelete,
+  moveTargetRows,
+  onMoveToRow,
+}: EditablePanelCardProps) {
+  const [moveMenuAnchor, setMoveMenuAnchor] = useState<HTMLElement | null>(
+    null,
+  );
   const moveMenuOpen = Boolean(moveMenuAnchor);
 
   return (
@@ -181,10 +202,14 @@ function EditablePanelCard({ panel, onEdit, onDelete, moveTargetRows, onMoveToRo
         flexDirection: 'column',
         gap: 0.5,
         cursor: 'move',
-        bgcolor: 'background.paper'
+        bgcolor: 'background.paper',
       }}
     >
-      <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center', flexWrap: 'wrap', flexShrink: 0 }}>
+      <Stack
+        direction="row"
+        spacing={0.5}
+        sx={{ alignItems: 'center', flexWrap: 'wrap', flexShrink: 0 }}
+      >
         <PanelTypeChip type={panel.type} />
         {panel.caption && (
           <Typography variant="caption" noWrap sx={{ maxWidth: 150 }}>
@@ -197,7 +222,15 @@ function EditablePanelCard({ panel, onEdit, onDelete, moveTargetRows, onMoveToRo
       </Box>
 
       {/* Edit/delete controls. Drag and resize are handled by react-grid-layout. */}
-      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.25, flexShrink: 0, pr: 2.5 }}>
+      <Box
+        sx={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 0.25,
+          flexShrink: 0,
+          pr: 2.5,
+        }}
+      >
         <Box sx={{ flex: 1 }} />
         <Tooltip title="Edit panel">
           <IconButton aria-label="Edit panel" size="small" onClick={onEdit}>
@@ -205,7 +238,12 @@ function EditablePanelCard({ panel, onEdit, onDelete, moveTargetRows, onMoveToRo
           </IconButton>
         </Tooltip>
         <Tooltip title="Delete panel">
-          <IconButton aria-label="Delete panel" size="small" color="error" onClick={onDelete}>
+          <IconButton
+            aria-label="Delete panel"
+            size="small"
+            color="error"
+            onClick={onDelete}
+          >
             <DeleteIcon sx={{ fontSize: 14 }} />
           </IconButton>
         </Tooltip>
@@ -214,7 +252,9 @@ function EditablePanelCard({ panel, onEdit, onDelete, moveTargetRows, onMoveToRo
             <Tooltip title="Move to row">
               <IconButton
                 aria-label="Move to row"
-                aria-controls={moveMenuOpen ? `move-menu-${panel._id}` : undefined}
+                aria-controls={
+                  moveMenuOpen ? `move-menu-${panel._id}` : undefined
+                }
                 aria-haspopup="true"
                 aria-expanded={moveMenuOpen || undefined}
                 size="small"
@@ -260,7 +300,7 @@ function EditablePanelCard({ panel, onEdit, onDelete, moveTargetRows, onMoveToRo
           justifyContent: 'center',
           color: 'text.secondary',
           opacity: 0.65,
-          pointerEvents: 'none'
+          pointerEvents: 'none',
         }}
       >
         <OpenInFullIcon sx={{ fontSize: 15, transform: 'scaleX(-1)' }} />
@@ -275,7 +315,7 @@ function EditablePanelCard({ panel, onEdit, onDelete, moveTargetRows, onMoveToRo
 
 const INPUT_TYPES = [
   { value: 'autocomplete', label: 'Autocomplete' },
-  { value: 'text', label: 'Text' }
+  { value: 'text', label: 'Text' },
 ];
 
 function emptyInput(): ReportInput {
@@ -297,7 +337,11 @@ function InputCard({ input, onEdit, onDelete, onResize }: InputCardProps) {
       sx={{ p: 1.5, display: 'flex', alignItems: 'center', gap: 1 }}
     >
       <Box sx={{ flex: 1, minWidth: 0 }}>
-        <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center', flexWrap: 'wrap' }}>
+        <Stack
+          direction="row"
+          spacing={0.5}
+          sx={{ alignItems: 'center', flexWrap: 'wrap' }}
+        >
           <Chip
             label={input.type}
             size="small"
@@ -315,7 +359,11 @@ function InputCard({ input, onEdit, onDelete, onResize }: InputCardProps) {
       </Box>
       <Tooltip title="Decrease width">
         <span>
-          <IconButton size="small" disabled={capped <= 1} onClick={() => onResize(-1)}>
+          <IconButton
+            size="small"
+            disabled={capped <= 1}
+            onClick={() => onResize(-1)}
+          >
             <RemoveIcon sx={{ fontSize: 14 }} />
           </IconButton>
         </span>
@@ -325,7 +373,11 @@ function InputCard({ input, onEdit, onDelete, onResize }: InputCardProps) {
       </Typography>
       <Tooltip title="Increase width">
         <span>
-          <IconButton size="small" disabled={capped >= 12} onClick={() => onResize(1)}>
+          <IconButton
+            size="small"
+            disabled={capped >= 12}
+            onClick={() => onResize(1)}
+          >
             <Add sx={{ fontSize: 14 }} />
           </IconButton>
         </span>
@@ -351,7 +403,12 @@ interface InputEditorDialogProps {
   onSave: (input: ReportInput) => void;
 }
 
-function InputEditorDialog({ open, input, onClose, onSave }: InputEditorDialogProps) {
+function InputEditorDialog({
+  open,
+  input,
+  onClose,
+  onSave,
+}: InputEditorDialogProps) {
   const [form, setForm] = useState<ReportInput>(emptyInput());
 
   useEffect(() => {
@@ -365,7 +422,11 @@ function InputEditorDialog({ open, input, onClose, onSave }: InputEditorDialogPr
   function setDefault(field: keyof InputValue, value: string) {
     setForm((prev) => ({
       ...prev,
-      default: { label: prev.default?.label ?? '', value: prev.default?.value ?? '', [field]: value }
+      default: {
+        label: prev.default?.label ?? '',
+        value: prev.default?.value ?? '',
+        [field]: value,
+      },
     }));
   }
 
@@ -385,20 +446,26 @@ function InputEditorDialog({ open, input, onClose, onSave }: InputEditorDialogPr
               onChange={(e) => set('type', e.target.value)}
             >
               {INPUT_TYPES.map((t) => (
-                <MenuItem key={t.value} value={t.value}>{t.label}</MenuItem>
+                <MenuItem key={t.value} value={t.value}>
+                  {t.label}
+                </MenuItem>
               ))}
             </Select>
           </FormControl>
 
           <TextField
-            fullWidth size="small" label="Input ID"
+            fullWidth
+            size="small"
+            label="Input ID"
             value={form.input_id}
             onChange={(e) => set('input_id', e.target.value)}
             helperText="Referenced from panel params via input_id."
           />
 
           <TextField
-            fullWidth size="small" label="Label"
+            fullWidth
+            size="small"
+            label="Label"
             value={form.label}
             onChange={(e) => set('label', e.target.value)}
             helperText="Shown to the user above the input."
@@ -409,7 +476,10 @@ function InputEditorDialog({ open, input, onClose, onSave }: InputEditorDialogPr
               Size (grid columns: {form.size ?? 3})
             </Typography>
             <Slider
-              min={1} max={12} step={1} marks
+              min={1}
+              max={12}
+              step={1}
+              marks
               value={form.size ?? 3}
               onChange={(_, v) => set('size', v as number)}
               valueLabelDisplay="auto"
@@ -420,28 +490,39 @@ function InputEditorDialog({ open, input, onClose, onSave }: InputEditorDialogPr
             <>
               <Divider />
               <TextField
-                fullWidth size="small" label="Cypher (options query)"
-                multiline minRows={3}
+                fullWidth
+                size="small"
+                label="Cypher (options query)"
+                multiline
+                minRows={3}
                 value={form.cypher ?? ''}
                 onChange={(e) => set('cypher', e.target.value || undefined)}
-                slotProps={{ htmlInput: { style: { fontFamily: 'monospace', fontSize: '0.8rem' } } }}
+                slotProps={{
+                  htmlInput: {
+                    style: { fontFamily: 'monospace', fontSize: '0.8rem' },
+                  },
+                }}
                 helperText="Query to populate the dropdown. Must return a 'value' column."
               />
             </>
           )}
 
           <Divider />
-          <Typography variant="body2" sx={{ fontWeight: 'medium' }}>Default value</Typography>
+          <Typography variant="body2" sx={{ fontWeight: 'medium' }}>
+            Default value
+          </Typography>
           <Stack direction="row" spacing={1}>
             <TextField
-              size="small" label="Default label"
+              size="small"
+              label="Default label"
               value={form.default?.label ?? ''}
               onChange={(e) => setDefault('label', e.target.value)}
               sx={{ flex: 1 }}
               helperText="Display label for the default."
             />
             <TextField
-              size="small" label="Default value"
+              size="small"
+              label="Default value"
               value={form.default?.value ?? ''}
               onChange={(e) => setDefault('value', e.target.value)}
               sx={{ flex: 1 }}
@@ -452,7 +533,11 @@ function InputEditorDialog({ open, input, onClose, onSave }: InputEditorDialogPr
       </DialogContent>
       <DialogActions>
         <Button onClick={onClose}>Cancel</Button>
-        <Button variant="contained" onClick={() => onSave(cleanInput(form))} disabled={!canSave}>
+        <Button
+          variant="contained"
+          onClick={() => onSave(cleanInput(form))}
+          disabled={!canSave}
+        >
           Save Input
         </Button>
       </DialogActions>
@@ -464,11 +549,12 @@ function cleanInput(input: ReportInput): ReportInput {
   const result: ReportInput = {
     input_id: input.input_id.trim(),
     type: input.type,
-    label: input.label.trim()
+    label: input.label.trim(),
   };
   if (input.size != null) result.size = Math.max(1, Math.min(12, input.size));
   if (input.cypher) result.cypher = input.cypher;
-  if (input.default?.value) result.default = { label: input.default.label, value: input.default.value };
+  if (input.default?.value)
+    result.default = { label: input.default.label, value: input.default.value };
   return result;
 }
 
@@ -487,15 +573,28 @@ interface QueryRowProps {
 
 // Isolated row component so that local key-name state doesn't cause the
 // parent to re-key the entire list on every keystroke.
-function QueryRow({ queryKey, value, onRename, onValueChange, onDraftValueChange, onDelete }: QueryRowProps) {
+function QueryRow({
+  queryKey,
+  value,
+  onRename,
+  onValueChange,
+  onDraftValueChange,
+  onDelete,
+}: QueryRowProps) {
   const [localKey, setLocalKey] = useState(queryKey);
   const [localValue, setLocalValue] = useState(value);
 
   // Keep local key in sync if the parent renames it externally
-  if (localKey !== queryKey && document.activeElement?.getAttribute('data-query-key') !== queryKey) {
+  if (
+    localKey !== queryKey &&
+    document.activeElement?.getAttribute('data-query-key') !== queryKey
+  ) {
     setLocalKey(queryKey);
   }
-  if (localValue !== value && document.activeElement?.getAttribute('data-query-value') !== queryKey) {
+  if (
+    localValue !== value &&
+    document.activeElement?.getAttribute('data-query-value') !== queryKey
+  ) {
     setLocalValue(value);
   }
 
@@ -532,10 +631,19 @@ function QueryRow({ queryKey, value, onRename, onValueChange, onDraftValueChange
           if (localValue !== value) onValueChange(queryKey, localValue);
         }}
         sx={{ flex: 1 }}
-        slotProps={{ htmlInput: { 'data-query-value': queryKey, style: { fontFamily: 'monospace', fontSize: '0.8rem' } } }}
+        slotProps={{
+          htmlInput: {
+            'data-query-value': queryKey,
+            style: { fontFamily: 'monospace', fontSize: '0.8rem' },
+          },
+        }}
       />
       <Tooltip title="Delete query">
-        <IconButton onClick={() => onDelete(queryKey)} size="small" sx={{ mt: 0.5 }}>
+        <IconButton
+          onClick={() => onDelete(queryKey)}
+          size="small"
+          sx={{ mt: 0.5 }}
+        >
           <DeleteIcon fontSize="small" />
         </IconButton>
       </Tooltip>
@@ -558,7 +666,7 @@ const EditToolbar = memo(function EditToolbar({
   saveError,
   toolbarRef,
   onCancel,
-  onSave
+  onSave,
 }: EditToolbarProps) {
   const [reportName, setReportName] = useState(initialReportName);
   const [saveComment, setSaveComment] = useState('');
@@ -584,7 +692,7 @@ const EditToolbar = memo(function EditToolbar({
         py: 2,
         display: 'flex',
         alignItems: 'center',
-        gap: 1.5
+        gap: 1.5,
       }}
     >
       <Typography variant="body2" sx={{ fontWeight: 'medium', flexShrink: 0 }}>
@@ -637,14 +745,17 @@ interface EditableRowCardProps {
   row: EditableRow;
   rowIndex: number;
   onRename: (rowId: string, name: string) => void;
-  onUpdateRowProps: (rowId: string, updates: Partial<Pick<EditableRow, 'hide_header' | 'collapsible'>>) => void;
+  onUpdateRowProps: (
+    rowId: string,
+    updates: Partial<Pick<EditableRow, 'hide_header' | 'collapsible'>>,
+  ) => void;
   onAddPanel: (rowId: string) => void;
   onDeleteRow: (rowId: string) => void;
   onEditPanel: (rowId: string, panelId: string) => void;
   onDeletePanel: (rowId: string, panelId: string) => void;
   onLayoutChange: (
     rowId: string,
-    layouts: ResponsiveLayouts<ResponsiveBreakpoint>
+    layouts: ResponsiveLayouts<ResponsiveBreakpoint>,
   ) => void;
   dragHandleProps: DragHandleProps;
   moveTargetRows: ReadonlyArray<{ id: string; name: string }>;
@@ -736,7 +847,11 @@ const EditableRowCard = memo(function EditableRowCard({
               <Checkbox
                 size="small"
                 checked={row.hide_header === true}
-                onChange={(e) => onUpdateRowProps(row._id, { hide_header: e.target.checked || undefined })}
+                onChange={(e) =>
+                  onUpdateRowProps(row._id, {
+                    hide_header: e.target.checked || undefined,
+                  })
+                }
               />
             }
             label={<Typography variant="body2">Hide header</Typography>}
@@ -746,7 +861,11 @@ const EditableRowCard = memo(function EditableRowCard({
               <Checkbox
                 size="small"
                 checked={row.collapsible !== false}
-                onChange={(e) => onUpdateRowProps(row._id, { collapsible: e.target.checked ? undefined : false })}
+                onChange={(e) =>
+                  onUpdateRowProps(row._id, {
+                    collapsible: e.target.checked ? undefined : false,
+                  })
+                }
               />
             }
             label={<Typography variant="body2">Collapsible</Typography>}
@@ -756,7 +875,11 @@ const EditableRowCard = memo(function EditableRowCard({
 
         {row.panels.length === 0 ? (
           <Box sx={{ minHeight: 80, display: 'flex', alignItems: 'center' }}>
-            <Typography variant="body2" color="text.secondary" sx={{ py: 2, px: 1 }}>
+            <Typography
+              variant="body2"
+              color="text.secondary"
+              sx={{ py: 2, px: 1 }}
+            >
               No panels yet. Click "Add panel" to add one.
             </Typography>
           </Box>
@@ -773,7 +896,9 @@ const EditableRowCard = memo(function EditableRowCard({
                   onEdit={() => onEditPanel(row._id, panel._id)}
                   onDelete={() => onDeletePanel(row._id, panel._id)}
                   moveTargetRows={moveTargetRows}
-                  onMoveToRow={(targetRowId) => onMovePanel(panel._id, targetRowId)}
+                  onMoveToRow={(targetRowId) =>
+                    onMovePanel(panel._id, targetRowId)
+                  }
                 />
               );
             }}
@@ -791,9 +916,16 @@ interface NamedQueryEditorProps {
   onRename: (oldKey: string, newKey: string) => void;
 }
 
-function NamedQueryEditor({ queries, onChange, onDraftValueChange, onRename }: NamedQueryEditorProps) {
+function NamedQueryEditor({
+  queries,
+  onChange,
+  onDraftValueChange,
+  onRename,
+}: NamedQueryEditorProps) {
   // Stable insertion-order list so React keys don't thrash when a key is renamed
-  const [keyOrder, setKeyOrder] = useState<string[]>(() => Object.keys(queries));
+  const [keyOrder, setKeyOrder] = useState<string[]>(() =>
+    Object.keys(queries),
+  );
 
   function renameKey(oldKey: string, newKey: string) {
     if (newKey === oldKey || newKey in queries) return;
@@ -830,7 +962,8 @@ function NamedQueryEditor({ queries, onChange, onDraftValueChange, onRename }: N
     <Stack spacing={2}>
       {orderedKeys.length === 0 && (
         <Typography variant="body2" color="text.secondary">
-          No named queries yet. Add one below to reference it by key in panel Cypher fields.
+          No named queries yet. Add one below to reference it by key in panel
+          Cypher fields.
         </Typography>
       )}
       {orderedKeys.map((key) => (
@@ -864,19 +997,26 @@ export interface EditableReportViewProps {
   onCancel: () => void;
 }
 
-function EditableReportView({ report, reportId: _reportId, onSave, onCancel }: EditableReportViewProps) {
+function EditableReportView({
+  report,
+  reportId: _reportId,
+  onSave,
+  onCancel,
+}: EditableReportViewProps) {
   const [namedQueries, setNamedQueries] = useState<Record<string, string>>(
-    report.queries ?? {}
+    report.queries ?? {},
   );
   const namedQueriesRef = useRef<Record<string, string>>(report.queries ?? {});
   const [editableRows, setEditableRows] = useState<EditableRow[]>(
-    toEditableRows(report.rows)
+    toEditableRows(report.rows),
   );
   const [editableInputs, setEditableInputs] = useState<ReportInput[]>(
-    report.inputs ?? []
+    report.inputs ?? [],
   );
   const [inputEditorOpen, setInputEditorOpen] = useState(false);
-  const [editingInputIndex, setEditingInputIndex] = useState<number | null>(null);
+  const [editingInputIndex, setEditingInputIndex] = useState<number | null>(
+    null,
+  );
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const toolbarRef = useRef<HTMLDivElement | null>(null);
@@ -925,9 +1065,10 @@ function EditableReportView({ report, reportId: _reportId, onSave, onCancel }: E
         panels: row.panels.map((panel) => ({
           ...panel,
           cypher: panel.cypher === oldKey ? newKey : panel.cypher,
-          details_cypher: panel.details_cypher === oldKey ? newKey : panel.details_cypher
-        }))
-      }))
+          details_cypher:
+            panel.details_cypher === oldKey ? newKey : panel.details_cypher,
+        })),
+      })),
     );
   }
 
@@ -949,7 +1090,9 @@ function EditableReportView({ report, reportId: _reportId, onSave, onCancel }: E
     if (editingInputIndex === null) {
       setEditableInputs((prev) => [...prev, saved]);
     } else {
-      setEditableInputs((prev) => prev.map((inp, i) => (i === editingInputIndex ? saved : inp)));
+      setEditableInputs((prev) =>
+        prev.map((inp, i) => (i === editingInputIndex ? saved : inp)),
+      );
     }
     setInputEditorOpen(false);
   }
@@ -961,8 +1104,10 @@ function EditableReportView({ report, reportId: _reportId, onSave, onCancel }: E
   function resizeInput(index: number, delta: number) {
     setEditableInputs((prev) =>
       prev.map((inp, i) =>
-        i === index ? { ...inp, size: Math.max(1, Math.min(12, (inp.size ?? 3) + delta)) } : inp
-      )
+        i === index
+          ? { ...inp, size: Math.max(1, Math.min(12, (inp.size ?? 3) + delta)) }
+          : inp,
+      ),
     );
   }
 
@@ -971,7 +1116,7 @@ function EditableReportView({ report, reportId: _reportId, onSave, onCancel }: E
   function addRow() {
     setEditableRows((prev) => [
       ...prev,
-      { _id: uid(), name: 'New Row', panels: [] }
+      { _id: uid(), name: 'New Row', panels: [] },
     ]);
   }
 
@@ -981,13 +1126,16 @@ function EditableReportView({ report, reportId: _reportId, onSave, onCancel }: E
 
   function renameRow(rowId: string, name: string) {
     setEditableRows((prev) =>
-      prev.map((r) => (r._id === rowId ? { ...r, name } : r))
+      prev.map((r) => (r._id === rowId ? { ...r, name } : r)),
     );
   }
 
-  function updateRowProps(rowId: string, updates: Partial<Pick<EditableRow, 'hide_header' | 'collapsible'>>) {
+  function updateRowProps(
+    rowId: string,
+    updates: Partial<Pick<EditableRow, 'hide_header' | 'collapsible'>>,
+  ) {
     setEditableRows((prev) =>
-      prev.map((r) => (r._id === rowId ? { ...r, ...updates } : r))
+      prev.map((r) => (r._id === rowId ? { ...r, ...updates } : r)),
     );
   }
 
@@ -997,7 +1145,9 @@ function EditableReportView({ report, reportId: _reportId, onSave, onCancel }: E
 
   const rowSensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
-    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    }),
   );
 
   const handleRowDragEnd = useCallback((event: DragEndEvent) => {
@@ -1039,8 +1189,8 @@ function EditableReportView({ report, reportId: _reportId, onSave, onCancel }: E
       const newPanel: EditablePanel = { ...saved, _id: uid() };
       setEditableRows((prev) =>
         prev.map((r) =>
-          r._id === rowId ? { ...r, panels: [...r.panels, newPanel] } : r
-        )
+          r._id === rowId ? { ...r, panels: [...r.panels, newPanel] } : r,
+        ),
       );
     } else {
       // Update existing
@@ -1049,10 +1199,12 @@ function EditableReportView({ report, reportId: _reportId, onSave, onCancel }: E
           r._id === rowId
             ? {
                 ...r,
-                panels: r.panels.map((p) => (p._id === panelId ? { ...saved, _id: panelId } : p))
+                panels: r.panels.map((p) =>
+                  p._id === panelId ? { ...saved, _id: panelId } : p,
+                ),
               }
-            : r
-        )
+            : r,
+        ),
       );
     }
     setEditorOpen(false);
@@ -1061,8 +1213,10 @@ function EditableReportView({ report, reportId: _reportId, onSave, onCancel }: E
   function deletePanel(rowId: string, panelId: string) {
     setEditableRows((prev) =>
       prev.map((r) =>
-        r._id === rowId ? { ...r, panels: r.panels.filter((p) => p._id !== panelId) } : r
-      )
+        r._id === rowId
+          ? { ...r, panels: r.panels.filter((p) => p._id !== panelId) }
+          : r,
+      ),
     );
   }
 
@@ -1072,8 +1226,10 @@ function EditableReportView({ report, reportId: _reportId, onSave, onCancel }: E
       const panel = sourceRow?.panels.find((p) => p._id === panelId);
       if (!panel) return prev;
       return prev.map((r) => {
-        if (r._id === fromRowId) return { ...r, panels: r.panels.filter((p) => p._id !== panelId) };
-        if (r._id === targetRowId) return { ...r, panels: [...r.panels, panel] };
+        if (r._id === fromRowId)
+          return { ...r, panels: r.panels.filter((p) => p._id !== panelId) };
+        if (r._id === targetRowId)
+          return { ...r, panels: [...r.panels, panel] };
         return r;
       });
     });
@@ -1110,14 +1266,14 @@ function EditableReportView({ report, reportId: _reportId, onSave, onCancel }: E
               x: item.x,
               y: item.y,
               w: item.w,
-              h: item.h
+              h: item.h,
             };
           });
           return dirty ? { ...r, panels: nextPanels } : r;
-        })
+        }),
       );
     },
-    []
+    [],
   );
 
   // ---------------------------------------------------------------------------
@@ -1133,7 +1289,7 @@ function EditableReportView({ report, reportId: _reportId, onSave, onCancel }: E
         name: reportName,
         queries: namedQueriesRef.current,
         inputs: editableInputs.length ? editableInputs : undefined,
-        rows: fromEditableRows(editableRows)
+        rows: fromEditableRows(editableRows),
       };
       await onSave(updatedReport, saveComment);
     } catch (err) {
@@ -1160,7 +1316,10 @@ function EditableReportView({ report, reportId: _reportId, onSave, onCancel }: E
       <Box sx={{ height: toolbarHeight }} />
 
       {/* Named queries section */}
-      <Container maxWidth={false} sx={{ ...contentContainerSx, pt: 1.5, pb: 1 }}>
+      <Container
+        maxWidth={false}
+        sx={{ ...contentContainerSx, pt: 1.5, pb: 1 }}
+      >
         <Accordion variant="outlined" disableGutters defaultExpanded>
           <AccordionSummary expandIcon={<ExpandMoreIcon />}>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -1206,11 +1365,11 @@ function EditableReportView({ report, reportId: _reportId, onSave, onCancel }: E
             <Stack spacing={1}>
               {editableInputs.length === 0 && (
                 <Typography variant="body2" color="text.secondary">
-                  No inputs yet. Add one below to let users filter panel queries.
+                  No inputs yet. Add one below to let users filter panel
+                  queries.
                 </Typography>
               )}
               {editableInputs.map((inp, i) => (
-                // eslint-disable-next-line @eslint-react/no-array-index-key
                 <InputCard
                   key={i}
                   input={inp}
@@ -1231,7 +1390,10 @@ function EditableReportView({ report, reportId: _reportId, onSave, onCancel }: E
 
       {/* Rows with panels */}
       {(() => {
-        const rowNameMap = editableRows.map((r) => ({ id: r._id, name: r.name }));
+        const rowNameMap = editableRows.map((r) => ({
+          id: r._id,
+          name: r.name,
+        }));
         return (
           <DndContext
             sensors={rowSensors}
@@ -1256,7 +1418,9 @@ function EditableReportView({ report, reportId: _reportId, onSave, onCancel }: E
                       onDeletePanel={deletePanel}
                       onLayoutChange={handleLayoutChange}
                       dragHandleProps={dragHandleProps}
-                      moveTargetRows={rowNameMap.filter((r) => r.id !== row._id)}
+                      moveTargetRows={rowNameMap.filter(
+                        (r) => r.id !== row._id,
+                      )}
                       onMovePanel={(panelId, targetRowId) =>
                         movePanel(panelId, row._id, targetRowId)
                       }
@@ -1271,7 +1435,12 @@ function EditableReportView({ report, reportId: _reportId, onSave, onCancel }: E
 
       {/* Add row */}
       <Container maxWidth={false} sx={{ ...contentContainerSx, pb: 2.5 }}>
-        <Button variant="outlined" startIcon={<Add />} onClick={addRow} fullWidth>
+        <Button
+          variant="outlined"
+          startIcon={<Add />}
+          onClick={addRow}
+          fullWidth
+        >
           Add Row
         </Button>
       </Container>
@@ -1282,13 +1451,20 @@ function EditableReportView({ report, reportId: _reportId, onSave, onCancel }: E
         panel={editingPanelRef?.panelId ? editingPanel.current : null}
         onClose={() => setEditorOpen(false)}
         onSave={handlePanelSave}
-        availableVariables={editableInputs.map((i) => ({ name: i.input_id, label: i.label }))}
+        availableVariables={editableInputs.map((i) => ({
+          name: i.input_id,
+          label: i.label,
+        }))}
       />
 
       {/* Input editor dialog */}
       <InputEditorDialog
         open={inputEditorOpen}
-        input={editingInputIndex !== null ? (editableInputs[editingInputIndex] ?? null) : null}
+        input={
+          editingInputIndex !== null
+            ? (editableInputs[editingInputIndex] ?? null)
+            : null
+        }
         onClose={() => setInputEditorOpen(false)}
         onSave={handleInputSave}
       />

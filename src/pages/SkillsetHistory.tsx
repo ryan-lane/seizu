@@ -15,7 +15,7 @@ import {
   Menu,
   MenuItem,
   Tooltip,
-  Typography
+  Typography,
 } from '@mui/material';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import HistoryIcon from '@mui/icons-material/History';
@@ -26,12 +26,12 @@ import { Helmet } from 'react-helmet';
 import {
   SkillsetVersion,
   useSkillsetMutations,
-  useSkillsetVersionsList
+  useSkillsetVersionsList,
 } from 'src/hooks/useSkillsetsApi';
 import ListTable, {
   ListTableColumn,
   listTableActionColumnSx,
-  listTableSecondaryCellSx
+  listTableSecondaryCellSx,
 } from 'src/components/ListTable';
 import UserDisplay from 'src/components/UserDisplay';
 import { usePermissions } from 'src/hooks/usePermissions';
@@ -62,7 +62,11 @@ function RowMenu({ isCurrent, onRestore }: RowMenuProps) {
   return (
     <>
       <Tooltip title="More actions">
-        <IconButton aria-label="More actions" size="small" onClick={(e) => setAnchor(e.currentTarget)}>
+        <IconButton
+          aria-label="More actions"
+          size="small"
+          onClick={(e) => setAnchor(e.currentTarget)}
+        >
           <MoreVertIcon fontSize="small" />
         </IconButton>
       </Tooltip>
@@ -76,9 +80,18 @@ function RowMenu({ isCurrent, onRestore }: RowMenuProps) {
       >
         <Tooltip title={restoreTooltip} placement="left">
           <span>
-            <MenuItem onClick={() => { onRestore(); close(); }} disabled={restoreDisabled}>
+            <MenuItem
+              onClick={() => {
+                onRestore();
+                close();
+              }}
+              disabled={restoreDisabled}
+            >
               <ListItemIcon>
-                <RestoreIcon fontSize="small" color={restoreDisabled ? 'disabled' : 'inherit'} />
+                <RestoreIcon
+                  fontSize="small"
+                  color={restoreDisabled ? 'disabled' : 'inherit'}
+                />
               </ListItemIcon>
               <ListItemText>Restore</ListItemText>
             </MenuItem>
@@ -91,7 +104,7 @@ function RowMenu({ isCurrent, onRestore }: RowMenuProps) {
 
 function SkillsetVersionDetailDialog({
   version,
-  onClose
+  onClose,
 }: {
   version: SkillsetVersion | null;
   onClose: () => void;
@@ -104,16 +117,38 @@ function SkillsetVersionDetailDialog({
       <DialogContent dividers>
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
           <Box>
-            <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 0.5 }}>Version</Typography>
+            <Typography
+              variant="subtitle2"
+              color="text.secondary"
+              sx={{ mb: 0.5 }}
+            >
+              Version
+            </Typography>
             <Typography variant="body2">v{version.version}</Typography>
           </Box>
           <Box>
-            <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 0.5 }}>Status</Typography>
-            <Chip label={version.enabled ? 'Enabled' : 'Disabled'} color={version.enabled ? 'success' : 'default'} size="small" />
+            <Typography
+              variant="subtitle2"
+              color="text.secondary"
+              sx={{ mb: 0.5 }}
+            >
+              Status
+            </Typography>
+            <Chip
+              label={version.enabled ? 'Enabled' : 'Disabled'}
+              color={version.enabled ? 'success' : 'default'}
+              size="small"
+            />
           </Box>
           {version.description && (
             <Box>
-              <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 0.5 }}>Description</Typography>
+              <Typography
+                variant="subtitle2"
+                color="text.secondary"
+                sx={{ mb: 0.5 }}
+              >
+                Description
+              </Typography>
               <Typography variant="body2">{version.description}</Typography>
             </Box>
           )}
@@ -131,9 +166,13 @@ function SkillsetHistory() {
   const navigate = useNavigate();
   const location = useLocation();
   const { fromLabel } = (location.state ?? {}) as BackState;
-  const { versions, loading, error } = useSkillsetVersionsList(skillsetId ?? null);
+  const { versions, loading, error } = useSkillsetVersionsList(
+    skillsetId ?? null,
+  );
   const { updateSkillset } = useSkillsetMutations();
-  const [detailVersion, setDetailVersion] = useState<SkillsetVersion | null>(null);
+  const [detailVersion, setDetailVersion] = useState<SkillsetVersion | null>(
+    null,
+  );
   const sorted = [...versions].sort((a, b) => b.version - a.version);
   const latestVersion = sorted[0]?.version;
   const name = sorted[0]?.name;
@@ -154,7 +193,7 @@ function SkillsetHistory() {
                 color: 'inherit',
                 borderRadius: 0,
                 textAlign: 'left',
-                '&:hover': { textDecoration: 'underline' }
+                '&:hover': { textDecoration: 'underline' },
               }}
             >
               <Typography component="span" sx={{ lineHeight: 1.4 }}>
@@ -168,34 +207,34 @@ function SkillsetHistory() {
             )}
           </Box>
         );
-      }
+      },
     },
     {
       key: 'name',
       label: 'Name',
       cellSx: { width: '24%' },
-      render: (version) => version.name
+      render: (version) => version.name,
     },
     {
       key: 'saved',
       label: 'Saved',
       hideBelow: 'sm',
       cellSx: savedColumnSx,
-      render: (version) => new Date(version.created_at).toLocaleString()
+      render: (version) => new Date(version.created_at).toLocaleString(),
     },
     {
       key: 'created_by',
       label: 'Created By',
       hideBelow: 'md',
       cellSx: authorColumnSx,
-      render: (version) => <UserDisplay userId={version.created_by} />
+      render: (version) => <UserDisplay userId={version.created_by} />,
     },
     {
       key: 'comment',
       label: 'Comment',
       hideBelow: 'lg',
       cellSx: commentColumnSx,
-      render: (version) => version.comment || '—'
+      render: (version) => version.comment || '—',
     },
     {
       key: 'actions',
@@ -206,8 +245,8 @@ function SkillsetHistory() {
           isCurrent={version.version === latestVersion}
           onRestore={() => handleRestore(version)}
         />
-      )
-    }
+      ),
+    },
   ];
 
   async function handleRestore(version: SkillsetVersion) {
@@ -216,17 +255,30 @@ function SkillsetHistory() {
       name: version.name,
       description: version.description,
       enabled: version.enabled,
-      comment: `Restored from version ${version.version}`
+      comment: `Restored from version ${version.version}`,
     });
     navigate('/app/skillsets');
   }
 
   return (
     <Box sx={pageContentSx}>
-      <Helmet><title>{name ? `History - ${name} | Seizu` : 'History | Seizu'}</title></Helmet>
-      {fromLabel && <Button startIcon={<ArrowBackIcon />} onClick={() => navigate(-1)} sx={{ mb: 2 }}>Back to {fromLabel}</Button>}
+      <Helmet>
+        <title>{name ? `History - ${name} | Seizu` : 'History | Seizu'}</title>
+      </Helmet>
+      {fromLabel && (
+        <Button
+          startIcon={<ArrowBackIcon />}
+          onClick={() => navigate(-1)}
+          sx={{ mb: 2 }}
+        >
+          Back to {fromLabel}
+        </Button>
+      )}
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 3 }}>
-        <HistoryIcon color="action" /><Typography variant="h1">Version history{name ? ` - ${name}` : ''}</Typography>
+        <HistoryIcon color="action" />
+        <Typography variant="h1">
+          Version history{name ? ` - ${name}` : ''}
+        </Typography>
       </Box>
       {loading && <CircularProgress />}
       {error && <Typography color="error">Failed to load history</Typography>}

@@ -38,7 +38,8 @@ repos:
     rev: v10.4.0
     hooks:
     -   id: eslint
-        verbose: true
+        # Override the mirror's `types: [javascript]` so .ts/.tsx are linted.
+        types: [file]
         exclude: ^notebooks/
         files: \.(js|jsx|ts|tsx)$
         args:

@@ -7,7 +7,7 @@ import {
   Divider,
   IconButton,
   Grid,
-  Typography
+  Typography,
 } from '@mui/material';
 import { useTheme } from '@mui/material/styles';
 import Info from '@mui/icons-material/Info';
@@ -22,13 +22,13 @@ import QueryValidationBadge from 'src/components/reports/QueryValidationBadge';
 const fillCardSx = {
   height: '100%',
   display: 'flex',
-  flexDirection: 'column' as const
+  flexDirection: 'column' as const,
 };
 
 const chartFillSx = {
   flex: 1,
   minHeight: 0,
-  display: 'flex'
+  display: 'flex',
 };
 
 const MAX_AXIS_LABEL_LINES = 2;
@@ -80,24 +80,27 @@ export function wrapAxisLabel(
 
   const boundedLines = lines.slice(0, maxLines);
   if (lines.length > maxLines) {
-    boundedLines[maxLines - 1] = `${boundedLines[maxLines - 1]} ${lines.slice(maxLines).join(' ')}`;
+    boundedLines[maxLines - 1] =
+      `${boundedLines[maxLines - 1]} ${lines.slice(maxLines).join(' ')}`;
   }
 
-  return boundedLines
-    .map((line) => ellipsizeText(line, maxChars))
-    .join('\n');
+  return boundedLines.map((line) => ellipsizeText(line, maxChars)).join('\n');
 }
 
 interface BarSettings {
   legend?: string;
 }
 
-export function buildBarDataset(records: QueryRecord[]): Record<string, string | number>[] {
+export function buildBarDataset(
+  records: QueryRecord[],
+): Record<string, string | number>[] {
   const mungedRecords: Record<string, string | number>[] = [];
   for (let i = 0; i < records.length; i++) {
     const data = records[i];
     let mungedData: Record<string, unknown>;
-    const dataDetails = data['details'] as QueryRecord & { properties?: QueryRecord };
+    const dataDetails = data['details'] as QueryRecord & {
+      properties?: QueryRecord;
+    };
     if (dataDetails.properties === undefined) {
       mungedData = dataDetails;
     } else {
@@ -147,8 +150,10 @@ export default function CypherBar({
   const theme = useTheme();
   const [open, setOpen] = useState(false);
 
-  const [runQuery, { loading, error, records, first, warnings, queryErrors, tokenExpired }] =
-    useLazyCypherQuery(cypher, reportQueryToken);
+  const [
+    runQuery,
+    { loading, error, records, first, warnings, queryErrors, tokenExpired },
+  ] = useLazyCypherQuery(cypher, reportQueryToken);
 
   const runQueryRef = useRef(runQuery);
   runQueryRef.current = runQuery;
@@ -156,7 +161,10 @@ export default function CypherBar({
   needInputsRef.current = needInputs;
 
   useEffect(() => {
-    if (needInputsRef.current === undefined || needInputsRef.current.length === 0) {
+    if (
+      needInputsRef.current === undefined ||
+      needInputsRef.current.length === 0
+    ) {
       runQueryRef.current(params, { force: (refreshKey ?? 0) > 0 });
     }
   }, [cypher, params, refreshKey]);
@@ -172,13 +180,21 @@ export default function CypherBar({
       <Card sx={fillCardSx}>
         {caption && (
           <>
-            <Grid container spacing={0} sx={{ flexDirection: 'column', alignItems: 'center' }}>
+            <Grid
+              container
+              spacing={0}
+              sx={{ flexDirection: 'column', alignItems: 'center' }}
+            >
               <CardHeader title={caption} />
             </Grid>
             <Divider />
           </>
         )}
-        <Grid container spacing={0} sx={{ flexDirection: 'column', alignItems: 'center' }}>
+        <Grid
+          container
+          spacing={0}
+          sx={{ flexDirection: 'column', alignItems: 'center' }}
+        >
           <CardContent>
             <Error />
             <Typography variant="body2">Missing cypher query</Typography>
@@ -193,13 +209,21 @@ export default function CypherBar({
       <Card sx={fillCardSx}>
         {caption && (
           <>
-            <Grid container spacing={0} sx={{ flexDirection: 'column', alignItems: 'center' }}>
+            <Grid
+              container
+              spacing={0}
+              sx={{ flexDirection: 'column', alignItems: 'center' }}
+            >
               <CardHeader title={caption} />
             </Grid>
             <Divider />
           </>
         )}
-        <Grid container spacing={0} sx={{ flexDirection: 'column', alignItems: 'center' }}>
+        <Grid
+          container
+          spacing={0}
+          sx={{ flexDirection: 'column', alignItems: 'center' }}
+        >
           <CardContent>
             <Typography variant="body2" align="center">
               (Set {needInputs.join(', ')})
@@ -223,17 +247,28 @@ export default function CypherBar({
       <Card sx={fillCardSx}>
         {caption && (
           <>
-            <Grid container sx={{ flexDirection: 'column', alignItems: 'center' }}>
+            <Grid
+              container
+              sx={{ flexDirection: 'column', alignItems: 'center' }}
+            >
               <CardHeader title={caption} />
             </Grid>
             <Divider />
           </>
         )}
         <QueryValidationBadge errors={queryErrors} warnings={warnings} />
-        <Grid container spacing={0} sx={{ flexDirection: 'column', alignItems: 'center' }}>
+        <Grid
+          container
+          spacing={0}
+          sx={{ flexDirection: 'column', alignItems: 'center' }}
+        >
           <CardContent>
-            <Typography variant="h4" align="center">N/A</Typography>
-            <Typography variant="body2" align="center">Query validation failed</Typography>
+            <Typography variant="h4" align="center">
+              N/A
+            </Typography>
+            <Typography variant="body2" align="center">
+              Query validation failed
+            </Typography>
           </CardContent>
         </Grid>
       </Card>
@@ -249,13 +284,21 @@ export default function CypherBar({
       <Card sx={fillCardSx}>
         {caption && (
           <>
-            <Grid container spacing={0} sx={{ flexDirection: 'column', alignItems: 'center' }}>
+            <Grid
+              container
+              spacing={0}
+              sx={{ flexDirection: 'column', alignItems: 'center' }}
+            >
               <CardHeader title={caption} />
             </Grid>
             <Divider />
           </>
         )}
-        <Grid container spacing={0} sx={{ flexDirection: 'column', alignItems: 'center' }}>
+        <Grid
+          container
+          spacing={0}
+          sx={{ flexDirection: 'column', alignItems: 'center' }}
+        >
           <CardContent>
             <Typography variant="h4">N/A</Typography>
           </CardContent>
@@ -271,23 +314,38 @@ export default function CypherBar({
   const tickLabelStyle = {
     fill: theme.palette.text.secondary,
     fontFamily: theme.typography.fontFamily,
-    fontSize: 12
+    fontSize: 12,
   };
 
   return (
     <>
-      <Card sx={{ ...fillCardSx, position: 'relative', '&:hover .panel-info-btn': { opacity: 1 } }}>
+      <Card
+        sx={{
+          ...fillCardSx,
+          position: 'relative',
+          '&:hover .panel-info-btn': { opacity: 1 },
+        }}
+      >
         <IconButton
           className="panel-info-btn"
           size="small"
           onClick={() => setOpen(true)}
-          sx={{ position: 'absolute', top: 8, right: 8, opacity: 0, transition: 'opacity 0.2s' }}
+          sx={{
+            position: 'absolute',
+            top: 8,
+            right: 8,
+            opacity: 0,
+            transition: 'opacity 0.2s',
+          }}
         >
           <Info fontSize="small" />
         </IconButton>
         {caption && (
           <>
-            <Grid container sx={{ flexDirection: 'column', alignItems: 'center' }}>
+            <Grid
+              container
+              sx={{ flexDirection: 'column', alignItems: 'center' }}
+            >
               <CardHeader title={caption} />
             </Grid>
             <Divider />
@@ -298,26 +356,32 @@ export default function CypherBar({
         <Box sx={chartFillSx}>
           <BarChart
             dataset={mungedRecords}
-            xAxis={[{
-              scaleType: 'band',
-              dataKey: 'id',
-              height: 48,
-              disableLine: true,
-              disableTicks: true,
-              tickLabelInterval: () => true,
-              tickLabelMinGap: 2,
-              valueFormatter: (value) => wrapAxisLabel(String(value)),
-              tickLabelStyle
-            }]}
-            yAxis={[{
-              disableLine: true,
-              disableTicks: true,
-              tickLabelStyle
-            }]}
-            series={[{
-              dataKey: 'value',
-              label: caption ?? 'Value'
-            }]}
+            xAxis={[
+              {
+                scaleType: 'band',
+                dataKey: 'id',
+                height: 48,
+                disableLine: true,
+                disableTicks: true,
+                tickLabelInterval: () => true,
+                tickLabelMinGap: 2,
+                valueFormatter: (value) => wrapAxisLabel(String(value)),
+                tickLabelStyle,
+              },
+            ]}
+            yAxis={[
+              {
+                disableLine: true,
+                disableTicks: true,
+                tickLabelStyle,
+              },
+            ]}
+            series={[
+              {
+                dataKey: 'value',
+                label: caption ?? 'Value',
+              },
+            ]}
             borderRadius={6}
             colors={chartColorsFor(theme.palette.mode)}
             grid={{ horizontal: true }}
@@ -329,20 +393,27 @@ export default function CypherBar({
                   ? { top: 16, right: 16, bottom: 88, left: 48 }
                   : { top: 16, right: 16, bottom: 56, left: 48 }
             }
-            slotProps={hasLegend ? {
-              legend: {
-                position:
-                  barSettings?.legend === 'column'
-                    ? { vertical: 'middle', horizontal: 'end' }
-                    : { vertical: 'bottom', horizontal: 'center' },
-                direction: barSettings?.legend === 'column' ? 'vertical' : 'horizontal'
-              }
-            } : undefined}
+            slotProps={
+              hasLegend
+                ? {
+                    legend: {
+                      position:
+                        barSettings?.legend === 'column'
+                          ? { vertical: 'middle', horizontal: 'end' }
+                          : { vertical: 'bottom', horizontal: 'center' },
+                      direction:
+                        barSettings?.legend === 'column'
+                          ? 'vertical'
+                          : 'horizontal',
+                    },
+                  }
+                : undefined
+            }
             sx={{
               '& .MuiChartsGrid-line': {
                 stroke: theme.palette.divider,
-                strokeDasharray: '4 4'
-              }
+                strokeDasharray: '4 4',
+              },
             }}
           />
         </Box>

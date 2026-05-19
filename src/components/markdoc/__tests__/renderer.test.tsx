@@ -6,20 +6,27 @@ afterEach(cleanup);
 
 describe('MarkdocRenderer', () => {
   it('substitutes variables from the variables prop', () => {
-    render(<MarkdocRenderer source="Hello {% $name %}" variables={{ name: 'world' }} />);
+    render(
+      <MarkdocRenderer
+        source="Hello {% $name %}"
+        variables={{ name: 'world' }}
+      />,
+    );
     expect(screen.getByText(/Hello world/)).toBeInTheDocument();
   });
 
   it('treats undefined variables as empty strings', () => {
     const { container } = render(
-      <MarkdocRenderer source="Hello {% $missing %}!" variables={{}} />
+      <MarkdocRenderer source="Hello {% $missing %}!" variables={{}} />,
     );
     expect(container.textContent).toContain('Hello !');
   });
 
   it('treats absent variables as falsy in {% if not($foo) %}', () => {
     const source = '{% if not($foo) %}unset{% else /%}set{% /if %}';
-    const { container, rerender } = render(<MarkdocRenderer source={source} variables={{}} />);
+    const { container, rerender } = render(
+      <MarkdocRenderer source={source} variables={{}} />,
+    );
     expect(container.textContent).toContain('unset');
     rerender(<MarkdocRenderer source={source} variables={{ foo: 'bar' }} />);
     expect(container.textContent).toContain('set');
@@ -58,7 +65,7 @@ describe('MarkdocRenderer', () => {
       <MarkdocRenderer
         source="[label](https://github.com/{%$org%})"
         variables={{ org: 'octo-org' }}
-      />
+      />,
     );
     const a = container.querySelector('a');
     expect(a).not.toBeNull();
@@ -67,7 +74,9 @@ describe('MarkdocRenderer', () => {
   });
 
   it('renders links with the themed MUI Link component', () => {
-    const { container } = render(<MarkdocRenderer source="[home](https://example.com)" />);
+    const { container } = render(
+      <MarkdocRenderer source="[home](https://example.com)" />,
+    );
     const a = container.querySelector('a');
     expect(a).not.toBeNull();
     expect(a?.className).toContain('MuiLink-root');
@@ -79,7 +88,7 @@ describe('MarkdocRenderer', () => {
       <MarkdocRenderer
         source={'Before {% if $show %}\nShown\n{% /if %}'}
         variables={{ show: 'yes' }}
-      />
+      />,
     );
     expect(container.querySelector('p p')).toBeNull();
     expect(container.textContent).toContain('Before');
@@ -91,7 +100,7 @@ describe('MarkdocRenderer', () => {
       <MarkdocRenderer
         source="[label](<https://github.com/{% $org %}>)"
         variables={{ org: 'octo-org' }}
-      />
+      />,
     );
     const a = container.querySelector('a');
     expect(a).not.toBeNull();
@@ -103,7 +112,7 @@ describe('MarkdocRenderer', () => {
       <MarkdocRenderer
         source="![alt](https://cdn.example.com/{%$file%}.png)"
         variables={{ file: 'logo' }}
-      />
+      />,
     );
     const img = container.querySelector('img');
     expect(img).not.toBeNull();
@@ -115,9 +124,11 @@ describe('MarkdocRenderer', () => {
       <MarkdocRenderer
         source="[click](https://example.com/{%$path%})"
         variables={{ path: 'reports/42' }}
-      />
+      />,
     );
-    expect(container.querySelector('a')?.getAttribute('href')).toBe('https://example.com/reports/42');
+    expect(container.querySelector('a')?.getAttribute('href')).toBe(
+      'https://example.com/reports/42',
+    );
   });
 
   it('blocks raw javascript: protocol from a fully variable href', () => {
@@ -125,7 +136,7 @@ describe('MarkdocRenderer', () => {
       <MarkdocRenderer
         source="[click](<{%$url%}>)"
         variables={{ url: 'javascript:alert(1)' }}
-      />
+      />,
     );
     expect(container.querySelector('a')?.getAttribute('href')).toBe('#');
   });
@@ -135,7 +146,7 @@ describe('MarkdocRenderer', () => {
       <MarkdocRenderer
         source="[click](<{%$url%}>)"
         variables={{ url: 'java\tscript:alert(1)' }}
-      />
+      />,
     );
     expect(container.querySelector('a')?.getAttribute('href')).toBe('#');
   });
@@ -145,7 +156,7 @@ describe('MarkdocRenderer', () => {
       <MarkdocRenderer
         source="[click](<{%$url%}>)"
         variables={{ url: 'java\nscript:alert(1)' }}
-      />
+      />,
     );
     expect(container.querySelector('a')?.getAttribute('href')).toBe('#');
   });
@@ -155,7 +166,7 @@ describe('MarkdocRenderer', () => {
       <MarkdocRenderer
         source="[click](<{%$url%}>)"
         variables={{ url: '\u0000javascript:alert(1)' }}
-      />
+      />,
     );
     expect(container.querySelector('a')?.getAttribute('href')).toBe('#');
   });
@@ -165,7 +176,7 @@ describe('MarkdocRenderer', () => {
       <MarkdocRenderer
         source="[click](<{%$url%}>)"
         variables={{ url: 'JaVaScRiPt:alert(1)' }}
-      />
+      />,
     );
     expect(container.querySelector('a')?.getAttribute('href')).toBe('#');
   });
@@ -175,9 +186,11 @@ describe('MarkdocRenderer', () => {
       <MarkdocRenderer
         source="[home](<{%$url%}>)"
         variables={{ url: 'https://example.com/p\tath' }}
-      />
+      />,
     );
-    expect(container.querySelector('a')?.getAttribute('href')).toBe('https://example.com/path');
+    expect(container.querySelector('a')?.getAttribute('href')).toBe(
+      'https://example.com/path',
+    );
   });
 
   it('blocks custom OS protocol handlers from a variable-built href', () => {
@@ -185,7 +198,7 @@ describe('MarkdocRenderer', () => {
       <MarkdocRenderer
         source="[click](<{%$url%}>)"
         variables={{ url: 'slack://channel/T01' }}
-      />
+      />,
     );
     expect(container.querySelector('a')?.getAttribute('href')).toBe('#');
   });
@@ -195,20 +208,28 @@ describe('MarkdocRenderer', () => {
       <MarkdocRenderer
         source="[click](<{%$url%}>)"
         variables={{ url: '//evil.example.com/x' }}
-      />
+      />,
     );
     // The substituted URL has no scheme, so it's treated as a relative path and
     // kept verbatim. Browsers will resolve protocol-relative URLs under the
     // current origin's protocol, which is intentional and what `/path` does too.
-    expect(container.querySelector('a')?.getAttribute('href')).toBe('//evil.example.com/x');
+    expect(container.querySelector('a')?.getAttribute('href')).toBe(
+      '//evil.example.com/x',
+    );
   });
 
   it('allows mailto and tel after substitution', () => {
     const { container } = render(
       <>
-        <MarkdocRenderer source="[email](mailto:{%$addr%})" variables={{ addr: 'a@b.co' }} />
-        <MarkdocRenderer source="[call](tel:{%$num%})" variables={{ num: '+15555555' }} />
-      </>
+        <MarkdocRenderer
+          source="[email](mailto:{%$addr%})"
+          variables={{ addr: 'a@b.co' }}
+        />
+        <MarkdocRenderer
+          source="[call](tel:{%$num%})"
+          variables={{ num: '+15555555' }}
+        />
+      </>,
     );
     const links = container.querySelectorAll('a');
     expect(links[0]?.getAttribute('href')).toBe('mailto:a@b.co');
@@ -220,16 +241,23 @@ describe('MarkdocRenderer', () => {
     // and our renderer does not second-guess it. This is intentional: the
     // allowlist only applies when a variable substitution changed the URL.
     const { container } = render(
-      <MarkdocRenderer source="[chat](slack://channel/T01)" variables={{}} />
+      <MarkdocRenderer source="[chat](slack://channel/T01)" variables={{}} />,
     );
-    expect(container.querySelector('a')?.getAttribute('href')).toBe('slack://channel/T01');
+    expect(container.querySelector('a')?.getAttribute('href')).toBe(
+      'slack://channel/T01',
+    );
   });
 
   it('preserves non-substituted link URLs unchanged', () => {
     const { container } = render(
-      <MarkdocRenderer source="[home](https://example.com/path)" variables={{}} />
+      <MarkdocRenderer
+        source="[home](https://example.com/path)"
+        variables={{}}
+      />,
     );
-    expect(container.querySelector('a')?.getAttribute('href')).toBe('https://example.com/path');
+    expect(container.querySelector('a')?.getAttribute('href')).toBe(
+      'https://example.com/path',
+    );
   });
 
   it('fuzzes markdown fragments without rendering raw executable HTML', () => {
@@ -246,8 +274,8 @@ describe('MarkdocRenderer', () => {
         '![alt](https://example.com/{%$image%}.png)',
         '<script>alert(1)</script>',
         '<img src=x onerror=alert(1)>',
-        '{% if $show %}visible{% /if %}'
-      )
+        '{% if $show %}visible{% /if %}',
+      ),
     );
 
     fc.assert(
@@ -260,7 +288,7 @@ describe('MarkdocRenderer', () => {
             <MarkdocRenderer
               source={fragments.join('\n\n')}
               variables={{ path, image, show: 'true' }}
-            />
+            />,
           );
 
           try {
@@ -270,9 +298,9 @@ describe('MarkdocRenderer', () => {
           } finally {
             cleanup();
           }
-        }
+        },
       ),
-      { numRuns: 75 }
+      { numRuns: 75 },
     );
   });
 
@@ -281,20 +309,27 @@ describe('MarkdocRenderer', () => {
       .constant('javascript:')
       .chain((protocol) =>
         fc.tuple(
-          ...protocol.split('').map((char) =>
-            fc.tuple(
-              fc.boolean(),
-              fc.constantFrom('', '\u0000', '\t', '\n', '\r')
-            ).map(([upper, separator]) => `${upper ? char.toUpperCase() : char}${separator}`)
-          )
-        )
+          ...protocol
+            .split('')
+            .map((char) =>
+              fc
+                .tuple(
+                  fc.boolean(),
+                  fc.constantFrom('', '\u0000', '\t', '\n', '\r'),
+                )
+                .map(
+                  ([upper, separator]) =>
+                    `${upper ? char.toUpperCase() : char}${separator}`,
+                ),
+            ),
+        ),
       )
       .map((parts) => `${parts.join('')}alert(1)`);
 
     fc.assert(
       fc.property(javascriptProtocol, (url) => {
         const { container } = render(
-          <MarkdocRenderer source="[click](<{%$url%}>)" variables={{ url }} />
+          <MarkdocRenderer source="[click](<{%$url%}>)" variables={{ url }} />,
         );
 
         try {
@@ -303,7 +338,7 @@ describe('MarkdocRenderer', () => {
           cleanup();
         }
       }),
-      { numRuns: 75 }
+      { numRuns: 75 },
     );
   });
 });

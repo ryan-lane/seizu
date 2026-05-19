@@ -11,7 +11,7 @@ import {
   Menu,
   MenuItem,
   Tooltip,
-  Typography
+  Typography,
 } from '@mui/material';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import HistoryIcon from '@mui/icons-material/History';
@@ -21,14 +21,16 @@ import Error from '@mui/icons-material/Error';
 import {
   ToolVersion,
   useToolVersionsList,
-  useToolMutations
+  useToolMutations,
 } from 'src/hooks/useToolsetsApi';
 import ListTable, {
   ListTableColumn,
   listTableActionColumnSx,
-  listTableSecondaryCellSx
+  listTableSecondaryCellSx,
 } from 'src/components/ListTable';
-import ToolDetailDialog, { ToolViewData } from 'src/components/ToolDetailDialog';
+import ToolDetailDialog, {
+  ToolViewData,
+} from 'src/components/ToolDetailDialog';
 import UserDisplay from 'src/components/UserDisplay';
 import { usePermissions } from 'src/hooks/usePermissions';
 import type { BackState } from 'src/navigation';
@@ -65,7 +67,11 @@ function RowMenu({ isCurrent, onRestore, onDetail }: RowMenuProps) {
   return (
     <>
       <Tooltip title="More actions">
-        <IconButton aria-label="More actions" size="small" onClick={(e) => setAnchor(e.currentTarget)}>
+        <IconButton
+          aria-label="More actions"
+          size="small"
+          onClick={(e) => setAnchor(e.currentTarget)}
+        >
           <MoreVertIcon fontSize="small" />
         </IconButton>
       </Tooltip>
@@ -78,16 +84,32 @@ function RowMenu({ isCurrent, onRestore, onDetail }: RowMenuProps) {
         transformOrigin={{ vertical: 'top', horizontal: 'right' }}
         slotProps={{ paper: { sx: { minWidth: 180 } } }}
       >
-        <MenuItem onClick={() => { onDetail(); close(); }}>
-          <ListItemIcon><HistoryIcon fontSize="small" /></ListItemIcon>
+        <MenuItem
+          onClick={() => {
+            onDetail();
+            close();
+          }}
+        >
+          <ListItemIcon>
+            <HistoryIcon fontSize="small" />
+          </ListItemIcon>
           <ListItemText>View detail</ListItemText>
         </MenuItem>
 
         <Tooltip title={restoreTooltip} placement="left">
           <span>
-            <MenuItem onClick={() => { onRestore(); close(); }} disabled={restoreDisabled}>
+            <MenuItem
+              onClick={() => {
+                onRestore();
+                close();
+              }}
+              disabled={restoreDisabled}
+            >
               <ListItemIcon>
-                <RestoreIcon fontSize="small" color={restoreDisabled ? 'disabled' : 'inherit'} />
+                <RestoreIcon
+                  fontSize="small"
+                  color={restoreDisabled ? 'disabled' : 'inherit'}
+                />
               </ListItemIcon>
               <ListItemText>Restore</ListItemText>
             </MenuItem>
@@ -108,7 +130,10 @@ function ToolHistory() {
   const location = useLocation();
   const { fromLabel } = (location.state ?? {}) as BackState;
 
-  const { versions, loading, error } = useToolVersionsList(toolsetId ?? null, toolId ?? null);
+  const { versions, loading, error } = useToolVersionsList(
+    toolsetId ?? null,
+    toolId ?? null,
+  );
   const mutations = useToolMutations(toolsetId ?? '');
   const [detailData, setDetailData] = useState<ToolViewData | null>(null);
 
@@ -125,7 +150,11 @@ function ToolHistory() {
         return (
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
             <Typography
-              sx={{ cursor: 'pointer', fontWeight: isCurrent ? 'bold' : 'medium', '&:hover': { textDecoration: 'underline' } }}
+              sx={{
+                cursor: 'pointer',
+                fontWeight: isCurrent ? 'bold' : 'medium',
+                '&:hover': { textDecoration: 'underline' },
+              }}
               onClick={() =>
                 setDetailData({
                   name: version.name,
@@ -133,7 +162,7 @@ function ToolHistory() {
                   description: version.description,
                   cypher: version.cypher,
                   parameters: version.parameters,
-                  enabled: version.enabled
+                  enabled: version.enabled,
                 })
               }
             >
@@ -146,34 +175,34 @@ function ToolHistory() {
             )}
           </Box>
         );
-      }
+      },
     },
     {
       key: 'name',
       label: 'Name',
       cellSx: { width: '24%' },
-      render: (version) => version.name
+      render: (version) => version.name,
     },
     {
       key: 'saved',
       label: 'Saved',
       hideBelow: 'sm',
       cellSx: savedColumnSx,
-      render: (version) => new Date(version.created_at).toLocaleString()
+      render: (version) => new Date(version.created_at).toLocaleString(),
     },
     {
       key: 'created_by',
       label: 'Created by',
       hideBelow: 'md',
       cellSx: authorColumnSx,
-      render: (version) => <UserDisplay userId={version.created_by} />
+      render: (version) => <UserDisplay userId={version.created_by} />,
     },
     {
       key: 'comment',
       label: 'Comment',
       hideBelow: 'lg',
       cellSx: commentColumnSx,
-      render: (version) => version.comment || '—'
+      render: (version) => version.comment || '—',
     },
     {
       key: 'actions',
@@ -191,12 +220,12 @@ function ToolHistory() {
               description: version.description,
               cypher: version.cypher,
               parameters: version.parameters,
-              enabled: version.enabled
+              enabled: version.enabled,
             })
           }
         />
-      )
-    }
+      ),
+    },
   ];
 
   async function handleRestore(version: ToolVersion) {
@@ -207,7 +236,7 @@ function ToolHistory() {
       cypher: version.cypher,
       parameters: version.parameters,
       enabled: version.enabled,
-      comment: `Restored from version ${version.version}`
+      comment: `Restored from version ${version.version}`,
     });
     navigate(`/app/toolsets/${toolsetId}/tools`);
   }
@@ -215,7 +244,9 @@ function ToolHistory() {
   return (
     <>
       <Helmet>
-        <title>{toolName ? `History – ${toolName} | Seizu` : 'History | Seizu'}</title>
+        <title>
+          {toolName ? `History – ${toolName} | Seizu` : 'History | Seizu'}
+        </title>
       </Helmet>
       <Box sx={pageContentSx}>
         {fromLabel && (
