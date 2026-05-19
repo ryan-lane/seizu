@@ -11,7 +11,7 @@ import {
   Menu,
   MenuItem,
   Tooltip,
-  Typography
+  Typography,
 } from '@mui/material';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import HistoryIcon from '@mui/icons-material/History';
@@ -21,12 +21,12 @@ import Error from '@mui/icons-material/Error';
 import {
   ToolsetVersion,
   useToolsetVersionsList,
-  useToolsetMutations
+  useToolsetMutations,
 } from 'src/hooks/useToolsetsApi';
 import ListTable, {
   ListTableColumn,
   listTableActionColumnSx,
-  listTableSecondaryCellSx
+  listTableSecondaryCellSx,
 } from 'src/components/ListTable';
 import UserDisplay from 'src/components/UserDisplay';
 import { usePermissions } from 'src/hooks/usePermissions';
@@ -62,7 +62,11 @@ function RowMenu({ isCurrent, onRestore }: RowMenuProps) {
   return (
     <>
       <Tooltip title="More actions">
-        <IconButton aria-label="More actions" size="small" onClick={(e) => setAnchor(e.currentTarget)}>
+        <IconButton
+          aria-label="More actions"
+          size="small"
+          onClick={(e) => setAnchor(e.currentTarget)}
+        >
           <MoreVertIcon fontSize="small" />
         </IconButton>
       </Tooltip>
@@ -77,9 +81,18 @@ function RowMenu({ isCurrent, onRestore }: RowMenuProps) {
       >
         <Tooltip title={restoreTooltip} placement="left">
           <span>
-            <MenuItem onClick={() => { onRestore(); close(); }} disabled={restoreDisabled}>
+            <MenuItem
+              onClick={() => {
+                onRestore();
+                close();
+              }}
+              disabled={restoreDisabled}
+            >
               <ListItemIcon>
-                <RestoreIcon fontSize="small" color={restoreDisabled ? 'disabled' : 'inherit'} />
+                <RestoreIcon
+                  fontSize="small"
+                  color={restoreDisabled ? 'disabled' : 'inherit'}
+                />
               </ListItemIcon>
               <ListItemText>Restore</ListItemText>
             </MenuItem>
@@ -100,7 +113,9 @@ function ToolsetHistory() {
   const location = useLocation();
   const { fromLabel } = (location.state ?? {}) as BackState;
 
-  const { versions, loading, error } = useToolsetVersionsList(toolsetId ?? null);
+  const { versions, loading, error } = useToolsetVersionsList(
+    toolsetId ?? null,
+  );
   const { updateToolset } = useToolsetMutations();
 
   const sorted = [...versions].sort((a, b) => b.version - a.version);
@@ -125,34 +140,34 @@ function ToolsetHistory() {
             )}
           </Box>
         );
-      }
+      },
     },
     {
       key: 'name',
       label: 'Name',
       cellSx: { width: '24%' },
-      render: (version) => version.name
+      render: (version) => version.name,
     },
     {
       key: 'saved',
       label: 'Saved',
       hideBelow: 'sm',
       cellSx: savedColumnSx,
-      render: (version) => new Date(version.created_at).toLocaleString()
+      render: (version) => new Date(version.created_at).toLocaleString(),
     },
     {
       key: 'created_by',
       label: 'Created by',
       hideBelow: 'md',
       cellSx: authorColumnSx,
-      render: (version) => <UserDisplay userId={version.created_by} />
+      render: (version) => <UserDisplay userId={version.created_by} />,
     },
     {
       key: 'comment',
       label: 'Comment',
       hideBelow: 'lg',
       cellSx: commentColumnSx,
-      render: (version) => version.comment || '—'
+      render: (version) => version.comment || '—',
     },
     {
       key: 'actions',
@@ -163,8 +178,8 @@ function ToolsetHistory() {
           isCurrent={version.version === latestVersion}
           onRestore={() => handleRestore(version)}
         />
-      )
-    }
+      ),
+    },
   ];
 
   async function handleRestore(version: ToolsetVersion) {
@@ -173,7 +188,7 @@ function ToolsetHistory() {
       name: version.name,
       description: version.description,
       enabled: version.enabled,
-      comment: `Restored from version ${version.version}`
+      comment: `Restored from version ${version.version}`,
     });
     navigate('/app/toolsets');
   }
@@ -181,7 +196,9 @@ function ToolsetHistory() {
   return (
     <>
       <Helmet>
-        <title>{toolsetName ? `History – ${toolsetName} | Seizu` : 'History | Seizu'}</title>
+        <title>
+          {toolsetName ? `History – ${toolsetName} | Seizu` : 'History | Seizu'}
+        </title>
       </Helmet>
       <Box sx={pageContentSx}>
         {fromLabel && (

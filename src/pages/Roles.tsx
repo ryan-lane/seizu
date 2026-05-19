@@ -22,7 +22,7 @@ import {
   Paper,
   TextField,
   Tooltip,
-  Typography
+  Typography,
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import BadgeIcon from '@mui/icons-material/Badge';
@@ -40,7 +40,7 @@ import {
   isBuiltinRole,
   useBuiltinRolesList,
   useRoleMutations,
-  useRolesList
+  useRolesList,
 } from 'src/hooks/useRolesApi';
 import UserDisplay from 'src/components/UserDisplay';
 import { usePermissionState } from 'src/hooks/usePermissions';
@@ -50,7 +50,7 @@ import ListTable, {
   listTableActionColumnSx,
   listTablePrimaryCellSx,
   listTableSecondaryCellSx,
-  listTableTruncateSx
+  listTableTruncateSx,
 } from 'src/components/ListTable';
 import type { BackState } from 'src/navigation';
 import { pageContentSx } from 'src/theme/layout';
@@ -70,7 +70,7 @@ const srOnlySx = {
   overflow: 'hidden',
   clip: 'rect(0, 0, 0, 0)',
   whiteSpace: 'nowrap',
-  border: 0
+  border: 0,
 } as const;
 
 function permissionGroup(permission: string): string {
@@ -116,7 +116,8 @@ function PermissionChipsSummary({ permissions }: PermissionChipsSummaryProps) {
 
     updateWidth();
 
-    if (!containerRef.current || typeof ResizeObserver === 'undefined') return undefined;
+    if (!containerRef.current || typeof ResizeObserver === 'undefined')
+      return undefined;
 
     const observer = new ResizeObserver(updateWidth);
     observer.observe(containerRef.current);
@@ -126,9 +127,14 @@ function PermissionChipsSummary({ permissions }: PermissionChipsSummaryProps) {
   useLayoutEffect(() => {
     if (availableWidth <= 0) return;
 
-    const permissionWidths = permissions.map((permission) => permissionRefs.current[permission]?.getBoundingClientRect().width ?? 0);
-    const overflowWidths = Array.from({ length: permissions.length + 1 }, (_, index) =>
-      overflowRefs.current[index]?.getBoundingClientRect().width ?? 0
+    const permissionWidths = permissions.map(
+      (permission) =>
+        permissionRefs.current[permission]?.getBoundingClientRect().width ?? 0,
+    );
+    const overflowWidths = Array.from(
+      { length: permissions.length + 1 },
+      (_, index) =>
+        overflowRefs.current[index]?.getBoundingClientRect().width ?? 0,
     );
 
     let nextVisibleCount = 0;
@@ -136,7 +142,9 @@ function PermissionChipsSummary({ permissions }: PermissionChipsSummaryProps) {
       const remaining = permissions.length - count;
       const chipCount = count + (remaining > 0 ? 1 : 0);
       const totalWidth =
-        permissionWidths.slice(0, count).reduce((sum, width) => sum + width, 0) +
+        permissionWidths
+          .slice(0, count)
+          .reduce((sum, width) => sum + width, 0) +
         (chipCount > 0 ? gapPx * (chipCount - 1) : 0) +
         (remaining > 0 ? (overflowWidths[remaining] ?? 0) : 0);
       if (totalWidth <= availableWidth) {
@@ -154,10 +162,26 @@ function PermissionChipsSummary({ permissions }: PermissionChipsSummaryProps) {
   const remaining = permissions.length - visibleCount;
 
   return (
-    <Box ref={containerRef} sx={{ position: 'relative', minWidth: 0, overflow: 'hidden' }}>
-      <Box sx={{ display: 'flex', flexWrap: 'nowrap', gap: 0.5, overflow: 'hidden', minWidth: 0 }}>
+    <Box
+      ref={containerRef}
+      sx={{ position: 'relative', minWidth: 0, overflow: 'hidden' }}
+    >
+      <Box
+        sx={{
+          display: 'flex',
+          flexWrap: 'nowrap',
+          gap: 0.5,
+          overflow: 'hidden',
+          minWidth: 0,
+        }}
+      >
         {visiblePermissions.map((permission) => (
-          <Chip key={permission} label={permission} size="small" variant="outlined" />
+          <Chip
+            key={permission}
+            label={permission}
+            size="small"
+            variant="outlined"
+          />
         ))}
         {remaining > 0 && (
           <Chip label={`+${remaining}`} size="small" variant="outlined" />
@@ -174,7 +198,7 @@ function PermissionChipsSummary({ permissions }: PermissionChipsSummaryProps) {
           display: 'flex',
           flexWrap: 'nowrap',
           gap: 0.5,
-          minWidth: 0
+          minWidth: 0,
         }}
       >
         {permissions.map((permission) => (
@@ -184,7 +208,8 @@ function PermissionChipsSummary({ permissions }: PermissionChipsSummaryProps) {
             size="small"
             variant="outlined"
             ref={(node) => {
-              permissionRefs.current[permission] = node as HTMLDivElement | null;
+              permissionRefs.current[permission] =
+                node as HTMLDivElement | null;
             }}
           />
         ))}
@@ -212,7 +237,7 @@ interface RoleDetailDialogProps {
 function RoleDetailDialog({ role, onClose }: RoleDetailDialogProps) {
   const groups = useMemo(
     () => groupedPermissions(role?.permissions ?? []),
-    [role]
+    [role],
   );
 
   return (
@@ -227,7 +252,11 @@ function RoleDetailDialog({ role, onClose }: RoleDetailDialogProps) {
             <Typography>{role?.description || '-'}</Typography>
           </Box>
           <Box>
-            <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 1 }}>
+            <Typography
+              variant="subtitle2"
+              color="text.secondary"
+              sx={{ mb: 1 }}
+            >
               Permissions
             </Typography>
             {Object.keys(groups).length === 0 ? (
@@ -236,12 +265,24 @@ function RoleDetailDialog({ role, onClose }: RoleDetailDialogProps) {
               <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
                 {Object.entries(groups).map(([group, permissions]) => (
                   <Box key={group}>
-                    <Typography variant="body2" sx={{ fontWeight: 700, textTransform: 'capitalize', mb: 0.75 }}>
+                    <Typography
+                      variant="body2"
+                      sx={{
+                        fontWeight: 700,
+                        textTransform: 'capitalize',
+                        mb: 0.75,
+                      }}
+                    >
                       {permissionLabel(group)}
                     </Typography>
                     <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.75 }}>
                       {permissions.map((permission) => (
-                        <Chip key={permission} label={permission} size="small" variant="outlined" />
+                        <Chip
+                          key={permission}
+                          label={permission}
+                          size="small"
+                          variant="outlined"
+                        />
                       ))}
                     </Box>
                   </Box>
@@ -266,17 +307,25 @@ interface RoleDialogProps {
   availablePermissions: string[];
 }
 
-function RoleDialog({ open, onClose, onSave, initial, availablePermissions }: RoleDialogProps) {
+function RoleDialog({
+  open,
+  onClose,
+  onSave,
+  initial,
+  availablePermissions,
+}: RoleDialogProps) {
   const [name, setName] = useState(initial?.name ?? '');
   const [description, setDescription] = useState(initial?.description ?? '');
-  const [permissions, setPermissions] = useState<string[]>(initial?.permissions ?? []);
+  const [permissions, setPermissions] = useState<string[]>(
+    initial?.permissions ?? [],
+  );
   const [comment, setComment] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const groups = useMemo(
     () => groupedPermissions(availablePermissions),
-    [availablePermissions]
+    [availablePermissions],
   );
 
   const handleClose = () => {
@@ -285,11 +334,11 @@ function RoleDialog({ open, onClose, onSave, initial, availablePermissions }: Ro
   };
 
   const togglePermission = (permission: string) => {
-    setPermissions((current) => (
+    setPermissions((current) =>
       current.includes(permission)
         ? current.filter((p) => p !== permission)
-        : [...current, permission].sort()
-    ));
+        : [...current, permission].sort(),
+    );
   };
 
   const handleSave = async () => {
@@ -304,17 +353,17 @@ function RoleDialog({ open, onClose, onSave, initial, availablePermissions }: Ro
     }
 
     const req = initial
-      ? {
+      ? ({
           name: name.trim(),
           description: description.trim(),
           permissions,
-          comment: comment.trim() || null
-        } as UpdateRoleRequest
-      : {
+          comment: comment.trim() || null,
+        } as UpdateRoleRequest)
+      : ({
           name: name.trim(),
           description: description.trim(),
-          permissions
-        } as CreateRoleRequest;
+          permissions,
+        } as CreateRoleRequest);
 
     setSaving(true);
     try {
@@ -364,13 +413,23 @@ function RoleDialog({ open, onClose, onSave, initial, availablePermissions }: Ro
               <Box
                 sx={{
                   display: 'grid',
-                  gridTemplateColumns: { xs: '1fr', md: 'repeat(2, minmax(0, 1fr))' },
-                  gap: 2
+                  gridTemplateColumns: {
+                    xs: '1fr',
+                    md: 'repeat(2, minmax(0, 1fr))',
+                  },
+                  gap: 2,
                 }}
               >
                 {Object.entries(groups).map(([group, groupPermissions]) => (
                   <Paper key={group} variant="outlined" sx={{ p: 1.5 }}>
-                    <Typography variant="body2" sx={{ fontWeight: 700, textTransform: 'capitalize', mb: 0.5 }}>
+                    <Typography
+                      variant="body2"
+                      sx={{
+                        fontWeight: 700,
+                        textTransform: 'capitalize',
+                        mb: 0.5,
+                      }}
+                    >
                       {permissionLabel(group)}
                     </Typography>
                     <Box sx={{ display: 'flex', flexDirection: 'column' }}>
@@ -425,7 +484,14 @@ interface RowMenuProps {
   onDelete: () => void;
 }
 
-function RowMenu({ isBuiltin, hasPermission, onView, onEdit, onHistory, onDelete }: RowMenuProps) {
+function RowMenu({
+  isBuiltin,
+  hasPermission,
+  onView,
+  onEdit,
+  onHistory,
+  onDelete,
+}: RowMenuProps) {
   const [anchor, setAnchor] = useState<null | HTMLElement>(null);
   const close = () => setAnchor(null);
 
@@ -434,14 +500,28 @@ function RowMenu({ isBuiltin, hasPermission, onView, onEdit, onHistory, onDelete
   const editDisabled = isBuiltin || !canWrite;
   const deleteDisabled = isBuiltin || !canDelete;
   const historyDisabled = isBuiltin;
-  const editTooltip = isBuiltin ? 'Built-in roles cannot be edited' : !canWrite ? 'You do not have permission to edit roles' : '';
-  const deleteTooltip = isBuiltin ? 'Built-in roles cannot be deleted' : !canDelete ? 'You do not have permission to delete roles' : '';
-  const historyTooltip = isBuiltin ? 'Built-in roles have no version history' : '';
+  const editTooltip = isBuiltin
+    ? 'Built-in roles cannot be edited'
+    : !canWrite
+      ? 'You do not have permission to edit roles'
+      : '';
+  const deleteTooltip = isBuiltin
+    ? 'Built-in roles cannot be deleted'
+    : !canDelete
+      ? 'You do not have permission to delete roles'
+      : '';
+  const historyTooltip = isBuiltin
+    ? 'Built-in roles have no version history'
+    : '';
 
   return (
     <>
       <Tooltip title="More actions">
-        <IconButton aria-label="More actions" size="small" onClick={(e) => setAnchor(e.currentTarget)}>
+        <IconButton
+          aria-label="More actions"
+          size="small"
+          onClick={(e) => setAnchor(e.currentTarget)}
+        >
           <MoreVertIcon fontSize="small" />
         </IconButton>
       </Tooltip>
@@ -453,22 +533,51 @@ function RowMenu({ isBuiltin, hasPermission, onView, onEdit, onHistory, onDelete
         transformOrigin={{ vertical: 'top', horizontal: 'right' }}
         slotProps={{ paper: { sx: { minWidth: 190 } } }}
       >
-        <MenuItem onClick={() => { onView(); close(); }}>
-          <ListItemIcon><VisibilityIcon fontSize="small" /></ListItemIcon>
+        <MenuItem
+          onClick={() => {
+            onView();
+            close();
+          }}
+        >
+          <ListItemIcon>
+            <VisibilityIcon fontSize="small" />
+          </ListItemIcon>
           <ListItemText>View detail</ListItemText>
         </MenuItem>
         <Tooltip title={editTooltip} placement="left">
           <span>
-            <MenuItem onClick={() => { onEdit(); close(); }} disabled={editDisabled}>
-              <ListItemIcon><EditIcon fontSize="small" color={editDisabled ? 'disabled' : 'inherit'} /></ListItemIcon>
+            <MenuItem
+              onClick={() => {
+                onEdit();
+                close();
+              }}
+              disabled={editDisabled}
+            >
+              <ListItemIcon>
+                <EditIcon
+                  fontSize="small"
+                  color={editDisabled ? 'disabled' : 'inherit'}
+                />
+              </ListItemIcon>
               <ListItemText>Edit</ListItemText>
             </MenuItem>
           </span>
         </Tooltip>
         <Tooltip title={historyTooltip} placement="left">
           <span>
-            <MenuItem onClick={() => { onHistory(); close(); }} disabled={historyDisabled}>
-              <ListItemIcon><HistoryIcon fontSize="small" color={historyDisabled ? 'disabled' : 'inherit'} /></ListItemIcon>
+            <MenuItem
+              onClick={() => {
+                onHistory();
+                close();
+              }}
+              disabled={historyDisabled}
+            >
+              <ListItemIcon>
+                <HistoryIcon
+                  fontSize="small"
+                  color={historyDisabled ? 'disabled' : 'inherit'}
+                />
+              </ListItemIcon>
               <ListItemText>View history</ListItemText>
             </MenuItem>
           </span>
@@ -476,8 +585,20 @@ function RowMenu({ isBuiltin, hasPermission, onView, onEdit, onHistory, onDelete
         <Divider />
         <Tooltip title={deleteTooltip} placement="left">
           <span>
-            <MenuItem onClick={() => { onDelete(); close(); }} disabled={deleteDisabled} sx={{ color: deleteDisabled ? undefined : 'error.main' }}>
-              <ListItemIcon><DeleteIcon fontSize="small" color={deleteDisabled ? 'disabled' : 'error'} /></ListItemIcon>
+            <MenuItem
+              onClick={() => {
+                onDelete();
+                close();
+              }}
+              disabled={deleteDisabled}
+              sx={{ color: deleteDisabled ? undefined : 'error.main' }}
+            >
+              <ListItemIcon>
+                <DeleteIcon
+                  fontSize="small"
+                  color={deleteDisabled ? 'disabled' : 'error'}
+                />
+              </ListItemIcon>
               <ListItemText>Delete</ListItemText>
             </MenuItem>
           </span>
@@ -491,7 +612,11 @@ function Roles() {
   const navigate = useNavigate();
   const { hasPermission, loading: permissionsLoading } = usePermissionState();
   const canRead = hasPermission('roles:read');
-  const { roles: builtinRoles, loading: builtinLoading, error: builtinError } = useBuiltinRolesList(canRead);
+  const {
+    roles: builtinRoles,
+    loading: builtinLoading,
+    error: builtinError,
+  } = useBuiltinRolesList(canRead);
   const { roles, loading, error, refresh } = useRolesList(canRead);
   const { createRole, updateRole, deleteRole } = useRoleMutations();
 
@@ -500,16 +625,21 @@ function Roles() {
   const [detailTarget, setDetailTarget] = useState<RoleItem | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<RoleItem | null>(null);
   const [deleting, setDeleting] = useState(false);
-  const [missingPermsTarget, setMissingPermsTarget] = useState<RoleItem | null>(null);
+  const [missingPermsTarget, setMissingPermsTarget] = useState<RoleItem | null>(
+    null,
+  );
   const [missingPermNames, setMissingPermNames] = useState<string[]>([]);
 
   const allRows = useMemo(
     () => [...builtinRoles, ...roles],
-    [builtinRoles, roles]
+    [builtinRoles, roles],
   );
   const availablePermissions = useMemo(
-    () => Array.from(new Set(builtinRoles.flatMap((role) => role.permissions))).sort(),
-    [builtinRoles]
+    () =>
+      Array.from(
+        new Set(builtinRoles.flatMap((role) => role.permissions)),
+      ).sort(),
+    [builtinRoles],
   );
 
   const handleSave = async (req: CreateRoleRequest | UpdateRoleRequest) => {
@@ -537,7 +667,12 @@ function Roles() {
   const handleMissingPermsConfirm = () => {
     if (!missingPermsTarget) return;
     const knownSet = new Set(builtinRoles.flatMap((r) => r.permissions));
-    const filtered = { ...missingPermsTarget, permissions: missingPermsTarget.permissions.filter((p) => knownSet.has(p)) };
+    const filtered = {
+      ...missingPermsTarget,
+      permissions: missingPermsTarget.permissions.filter((p) =>
+        knownSet.has(p),
+      ),
+    };
     setEditTarget(filtered);
     setDialogOpen(true);
     setMissingPermsTarget(null);
@@ -598,15 +733,15 @@ function Roles() {
               fontWeight: 500,
               '&:hover': {
                 backgroundColor: 'transparent',
-                textDecoration: 'underline'
-              }
+                textDecoration: 'underline',
+              },
             },
-            listTableTruncateSx
+            listTableTruncateSx,
           ]}
         >
           {item.name}
         </Button>
-      )
+      ),
     },
     {
       key: 'type',
@@ -622,7 +757,7 @@ function Roles() {
             color={builtin ? 'primary' : 'default'}
           />
         );
-      }
+      },
     },
     {
       key: 'description',
@@ -630,10 +765,14 @@ function Roles() {
       hideBelow: 'md',
       cellSx: descriptionColumnSx,
       render: (item) => (
-        <Typography variant="body2" color="text.secondary" sx={listTableTruncateSx}>
+        <Typography
+          variant="body2"
+          color="text.secondary"
+          sx={listTableTruncateSx}
+        >
           {item.description || '-'}
         </Typography>
-      )
+      ),
     },
     {
       key: 'permissions',
@@ -647,32 +786,39 @@ function Roles() {
             <PermissionChipsSummary permissions={item.permissions} />
           </Box>
         );
-      }
+      },
     },
     {
       key: 'version',
       label: 'Version',
       hideBelow: 'sm',
       cellSx: versionColumnSx,
-      render: (item) => isBuiltinRole(item.role_id) ? '-' : `v${item.current_version}`
+      render: (item) =>
+        isBuiltinRole(item.role_id) ? '-' : `v${item.current_version}`,
     },
     {
       key: 'updated_at',
       label: 'Last updated',
       hideBelow: 'xl',
       cellSx: updatedAtColumnSx,
-      render: (item) => isBuiltinRole(item.role_id) || !item.updated_at ? '-' : new Date(item.updated_at).toLocaleString()
+      render: (item) =>
+        isBuiltinRole(item.role_id) || !item.updated_at
+          ? '-'
+          : new Date(item.updated_at).toLocaleString(),
     },
     {
       key: 'updated_by',
       label: 'Updated by',
       hideBelow: 'lg',
       cellSx: updatedByColumnSx,
-      render: (item) => isBuiltinRole(item.role_id) ? '-' : (
-        item.updated_by
-          ? <UserDisplay userId={item.updated_by} />
-          : <UserDisplay userId={item.created_by} />
-      )
+      render: (item) =>
+        isBuiltinRole(item.role_id) ? (
+          '-'
+        ) : item.updated_by ? (
+          <UserDisplay userId={item.updated_by} />
+        ) : (
+          <UserDisplay userId={item.created_by} />
+        ),
     },
     {
       key: 'actions',
@@ -686,12 +832,16 @@ function Roles() {
             hasPermission={hasPermission}
             onView={() => setDetailTarget(item)}
             onEdit={() => handleEditClick(item)}
-            onHistory={() => navigate(`/app/roles/${item.role_id}/history`, { state: { fromLabel: 'Roles' } satisfies BackState })}
+            onHistory={() =>
+              navigate(`/app/roles/${item.role_id}/history`, {
+                state: { fromLabel: 'Roles' } satisfies BackState,
+              })
+            }
             onDelete={() => setDeleteTarget(item)}
           />
         );
-      }
-    }
+      },
+    },
   ];
   const filterGroups: ListTableFilterGroup<RoleItem>[] = [
     {
@@ -703,28 +853,38 @@ function Roles() {
           key: 'builtin',
           label: 'Built-in',
           icon: <BadgeIcon fontSize="small" />,
-          matches: (item) => isBuiltinRole(item.role_id)
+          matches: (item) => isBuiltinRole(item.role_id),
         },
         {
           key: 'user_defined',
           label: 'User-defined',
           icon: <PersonOutlineIcon fontSize="small" />,
-          matches: (item) => !isBuiltinRole(item.role_id)
-        }
-      ]
-    }
+          matches: (item) => !isBuiltinRole(item.role_id),
+        },
+      ],
+    },
   ];
 
   return (
     <>
       <Box sx={pageContentSx}>
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+        <Box
+          sx={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            mb: 3,
+          }}
+        >
           <Typography variant="h1">Roles</Typography>
           {hasPermission('roles:write') && (
             <Button
               variant="contained"
               startIcon={<AddIcon />}
-              onClick={() => { setEditTarget(null); setDialogOpen(true); }}
+              onClick={() => {
+                setEditTarget(null);
+                setDialogOpen(true);
+              }}
             >
               New role
             </Button>
@@ -764,9 +924,20 @@ function Roles() {
         availablePermissions={availablePermissions}
       />
 
-      <RoleDetailDialog role={detailTarget} onClose={() => setDetailTarget(null)} />
+      <RoleDetailDialog
+        role={detailTarget}
+        onClose={() => setDetailTarget(null)}
+      />
 
-      <Dialog open={!!missingPermsTarget} onClose={() => { setMissingPermsTarget(null); setMissingPermNames([]); }} maxWidth="sm" fullWidth>
+      <Dialog
+        open={!!missingPermsTarget}
+        onClose={() => {
+          setMissingPermsTarget(null);
+          setMissingPermNames([]);
+        }}
+        maxWidth="sm"
+        fullWidth
+      >
         <DialogTitle>Remove unrecognized permissions?</DialogTitle>
         <DialogContent>
           <DialogContentText>
@@ -774,7 +945,13 @@ function Roles() {
           </DialogContentText>
           <Box component="ul" sx={{ mt: 1, mb: 1, pl: 2 }}>
             {missingPermNames.map((p) => (
-              <Box component="li" key={p} sx={{ fontFamily: 'monospace', fontSize: 13 }}>{p}</Box>
+              <Box
+                component="li"
+                key={p}
+                sx={{ fontFamily: 'monospace', fontSize: 13 }}
+              >
+                {p}
+              </Box>
             ))}
           </Box>
           <DialogContentText>
@@ -782,24 +959,43 @@ function Roles() {
           </DialogContentText>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => { setMissingPermsTarget(null); setMissingPermNames([]); }}>Cancel</Button>
-          <Button variant="contained" onClick={handleMissingPermsConfirm}>Continue editing</Button>
+          <Button
+            onClick={() => {
+              setMissingPermsTarget(null);
+              setMissingPermNames([]);
+            }}
+          >
+            Cancel
+          </Button>
+          <Button variant="contained" onClick={handleMissingPermsConfirm}>
+            Continue editing
+          </Button>
         </DialogActions>
       </Dialog>
 
-      <Dialog open={!!deleteTarget} onClose={() => setDeleteTarget(null)} maxWidth="xs" fullWidth>
+      <Dialog
+        open={!!deleteTarget}
+        onClose={() => setDeleteTarget(null)}
+        maxWidth="xs"
+        fullWidth
+      >
         <DialogTitle>Delete role?</DialogTitle>
         <DialogContent>
           <DialogContentText>
-            Permanently delete <strong>{deleteTarget?.name}</strong> and all its versions?
-            This cannot be undone.
+            Permanently delete <strong>{deleteTarget?.name}</strong> and all its
+            versions? This cannot be undone.
           </DialogContentText>
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setDeleteTarget(null)} disabled={deleting}>
             Cancel
           </Button>
-          <Button variant="contained" color="error" onClick={handleDeleteConfirm} disabled={deleting}>
+          <Button
+            variant="contained"
+            color="error"
+            onClick={handleDeleteConfirm}
+            disabled={deleting}
+          >
             {deleting ? <CircularProgress size={20} /> : 'Delete'}
           </Button>
         </DialogActions>

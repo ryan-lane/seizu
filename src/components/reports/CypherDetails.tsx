@@ -13,7 +13,7 @@ import {
   TableContainer,
   TableRow,
   Tabs,
-  Typography
+  Typography,
 } from '@mui/material';
 import useMediaQuery from '@mui/material/useMediaQuery';
 import { useTheme } from '@mui/material/styles';
@@ -43,7 +43,7 @@ function TabPanel({ children, value, index, ...other }: TabPanelProps) {
 function a11yProps(index: number) {
   return {
     id: `simple-tab-${index}`,
-    'aria-controls': `simple-tabpanel-${index}`
+    'aria-controls': `simple-tabpanel-${index}`,
   };
 }
 
@@ -65,7 +65,11 @@ interface CypherDetailsProps {
   setOpen: (open: boolean) => void;
 }
 
-export default function CypherDetails({ details, open, setOpen }: CypherDetailsProps) {
+export default function CypherDetails({
+  details,
+  open,
+  setOpen,
+}: CypherDetailsProps) {
   const theme = useTheme();
   const fullScreen = useMediaQuery(theme.breakpoints.down('sm'));
   const handleClose = () => {
@@ -129,12 +133,12 @@ export default function CypherDetails({ details, open, setOpen }: CypherDetailsP
     paramsRow = (
       <TableRow>
         <TableCell>
-          <Typography variant="body1">
-            Query Parameters
-          </Typography>
+          <Typography variant="body1">Query Parameters</Typography>
         </TableCell>
         <TableCell>
-          <Typography variant="body1" component="div">{params}</Typography>
+          <Typography variant="body1" component="div">
+            {params}
+          </Typography>
         </TableCell>
       </TableRow>
     );
@@ -143,9 +147,7 @@ export default function CypherDetails({ details, open, setOpen }: CypherDetailsP
   let cypherTabs;
   let cypherTabPanel;
   if (details.details_cypher === undefined || details.details_cypher === null) {
-    cypherTabs = [
-      <Tab key={0} label="Query Details" {...a11yProps(0)} />
-    ];
+    cypherTabs = [<Tab key={0} label="Query Details" {...a11yProps(0)} />];
     cypherTabPanel = (
       <TabPanel value={value} index={0}>
         <TableContainer component={Paper}>
@@ -162,7 +164,7 @@ export default function CypherDetails({ details, open, setOpen }: CypherDetailsP
   } else {
     cypherTabs = [
       <Tab key={0} label="Data Details" {...a11yProps(0)} />,
-      <Tab key={1} label="Query Details" {...a11yProps(1)} />
+      <Tab key={1} label="Query Details" {...a11yProps(1)} />,
     ];
     cypherTabPanel = (
       <>

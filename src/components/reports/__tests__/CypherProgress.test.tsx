@@ -3,21 +3,21 @@ import { ThemeProvider, createTheme } from '@mui/material/styles';
 import CypherProgress from '../CypherProgress';
 
 jest.mock('src/hooks/useCypherQuery', () => ({
-  useLazyCypherQuery: jest.fn()
+  useLazyCypherQuery: jest.fn(),
 }));
 
 jest.mock('src/components/reports/CypherDetails', () => ({
   __esModule: true,
   default: function MockCypherDetails({ open }: { open: boolean }) {
     return open ? <div data-testid="details-dialog">Details</div> : null;
-  }
+  },
 }));
 
 jest.mock('src/components/reports/QueryValidationBadge', () => ({
   __esModule: true,
   default: function MockQueryValidationBadge() {
     return null;
-  }
+  },
 }));
 
 const { useLazyCypherQuery } = require('src/hooks/useCypherQuery');
@@ -28,7 +28,14 @@ function Wrapper({ children }) {
   return <ThemeProvider theme={theme}>{children}</ThemeProvider>;
 }
 
-const defaultState = { loading: false, error: null, records: undefined, first: undefined, warnings: [], queryErrors: [] };
+const defaultState = {
+  loading: false,
+  error: null,
+  records: undefined,
+  first: undefined,
+  warnings: [],
+  queryErrors: [],
+};
 
 describe('CypherProgress', () => {
   const mockRunQuery = jest.fn();
@@ -44,7 +51,7 @@ describe('CypherProgress', () => {
     render(
       <Wrapper>
         <CypherProgress caption="Test Progress" />
-      </Wrapper>
+      </Wrapper>,
     );
     expect(screen.getByText('Missing cypher query')).toBeInTheDocument();
   });
@@ -52,7 +59,7 @@ describe('CypherProgress', () => {
   it('shows N/A with needInputs message when needInputs is provided', () => {
     useLazyCypherQuery.mockReturnValue([
       mockRunQuery,
-      { ...defaultState, records: [], first: undefined }
+      { ...defaultState, records: [], first: undefined },
     ]);
     render(
       <Wrapper>
@@ -61,7 +68,7 @@ describe('CypherProgress', () => {
           caption="Test Progress"
           needInputs={['team']}
         />
-      </Wrapper>
+      </Wrapper>,
     );
     expect(screen.getByText('N/A')).toBeInTheDocument();
     expect(screen.getByText('(Set team)')).toBeInTheDocument();
@@ -70,7 +77,7 @@ describe('CypherProgress', () => {
   it('shows error message when query fails', () => {
     useLazyCypherQuery.mockReturnValue([
       mockRunQuery,
-      { ...defaultState, error: new Error('Query failed') }
+      { ...defaultState, error: new Error('Query failed') },
     ]);
     render(
       <Wrapper>
@@ -78,17 +85,17 @@ describe('CypherProgress', () => {
           cypher="MATCH (n) RETURN count(n) as numerator, count(n) as denominator"
           caption="Test Progress"
         />
-      </Wrapper>
+      </Wrapper>,
     );
     expect(
-      screen.getByText(/failed to load requested data/i)
+      screen.getByText(/failed to load requested data/i),
     ).toBeInTheDocument();
   });
 
   it('shows N/A when records exist but first is undefined', () => {
     useLazyCypherQuery.mockReturnValue([
       mockRunQuery,
-      { ...defaultState, records: [], first: undefined }
+      { ...defaultState, records: [], first: undefined },
     ]);
     render(
       <Wrapper>
@@ -96,7 +103,7 @@ describe('CypherProgress', () => {
           cypher="MATCH (n) RETURN count(n) as numerator, count(n) as denominator"
           caption="Test Progress"
         />
-      </Wrapper>
+      </Wrapper>,
     );
     expect(screen.getByText('N/A')).toBeInTheDocument();
   });
@@ -107,8 +114,8 @@ describe('CypherProgress', () => {
       {
         ...defaultState,
         records: [{ numerator: 75, denominator: 100 }],
-        first: { numerator: 75, denominator: 100 }
-      }
+        first: { numerator: 75, denominator: 100 },
+      },
     ]);
     render(
       <Wrapper>
@@ -116,7 +123,7 @@ describe('CypherProgress', () => {
           cypher="MATCH (n) RETURN count(n) as numerator, count(n) as denominator"
           caption="Progress Caption"
         />
-      </Wrapper>
+      </Wrapper>,
     );
     expect(screen.getByText('Progress Caption')).toBeInTheDocument();
     expect(screen.getByText('75%')).toBeInTheDocument();
@@ -125,7 +132,11 @@ describe('CypherProgress', () => {
   it('renders the info button in the top-right when data is loaded', () => {
     useLazyCypherQuery.mockReturnValue([
       mockRunQuery,
-      { ...defaultState, records: [{ numerator: 75, denominator: 100 }], first: { numerator: 75, denominator: 100 } }
+      {
+        ...defaultState,
+        records: [{ numerator: 75, denominator: 100 }],
+        first: { numerator: 75, denominator: 100 },
+      },
     ]);
     const { container } = render(
       <Wrapper>
@@ -133,7 +144,7 @@ describe('CypherProgress', () => {
           cypher="MATCH (n) RETURN count(n) as numerator, count(n) as denominator"
           caption="Test Progress"
         />
-      </Wrapper>
+      </Wrapper>,
     );
     expect(container.querySelector('.panel-info-btn')).toBeInTheDocument();
   });
@@ -141,7 +152,11 @@ describe('CypherProgress', () => {
   it('opens the details dialog when the info button is clicked', () => {
     useLazyCypherQuery.mockReturnValue([
       mockRunQuery,
-      { ...defaultState, records: [{ numerator: 75, denominator: 100 }], first: { numerator: 75, denominator: 100 } }
+      {
+        ...defaultState,
+        records: [{ numerator: 75, denominator: 100 }],
+        first: { numerator: 75, denominator: 100 },
+      },
     ]);
     const { container } = render(
       <Wrapper>
@@ -150,7 +165,7 @@ describe('CypherProgress', () => {
           caption="Test Progress"
           details={{ type: 'progress', caption: 'Test Progress' }}
         />
-      </Wrapper>
+      </Wrapper>,
     );
     fireEvent.click(container.querySelector('.panel-info-btn')!);
     expect(screen.getByTestId('details-dialog')).toBeInTheDocument();
@@ -159,15 +174,12 @@ describe('CypherProgress', () => {
   it('shows validation error state when queryErrors are present', () => {
     useLazyCypherQuery.mockReturnValue([
       mockRunQuery,
-      { ...defaultState, queryErrors: ['Write queries are not allowed'] }
+      { ...defaultState, queryErrors: ['Write queries are not allowed'] },
     ]);
     render(
       <Wrapper>
-        <CypherProgress
-          cypher="CREATE (n) RETURN n"
-          caption="Test Progress"
-        />
-      </Wrapper>
+        <CypherProgress cypher="CREATE (n) RETURN n" caption="Test Progress" />
+      </Wrapper>,
     );
     expect(screen.getByText('Query validation failed')).toBeInTheDocument();
   });

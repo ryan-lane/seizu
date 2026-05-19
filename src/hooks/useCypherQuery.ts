@@ -13,15 +13,25 @@ export type QueryRecord = Record<string, unknown>;
 const MAX_CACHE_ENTRIES = 200;
 const queryResultCache = new Map<string, QueryRecord[]>();
 
-function makeCacheKey(token: string, params: Record<string, unknown> | undefined): string {
+function makeCacheKey(
+  token: string,
+  params: Record<string, unknown> | undefined,
+): string {
   return `${token}|${JSON.stringify(params ?? {})}`;
 }
 
-function readQueryCache(token: string, params: Record<string, unknown> | undefined): QueryRecord[] | undefined {
+function readQueryCache(
+  token: string,
+  params: Record<string, unknown> | undefined,
+): QueryRecord[] | undefined {
   return queryResultCache.get(makeCacheKey(token, params));
 }
 
-function writeQueryCache(token: string, params: Record<string, unknown> | undefined, records: QueryRecord[]): void {
+function writeQueryCache(
+  token: string,
+  params: Record<string, unknown> | undefined,
+  records: QueryRecord[],
+): void {
   if (queryResultCache.size >= MAX_CACHE_ENTRIES) {
     const oldest = queryResultCache.keys().next().value;
     if (oldest !== undefined) queryResultCache.delete(oldest);
@@ -51,8 +61,11 @@ export interface RunOptions {
 
 export function useLazyCypherQuery(
   cypher?: string,
-  reportToken?: string
-): [(params?: Record<string, unknown>, options?: RunOptions) => void, QueryState] {
+  reportToken?: string,
+): [
+  (params?: Record<string, unknown>, options?: RunOptions) => void,
+  QueryState,
+] {
   const { accessToken } = useContext(AuthContext);
   const { auth_required } = useContext(AuthConfigContext);
   const { hasPermission, loading: permissionsLoading } = usePermissionState();
@@ -93,23 +106,41 @@ export function useLazyCypherQuery(
       if (reportToken && !options?.force) {
         const cached = readQueryCache(reportToken, params);
         if (cached !== undefined) {
-          setState({ loading: false, error: null, records: cached, first: cached[0], warnings: [], queryErrors: [], tokenExpired: false, historyId: null });
+          setState({
+            loading: false,
+            error: null,
+            records: cached,
+            first: cached[0],
+            warnings: [],
+            queryErrors: [],
+            tokenExpired: false,
+            historyId: null,
+          });
           return;
         }
       }
 
       // Keep existing records visible while fetching so panels don't flash to skeleton
       // while a token refresh / force-retry is in flight.
-      setState((prev) => ({ ...prev, loading: true, error: null, warnings: [], queryErrors: [], tokenExpired: false }));
+      setState((prev) => ({
+        ...prev,
+        loading: true,
+        error: null,
+        warnings: [],
+        queryErrors: [],
+        tokenExpired: false,
+      }));
 
       const headers: Record<string, string> = {
-        'Content-Type': 'application/json'
+        'Content-Type': 'application/json',
       };
       if (accessToken) {
         headers['Authorization'] = `Bearer ${accessToken}`;
       }
 
-      const endpoint = reportToken ? '/api/v1/query/report' : '/api/v1/query/adhoc';
+      const endpoint = reportToken
+        ? '/api/v1/query/report'
+        : '/api/v1/query/adhoc';
       const body = reportToken
         ? { token: reportToken, params }
         : { query: cypher, params };
@@ -117,76 +148,104 @@ export function useLazyCypherQuery(
       fetch(endpoint, {
         method: 'POST',
         headers,
-        body: JSON.stringify(body)
+        body: JSON.stringify(body),
       })
         .then((res) => res.json())
-        .then((data: { error?: string; code?: string; errors?: string[]; warnings?: string[]; results?: QueryRecord[]; history_id?: string }) => {
-          const validationErrors = data.errors ?? [];
-          const validationWarnings = data.warnings ?? [];
+        .then(
+          (data: {
+            error?: string;
+            code?: string;
+            errors?: string[];
+            warnings?: string[];
+            results?: QueryRecord[];
+            history_id?: string;
+          }) => {
+            const validationErrors = data.errors ?? [];
+            const validationWarnings = data.warnings ?? [];
 
-          if (data.error) {
-            if (data.code === 'token_expired') {
-              // Keep records/first from previous state so panels continue showing stale data
-              // while the token refresh and retry are in flight.
-              setState((prev) => ({
-                ...prev,
-                loading: false,
-                error: null,
-                tokenExpired: true,
-              }));
-            } else {
-              // Server or request-level error (HTTP 500, malformed request, etc.)
+            if (data.error) {
+              if (data.code === 'token_expired') {
+                // Keep records/first from previous state so panels continue showing stale data
+                // while the token refresh and retry are in flight.
+                setState((prev) => ({
+                  ...prev,
+                  loading: false,
+                  error: null,
+                  tokenExpired: true,
+                }));
+              } else {
+                // Server or request-level error (HTTP 500, malformed request, etc.)
+                setState({
+                  loading: false,
+                  error: new Error(data.error),
+                  records: undefined,
+                  first: undefined,
+                  warnings: [],
+                  queryErrors: [],
+                  tokenExpired: false,
+                  historyId: null,
+                });
+              }
+            } else if (validationErrors.length > 0) {
+              // Query validation errors — query was not executed
               setState({
                 loading: false,
-                error: new Error(data.error),
+                error: null,
                 records: undefined,
                 first: undefined,
-                warnings: [],
-                queryErrors: [],
+                warnings: validationWarnings,
+                queryErrors: validationErrors,
                 tokenExpired: false,
                 historyId: null,
               });
+            } else {
+              const results = data.results ?? [];
+              if (reportToken) {
+                writeQueryCache(reportToken, params, results);
+              }
+              setState({
+                loading: false,
+                error: null,
+                records: results,
+                first: results[0],
+                warnings: validationWarnings,
+                queryErrors: [],
+                tokenExpired: false,
+                historyId: data.history_id ?? null,
+              });
             }
-          } else if (validationErrors.length > 0) {
-            // Query validation errors — query was not executed
-            setState({
-              loading: false,
-              error: null,
-              records: undefined,
-              first: undefined,
-              warnings: validationWarnings,
-              queryErrors: validationErrors,
-              tokenExpired: false,
-              historyId: null,
-            });
-          } else {
-            const results = data.results ?? [];
-            if (reportToken) {
-              writeQueryCache(reportToken, params, results);
-            }
-            setState({
-              loading: false,
-              error: null,
-              records: results,
-              first: results[0],
-              warnings: validationWarnings,
-              queryErrors: [],
-              tokenExpired: false,
-              historyId: data.history_id ?? null,
-            });
-          }
-        })
+          },
+        )
         .catch((err: Error) => {
-          setState({ loading: false, error: err, records: undefined, first: undefined, warnings: [], queryErrors: [], tokenExpired: false, historyId: null });
+          setState({
+            loading: false,
+            error: err,
+            records: undefined,
+            first: undefined,
+            warnings: [],
+            queryErrors: [],
+            tokenExpired: false,
+            historyId: null,
+          });
         });
     },
-    [cypher, reportToken, accessToken, auth_required, permissionsLoading, hasPermission]
+    [
+      cypher,
+      reportToken,
+      accessToken,
+      auth_required,
+      permissionsLoading,
+      hasPermission,
+    ],
   );
 
   return [run, state];
 }
 
-export function useLazyHistoryQuery(): [(historyId: string) => void, QueryState] {
+export function useLazyHistoryQuery(): [
+  (historyId: string) => void,
+  QueryState,
+] {
   const { accessToken } = useContext(AuthContext);
   const { auth_required } = useContext(AuthConfigContext);
   const { hasPermission, loading: permissionsLoading } = usePermissionState();
@@ -221,10 +280,17 @@ export function useLazyHistoryQuery(): [(historyId: string) => void, QueryState]
         return;
       }
 
-      setState((prev) => ({ ...prev, loading: true, error: null, warnings: [], queryErrors: [], tokenExpired: false }));
+      setState((prev) => ({
+        ...prev,
+        loading: true,
+        error: null,
+        warnings: [],
+        queryErrors: [],
+        tokenExpired: false,
+      }));
 
       const headers: Record<string, string> = {
-        'Content-Type': 'application/json'
+        'Content-Type': 'application/json',
       };
       if (accessToken) {
         headers['Authorization'] = `Bearer ${accessToken}`;
@@ -233,54 +299,72 @@ export function useLazyHistoryQuery(): [(historyId: string) => void, QueryState]
       fetch('/api/v1/query/history', {
         method: 'POST',
         headers,
-        body: JSON.stringify({ history_id: historyId })
+        body: JSON.stringify({ history_id: historyId }),
       })
         .then((res) => res.json())
-        .then((data: { error?: string; code?: string; errors?: string[]; warnings?: string[]; results?: QueryRecord[]; history_id?: string }) => {
-          const validationErrors = data.errors ?? [];
-          const validationWarnings = data.warnings ?? [];
+        .then(
+          (data: {
+            error?: string;
+            code?: string;
+            errors?: string[];
+            warnings?: string[];
+            results?: QueryRecord[];
+            history_id?: string;
+          }) => {
+            const validationErrors = data.errors ?? [];
+            const validationWarnings = data.warnings ?? [];
 
-          if (data.error) {
-            setState({
-              loading: false,
-              error: new Error(data.error),
-              records: undefined,
-              first: undefined,
-              warnings: [],
-              queryErrors: [],
-              tokenExpired: false,
-              historyId: null,
-            });
-          } else if (validationErrors.length > 0) {
-            setState({
-              loading: false,
-              error: null,
-              records: undefined,
-              first: undefined,
-              warnings: validationWarnings,
-              queryErrors: validationErrors,
-              tokenExpired: false,
-              historyId: null,
-            });
-          } else {
-            const results = data.results ?? [];
-            setState({
-              loading: false,
-              error: null,
-              records: results,
-              first: results[0],
-              warnings: validationWarnings,
-              queryErrors: [],
-              tokenExpired: false,
-              historyId: null,
-            });
-          }
-        })
+            if (data.error) {
+              setState({
+                loading: false,
+                error: new Error(data.error),
+                records: undefined,
+                first: undefined,
+                warnings: [],
+                queryErrors: [],
+                tokenExpired: false,
+                historyId: null,
+              });
+            } else if (validationErrors.length > 0) {
+              setState({
+                loading: false,
+                error: null,
+                records: undefined,
+                first: undefined,
+                warnings: validationWarnings,
+                queryErrors: validationErrors,
+                tokenExpired: false,
+                historyId: null,
+              });
+            } else {
+              const results = data.results ?? [];
+              setState({
+                loading: false,
+                error: null,
+                records: results,
+                first: results[0],
+                warnings: validationWarnings,
+                queryErrors: [],
+                tokenExpired: false,
+                historyId: null,
+              });
+            }
+          },
+        )
         .catch((err: Error) => {
-          setState({ loading: false, error: err, records: undefined, first: undefined, warnings: [], queryErrors: [], tokenExpired: false, historyId: null });
+          setState({
+            loading: false,
+            error: err,
+            records: undefined,
+            first: undefined,
+            warnings: [],
+            queryErrors: [],
+            tokenExpired: false,
+            historyId: null,
+          });
         });
     },
-    [accessToken, auth_required, permissionsLoading, hasPermission]
+    [accessToken, auth_required, permissionsLoading, hasPermission],
   );
 
   return [run, state];

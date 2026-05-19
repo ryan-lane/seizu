@@ -39,12 +39,7 @@ function makeEdge(
   };
 }
 
-const NODES = [
-  makeNode('a'),
-  makeNode('b'),
-  makeNode('c'),
-  makeNode('d'),
-];
+const NODES = [makeNode('a'), makeNode('b'), makeNode('c'), makeNode('d')];
 
 // a → b, a → c, d (isolated)
 const EDGES = [
@@ -78,17 +73,21 @@ describe('computeLayout', () => {
     const compact = computeLayout(graphNodes, graphLinks, 800, 450, 0.5);
     const spread = computeLayout(graphNodes, graphLinks, 800, 450, 2);
 
-    expect(distance(spread, 'a', 'c')).toBeGreaterThan(distance(compact, 'a', 'c'));
+    expect(distance(spread, 'a', 'c')).toBeGreaterThan(
+      distance(compact, 'a', 'c'),
+    );
   });
 });
 
 describe('pointToSegmentDistance', () => {
   it('measures distance to the interior of a relationship segment', () => {
-    expect(pointToSegmentDistance(
-      { x: 50, y: 12 },
-      { x: 0, y: 0 },
-      { x: 100, y: 0 },
-    )).toMatchObject({
+    expect(
+      pointToSegmentDistance(
+        { x: 50, y: 12 },
+        { x: 0, y: 0 },
+        { x: 100, y: 0 },
+      ),
+    ).toMatchObject({
       distance: 12,
       closestX: 50,
       closestY: 0,
@@ -97,11 +96,13 @@ describe('pointToSegmentDistance', () => {
   });
 
   it('clamps distance checks to segment endpoints', () => {
-    expect(pointToSegmentDistance(
-      { x: 120, y: 5 },
-      { x: 0, y: 0 },
-      { x: 100, y: 0 },
-    )).toMatchObject({
+    expect(
+      pointToSegmentDistance(
+        { x: 120, y: 5 },
+        { x: 0, y: 0 },
+        { x: 100, y: 0 },
+      ),
+    ).toMatchObject({
       closestX: 100,
       closestY: 0,
       t: 1,
@@ -111,46 +112,52 @@ describe('pointToSegmentDistance', () => {
 
 describe('extractGraphData', () => {
   it('rejects explicit graph maps whose nodes or links are not arrays', () => {
-    const result = extractGraphData([
-      {
-        graph: {
-          nodes: { length: 1, 0: { id: 'a' } },
-          links: [],
+    const result = extractGraphData(
+      [
+        {
+          graph: {
+            nodes: { length: 1, 0: { id: 'a' } },
+            links: [],
+          },
         },
-      },
-    ], 'name');
+      ],
+      'name',
+    );
 
     expect(result).toBeNull();
   });
 
   it('keeps Neo4j path metadata separate from node and relationship properties', () => {
-    const result = extractGraphData([
-      {
-        path: {
-          nodes: [
-            {
-              id: 42,
-              labels: ['GitHubDependabotAlert'],
-              properties: { id: 'domain-alert-id', name: 'Alert A' },
-            },
-            {
-              id: 43,
-              labels: ['GitHubRepository'],
-              properties: { id: 'domain-repo-id', name: 'repo-a' },
-            },
-          ],
-          relationships: [
-            {
-              id: 7,
-              type: 'AFFECTS',
-              start_node_id: 42,
-              end_node_id: 43,
-              properties: { id: 'domain-rel-id' },
-            },
-          ],
+    const result = extractGraphData(
+      [
+        {
+          path: {
+            nodes: [
+              {
+                id: 42,
+                labels: ['GitHubDependabotAlert'],
+                properties: { id: 'domain-alert-id', name: 'Alert A' },
+              },
+              {
+                id: 43,
+                labels: ['GitHubRepository'],
+                properties: { id: 'domain-repo-id', name: 'repo-a' },
+              },
+            ],
+            relationships: [
+              {
+                id: 7,
+                type: 'AFFECTS',
+                start_node_id: 42,
+                end_node_id: 43,
+                properties: { id: 'domain-rel-id' },
+              },
+            ],
+          },
         },
-      },
-    ], 'name');
+      ],
+      'name',
+    );
 
     expect(result?.nodes[0]).toMatchObject({
       id: 'domain-alert-id',
@@ -170,20 +177,23 @@ describe('extractGraphData', () => {
   });
 
   it('falls back to Neo4j internal id when a path node has no id property', () => {
-    const result = extractGraphData([
-      {
-        path: {
-          nodes: [
-            {
-              id: 42,
-              labels: ['GitHubDependabotAlert'],
-              properties: { name: 'Alert A' },
-            },
-          ],
-          relationships: [],
+    const result = extractGraphData(
+      [
+        {
+          path: {
+            nodes: [
+              {
+                id: 42,
+                labels: ['GitHubDependabotAlert'],
+                properties: { name: 'Alert A' },
+              },
+            ],
+            relationships: [],
+          },
         },
-      },
-    ], 'name');
+      ],
+      'name',
+    );
 
     expect(result?.nodes[0]).toMatchObject({
       id: 42,
@@ -195,37 +205,46 @@ describe('extractGraphData', () => {
 
 describe('graphNodeHoverId', () => {
   it('prefers the property id for node hover text', () => {
-    expect(graphNodeHoverId({
-      id: 'rendered-id',
-      neo4j_id: 42,
-      properties: { id: 'property-id' },
-    })).toBe('property-id');
+    expect(
+      graphNodeHoverId({
+        id: 'rendered-id',
+        neo4j_id: 42,
+        properties: { id: 'property-id' },
+      }),
+    ).toBe('property-id');
   });
 
   it('falls back to Neo4j internal id when property id is unset', () => {
-    expect(graphNodeHoverId({
-      id: 'rendered-id',
-      neo4j_id: 42,
-      properties: {},
-    })).toBe('42');
+    expect(
+      graphNodeHoverId({
+        id: 'rendered-id',
+        neo4j_id: 42,
+        properties: {},
+      }),
+    ).toBe('42');
   });
 
   it('falls back to rendered id when no Neo4j internal id is available', () => {
-    expect(graphNodeHoverId({
-      id: 'rendered-id',
-    })).toBe('rendered-id');
+    expect(
+      graphNodeHoverId({
+        id: 'rendered-id',
+      }),
+    ).toBe('rendered-id');
   });
 });
 
 describe('buildXyEdges', () => {
   it('draws relationship labels without a background box', () => {
-    const result = buildXyEdges([
-      {
-        source: 'a',
-        target: 'b',
-        type: 'REL_AB',
-      },
-    ], EDGE_COLOR);
+    const result = buildXyEdges(
+      [
+        {
+          source: 'a',
+          target: 'b',
+          type: 'REL_AB',
+        },
+      ],
+      EDGE_COLOR,
+    );
 
     expect(result[0].label).toBe('REL_AB');
     expect(result[0].type).toBe('relationship');
@@ -244,32 +263,40 @@ describe('buildXyEdges', () => {
   });
 
   it('uses the closest source and target handles when positions are available', () => {
-    const result = buildXyEdges([
-      {
-        source: 'a',
-        target: 'b',
-        type: 'REL_AB',
-      },
-    ], EDGE_COLOR, new Map([
-      ['a', { x: 0, y: 0 }],
-      ['b', { x: 100, y: 10 }],
-    ]));
+    const result = buildXyEdges(
+      [
+        {
+          source: 'a',
+          target: 'b',
+          type: 'REL_AB',
+        },
+      ],
+      EDGE_COLOR,
+      new Map([
+        ['a', { x: 0, y: 0 }],
+        ['b', { x: 100, y: 10 }],
+      ]),
+    );
 
     expect(result[0].sourceHandle).toBe('source-right');
     expect(result[0].targetHandle).toBe('target-left');
   });
 
   it('uses diagonal handles when the edge direction is diagonal', () => {
-    const result = buildXyEdges([
-      {
-        source: 'a',
-        target: 'b',
-        type: 'REL_AB',
-      },
-    ], EDGE_COLOR, new Map([
-      ['a', { x: 0, y: 0 }],
-      ['b', { x: 100, y: 100 }],
-    ]));
+    const result = buildXyEdges(
+      [
+        {
+          source: 'a',
+          target: 'b',
+          type: 'REL_AB',
+        },
+      ],
+      EDGE_COLOR,
+      new Map([
+        ['a', { x: 0, y: 0 }],
+        ['b', { x: 100, y: 100 }],
+      ]),
+    );
 
     expect(result[0].sourceHandle).toBe('source-bottom-right');
     expect(result[0].targetHandle).toBe('target-top-left');
@@ -324,7 +351,9 @@ describe('closestEdgeHandles', () => {
 
 describe('relationshipLabelTransform', () => {
   it('rotates relationship labels along the edge line', () => {
-    expect(relationshipLabelTransform(0, 0, 10, 10, 5, 5)).toContain('rotate(45deg)');
+    expect(relationshipLabelTransform(0, 0, 10, 10, 5, 5)).toContain(
+      'rotate(45deg)',
+    );
   });
 
   it('offsets relationship labels above the edge line', () => {
@@ -380,42 +409,42 @@ describe('applyFocusOpacity', () => {
     const result = applyFocusOpacity(NODES, EDGES, 'a', EDGE_COLOR);
 
     it('keeps the focused node at full opacity', () => {
-      const node = result.nodes.find(n => n.id === 'a')!;
+      const node = result.nodes.find((n) => n.id === 'a')!;
       expect(node.style?.opacity).toBe(1);
     });
 
     it('keeps direct neighbors (b, c) at full opacity', () => {
-      const b = result.nodes.find(n => n.id === 'b')!;
-      const c = result.nodes.find(n => n.id === 'c')!;
+      const b = result.nodes.find((n) => n.id === 'b')!;
+      const c = result.nodes.find((n) => n.id === 'c')!;
       expect(b.style?.opacity).toBe(1);
       expect(c.style?.opacity).toBe(1);
     });
 
     it('dims nodes not connected to focused node (d)', () => {
-      const d = result.nodes.find(n => n.id === 'd')!;
+      const d = result.nodes.find((n) => n.id === 'd')!;
       expect(d.style?.opacity).toBe(0.35);
     });
 
     it('keeps edges directly connected to focused node at full opacity', () => {
-      const e0 = result.edges.find(e => e.id === 'edge-0')!;
-      const e1 = result.edges.find(e => e.id === 'edge-1')!;
+      const e0 = result.edges.find((e) => e.id === 'edge-0')!;
+      const e1 = result.edges.find((e) => e.id === 'edge-1')!;
       expect(e0.style?.opacity).toBe(1);
       expect(e1.style?.opacity).toBe(1);
     });
 
     it('dims edges not connected to focused node', () => {
-      const e2 = result.edges.find(e => e.id === 'edge-2')!;
+      const e2 = result.edges.find((e) => e.id === 'edge-2')!;
       expect(e2.style?.opacity).toBe(0.35);
     });
 
     it('dims label and label background of non-connected edges', () => {
-      const e2 = result.edges.find(e => e.id === 'edge-2')!;
+      const e2 = result.edges.find((e) => e.id === 'edge-2')!;
       expect(e2.labelStyle?.opacity).toBe(0.35);
       expect(e2.labelBgStyle?.opacity).toBe(0.35);
     });
 
     it('keeps label and label background of connected edges at full opacity', () => {
-      const e0 = result.edges.find(e => e.id === 'edge-0')!;
+      const e0 = result.edges.find((e) => e.id === 'edge-0')!;
       expect(e0.labelStyle?.opacity).toBe(1);
       expect(e0.labelBgStyle?.opacity).toBe(1);
     });
@@ -427,12 +456,12 @@ describe('applyFocusOpacity', () => {
     const result = applyFocusOpacity(nodesWithIsolated, EDGES, 'e', EDGE_COLOR);
 
     it('keeps isolated focused node at full opacity', () => {
-      const e = result.nodes.find(n => n.id === 'e')!;
+      const e = result.nodes.find((n) => n.id === 'e')!;
       expect(e.style?.opacity).toBe(1);
     });
 
     it('dims all other nodes', () => {
-      for (const n of result.nodes.filter(n => n.id !== 'e')) {
+      for (const n of result.nodes.filter((n) => n.id !== 'e')) {
         expect(n.style?.opacity).toBe(0.35);
       }
     });
@@ -448,49 +477,54 @@ describe('applyFocusOpacity', () => {
     const result = applyFocusOpacity(NODES, EDGES, 'edge-2', EDGE_COLOR);
 
     it('keeps the source node (c) at full opacity', () => {
-      const c = result.nodes.find(n => n.id === 'c')!;
+      const c = result.nodes.find((n) => n.id === 'c')!;
       expect(c.style?.opacity).toBe(1);
     });
 
     it('keeps the target node (d) at full opacity', () => {
-      const d = result.nodes.find(n => n.id === 'd')!;
+      const d = result.nodes.find((n) => n.id === 'd')!;
       expect(d.style?.opacity).toBe(1);
     });
 
     it('dims nodes not part of the focused edge', () => {
-      const a = result.nodes.find(n => n.id === 'a')!;
-      const b = result.nodes.find(n => n.id === 'b')!;
+      const a = result.nodes.find((n) => n.id === 'a')!;
+      const b = result.nodes.find((n) => n.id === 'b')!;
       expect(a.style?.opacity).toBe(0.35);
       expect(b.style?.opacity).toBe(0.35);
     });
 
     it('keeps the focused edge at full opacity', () => {
-      const e2 = result.edges.find(e => e.id === 'edge-2')!;
+      const e2 = result.edges.find((e) => e.id === 'edge-2')!;
       expect(e2.style?.opacity).toBe(1);
     });
 
     it('dims other edges', () => {
-      const e0 = result.edges.find(e => e.id === 'edge-0')!;
-      const e1 = result.edges.find(e => e.id === 'edge-1')!;
+      const e0 = result.edges.find((e) => e.id === 'edge-0')!;
+      const e1 = result.edges.find((e) => e.id === 'edge-1')!;
       expect(e0.style?.opacity).toBe(0.35);
       expect(e1.style?.opacity).toBe(0.35);
     });
 
     it('dims label and label background of non-focused edges', () => {
-      const e0 = result.edges.find(e => e.id === 'edge-0')!;
+      const e0 = result.edges.find((e) => e.id === 'edge-0')!;
       expect(e0.labelStyle?.opacity).toBe(0.35);
       expect(e0.labelBgStyle?.opacity).toBe(0.35);
     });
 
     it('keeps label and label background of focused edge at full opacity', () => {
-      const e2 = result.edges.find(e => e.id === 'edge-2')!;
+      const e2 = result.edges.find((e) => e.id === 'edge-2')!;
       expect(e2.labelStyle?.opacity).toBe(1);
       expect(e2.labelBgStyle?.opacity).toBe(1);
     });
   });
 
   describe('unknown focusedId (not a node or edge id)', () => {
-    const result = applyFocusOpacity(NODES, EDGES, 'does-not-exist', EDGE_COLOR);
+    const result = applyFocusOpacity(
+      NODES,
+      EDGES,
+      'does-not-exist',
+      EDGE_COLOR,
+    );
 
     it('returns the original node array unchanged', () => {
       expect(result.nodes).toBe(NODES);
@@ -517,9 +551,12 @@ describe('applyFocusOpacity', () => {
     });
 
     it('preserves existing node style properties when dimming', () => {
-      const nodesWithStyle = [makeNode('x', { background: 'red' }), makeNode('y')];
+      const nodesWithStyle = [
+        makeNode('x', { background: 'red' }),
+        makeNode('y'),
+      ];
       const result = applyFocusOpacity(nodesWithStyle, [], 'y', EDGE_COLOR);
-      const x = result.nodes.find(n => n.id === 'x')!;
+      const x = result.nodes.find((n) => n.id === 'x')!;
       expect(x.style?.background).toBe('red');
       expect(x.style?.opacity).toBe(0.35);
     });

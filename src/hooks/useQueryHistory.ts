@@ -28,7 +28,7 @@ export function useQueryHistory() {
   const [state, setState] = useState<HistoryState>({
     loading: false,
     error: null,
-    data: null
+    data: null,
   });
 
   const fetchHistory = useCallback(
@@ -42,7 +42,7 @@ export function useQueryHistory() {
       }
 
       fetch(`/api/v1/query-history?page=${page}&per_page=${perPage}`, {
-        headers
+        headers,
       })
         .then((res) => {
           if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -55,13 +55,15 @@ export function useQueryHistory() {
           setState({ loading: false, error: err, data: null });
         });
     },
-    [accessToken, auth_required]
+    [accessToken, auth_required],
   );
 
   return { ...state, fetchHistory };
 }
 
-export function useFetchHistoryItem(): (historyId: string) => Promise<QueryHistoryItem | null> {
+export function useFetchHistoryItem(): (
+  historyId: string,
+) => Promise<QueryHistoryItem | null> {
   const { accessToken } = useContext(AuthContext);
   const { auth_required } = useContext(AuthConfigContext);
   const accessTokenRef = useRef(accessToken);
@@ -69,16 +71,22 @@ export function useFetchHistoryItem(): (historyId: string) => Promise<QueryHisto
   const authRequiredRef = useRef(auth_required);
   authRequiredRef.current = auth_required;
 
-  return useCallback(async (historyId: string): Promise<QueryHistoryItem | null> => {
-    if (authRequiredRef.current && !accessTokenRef.current) return null;
-    const headers: Record<string, string> = {};
-    if (accessTokenRef.current) headers.Authorization = `Bearer ${accessTokenRef.current}`;
-    try {
-      const res = await fetch(`/api/v1/query-history/${historyId}`, { headers });
-      if (!res.ok) return null;
-      return res.json() as Promise<QueryHistoryItem>;
-    } catch {
-      return null;
-    }
-  }, []);
+  return useCallback(
+    async (historyId: string): Promise<QueryHistoryItem | null> => {
+      if (authRequiredRef.current && !accessTokenRef.current) return null;
+      const headers: Record<string, string> = {};
+      if (accessTokenRef.current)
+        headers.Authorization = `Bearer ${accessTokenRef.current}`;
+      try {
+        const res = await fetch(`/api/v1/query-history/${historyId}`, {
+          headers,
+        });
+        if (!res.ok) return null;
+        return res.json() as Promise<QueryHistoryItem>;
+      } catch {
+        return null;
+      }
+    },
+    [],
+  );
 }

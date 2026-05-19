@@ -12,7 +12,7 @@ const container = document.getElementById('root') as HTMLElement;
 const root = createRoot(container);
 const emotionCache = createCache({
   key: 'mui',
-  nonce: cspNonce
+  nonce: cspNonce,
 });
 
 root.render(
@@ -20,5 +20,5 @@ root.render(
     <BrowserRouter>
       <App />
     </BrowserRouter>
-  </CacheProvider>
+  </CacheProvider>,
 );

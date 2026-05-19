@@ -1,5 +1,10 @@
 import { useState, useEffect } from 'react';
-import { useParams, useNavigate, useSearchParams, useLocation } from 'react-router-dom';
+import {
+  useParams,
+  useNavigate,
+  useSearchParams,
+  useLocation,
+} from 'react-router-dom';
 import {
   Box,
   Button,
@@ -30,7 +35,11 @@ import RefreshIcon from '@mui/icons-material/Refresh';
 
 import ReportView from 'src/components/ReportView';
 import EditableReportView from 'src/components/EditableReportView';
-import { useReport, useReportsMutations, updateCachedReportCapabilities } from 'src/hooks/useReportsApi';
+import {
+  useReport,
+  useReportsMutations,
+  updateCachedReportCapabilities,
+} from 'src/hooks/useReportsApi';
 import { Report } from 'src/config.context';
 import { usePermissionState } from 'src/hooks/usePermissions';
 import type { BackState } from 'src/navigation';
@@ -41,17 +50,40 @@ function Reports() {
   const navigate = useNavigate();
   const location = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
-  const { hasPermission, loading: permissionsLoading, currentUser } = usePermissionState();
+  const {
+    hasPermission,
+    loading: permissionsLoading,
+    currentUser,
+  } = usePermissionState();
 
   const [editMode, setEditMode] = useState(searchParams.get('edit') === 'true');
-  const [displayedReport, setDisplayedReport] = useState<Report | undefined>(undefined);
-  const [displayedName, setDisplayedName] = useState<string | undefined>(undefined);
-  const [displayedAccessScope, setDisplayedAccessScope] = useState<'private' | 'public' | undefined>(undefined);
-  const [displayedOwnerId, setDisplayedOwnerId] = useState<string | undefined>(undefined);
-  const [displayedQueryCapabilities, setDisplayedQueryCapabilities] = useState<Record<string, string> | undefined>(undefined);
+  const [displayedReport, setDisplayedReport] = useState<Report | undefined>(
+    undefined,
+  );
+  const [displayedName, setDisplayedName] = useState<string | undefined>(
+    undefined,
+  );
+  const [displayedAccessScope, setDisplayedAccessScope] = useState<
+    'private' | 'public' | undefined
+  >(undefined);
+  const [displayedOwnerId, setDisplayedOwnerId] = useState<string | undefined>(
+    undefined,
+  );
+  const [displayedQueryCapabilities, setDisplayedQueryCapabilities] = useState<
+    Record<string, string> | undefined
+  >(undefined);
 
-  const { report, name, reportVersion, queryCapabilities, loading, error, refresh: refreshCapabilities } = useReport(id);
-  const { saveReportVersion, cloneReport, updateReportVisibility } = useReportsMutations();
+  const {
+    report,
+    name,
+    reportVersion,
+    queryCapabilities,
+    loading,
+    error,
+    refresh: refreshCapabilities,
+  } = useReport(id);
+  const { saveReportVersion, cloneReport, updateReportVisibility } =
+    useReportsMutations();
 
   const [cloneOpen, setCloneOpen] = useState(false);
   const [cloneName, setCloneName] = useState('');
@@ -114,7 +146,12 @@ function Reports() {
 
   async function handleSave(updatedReport: Report, comment: string) {
     if (!id) return;
-    const version = await saveReportVersion(id, updatedReport, comment || undefined, true);
+    const version = await saveReportVersion(
+      id,
+      updatedReport,
+      comment || undefined,
+      true,
+    );
     const savedName = updatedReport.name?.trim() || version.name;
     // Keep the capabilities cache consistent so navigating away and back after save
     // returns the new version's tokens rather than the pre-save ones.
@@ -124,7 +161,9 @@ function Reports() {
       reportVersion: version,
       queryCapabilities: version.query_capabilities,
     });
-    setDisplayedReport(savedName ? { ...version.config, name: savedName } : version.config);
+    setDisplayedReport(
+      savedName ? { ...version.config, name: savedName } : version.config,
+    );
     setDisplayedName(savedName);
     setDisplayedQueryCapabilities(version.query_capabilities);
     window.dispatchEvent(new Event('seizu:reports-updated'));
@@ -137,7 +176,10 @@ function Reports() {
     if (!id || !displayedAccessScope) return;
     setUpdatingAccess(true);
     try {
-      const updated = await updateReportVisibility(id, displayedAccessScope === 'public' ? 'private' : 'public');
+      const updated = await updateReportVisibility(
+        id,
+        displayedAccessScope === 'public' ? 'private' : 'public',
+      );
       setDisplayedAccessScope(updated.access.scope);
     } finally {
       setUpdatingAccess(false);
@@ -154,7 +196,9 @@ function Reports() {
 
   if ((error || (!displayedReport && !report)) && !loading) {
     return (
-      <Box sx={{ ...pageContentSx, display: 'flex', alignItems: 'center', gap: 1 }}>
+      <Box
+        sx={{ ...pageContentSx, display: 'flex', alignItems: 'center', gap: 1 }}
+      >
         <Error />
         <Typography>Failed to load report</Typography>
       </Box>
@@ -205,45 +249,59 @@ function Reports() {
               label: 'History',
               icon: <HistoryIcon fontSize="small" />,
               disabled: false,
-              onClick: () => navigate(`/app/reports/${id}/history`, {
-                state: {
-                  fromLabel: displayedName ?? 'report',
-                  originReturnTo: `${location.pathname}${location.search}`
-                } satisfies BackState
-              })
+              onClick: () =>
+                navigate(`/app/reports/${id}/history`, {
+                  state: {
+                    fromLabel: displayedName ?? 'report',
+                    originReturnTo: `${location.pathname}${location.search}`,
+                  } satisfies BackState,
+                }),
             },
             ...(canWriteReports
               ? [
                   {
                     key: 'visibility',
-                    label: displayedAccessScope === 'public' ? 'Unpublish' : 'Publish',
-                    icon: updatingAccess
-                      ? <CircularProgress size={18} />
-                      : displayedAccessScope === 'public'
-                        ? <LockIcon fontSize="small" />
-                        : <PublicIcon fontSize="small" />,
+                    label:
+                      displayedAccessScope === 'public'
+                        ? 'Unpublish'
+                        : 'Publish',
+                    icon: updatingAccess ? (
+                      <CircularProgress size={18} />
+                    ) : displayedAccessScope === 'public' ? (
+                      <LockIcon fontSize="small" />
+                    ) : (
+                      <PublicIcon fontSize="small" />
+                    ),
                     disabled: !canUpdateAccess || updatingAccess,
-                    onClick: handleToggleAccess
+                    onClick: handleToggleAccess,
                   },
                   {
                     key: 'clone',
                     label: 'Clone',
                     icon: <ContentCopyIcon fontSize="small" />,
                     disabled: false,
-                    onClick: handleCloneOpen
-                  }
+                    onClick: handleCloneOpen,
+                  },
                 ]
-              : [])
+              : []),
           ];
 
           return (
             <>
               {displayedAccessScope && (
                 <Chip
-                  icon={displayedAccessScope === 'public' ? <PublicIcon /> : <LockIcon />}
+                  icon={
+                    displayedAccessScope === 'public' ? (
+                      <PublicIcon />
+                    ) : (
+                      <LockIcon />
+                    )
+                  }
                   label={displayedAccessScope === 'public' ? 'Public' : 'Draft'}
                   size="small"
-                  color={displayedAccessScope === 'public' ? 'success' : 'default'}
+                  color={
+                    displayedAccessScope === 'public' ? 'success' : 'default'
+                  }
                   variant="outlined"
                   sx={{ alignSelf: 'center' }}
                 />
@@ -277,11 +335,20 @@ function Reports() {
               >
                 {refreshedAtLabel && (
                   <MenuItem disabled sx={{ opacity: '1 !important' }}>
-                    <Typography variant="caption" color="text.secondary">{refreshedAtLabel}</Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      {refreshedAtLabel}
+                    </Typography>
                   </MenuItem>
                 )}
-                <MenuItem onClick={() => { closeActionsMenu(); onRefresh(); }}>
-                  <ListItemIcon><RefreshIcon fontSize="small" /></ListItemIcon>
+                <MenuItem
+                  onClick={() => {
+                    closeActionsMenu();
+                    onRefresh();
+                  }}
+                >
+                  <ListItemIcon>
+                    <RefreshIcon fontSize="small" />
+                  </ListItemIcon>
                   <ListItemText>Refresh data</ListItemText>
                 </MenuItem>
                 <Divider />
@@ -305,7 +372,12 @@ function Reports() {
         onRefreshCapabilities={refreshCapabilities}
       />
 
-      <Dialog open={cloneOpen} onClose={() => setCloneOpen(false)} maxWidth="sm" fullWidth>
+      <Dialog
+        open={cloneOpen}
+        onClose={() => setCloneOpen(false)}
+        maxWidth="sm"
+        fullWidth
+      >
         <DialogTitle>Clone report</DialogTitle>
         <DialogContent>
           {cloneError && (

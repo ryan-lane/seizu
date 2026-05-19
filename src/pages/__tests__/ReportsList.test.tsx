@@ -15,12 +15,17 @@ jest.mock('src/components/UserDisplay', () => ({
   default: ({ userId }: { userId: string }) => <>{userId}</>,
 }));
 
-const mockUsePermissionState = permissionsModule.usePermissionState as jest.MockedFunction<typeof permissionsModule.usePermissionState>;
+const mockUsePermissionState =
+  permissionsModule.usePermissionState as jest.MockedFunction<
+    typeof permissionsModule.usePermissionState
+  >;
 const theme = createTheme();
 
 function LocationTracker() {
   const location = useLocation();
-  return <div data-testid="location">{`${location.pathname}${location.search}`}</div>;
+  return (
+    <div data-testid="location">{`${location.pathname}${location.search}`}</div>
+  );
 }
 
 const REPORTS: reportsApiModule.ReportListItem[] = [
@@ -55,7 +60,15 @@ function Wrapper({ children }: { children: React.ReactNode }) {
     <MemoryRouter initialEntries={['/app/reports']}>
       <ThemeProvider theme={theme}>
         <Routes>
-          <Route path="/app/reports" element={<>{children}<LocationTracker /></>} />
+          <Route
+            path="/app/reports"
+            element={
+              <>
+                {children}
+                <LocationTracker />
+              </>
+            }
+          />
           <Route path="/app/reports/:reportId" element={<LocationTracker />} />
         </Routes>
       </ThemeProvider>
@@ -74,9 +87,18 @@ describe('ReportsList', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
-    mockUseReportsList = jest.spyOn(reportsApiModule, 'useReportsList') as unknown as jest.Mock;
-    mockUseDashboardReportId = jest.spyOn(reportsApiModule, 'useDashboardReportId') as unknown as jest.Mock;
-    mockUseReportsMutations = jest.spyOn(reportsApiModule, 'useReportsMutations') as unknown as jest.Mock;
+    mockUseReportsList = jest.spyOn(
+      reportsApiModule,
+      'useReportsList',
+    ) as unknown as jest.Mock;
+    mockUseDashboardReportId = jest.spyOn(
+      reportsApiModule,
+      'useDashboardReportId',
+    ) as unknown as jest.Mock;
+    mockUseReportsMutations = jest.spyOn(
+      reportsApiModule,
+      'useReportsMutations',
+    ) as unknown as jest.Mock;
     refreshReports = jest.fn();
     cloneReport = jest.fn().mockResolvedValue({
       ...REPORTS[0],
@@ -86,7 +108,10 @@ describe('ReportsList', () => {
     updateReportVisibility = jest.fn();
     deleteReport = jest.fn();
     mockUsePermissionState.mockReturnValue({
-      hasPermission: (permission: string) => ['reports:write', 'reports:delete', 'reports:set_dashboard'].includes(permission),
+      hasPermission: (permission: string) =>
+        ['reports:write', 'reports:delete', 'reports:set_dashboard'].includes(
+          permission,
+        ),
       loading: false,
       currentUser: {
         user_id: 'alice',
@@ -135,17 +160,23 @@ describe('ReportsList', () => {
   it('renders report list columns with visibility and updated-by metadata', () => {
     render(<ReportsList />, { wrapper: Wrapper });
 
-    expect(screen.getByRole('columnheader', { name: 'Visibility' })).toBeInTheDocument();
+    expect(
+      screen.getByRole('columnheader', { name: 'Visibility' }),
+    ).toBeInTheDocument();
     expect(screen.getByText('Last updated')).toBeInTheDocument();
     expect(screen.getByText('Updated by')).toBeInTheDocument();
 
-    expect(screen.getByRole('link', { name: 'Executive Risk' })).toBeInTheDocument();
+    expect(
+      screen.getByRole('link', { name: 'Executive Risk' }),
+    ).toBeInTheDocument();
     expect(screen.getByText('Public')).toBeInTheDocument();
     expect(screen.getByText('Pinned')).toBeInTheDocument();
     expect(screen.getByText('Dashboard')).toBeInTheDocument();
     expect(screen.getByText('bob')).toBeInTheDocument();
 
-    expect(screen.getByRole('link', { name: 'Draft Findings' })).toBeInTheDocument();
+    expect(
+      screen.getByRole('link', { name: 'Draft Findings' }),
+    ).toBeInTheDocument();
     expect(screen.getByText('Draft')).toBeInTheDocument();
     expect(screen.getByText('carol')).toBeInTheDocument();
   });
@@ -161,7 +192,9 @@ describe('ReportsList', () => {
     await user.click(screen.getAllByLabelText('More actions')[0]);
     await user.click(screen.getByRole('menuitem', { name: /clone/i }));
 
-    expect(screen.getByRole('textbox', { name: 'New report name' })).toHaveValue('Copy of Executive Risk');
+    expect(
+      screen.getByRole('textbox', { name: 'New report name' }),
+    ).toHaveValue('Copy of Executive Risk');
 
     await user.click(screen.getByRole('button', { name: 'Clone' }));
 
@@ -170,12 +203,18 @@ describe('ReportsList', () => {
     });
     expect(refreshReports).toHaveBeenCalledTimes(1);
     await waitFor(() => {
-      expect(screen.getByTestId('location')).toHaveTextContent('/app/reports/clone1?edit=true');
+      expect(screen.getByTestId('location')).toHaveTextContent(
+        '/app/reports/clone1?edit=true',
+      );
     });
   }, 15_000);
 
   it('shows an error dialog when unpublishing is rejected', async () => {
-    updateReportVisibility.mockRejectedValue(new Error('Report must be unpinned and removed from the dashboard before it can be made private'));
+    updateReportVisibility.mockRejectedValue(
+      new Error(
+        'Report must be unpinned and removed from the dashboard before it can be made private',
+      ),
+    );
     const user = userEvent.setup({ delay: null });
     render(<ReportsList />, { wrapper: Wrapper });
 
@@ -183,12 +222,20 @@ describe('ReportsList', () => {
     await user.click(screen.getByRole('menuitem', { name: /unpublish/i }));
 
     expect(updateReportVisibility).toHaveBeenCalledWith('r1', 'private');
-    expect(await screen.findByRole('dialog', { name: 'Could not unpublish report' })).toBeInTheDocument();
-    expect(screen.getByText('Report must be unpinned and removed from the dashboard before it can be made private')).toBeInTheDocument();
+    expect(
+      await screen.findByRole('dialog', { name: 'Could not unpublish report' }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        'Report must be unpinned and removed from the dashboard before it can be made private',
+      ),
+    ).toBeInTheDocument();
   }, 15_000);
 
   it('shows the delete failure in the confirmation dialog', async () => {
-    deleteReport.mockRejectedValue(new Error('Report must be unpinned before it can be deleted'));
+    deleteReport.mockRejectedValue(
+      new Error('Report must be unpinned before it can be deleted'),
+    );
     const user = userEvent.setup({ delay: null });
     render(<ReportsList />, { wrapper: Wrapper });
 
@@ -197,7 +244,11 @@ describe('ReportsList', () => {
     await user.click(screen.getByRole('button', { name: 'Delete' }));
 
     expect(deleteReport).toHaveBeenCalledWith('r1');
-    expect(await screen.findByRole('dialog', { name: 'Delete report?' })).toBeInTheDocument();
-    expect(screen.getByText('Report must be unpinned before it can be deleted')).toBeInTheDocument();
+    expect(
+      await screen.findByRole('dialog', { name: 'Delete report?' }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText('Report must be unpinned before it can be deleted'),
+    ).toBeInTheDocument();
   }, 15_000);
 });

@@ -7,34 +7,34 @@ function GlobalStyles() {
         '*': {
           boxSizing: 'border-box',
           margin: 0,
-          padding: 0
+          padding: 0,
         },
         html: {
           WebkitFontSmoothing: 'antialiased',
-          MozOsxFontSmoothing: 'grayscale'
+          MozOsxFontSmoothing: 'grayscale',
         },
         body: {
           backgroundColor: '#f4f6f8',
           height: '100%',
-          width: '100%'
+          width: '100%',
         },
         a: {
-          textDecoration: 'none'
+          textDecoration: 'none',
         },
         '#root': {
           height: '100%',
-          width: '100%'
+          width: '100%',
         },
         '.mui-markdown-ol': {
           paddingLeft: 40,
           paddingTop: 10,
-          paddingBottom: 10
+          paddingBottom: 10,
         },
         '.mui-markdown-ul': {
           paddingLeft: 40,
           paddingTop: 10,
-          paddingBottom: 10
-        }
+          paddingBottom: 10,
+        },
       }}
     />
   );

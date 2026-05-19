@@ -22,7 +22,7 @@ import {
   TableHead,
   TableRow,
   Tooltip,
-  Typography
+  Typography,
 } from '@mui/material';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import HistoryIcon from '@mui/icons-material/History';
@@ -33,13 +33,13 @@ import { Helmet } from 'react-helmet';
 import {
   SkillVersion,
   useSkillMutations,
-  useSkillVersionsList
+  useSkillVersionsList,
 } from 'src/hooks/useSkillsetsApi';
 import { useToolCatalog } from 'src/hooks/useToolsetsApi';
 import ListTable, {
   ListTableColumn,
   listTableActionColumnSx,
-  listTableSecondaryCellSx
+  listTableSecondaryCellSx,
 } from 'src/components/ListTable';
 import UserDisplay from 'src/components/UserDisplay';
 import { usePermissions } from 'src/hooks/usePermissions';
@@ -70,7 +70,11 @@ function RowMenu({ isCurrent, onRestore }: RowMenuProps) {
   return (
     <>
       <Tooltip title="More actions">
-        <IconButton aria-label="More actions" size="small" onClick={(e) => setAnchor(e.currentTarget)}>
+        <IconButton
+          aria-label="More actions"
+          size="small"
+          onClick={(e) => setAnchor(e.currentTarget)}
+        >
           <MoreVertIcon fontSize="small" />
         </IconButton>
       </Tooltip>
@@ -84,9 +88,18 @@ function RowMenu({ isCurrent, onRestore }: RowMenuProps) {
       >
         <Tooltip title={restoreTooltip} placement="left">
           <span>
-            <MenuItem onClick={() => { onRestore(); close(); }} disabled={restoreDisabled}>
+            <MenuItem
+              onClick={() => {
+                onRestore();
+                close();
+              }}
+              disabled={restoreDisabled}
+            >
               <ListItemIcon>
-                <RestoreIcon fontSize="small" color={restoreDisabled ? 'disabled' : 'inherit'} />
+                <RestoreIcon
+                  fontSize="small"
+                  color={restoreDisabled ? 'disabled' : 'inherit'}
+                />
               </ListItemIcon>
               <ListItemText>Restore</ListItemText>
             </MenuItem>
@@ -99,7 +112,7 @@ function RowMenu({ isCurrent, onRestore }: RowMenuProps) {
 
 function SkillVersionDetailDialog({
   version,
-  onClose
+  onClose,
 }: {
   version: SkillVersion | null;
   onClose: () => void;
@@ -112,43 +125,114 @@ function SkillVersionDetailDialog({
       <DialogContent dividers>
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
           <Box>
-            <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 0.5 }}>Version</Typography>
+            <Typography
+              variant="subtitle2"
+              color="text.secondary"
+              sx={{ mb: 0.5 }}
+            >
+              Version
+            </Typography>
             <Typography variant="body2">v{version.version}</Typography>
           </Box>
           <Box>
-            <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 0.5 }}>Status</Typography>
-            <Chip label={version.enabled ? 'Enabled' : 'Disabled'} color={version.enabled ? 'success' : 'default'} size="small" />
+            <Typography
+              variant="subtitle2"
+              color="text.secondary"
+              sx={{ mb: 0.5 }}
+            >
+              Status
+            </Typography>
+            <Chip
+              label={version.enabled ? 'Enabled' : 'Disabled'}
+              color={version.enabled ? 'success' : 'default'}
+              size="small"
+            />
           </Box>
           {version.description && (
             <Box>
-              <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 0.5 }}>Description</Typography>
+              <Typography
+                variant="subtitle2"
+                color="text.secondary"
+                sx={{ mb: 0.5 }}
+              >
+                Description
+              </Typography>
               <Typography variant="body2">{version.description}</Typography>
             </Box>
           )}
           {version.triggers.length > 0 && (
             <Box>
-              <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 0.5 }}>Triggers</Typography>
+              <Typography
+                variant="subtitle2"
+                color="text.secondary"
+                sx={{ mb: 0.5 }}
+              >
+                Triggers
+              </Typography>
               <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
-                {version.triggers.map((trigger) => <Chip key={trigger} label={trigger} size="small" />)}
+                {version.triggers.map((trigger) => (
+                  <Chip key={trigger} label={trigger} size="small" />
+                ))}
               </Box>
             </Box>
           )}
           {version.tools_required.length > 0 && (
             <Box>
-              <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 0.5 }}>Tools Required</Typography>
+              <Typography
+                variant="subtitle2"
+                color="text.secondary"
+                sx={{ mb: 0.5 }}
+              >
+                Tools Required
+              </Typography>
               <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
-                {version.tools_required.map((tool) => <Chip key={tool} label={tool} size="small" variant="outlined" />)}
+                {version.tools_required.map((tool) => (
+                  <Chip
+                    key={tool}
+                    label={tool}
+                    size="small"
+                    variant="outlined"
+                  />
+                ))}
               </Box>
             </Box>
           )}
           <Box>
-            <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 0.5 }}>Template</Typography>
-            <Box component="pre" sx={{ bgcolor: 'action.hover', p: 2, borderRadius: 1, whiteSpace: 'pre-wrap', wordBreak: 'break-word', m: 0, fontFamily: 'monospace', fontSize: 13 }}>{version.template}</Box>
+            <Typography
+              variant="subtitle2"
+              color="text.secondary"
+              sx={{ mb: 0.5 }}
+            >
+              Template
+            </Typography>
+            <Box
+              component="pre"
+              sx={{
+                bgcolor: 'action.hover',
+                p: 2,
+                borderRadius: 1,
+                whiteSpace: 'pre-wrap',
+                wordBreak: 'break-word',
+                m: 0,
+                fontFamily: 'monospace',
+                fontSize: 13,
+              }}
+            >
+              {version.template}
+            </Box>
           </Box>
           <Box>
-            <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 0.5 }}>Parameters</Typography>
+            <Typography
+              variant="subtitle2"
+              color="text.secondary"
+              sx={{ mb: 0.5 }}
+            >
+              Parameters
+            </Typography>
             {version.parameters.length === 0 ? (
-              <Typography variant="body2" color="text.secondary">No parameters.</Typography>
+              <Typography variant="body2" color="text.secondary">
+                No parameters.
+              </Typography>
             ) : (
               <TableContainer component={Paper} variant="outlined">
                 <Table size="small">
@@ -164,13 +248,28 @@ function SkillVersionDetailDialog({
                   <TableBody>
                     {version.parameters.map((param) => (
                       <TableRow key={param.name}>
-                        <TableCell sx={{ fontFamily: 'monospace', fontWeight: 600 }}>{param.name}</TableCell>
-                        <TableCell>{param.type}</TableCell>
-                        <TableCell sx={{ color: 'text.secondary' }}>{param.required ? 'Yes' : 'No'}</TableCell>
-                        <TableCell sx={{ color: 'text.secondary', fontFamily: 'monospace' }}>
-                          {param.default !== null && param.default !== undefined ? String(param.default) : '-'}
+                        <TableCell
+                          sx={{ fontFamily: 'monospace', fontWeight: 600 }}
+                        >
+                          {param.name}
                         </TableCell>
-                        <TableCell sx={{ color: 'text.secondary' }}>{param.description || '-'}</TableCell>
+                        <TableCell>{param.type}</TableCell>
+                        <TableCell sx={{ color: 'text.secondary' }}>
+                          {param.required ? 'Yes' : 'No'}
+                        </TableCell>
+                        <TableCell
+                          sx={{
+                            color: 'text.secondary',
+                            fontFamily: 'monospace',
+                          }}
+                        >
+                          {param.default !== null && param.default !== undefined
+                            ? String(param.default)
+                            : '-'}
+                        </TableCell>
+                        <TableCell sx={{ color: 'text.secondary' }}>
+                          {param.description || '-'}
+                        </TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
@@ -192,11 +291,15 @@ function SkillHistory() {
   const navigate = useNavigate();
   const location = useLocation();
   const { fromLabel } = (location.state ?? {}) as BackState;
-  const { versions, loading, error } = useSkillVersionsList(skillsetId ?? null, skillId ?? null);
+  const { versions, loading, error } = useSkillVersionsList(
+    skillsetId ?? null,
+    skillId ?? null,
+  );
   const { updateSkill } = useSkillMutations(skillsetId ?? '');
   const { tools: catalog } = useToolCatalog();
   const [detailVersion, setDetailVersion] = useState<SkillVersion | null>(null);
-  const [missingToolsTarget, setMissingToolsTarget] = useState<SkillVersion | null>(null);
+  const [missingToolsTarget, setMissingToolsTarget] =
+    useState<SkillVersion | null>(null);
   const [missingToolNames, setMissingToolNames] = useState<string[]>([]);
   const [restoreError, setRestoreError] = useState<string | null>(null);
   const sorted = [...versions].sort((a, b) => b.version - a.version);
@@ -219,7 +322,7 @@ function SkillHistory() {
                 color: 'inherit',
                 borderRadius: 0,
                 textAlign: 'left',
-                '&:hover': { textDecoration: 'underline' }
+                '&:hover': { textDecoration: 'underline' },
               }}
             >
               <Typography component="span" sx={{ lineHeight: 1.4 }}>
@@ -233,34 +336,34 @@ function SkillHistory() {
             )}
           </Box>
         );
-      }
+      },
     },
     {
       key: 'name',
       label: 'Name',
       cellSx: { width: '24%' },
-      render: (version) => version.name
+      render: (version) => version.name,
     },
     {
       key: 'saved',
       label: 'Saved',
       hideBelow: 'sm',
       cellSx: savedColumnSx,
-      render: (version) => new Date(version.created_at).toLocaleString()
+      render: (version) => new Date(version.created_at).toLocaleString(),
     },
     {
       key: 'created_by',
       label: 'Created by',
       hideBelow: 'md',
       cellSx: authorColumnSx,
-      render: (version) => <UserDisplay userId={version.created_by} />
+      render: (version) => <UserDisplay userId={version.created_by} />,
     },
     {
       key: 'comment',
       label: 'Comment',
       hideBelow: 'lg',
       cellSx: commentColumnSx,
-      render: (version) => version.comment || '—'
+      render: (version) => version.comment || '—',
     },
     {
       key: 'actions',
@@ -271,22 +374,29 @@ function SkillHistory() {
           isCurrent={version.version === latestVersion}
           onRestore={() => handleRestoreClick(version)}
         />
-      )
-    }
+      ),
+    },
   ];
 
   const handleRestoreClick = (version: SkillVersion) => {
     const catalogSet = new Set(catalog.map((tool) => tool.mcp_name));
-    const missing = (version.tools_required ?? []).filter((tool) => !catalogSet.has(tool));
+    const missing = (version.tools_required ?? []).filter(
+      (tool) => !catalogSet.has(tool),
+    );
     if (missing.length > 0) {
       setMissingToolsTarget(version);
       setMissingToolNames(missing);
       return;
     }
-    void handleRestore(version).catch((err: Error) => setRestoreError(err.message));
+    void handleRestore(version).catch((err: Error) =>
+      setRestoreError(err.message),
+    );
   };
 
-  async function handleRestore(version: SkillVersion, toolsRequired: string[] = version.tools_required ?? []) {
+  async function handleRestore(
+    version: SkillVersion,
+    toolsRequired: string[] = version.tools_required ?? [],
+  ) {
     if (!skillId) return;
     await updateSkill(skillId, {
       name: version.name,
@@ -296,7 +406,7 @@ function SkillHistory() {
       triggers: version.triggers,
       tools_required: toolsRequired,
       enabled: version.enabled,
-      comment: `Restored from version ${version.version}`
+      comment: `Restored from version ${version.version}`,
     });
     navigate(`/app/skillsets/${skillsetId}/skills`);
   }
@@ -304,18 +414,35 @@ function SkillHistory() {
   const handleMissingToolsConfirm = () => {
     if (!missingToolsTarget) return;
     const catalogSet = new Set(catalog.map((tool) => tool.mcp_name));
-    const filtered = (missingToolsTarget.tools_required ?? []).filter((tool) => catalogSet.has(tool));
+    const filtered = (missingToolsTarget.tools_required ?? []).filter((tool) =>
+      catalogSet.has(tool),
+    );
     setMissingToolsTarget(null);
     setMissingToolNames([]);
-    void handleRestore(missingToolsTarget, filtered).catch((err: Error) => setRestoreError(err.message));
+    void handleRestore(missingToolsTarget, filtered).catch((err: Error) =>
+      setRestoreError(err.message),
+    );
   };
 
   return (
     <Box sx={pageContentSx}>
-      <Helmet><title>{name ? `History - ${name} | Seizu` : 'History | Seizu'}</title></Helmet>
-      {fromLabel && <Button startIcon={<ArrowBackIcon />} onClick={() => navigate(-1)} sx={{ mb: 2 }}>Back to {fromLabel}</Button>}
+      <Helmet>
+        <title>{name ? `History - ${name} | Seizu` : 'History | Seizu'}</title>
+      </Helmet>
+      {fromLabel && (
+        <Button
+          startIcon={<ArrowBackIcon />}
+          onClick={() => navigate(-1)}
+          sx={{ mb: 2 }}
+        >
+          Back to {fromLabel}
+        </Button>
+      )}
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 3 }}>
-        <HistoryIcon color="action" /><Typography variant="h1">Version history{name ? ` - ${name}` : ''}</Typography>
+        <HistoryIcon color="action" />
+        <Typography variant="h1">
+          Version history{name ? ` - ${name}` : ''}
+        </Typography>
       </Box>
       {loading && <CircularProgress />}
       {error && <Typography color="error">Failed to load history</Typography>}
@@ -333,23 +460,45 @@ function SkillHistory() {
         version={detailVersion}
         onClose={() => setDetailVersion(null)}
       />
-      <Dialog open={!!missingToolsTarget} onClose={() => { setMissingToolsTarget(null); setMissingToolNames([]); }} maxWidth="sm" fullWidth>
+      <Dialog
+        open={!!missingToolsTarget}
+        onClose={() => {
+          setMissingToolsTarget(null);
+          setMissingToolNames([]);
+        }}
+        maxWidth="sm"
+        fullWidth
+      >
         <DialogTitle>Remove missing tool references?</DialogTitle>
         <DialogContent>
           <Typography color="text.secondary">
-            The following tools are no longer available and will be removed before restore:
+            The following tools are no longer available and will be removed
+            before restore:
           </Typography>
           <Box component="ul" sx={{ mt: 1, mb: 0, pl: 2 }}>
             {missingToolNames.map((tool) => (
-              <Box component="li" key={tool} sx={{ fontFamily: 'monospace', fontSize: 13 }}>
+              <Box
+                component="li"
+                key={tool}
+                sx={{ fontFamily: 'monospace', fontSize: 13 }}
+              >
                 {tool}
               </Box>
             ))}
           </Box>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => { setMissingToolsTarget(null); setMissingToolNames([]); }}>Cancel</Button>
-          <Button variant="contained" onClick={handleMissingToolsConfirm}>Restore anyway</Button>
+          <Button
+            onClick={() => {
+              setMissingToolsTarget(null);
+              setMissingToolNames([]);
+            }}
+          >
+            Cancel
+          </Button>
+          <Button variant="contained" onClick={handleMissingToolsConfirm}>
+            Restore anyway
+          </Button>
         </DialogActions>
       </Dialog>
     </Box>

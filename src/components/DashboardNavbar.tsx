@@ -10,7 +10,7 @@ import {
   MenuItem,
   Toolbar,
   Tooltip,
-  Typography
+  Typography,
 } from '@mui/material';
 import LogoutIcon from '@mui/icons-material/Logout';
 import MenuIcon from '@mui/icons-material/Menu';
@@ -37,7 +37,9 @@ function DashboardNavbar({
 }: DashboardNavbarProps) {
   const currentUser = useCurrentUser();
   const { userManager } = useContext(AuthConfigContext);
-  const [userMenuAnchor, setUserMenuAnchor] = useState<null | HTMLElement>(null);
+  const [userMenuAnchor, setUserMenuAnchor] = useState<null | HTMLElement>(
+    null,
+  );
 
   const handleLogout = async () => {
     setUserMenuAnchor(null);
@@ -45,7 +47,7 @@ function DashboardNavbar({
 
     try {
       await userManager.signoutRedirect({
-        post_logout_redirect_uri: window.location.origin
+        post_logout_redirect_uri: window.location.origin,
       });
     } catch {
       await userManager.removeUser();
@@ -64,23 +66,27 @@ function DashboardNavbar({
       sx={[
         (theme) => ({
           transition: theme.transitions.create(['left', 'width'], {
-            duration: theme.transitions.duration.shorter
+            duration: theme.transitions.duration.shorter,
           }),
           [theme.breakpoints.up('lg')]: {
             left: `var(${DASHBOARD_SIDEBAR_WIDTH_VAR})`,
-            width: `calc(100% - var(${DASHBOARD_SIDEBAR_WIDTH_VAR}))`
-          }
+            width: `calc(100% - var(${DASHBOARD_SIDEBAR_WIDTH_VAR}))`,
+          },
         }),
-        ...(Array.isArray(sx) ? sx : [sx])
+        ...(Array.isArray(sx) ? sx : [sx]),
       ]}
       {...rest}
     >
       <Toolbar>
         {onSidebarToggle && (
           <Hidden>
-            <Tooltip title={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}>
+            <Tooltip
+              title={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+            >
               <IconButton
-                aria-label={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+                aria-label={
+                  sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'
+                }
                 color="inherit"
                 size="small"
                 onClick={onSidebarToggle}

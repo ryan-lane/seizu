@@ -7,8 +7,18 @@ interface MarkdownPanelEditorProps {
   availableVariables?: MarkdocVariableOption[];
 }
 
-function MarkdownPanelEditor({ value, onChange, availableVariables }: MarkdownPanelEditorProps) {
-  return <MarkdownEditor value={value} onChange={onChange} availableVariables={availableVariables} />;
+function MarkdownPanelEditor({
+  value,
+  onChange,
+  availableVariables,
+}: MarkdownPanelEditorProps) {
+  return (
+    <MarkdownEditor
+      value={value}
+      onChange={onChange}
+      availableVariables={availableVariables}
+    />
+  );
 }
 
 export default MarkdownPanelEditor;

@@ -10,7 +10,9 @@ describe('CypherBar axis labels', () => {
   });
 
   it('ellipsizes labels that still exceed the line limit after wrapping', () => {
-    expect(wrapAxisLabel('VeryLongSingleWordLabel', 8, 2, 10)).toBe('VeryLon...');
+    expect(wrapAxisLabel('VeryLongSingleWordLabel', 8, 2, 10)).toBe(
+      'VeryLon...',
+    );
   });
 
   it('ellipsizes standalone text to the requested width', () => {

@@ -9,11 +9,15 @@ function renderWithRule(source: string): string {
 
 describe('MarkdocVariable markdown-it rule', () => {
   it('renders {%$name%} as a span with data-markdoc-var', () => {
-    expect(renderWithRule('Hello {%$foo%}!')).toContain('<span data-markdoc-var="foo"></span>');
+    expect(renderWithRule('Hello {%$foo%}!')).toContain(
+      '<span data-markdoc-var="foo"></span>',
+    );
   });
 
   it('accepts the spaced form {% $name %}', () => {
-    expect(renderWithRule('{% $org %}')).toContain('<span data-markdoc-var="org"></span>');
+    expect(renderWithRule('{% $org %}')).toContain(
+      '<span data-markdoc-var="org"></span>',
+    );
   });
 
   it('handles multiple variables in a single line', () => {

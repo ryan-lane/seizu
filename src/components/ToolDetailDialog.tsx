@@ -12,7 +12,7 @@ import {
   TableHead,
   TableRow,
   Tooltip,
-  Typography
+  Typography,
 } from '@mui/material';
 import CloseIcon from '@mui/icons-material/Close';
 import { ToolItem, ToolVersion, ToolParamDef } from 'src/hooks/useToolsetsApi';
@@ -20,7 +20,11 @@ import { ToolItem, ToolVersion, ToolParamDef } from 'src/hooks/useToolsetsApi';
 export type ToolViewData = Pick<
   ToolItem | ToolVersion,
   'name' | 'description' | 'cypher' | 'parameters' | 'enabled'
-> & { version?: number; effective_enabled?: boolean | null; disabled_reason?: string | null };
+> & {
+  version?: number;
+  effective_enabled?: boolean | null;
+  disabled_reason?: string | null;
+};
 
 interface Props {
   open: boolean;
@@ -28,7 +32,13 @@ interface Props {
   data: ToolViewData | null;
 }
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
+function Section({
+  title,
+  children,
+}: {
+  title: string;
+  children: React.ReactNode;
+}) {
   return (
     <Box sx={{ mb: 2 }}>
       <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 0.5 }}>
@@ -41,7 +51,12 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 
 function ParamTypeChip({ type }: { type: ToolParamDef['type'] }) {
   return (
-    <Chip label={type} size="small" variant="outlined" sx={{ fontFamily: 'monospace', fontSize: 11 }} />
+    <Chip
+      label={type}
+      size="small"
+      variant="outlined"
+      sx={{ fontFamily: 'monospace', fontSize: 11 }}
+    />
   );
 }
 
@@ -57,7 +72,12 @@ export default function ToolDetailDialog({ open, onClose, data }: Props) {
   return (
     <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>
       <DialogTitle
-        sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', pr: 1 }}
+        sx={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          pr: 1,
+        }}
       >
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
           {data.name}
@@ -104,7 +124,7 @@ export default function ToolDetailDialog({ open, onClose, data }: Props) {
                 fontFamily: 'monospace',
                 whiteSpace: 'pre-wrap',
                 wordBreak: 'break-word',
-                overflowX: 'auto'
+                overflowX: 'auto',
               }}
             >
               {data.cypher}
@@ -126,15 +146,30 @@ export default function ToolDetailDialog({ open, onClose, data }: Props) {
                 <TableBody>
                   {data.parameters.map((p, i) => (
                     <TableRow key={i}>
-                      <TableCell sx={{ fontFamily: 'monospace', fontWeight: 600 }}>{p.name}</TableCell>
-                      <TableCell><ParamTypeChip type={p.type} /></TableCell>
+                      <TableCell
+                        sx={{ fontFamily: 'monospace', fontWeight: 600 }}
+                      >
+                        {p.name}
+                      </TableCell>
+                      <TableCell>
+                        <ParamTypeChip type={p.type} />
+                      </TableCell>
                       <TableCell sx={{ color: 'text.secondary' }}>
                         {p.required ? 'Yes' : 'No'}
                       </TableCell>
-                      <TableCell sx={{ color: 'text.secondary', fontFamily: 'monospace' }}>
-                        {p.default !== null && p.default !== undefined ? String(p.default) : '—'}
+                      <TableCell
+                        sx={{
+                          color: 'text.secondary',
+                          fontFamily: 'monospace',
+                        }}
+                      >
+                        {p.default !== null && p.default !== undefined
+                          ? String(p.default)
+                          : '—'}
                       </TableCell>
-                      <TableCell sx={{ color: 'text.secondary' }}>{p.description || '—'}</TableCell>
+                      <TableCell sx={{ color: 'text.secondary' }}>
+                        {p.description || '—'}
+                      </TableCell>
                     </TableRow>
                   ))}
                 </TableBody>

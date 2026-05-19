@@ -19,7 +19,7 @@ describe('Hidden', () => {
         <Hidden>
           <span>visible content</span>
         </Hidden>
-      </Wrapper>
+      </Wrapper>,
     );
     expect(screen.getByText('visible content')).toBeInTheDocument();
   });
@@ -33,7 +33,7 @@ describe('Hidden', () => {
         <Hidden lgUp>
           <span>hidden content</span>
         </Hidden>
-      </Wrapper>
+      </Wrapper>,
     );
     // Without mocking matchMedia in jsdom, useMediaQuery returns false so lgUp won't hide content
     // This test verifies the component renders without error in either case

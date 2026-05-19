@@ -11,7 +11,7 @@ export function createUserManager(config: OidcConfig): UserManager {
     // the app is accessed on a different port (e.g. :8080 vs :3000).
     redirect_uri: `${window.location.origin}/auth/callback`,
     scope: config.scope,
-    response_type: 'code'
+    response_type: 'code',
   };
   return new UserManager(settings);
 }

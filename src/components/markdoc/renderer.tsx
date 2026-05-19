@@ -52,7 +52,9 @@ function MarkdocHeadCell({ children }: { children?: React.ReactNode }) {
 
 function MarkdocCell({ children }: { children?: React.ReactNode }) {
   return (
-    <TableCell sx={{ whiteSpace: 'normal', border: '1px solid', borderColor: 'divider' }}>
+    <TableCell
+      sx={{ whiteSpace: 'normal', border: '1px solid', borderColor: 'divider' }}
+    >
       {children}
     </TableCell>
   );
@@ -180,6 +182,7 @@ const SAFE_DATA_IMAGE_RE = /^data:image\/(gif|png|jpeg|webp);/i;
 // so it would otherwise be treated as a relative URL) and then resolve to
 // `javascript:` in the browser after the tab is removed. We return the
 // normalized form so the rendered href is also clean.
+// eslint-disable-next-line no-control-regex -- intentionally strips control chars
 const URL_CONTROL_CHARS_RE = /[\u0000-\u001F\u007F]/g;
 
 function safeSubstitutedUrl(url: string): string {
@@ -218,10 +221,17 @@ const linkNode = {
     const attributes = node.transformAttributes(config);
     const children = node.transformChildren(config);
     if (typeof attributes.href === 'string') {
-      const { value, changed } = substituteUrlVars(attributes.href, config.variables ?? {});
+      const { value, changed } = substituteUrlVars(
+        attributes.href,
+        config.variables ?? {},
+      );
       if (changed) attributes.href = safeSubstitutedUrl(value);
     }
-    return new Tag('MuiLink', { underline: 'hover', color: 'primary', ...attributes }, children);
+    return new Tag(
+      'MuiLink',
+      { underline: 'hover', color: 'primary', ...attributes },
+      children,
+    );
   },
 };
 
@@ -230,7 +240,10 @@ const imageNode = {
   transform(node: any, config: any) {
     const attributes = node.transformAttributes(config);
     if (typeof attributes.src === 'string') {
-      const { value, changed } = substituteUrlVars(attributes.src, config.variables ?? {});
+      const { value, changed } = substituteUrlVars(
+        attributes.src,
+        config.variables ?? {},
+      );
       if (changed) attributes.src = safeSubstitutedUrl(value);
     }
     return new Tag('img', attributes);
@@ -263,7 +276,9 @@ export function MarkdocRenderer({ source, variables }: MarkdocRendererProps) {
       variables: variables ?? {},
       nodes: markdocNodes,
     });
-    return Markdoc.renderers.react(content, React, { components: markdocComponents });
+    return Markdoc.renderers.react(content, React, {
+      components: markdocComponents,
+    });
   }, [source, variables]);
 
   return <>{rendered}</>;

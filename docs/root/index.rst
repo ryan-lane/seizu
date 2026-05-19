@@ -53,6 +53,7 @@ Documentation
 
     dev/dependencies
     dev/test
+    dev/query-validation
     dev/contributing
 
 .. toctree::

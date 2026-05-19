@@ -17,7 +17,12 @@ export default defineConfig({
       output: {
         manualChunks(id) {
           if (id.includes('node_modules/@nivo')) return 'vendor-nivo';
-          if (id.includes('node_modules/react') || id.includes('node_modules/react-dom') || id.includes('node_modules/react-router')) return 'vendor-react';
+          if (
+            id.includes('node_modules/react') ||
+            id.includes('node_modules/react-dom') ||
+            id.includes('node_modules/react-router')
+          )
+            return 'vendor-react';
         },
       },
     },
@@ -30,7 +35,14 @@ export default defineConfig({
       '/healthcheck': 'http://seizu:8080',
     },
     watch: {
-      ignored: ['**/.mypy_cache/**', '**/coverage/**', '**/__pycache__/**', '**/tests/**', '**/__tests__/**', '**/*.tmp.*'],
+      ignored: [
+        '**/.mypy_cache/**',
+        '**/coverage/**',
+        '**/__pycache__/**',
+        '**/tests/**',
+        '**/__tests__/**',
+        '**/*.tmp.*',
+      ],
     },
   },
 });

@@ -7,7 +7,7 @@ import {
   Divider,
   IconButton,
   Tooltip,
-  Typography
+  Typography,
 } from '@mui/material';
 import CloseIcon from '@mui/icons-material/Close';
 import FiberManualRecordIcon from '@mui/icons-material/FiberManualRecord';
@@ -15,7 +15,7 @@ import {
   ScheduledQueryParam,
   ScheduledQueryWatchScan,
   ScheduledQueryAction,
-  ScheduledQueryRunError
+  ScheduledQueryRunError,
 } from 'src/hooks/useScheduledQueriesApi';
 
 export interface ScheduledQueryViewData {
@@ -38,7 +38,13 @@ interface Props {
   data: ScheduledQueryViewData | null;
 }
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
+function Section({
+  title,
+  children,
+}: {
+  title: string;
+  children: React.ReactNode;
+}) {
   return (
     <Box sx={{ mb: 2 }}>
       <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 0.5 }}>
@@ -49,7 +55,11 @@ function Section({ title, children }: { title: string; children: React.ReactNode
   );
 }
 
-export default function ScheduledQueryDetailDialog({ open, onClose, data }: Props) {
+export default function ScheduledQueryDetailDialog({
+  open,
+  onClose,
+  data,
+}: Props) {
   if (!data) return null;
 
   const triggerLabel =
@@ -62,7 +72,12 @@ export default function ScheduledQueryDetailDialog({ open, onClose, data }: Prop
   return (
     <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>
       <DialogTitle
-        sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', pr: 1 }}
+        sx={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          pr: 1,
+        }}
       >
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
           {data.name}
@@ -96,11 +111,12 @@ export default function ScheduledQueryDetailDialog({ open, onClose, data }: Prop
               <FiberManualRecordIcon
                 sx={{
                   fontSize: 12,
-                  color: data.last_run_status === 'success'
-                    ? 'success.main'
-                    : data.last_run_status === 'failure'
-                      ? 'error.main'
-                      : 'warning.main',
+                  color:
+                    data.last_run_status === 'success'
+                      ? 'success.main'
+                      : data.last_run_status === 'failure'
+                        ? 'error.main'
+                        : 'warning.main',
                 }}
               />
               <Typography variant="body2">
@@ -124,9 +140,18 @@ export default function ScheduledQueryDetailDialog({ open, onClose, data }: Prop
                 {data.last_errors.map((err, i) => (
                   <Box
                     key={i}
-                    sx={{ border: '1px solid', borderColor: 'error.light', borderRadius: 1, p: 1.5 }}
+                    sx={{
+                      border: '1px solid',
+                      borderColor: 'error.light',
+                      borderRadius: 1,
+                      p: 1.5,
+                    }}
                   >
-                    <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>
+                    <Typography
+                      variant="caption"
+                      color="text.secondary"
+                      sx={{ display: 'block', mb: 0.5 }}
+                    >
                       {new Date(err.timestamp).toLocaleString()}
                     </Typography>
                     <Box
@@ -156,8 +181,15 @@ export default function ScheduledQueryDetailDialog({ open, onClose, data }: Prop
             {data.watch_scans.length > 0 && (
               <Box sx={{ mt: 0.5 }}>
                 {data.watch_scans.map((ws, i) => (
-                  <Typography key={i} variant="caption" color="text.secondary" sx={{ display: 'block' }}>
-                    grouptype: {ws.grouptype ?? '*'} &nbsp;·&nbsp; syncedtype: {ws.syncedtype ?? '*'} &nbsp;·&nbsp; groupid: {ws.groupid ?? '*'}
+                  <Typography
+                    key={i}
+                    variant="caption"
+                    color="text.secondary"
+                    sx={{ display: 'block' }}
+                  >
+                    grouptype: {ws.grouptype ?? '*'} &nbsp;·&nbsp; syncedtype:{' '}
+                    {ws.syncedtype ?? '*'} &nbsp;·&nbsp; groupid:{' '}
+                    {ws.groupid ?? '*'}
                   </Typography>
                 ))}
               </Box>
@@ -176,7 +208,7 @@ export default function ScheduledQueryDetailDialog({ open, onClose, data }: Prop
                 fontFamily: 'monospace',
                 whiteSpace: 'pre-wrap',
                 wordBreak: 'break-word',
-                overflowX: 'auto'
+                overflowX: 'auto',
               }}
             >
               {data.cypher}
@@ -188,13 +220,31 @@ export default function ScheduledQueryDetailDialog({ open, onClose, data }: Prop
               <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
                 {data.params.map((p, i) => (
                   <Box key={i} sx={{ display: 'flex', gap: 1 }}>
-                    <Typography variant="body2" sx={{ fontFamily: 'monospace', fontWeight: 600, minWidth: 120 }}>
+                    <Typography
+                      variant="body2"
+                      sx={{
+                        fontFamily: 'monospace',
+                        fontWeight: 600,
+                        minWidth: 120,
+                      }}
+                    >
                       {p.name}
                     </Typography>
-                    <Typography variant="body2" color="text.secondary" sx={{ fontFamily: 'monospace' }}>
-                      {Array.isArray(p.value) ? (p.value as unknown[]).join(', ') : String(p.value ?? '')}
+                    <Typography
+                      variant="body2"
+                      color="text.secondary"
+                      sx={{ fontFamily: 'monospace' }}
+                    >
+                      {Array.isArray(p.value)
+                        ? (p.value as unknown[]).join(', ')
+                        : String(p.value ?? '')}
                       {Array.isArray(p.value) && (
-                        <Typography component="span" variant="caption" color="text.disabled" sx={{ ml: 0.5 }}>
+                        <Typography
+                          component="span"
+                          variant="caption"
+                          color="text.disabled"
+                          sx={{ ml: 0.5 }}
+                        >
                           (list)
                         </Typography>
                       )}
@@ -211,20 +261,44 @@ export default function ScheduledQueryDetailDialog({ open, onClose, data }: Prop
                 {data.actions.map((a, i) => (
                   <Box
                     key={i}
-                    sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 1, p: 1.5 }}
+                    sx={{
+                      border: '1px solid',
+                      borderColor: 'divider',
+                      borderRadius: 1,
+                      p: 1.5,
+                    }}
                   >
-                    <Typography variant="body2" sx={{ fontWeight: 600, mb: 0.5 }}>
+                    <Typography
+                      variant="body2"
+                      sx={{ fontWeight: 600, mb: 0.5 }}
+                    >
                       {a.action_type}
                     </Typography>
                     {Object.keys(a.action_config).length > 0 && (
-                      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.25 }}>
+                      <Box
+                        sx={{
+                          display: 'flex',
+                          flexDirection: 'column',
+                          gap: 0.25,
+                        }}
+                      >
                         {Object.entries(a.action_config).map(([k, v]) => (
                           <Box key={k} sx={{ display: 'flex', gap: 1 }}>
-                            <Typography variant="caption" color="text.secondary" sx={{ fontFamily: 'monospace', minWidth: 140 }}>
+                            <Typography
+                              variant="caption"
+                              color="text.secondary"
+                              sx={{ fontFamily: 'monospace', minWidth: 140 }}
+                            >
                               {k}
                             </Typography>
-                            <Typography variant="caption" color="text.secondary" sx={{ fontFamily: 'monospace' }}>
-                              {Array.isArray(v) ? (v as unknown[]).join(', ') : String(v ?? '')}
+                            <Typography
+                              variant="caption"
+                              color="text.secondary"
+                              sx={{ fontFamily: 'monospace' }}
+                            >
+                              {Array.isArray(v)
+                                ? (v as unknown[]).join(', ')
+                                : String(v ?? '')}
                             </Typography>
                           </Box>
                         ))}

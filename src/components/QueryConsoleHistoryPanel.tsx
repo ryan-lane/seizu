@@ -6,7 +6,7 @@ import {
   ListItemButton,
   Pagination,
   Tooltip,
-  Typography
+  Typography,
 } from '@mui/material';
 import ErrorIcon from '@mui/icons-material/Error';
 import { useQueryHistory, QueryHistoryItem } from 'src/hooks/useQueryHistory';
@@ -20,7 +20,7 @@ interface QueryConsoleHistoryPanelProps {
 
 export default function QueryConsoleHistoryPanel({
   onQuerySelect,
-  refreshTrigger
+  refreshTrigger,
 }: QueryConsoleHistoryPanelProps) {
   const { loading, error, data, fetchHistory } = useQueryHistory();
   const [page, setPage] = useState(1);
@@ -34,7 +34,7 @@ export default function QueryConsoleHistoryPanel({
     if (!refreshTrigger) return;
     setPage(1);
     fetchHistory(1, PER_PAGE);
-  }, [refreshTrigger]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [refreshTrigger]);
 
   const totalPages = data ? Math.ceil(data.total / PER_PAGE) : 0;
 
@@ -77,7 +77,7 @@ export default function QueryConsoleHistoryPanel({
         display: 'flex',
         flexDirection: 'column',
         height: '100%',
-        minHeight: 0
+        minHeight: 0,
       }}
     >
       <List dense disablePadding sx={{ flex: 1, overflow: 'auto' }}>
@@ -87,7 +87,7 @@ export default function QueryConsoleHistoryPanel({
             title={item.query}
             placement="right"
             slotProps={{
-              tooltip: { sx: { fontFamily: 'monospace', fontSize: 11 } }
+              tooltip: { sx: { fontFamily: 'monospace', fontSize: 11 } },
             }}
           >
             <ListItemButton
@@ -96,7 +96,7 @@ export default function QueryConsoleHistoryPanel({
                 py: 0.75,
                 px: 1.5,
                 flexDirection: 'column',
-                alignItems: 'flex-start'
+                alignItems: 'flex-start',
               }}
             >
               <Typography
@@ -125,7 +125,7 @@ export default function QueryConsoleHistoryPanel({
             py: 0.5,
             borderTop: 1,
             borderColor: 'divider',
-            flexShrink: 0
+            flexShrink: 0,
           }}
         >
           <Pagination

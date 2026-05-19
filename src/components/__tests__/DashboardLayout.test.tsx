@@ -17,14 +17,22 @@ jest.mock('src/hooks/useCurrentUser', () => ({
 }));
 
 const theme = createTheme();
-const mockUsePermissions = usePermissionsModule.usePermissions as jest.MockedFunction<typeof usePermissionsModule.usePermissions>;
-const mockUseCurrentUser = useCurrentUserModule.useCurrentUser as jest.MockedFunction<typeof useCurrentUserModule.useCurrentUser>;
+const mockUsePermissions =
+  usePermissionsModule.usePermissions as jest.MockedFunction<
+    typeof usePermissionsModule.usePermissions
+  >;
+const mockUseCurrentUser =
+  useCurrentUserModule.useCurrentUser as jest.MockedFunction<
+    typeof useCurrentUserModule.useCurrentUser
+  >;
 
 function renderLayout() {
   return render(
     <MemoryRouter initialEntries={['/app/dashboard']}>
       <ThemeProvider theme={theme}>
-        <AuthConfigContext.Provider value={{ auth_required: false, oidc: null, userManager: null }}>
+        <AuthConfigContext.Provider
+          value={{ auth_required: false, oidc: null, userManager: null }}
+        >
           <Routes>
             <Route element={<DashboardLayout />} path="/app">
               <Route path="dashboard" element={<div>Dashboard content</div>} />
@@ -32,7 +40,7 @@ function renderLayout() {
           </Routes>
         </AuthConfigContext.Provider>
       </ThemeProvider>
-    </MemoryRouter>
+    </MemoryRouter>,
   );
 }
 
@@ -44,8 +52,16 @@ describe('DashboardLayout', () => {
     window.localStorage.clear();
     mockUsePermissions.mockReturnValue(() => false);
     mockUseCurrentUser.mockReturnValue(null);
-    useReportsList = jest.spyOn(reportsApiModule, 'useReportsList') as unknown as jest.Mock;
-    useReportsList.mockReturnValue({ reports: [], loading: false, error: null, refresh: jest.fn() });
+    useReportsList = jest.spyOn(
+      reportsApiModule,
+      'useReportsList',
+    ) as unknown as jest.Mock;
+    useReportsList.mockReturnValue({
+      reports: [],
+      loading: false,
+      error: null,
+      refresh: jest.fn(),
+    });
   });
 
   afterEach(cleanup);
@@ -55,14 +71,21 @@ describe('DashboardLayout', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /collapse sidebar/i }));
 
-    expect(window.localStorage.getItem(DASHBOARD_SIDEBAR_COLLAPSED_STORAGE_KEY)).toBe('true');
+    expect(
+      window.localStorage.getItem(DASHBOARD_SIDEBAR_COLLAPSED_STORAGE_KEY),
+    ).toBe('true');
   });
 
   it('restores the collapsed sidebar state from localStorage', () => {
-    window.localStorage.setItem(DASHBOARD_SIDEBAR_COLLAPSED_STORAGE_KEY, 'true');
+    window.localStorage.setItem(
+      DASHBOARD_SIDEBAR_COLLAPSED_STORAGE_KEY,
+      'true',
+    );
 
     renderLayout();
 
-    expect(screen.getByRole('button', { name: /expand sidebar/i })).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: /expand sidebar/i }),
+    ).toBeInTheDocument();
   });
 });

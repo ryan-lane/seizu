@@ -116,22 +116,6 @@ make schema
 
 This updates `schema/openapi.json` and `schema/reporting-schema.json`.
 
-## Query Validator Regression Tests
-
-The query validator has focused unit tests and integration tests. Run the unit suite when changing Cypher validation behavior:
-
-```bash
-docker compose run --rm seizu uv run --frozen --no-sync pytest tests/unit/reporting/services/query_validator_test.py -v
-```
-
-Run the integration suite when you need to verify behavior against Neo4j:
-
-```bash
-docker compose run --rm seizu uv run --frozen --no-sync pytest tests/integration/reporting/services/query_validator_test.py -v
-```
-
-When adding a new attack vector, also append a row to `tests/data/query-fuzzing.csv`.
-
 ## Package Build Checks
 
 CI verifies that both Python packages build. To check locally:

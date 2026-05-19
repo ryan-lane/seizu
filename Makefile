@@ -27,6 +27,10 @@ test_unit: junit uv_sync
 test_integration:
 	docker compose run --rm seizu uv run --frozen --no-sync pytest tests/integration -v
 
+.PHONY: test_query_validator_live
+test_query_validator_live: config_setup
+	docker compose run --rm seizu uv run --frozen --no-sync pytest tests/integration/reporting/services/query_validator_test.py -v
+
 .PHONY: test_frontend
 test_frontend:
 	@docker compose run --rm --no-deps seizu-node bun run type-check
@@ -126,6 +130,24 @@ up: config_setup
 down:
 	docker compose $(COMPOSE_PROFILES) down
 
+.PHONY: neo4j_current
+neo4j_current: config_setup
+	@grep -q '^COMPOSE_FILE=' .env 2>/dev/null \
+		&& perl -pi -e 's|^COMPOSE_FILE=.*|COMPOSE_FILE=docker-compose.yml|' .env \
+		|| echo 'COMPOSE_FILE=docker-compose.yml' >> .env
+	@echo "Neo4j current dev database selected (neo4j:5.26, volume neo4j_data). Run 'make down && make up' to apply."
+
+.PHONY: neo4j_latest
+neo4j_latest: config_setup
+	@mkdir -p ./.compose/neo4j-latest/logs ./.compose/neo4j-latest/plugins
+	@grep -q '^COMPOSE_FILE=' .env 2>/dev/null \
+		&& perl -pi -e 's|^COMPOSE_FILE=.*|COMPOSE_FILE=docker-compose.yml:docker-compose.neo4j-latest.yml|' .env \
+		|| echo 'COMPOSE_FILE=docker-compose.yml:docker-compose.neo4j-latest.yml' >> .env
+	@grep -q '^NEO4J_LATEST_IMAGE_TAG=' .env 2>/dev/null \
+		&& perl -pi -e 's|^NEO4J_LATEST_IMAGE_TAG=.*|NEO4J_LATEST_IMAGE_TAG=2026.04.0|' .env \
+		|| echo 'NEO4J_LATEST_IMAGE_TAG=2026.04.0' >> .env
+	@echo "Neo4j latest database selected (neo4j:2026.04.0, volume neo4j_latest_data). Run 'make down && make up' to apply."
+
 .PHONY: auth_enable
 auth_enable:
 	@perl -pi -e 's/DEVELOPMENT_ONLY_REQUIRE_AUTH=false/DEVELOPMENT_ONLY_REQUIRE_AUTH=true/' .env
@@ -192,3 +214,7 @@ sync_github:
 .PHONY: sync_cve
 sync_cve:
 	docker compose run cartography --neo4j-uri=bolt://neo4j:7687 --selected-modules=create-indexes,cve,analysis --cve-enabled
+
+.PHONY: sync_cve_metadata
+sync_cve_metadata:
+	docker compose run cartography --neo4j-uri=bolt://neo4j:7687 --selected-modules=create-indexes,cve_metadata,analysis --cve-metadata-nist-api-key-env-var=NIST_NVD_TOKEN

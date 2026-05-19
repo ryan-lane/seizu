@@ -7,7 +7,7 @@ import {
   Divider,
   IconButton,
   Grid,
-  Typography
+  Typography,
 } from '@mui/material';
 import { useTheme } from '@mui/material/styles';
 import Info from '@mui/icons-material/Info';
@@ -22,21 +22,25 @@ import QueryValidationBadge from 'src/components/reports/QueryValidationBadge';
 const fillCardSx = {
   height: '100%',
   display: 'flex',
-  flexDirection: 'column' as const
+  flexDirection: 'column' as const,
 };
 
 const chartFillSx = {
   flex: 1,
   minHeight: 0,
-  display: 'flex'
+  display: 'flex',
 };
 
-export function buildPieData(records: QueryRecord[]): { id: string; value: number; label: string }[] {
+export function buildPieData(
+  records: QueryRecord[],
+): { id: string; value: number; label: string }[] {
   const pieData: { id: string; value: number; label: string }[] = [];
   for (let i = 0; i < records.length; i++) {
     const data = records[i];
     let mungedData: Record<string, unknown>;
-    const dataDetails = data['details'] as QueryRecord & { properties?: QueryRecord };
+    const dataDetails = data['details'] as QueryRecord & {
+      properties?: QueryRecord;
+    };
     if (dataDetails.properties === undefined) {
       mungedData = dataDetails;
     } else {
@@ -46,7 +50,7 @@ export function buildPieData(records: QueryRecord[]): { id: string; value: numbe
     pieData.push({
       id: String(mungedData['id'] ?? i),
       value: Number.isFinite(value) ? value : 0,
-      label: String(mungedData['id'] ?? i)
+      label: String(mungedData['id'] ?? i),
     });
   }
   return pieData;
@@ -78,8 +82,10 @@ export default function CypherPie({
   const theme = useTheme();
   const [open, setOpen] = useState(false);
 
-  const [runQuery, { loading, error, records, first, warnings, queryErrors, tokenExpired }] =
-    useLazyCypherQuery(cypher, reportQueryToken);
+  const [
+    runQuery,
+    { loading, error, records, first, warnings, queryErrors, tokenExpired },
+  ] = useLazyCypherQuery(cypher, reportQueryToken);
 
   const runQueryRef = useRef(runQuery);
   runQueryRef.current = runQuery;
@@ -87,7 +93,10 @@ export default function CypherPie({
   needInputsRef.current = needInputs;
 
   useEffect(() => {
-    if (needInputsRef.current === undefined || needInputsRef.current.length === 0) {
+    if (
+      needInputsRef.current === undefined ||
+      needInputsRef.current.length === 0
+    ) {
       runQueryRef.current(params, { force: (refreshKey ?? 0) > 0 });
     }
   }, [cypher, params, refreshKey]);
@@ -103,13 +112,21 @@ export default function CypherPie({
       <Card sx={fillCardSx}>
         {caption && (
           <>
-            <Grid container spacing={0} sx={{ flexDirection: 'column', alignItems: 'center' }}>
+            <Grid
+              container
+              spacing={0}
+              sx={{ flexDirection: 'column', alignItems: 'center' }}
+            >
               <CardHeader title={caption} />
             </Grid>
             <Divider />
           </>
         )}
-        <Grid container spacing={0} sx={{ flexDirection: 'column', alignItems: 'center' }}>
+        <Grid
+          container
+          spacing={0}
+          sx={{ flexDirection: 'column', alignItems: 'center' }}
+        >
           <CardContent>
             <Error />
             <Typography variant="body2">Missing cypher query</Typography>
@@ -124,13 +141,21 @@ export default function CypherPie({
       <Card sx={fillCardSx}>
         {caption && (
           <>
-            <Grid container spacing={0} sx={{ flexDirection: 'column', alignItems: 'center' }}>
+            <Grid
+              container
+              spacing={0}
+              sx={{ flexDirection: 'column', alignItems: 'center' }}
+            >
               <CardHeader title={caption} />
             </Grid>
             <Divider />
           </>
         )}
-        <Grid container spacing={0} sx={{ flexDirection: 'column', alignItems: 'center' }}>
+        <Grid
+          container
+          spacing={0}
+          sx={{ flexDirection: 'column', alignItems: 'center' }}
+        >
           <CardContent>
             <Typography variant="body2" align="center">
               (Set {needInputs.join(', ')})
@@ -154,17 +179,28 @@ export default function CypherPie({
       <Card sx={fillCardSx}>
         {caption && (
           <>
-            <Grid container sx={{ flexDirection: 'column', alignItems: 'center' }}>
+            <Grid
+              container
+              sx={{ flexDirection: 'column', alignItems: 'center' }}
+            >
               <CardHeader title={caption} />
             </Grid>
             <Divider />
           </>
         )}
         <QueryValidationBadge errors={queryErrors} warnings={warnings} />
-        <Grid container spacing={0} sx={{ flexDirection: 'column', alignItems: 'center' }}>
+        <Grid
+          container
+          spacing={0}
+          sx={{ flexDirection: 'column', alignItems: 'center' }}
+        >
           <CardContent>
-            <Typography variant="h4" align="center">N/A</Typography>
-            <Typography variant="body2" align="center">Query validation failed</Typography>
+            <Typography variant="h4" align="center">
+              N/A
+            </Typography>
+            <Typography variant="body2" align="center">
+              Query validation failed
+            </Typography>
           </CardContent>
         </Grid>
       </Card>
@@ -180,13 +216,21 @@ export default function CypherPie({
       <Card sx={fillCardSx}>
         {caption && (
           <>
-            <Grid container spacing={0} sx={{ flexDirection: 'column', alignItems: 'center' }}>
+            <Grid
+              container
+              spacing={0}
+              sx={{ flexDirection: 'column', alignItems: 'center' }}
+            >
               <CardHeader title={caption} />
             </Grid>
             <Divider />
           </>
         )}
-        <Grid container spacing={0} sx={{ flexDirection: 'column', alignItems: 'center' }}>
+        <Grid
+          container
+          spacing={0}
+          sx={{ flexDirection: 'column', alignItems: 'center' }}
+        >
           <CardContent>
             <Typography variant="h4">N/A</Typography>
           </CardContent>
@@ -201,18 +245,33 @@ export default function CypherPie({
 
   return (
     <>
-      <Card sx={{ ...fillCardSx, position: 'relative', '&:hover .panel-info-btn': { opacity: 1 } }}>
+      <Card
+        sx={{
+          ...fillCardSx,
+          position: 'relative',
+          '&:hover .panel-info-btn': { opacity: 1 },
+        }}
+      >
         <IconButton
           className="panel-info-btn"
           size="small"
           onClick={() => setOpen(true)}
-          sx={{ position: 'absolute', top: 8, right: 8, opacity: 0, transition: 'opacity 0.2s' }}
+          sx={{
+            position: 'absolute',
+            top: 8,
+            right: 8,
+            opacity: 0,
+            transition: 'opacity 0.2s',
+          }}
         >
           <Info fontSize="small" />
         </IconButton>
         {caption && (
           <>
-            <Grid container sx={{ flexDirection: 'column', alignItems: 'center' }}>
+            <Grid
+              container
+              sx={{ flexDirection: 'column', alignItems: 'center' }}
+            >
               <CardHeader title={caption} />
             </Grid>
             <Divider />
@@ -222,22 +281,27 @@ export default function CypherPie({
 
         <Box sx={chartFillSx}>
           <PieChart
-            series={[{
-              data: pieData,
-              // Donut style — looks cleaner with labels
-              innerRadius: '35%',
-              outerRadius: '80%',
-              paddingAngle: 2,
-              cornerRadius: 4,
-              // Show arc labels only when no legend is configured
-              arcLabel: hasLegend ? undefined : 'label',
-              arcLabelMinAngle: 20,
-              arcLabelRadius: '60%',
-              highlightScope: { fade: 'global', highlight: 'item' },
-              // faded.innerRadius only accepts number, not string
-              faded: { additionalRadius: -4, color: theme.palette.action.disabled },
-              valueFormatter: (item) => String(item.value)
-            }]}
+            series={[
+              {
+                data: pieData,
+                // Donut style — looks cleaner with labels
+                innerRadius: '35%',
+                outerRadius: '80%',
+                paddingAngle: 2,
+                cornerRadius: 4,
+                // Show arc labels only when no legend is configured
+                arcLabel: hasLegend ? undefined : 'label',
+                arcLabelMinAngle: 20,
+                arcLabelRadius: '60%',
+                highlightScope: { fade: 'global', highlight: 'item' },
+                // faded.innerRadius only accepts number, not string
+                faded: {
+                  additionalRadius: -4,
+                  color: theme.palette.action.disabled,
+                },
+                valueFormatter: (item) => String(item.value),
+              },
+            ]}
             colors={chartColorsFor(theme.palette.mode)}
             hideLegend={!hasLegend}
             margin={
@@ -254,16 +318,19 @@ export default function CypherPie({
                     pieSettings?.legend === 'column'
                       ? { vertical: 'middle', horizontal: 'end' }
                       : { vertical: 'bottom', horizontal: 'center' },
-                  direction: pieSettings?.legend === 'column' ? 'vertical' : 'horizontal'
-                }
+                  direction:
+                    pieSettings?.legend === 'column'
+                      ? 'vertical'
+                      : 'horizontal',
+                },
               }),
               pieArcLabel: {
                 style: {
                   fontFamily: theme.typography.fontFamily ?? undefined,
                   fontSize: 12,
-                  fontWeight: 500
-                }
-              }
+                  fontWeight: 500,
+                },
+              },
             }}
           />
         </Box>

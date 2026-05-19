@@ -6,7 +6,7 @@ const renderWithMode = (mode: 'light' | 'dark') =>
   render(
     <ThemeProvider theme={createTheme({ palette: { mode } })}>
       <Logo />
-    </ThemeProvider>
+    </ThemeProvider>,
   );
 
 describe('Logo', () => {
@@ -18,7 +18,7 @@ describe('Logo', () => {
     expect(img).toBeInTheDocument();
     expect(img).toHaveAttribute(
       'src',
-      '/static/images/logo-horizontal-white.svg'
+      '/static/images/logo-horizontal-white.svg',
     );
     expect(img).toHaveAttribute('height', '50');
   });
@@ -27,7 +27,7 @@ describe('Logo', () => {
     renderWithMode('dark');
     expect(screen.getByAltText('Seizu')).toHaveAttribute(
       'src',
-      '/static/images/logo-horizontal-black.svg'
+      '/static/images/logo-horizontal-black.svg',
     );
   });
 
@@ -35,7 +35,7 @@ describe('Logo', () => {
     render(
       <ThemeProvider theme={createTheme()}>
         <Logo data-testid="logo-img" />
-      </ThemeProvider>
+      </ThemeProvider>,
     );
     expect(screen.getByTestId('logo-img')).toBeInTheDocument();
   });

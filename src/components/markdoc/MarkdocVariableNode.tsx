@@ -47,7 +47,10 @@ export function setupMarkdocVariableMarkdownIt(md: MarkdownIt): void {
 function MarkdocVariableChip({ node }: NodeViewProps) {
   const name = (node.attrs.name as string | undefined) ?? '';
   return (
-    <NodeViewWrapper as="span" style={{ display: 'inline-block', verticalAlign: 'baseline' }}>
+    <NodeViewWrapper
+      as="span"
+      style={{ display: 'inline-block', verticalAlign: 'baseline' }}
+    >
       <Chip
         size="small"
         label={`$${name}`}
@@ -90,7 +93,11 @@ export const MarkdocVariable = Node.create({
 
   renderHTML({ HTMLAttributes, node }) {
     const name = (node.attrs.name as string | undefined) ?? '';
-    return ['span', mergeAttributes(HTMLAttributes, { 'data-markdoc-var': name }), `{%$${name}%}`];
+    return [
+      'span',
+      mergeAttributes(HTMLAttributes, { 'data-markdoc-var': name }),
+      `{%$${name}%}`,
+    ];
   },
 
   addNodeView() {
@@ -109,7 +116,10 @@ export const MarkdocVariable = Node.create({
   addStorage() {
     return {
       markdown: {
-        serialize(state: { write: (s: string) => void }, node: { attrs: { name: string } }) {
+        serialize(
+          state: { write: (s: string) => void },
+          node: { attrs: { name: string } },
+        ) {
           // Compact form (no spaces) is required so markdown-it can parse
           // links like `[label](https://example.com/{%$foo%})` — markdown-it
           // bails on URLs containing spaces.
