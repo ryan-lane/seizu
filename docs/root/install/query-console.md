@@ -57,6 +57,8 @@ The console defaults to the Graph tab when the data supports it, otherwise the T
 
 ## Graph View
 
+![graph view in the query console showing a node-link diagram with schema panel and Cypher editor](/images/graph-view.png)
+
 The graph view is the same panel used in reports. It supports:
 
 - **`RETURN path`** queries — Neo4j path objects are automatically unpacked into nodes and relationships.
@@ -66,6 +68,8 @@ When a node or relationship is clicked, a detail panel slides in from the right 
 Clicking the canvas background deselects the item and shows a graph summary (node counts by label, relationship counts by type).
 
 ## Table View
+
+![table view in the query console showing CVE path results with schema panel and Cypher editor](/images/console-table-view.png)
 
 The table view accepts any query return shape:
 
@@ -77,3 +81,9 @@ Nested objects (such as node or relationship values inside a path) are rendered 
 - Nodes → `(Label) name`
 - Relationships → `[TYPE]`
 - Paths → `(StartLabel) name → (EndLabel) name`
+
+## Raw View
+
+![raw view in the query console showing full JSON path objects](/images/console-raw-view.png)
+
+The raw view shows the complete JSON response from the API. It is useful for inspecting the exact structure returned by a query — particularly for path objects, node properties, or debugging unexpected results.
