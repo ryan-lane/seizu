@@ -33,7 +33,7 @@ FROM oven/bun:latest@sha256:87416c977a612a204eb54ab9f3927023c2a3c971f4f345a01da0
 
 WORKDIR /home/node/seizu
 
-COPY package.json bun.lock .eslintrc .prettierrc .prettierignore tsconfig.json vite.config.ts .
+COPY package.json bun.lock eslint.config.mjs .prettierrc .prettierignore tsconfig.json vite.config.ts .
 
 RUN bun install
 
