@@ -1,0 +1,12 @@
+volumes:
+  neo4j_latest_data:
+
+services:
+  neo4j:
+    image: neo4j:${NEO4J_LATEST_IMAGE_TAG:-2026.04.0}
+    volumes:
+      - ./.compose/neo4j/neo4j.conf:/conf/neo4j.conf
+      - neo4j_latest_data:/data
+      - ./.compose/neo4j/import:/import
+      - ./.compose/neo4j-latest/logs:/logs
+      - ./.compose/neo4j-latest/plugins:/plugins

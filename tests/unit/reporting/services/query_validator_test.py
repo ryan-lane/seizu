@@ -1,6 +1,19 @@
 from unittest.mock import AsyncMock, MagicMock
 
+import pytest
+
+from reporting import settings
 from reporting.services.query_validator import ValidationResult, validate_query
+from tests.query_validator_cases import (
+    ADMIN_COMMAND_FUZZ_CASES,
+    ALLOWED_PROCEDURE_CASES,
+    DANGEROUS_READ_PATH_FUZZ_CASES,
+    DISALLOWED_PROCEDURE_CASES,
+    READ_ONLY_CALL_SUBQUERY_CASES,
+    USE_CLAUSE_FALSE_POSITIVE_CASES,
+    USE_CLAUSE_FUZZ_CASES,
+    WRITE_QUERY_TYPE_FUZZ_CASES,
+)
 
 
 def _mock_cyver(
@@ -40,6 +53,130 @@ def _mock_cyver(
 
 
 # --- validate_query returns ValidationResult ---
+
+
+@pytest.mark.parametrize("query", DANGEROUS_READ_PATH_FUZZ_CASES)
+async def test_dangerous_read_path_fuzz_cases_are_blocked(mocker, query):
+    """Regex guards should block read-classified dangerous surfaces after EXPLAIN."""
+    _mock_cyver(mocker)
+    result = await validate_query(query)
+    assert result.has_errors
+
+
+@pytest.mark.parametrize(("query_type", "query"), WRITE_QUERY_TYPE_FUZZ_CASES)
+async def test_write_query_type_fuzz_cases_are_blocked(mocker, query_type, query):
+    """Neo4j EXPLAIN classifications should block write/schema procedure variants."""
+    _mock_cyver(mocker, query_type=query_type)
+    result = await validate_query(query)
+    assert result.has_errors
+
+
+@pytest.mark.parametrize("query", READ_ONLY_CALL_SUBQUERY_CASES)
+async def test_read_only_call_subquery_fuzz_cases_are_allowed(mocker, query):
+    """Keep legitimate read-only CALL subquery shapes allowed while write forms block."""
+    _mock_cyver(mocker)
+    result = await validate_query(query)
+    assert not result.has_errors
+
+
+@pytest.mark.parametrize("query", ADMIN_COMMAND_FUZZ_CASES)
+async def test_admin_command_fuzz_cases_are_blocked(mocker, query):
+    """Admin and DBMS-management surfaces should not validate as user queries."""
+    _mock_cyver(mocker)
+    result = await validate_query(query)
+    assert result.has_errors
+
+
+@pytest.mark.parametrize("query", USE_CLAUSE_FUZZ_CASES)
+async def test_use_clause_fuzz_cases_are_blocked(mocker, query):
+    """The USE clause escapes Seizu's configured graph and is always blocked."""
+    _mock_cyver(mocker)
+    result = await validate_query(query)
+    assert result.has_errors
+
+
+@pytest.mark.parametrize("query", USE_CLAUSE_FALSE_POSITIVE_CASES)
+async def test_use_clause_false_positive_cases_are_allowed(mocker, query):
+    """A `use` variable after a CASE THEN/ELSE must not trip the USE-clause guard."""
+    _mock_cyver(mocker)
+    result = await validate_query(query)
+    assert not result.has_errors
+
+
+@pytest.mark.parametrize("query", DISALLOWED_PROCEDURE_CASES)
+async def test_disallowed_procedure_cases_are_blocked(mocker, query):
+    """Procedures outside the default allowlist are blocked after EXPLAIN."""
+    _mock_cyver(mocker)
+    result = await validate_query(query)
+    assert result.has_errors
+
+
+@pytest.mark.parametrize("query", ALLOWED_PROCEDURE_CASES)
+async def test_allowed_procedure_cases_are_permitted(mocker, query):
+    """Side-effect-free built-in schema procedures validate cleanly by default."""
+    _mock_cyver(mocker)
+    result = await validate_query(query)
+    assert not result.has_errors
+
+
+class TestProcedureAllowlist:
+    """QUERY_VALIDATOR_ALLOWED_PROCEDURES extends the default procedure allowlist."""
+
+    async def test_apoc_procedure_blocked_by_default(self, mocker):
+        _mock_cyver(mocker)
+        result = await validate_query("CALL apoc.meta.stats() YIELD labelCount RETURN labelCount")
+        assert result.has_errors
+
+    async def test_exact_procedure_name_is_allowed_when_configured(self, mocker):
+        _mock_cyver(mocker)
+        mocker.patch.object(settings, "QUERY_VALIDATOR_ALLOWED_PROCEDURES", ["apoc.meta.stats"])
+        result = await validate_query("CALL apoc.meta.stats() YIELD labelCount RETURN labelCount")
+        assert not result.has_errors
+
+    async def test_exact_procedure_name_does_not_allow_siblings(self, mocker):
+        _mock_cyver(mocker)
+        mocker.patch.object(settings, "QUERY_VALIDATOR_ALLOWED_PROCEDURES", ["apoc.meta.stats"])
+        result = await validate_query("CALL apoc.load.json('http://attacker/') YIELD value RETURN value")
+        assert result.has_errors
+
+    async def test_namespace_prefix_allows_whole_namespace(self, mocker):
+        _mock_cyver(mocker)
+        mocker.patch.object(settings, "QUERY_VALIDATOR_ALLOWED_PROCEDURES", ["apoc."])
+        result = await validate_query("CALL apoc.coll.sum([1, 2, 3]) YIELD value RETURN value")
+        assert not result.has_errors
+
+    async def test_apoc_namespace_prefix_does_not_unblock_apoc_cypher_functions(self, mocker):
+        """Procedure allowlisting does not permit arbitrary-Cypher functions."""
+        _mock_cyver(mocker)
+        mocker.patch.object(settings, "QUERY_VALIDATOR_ALLOWED_PROCEDURES", ["apoc."])
+        result = await validate_query("RETURN apoc.cypher.runFirstColumnSingle('RETURN 1', {}) AS r")
+        assert result.has_errors
+
+    async def test_gds_namespace_prefix_allows_gds_procedure_calls(self, mocker):
+        _mock_cyver(mocker)
+        mocker.patch.object(settings, "QUERY_VALIDATOR_ALLOWED_PROCEDURES", ["gds."])
+        result = await validate_query("CALL gds.graph.list() YIELD graphName RETURN graphName")
+        assert not result.has_errors
+
+    async def test_gds_namespace_prefix_does_not_unblock_gds_functions(self, mocker):
+        _mock_cyver(mocker)
+        mocker.patch.object(settings, "QUERY_VALIDATOR_ALLOWED_PROCEDURES", ["gds."])
+        result = await validate_query("RETURN gds.version() AS version")
+        assert result.has_errors
+
+    async def test_narrow_apoc_prefix_keeps_apoc_cypher_guarded(self, mocker):
+        """A sub-namespace prefix must not drop the apoc.cypher.* guard."""
+        _mock_cyver(mocker)
+        mocker.patch.object(settings, "QUERY_VALIDATOR_ALLOWED_PROCEDURES", ["apoc.coll."])
+        result = await validate_query("RETURN apoc.cypher.runFirstColumnSingle('RETURN 1', {}) AS r")
+        assert result.has_errors
+
+    async def test_allowlist_cannot_override_explain_write_check(self, mocker):
+        """Even an allowlisted namespace cannot permit a non-read procedure."""
+        _mock_cyver(mocker, query_type="w")
+        mocker.patch.object(settings, "QUERY_VALIDATOR_ALLOWED_PROCEDURES", ["apoc."])
+        result = await validate_query("CALL apoc.create.node(['X'], {}) YIELD node RETURN node")
+        assert result.has_errors
 
 
 async def test_validate_query_success(mocker):
@@ -323,6 +460,23 @@ class TestAdminCommandsBlocked:
         result = await validate_query("SHOW INDEXES YIELD name RETURN name LIMIT 5")
         assert result.has_errors
 
+    async def test_show_constraints_is_blocked(self, mocker):
+        _mock_cyver(mocker)
+        result = await validate_query("SHOW CONSTRAINTS YIELD name, type RETURN name, type LIMIT 5")
+        assert result.has_errors
+
+    async def test_show_all_indexes_modifier_is_blocked(self, mocker):
+        _mock_cyver(mocker)
+        result = await validate_query("SHOW ALL INDEXES YIELD name, type RETURN name, type LIMIT 5")
+        assert result.has_errors
+
+    async def test_show_typed_indexes_modifier_is_blocked(self, mocker):
+        _mock_cyver(mocker)
+        index_types = ("RANGE", "LOOKUP", "TEXT", "POINT", "VECTOR", "FULLTEXT")
+        for index_type in index_types:
+            result = await validate_query(f"SHOW {index_type} INDEXES YIELD name, type RETURN name, type LIMIT 5")
+            assert result.has_errors
+
     async def test_stop_database_is_blocked_if_explain_classifies_read(self, mocker):
         _mock_cyver(mocker)
         result = await validate_query("STOP DATABASE neo4j")
@@ -331,6 +485,79 @@ class TestAdminCommandsBlocked:
     async def test_start_database_is_blocked_if_explain_classifies_read(self, mocker):
         _mock_cyver(mocker)
         result = await validate_query("START DATABASE neo4j")
+        assert result.has_errors
+
+
+class TestGDSBlocked:
+    """GDS procedures/functions with side effects outside normal Cypher writes."""
+
+    async def test_gds_graph_project_procedure_is_blocked(self, mocker):
+        _mock_cyver(mocker)
+        result = await validate_query("CALL gds.graph.project('probe', '*', '*') YIELD graphName RETURN graphName")
+        assert result.has_errors
+
+    async def test_gds_graph_project_function_is_blocked(self, mocker):
+        _mock_cyver(mocker)
+        result = await validate_query(
+            "MATCH (source)-[r]->(target) "
+            "WITH gds.graph.project('probe', source, target) AS graph "
+            "RETURN graph.graphName"
+        )
+        assert result.has_errors
+
+    async def test_gds_quoted_graph_project_function_is_blocked(self, mocker):
+        _mock_cyver(mocker)
+        result = await validate_query(
+            "MATCH (source)-[r]->(target) "
+            "WITH `gds`.`graph`.`project`('probe', source, target) AS graph "
+            "RETURN graph.graphName"
+        )
+        assert result.has_errors
+
+    async def test_gds_full_quoted_function_namespace_is_blocked(self, mocker):
+        _mock_cyver(mocker)
+        result = await validate_query("RETURN `gds.version`() AS version")
+        assert result.has_errors
+
+    async def test_gds_version_function_is_blocked(self, mocker):
+        _mock_cyver(mocker)
+        result = await validate_query("RETURN gds.version() AS version")
+        assert result.has_errors
+
+    async def test_gds_write_mode_is_blocked(self, mocker):
+        _mock_cyver(mocker)
+        result = await validate_query(
+            "CALL gds.pageRank.write('probe', {writeProperty: 'pagerank'}) "
+            "YIELD nodePropertiesWritten RETURN nodePropertiesWritten"
+        )
+        assert result.has_errors
+
+    async def test_gds_mutate_mode_is_blocked(self, mocker):
+        _mock_cyver(mocker)
+        result = await validate_query(
+            "CALL gds.pageRank.mutate('probe', {mutateProperty: 'pagerank'}) "
+            "YIELD nodePropertiesWritten RETURN nodePropertiesWritten"
+        )
+        assert result.has_errors
+
+    async def test_gds_comment_bypass_is_blocked(self, mocker):
+        _mock_cyver(mocker)
+        result = await validate_query("CALL /* hide */ gds.graph.list() YIELD graphName RETURN graphName")
+        assert result.has_errors
+
+    async def test_gds_quoted_namespace_bypass_is_blocked(self, mocker):
+        _mock_cyver(mocker)
+        result = await validate_query("CALL `gds`.`graph`.`list`() YIELD graphName RETURN graphName")
+        assert result.has_errors
+
+    async def test_apoc_quoted_namespace_bypass_is_blocked(self, mocker):
+        _mock_cyver(mocker)
+        result = await validate_query("CALL `apoc`.`load`.`json`('http://169.254.169.254/') YIELD value RETURN value")
+        assert result.has_errors
+
+    async def test_gds_unicode_bypass_is_blocked(self, mocker):
+        _mock_cyver(mocker)
+        result = await validate_query(r"C\u0041LL gds.graph.list() YIELD graphName RETURN graphName")
         assert result.has_errors
 
 
@@ -557,6 +784,20 @@ class TestNeo4jectionCloudMetadata:
         )
         assert result.has_errors
 
+    async def test_apoc_cypher_segment_quoted_function_bypass(self, mocker):
+        _mock_cyver(mocker)
+        result = await validate_query(
+            "RETURN `apoc`.`cypher`.`runFirstColumnSingle`('MATCH (n) RETURN n.id LIMIT 1', {}) AS r"
+        )
+        assert result.has_errors
+
+    async def test_apoc_cypher_comment_before_dot_bypass(self, mocker):
+        _mock_cyver(mocker)
+        result = await validate_query(
+            "RETURN apoc/*hide*/.cypher.runFirstColumnSingle('MATCH (n) RETURN n.id LIMIT 1', {}) AS r"
+        )
+        assert result.has_errors
+
     async def test_apoc_cypher_run_first_column_many(self, mocker):
         _mock_cyver(mocker)
         result = await validate_query("RETURN apoc.cypher.runFirstColumnMany('MATCH (n) RETURN n', {}) AS r")
@@ -635,4 +876,65 @@ class TestNeo4jectionWriteClauses:
     async def test_remove_labels(self, mocker):
         _mock_cyver(mocker, query_type="rw")
         result = await validate_query("MATCH (n:Admin) REMOVE n:Admin RETURN n")
+        assert result.has_errors
+
+    async def test_insert_node(self, mocker):
+        _mock_cyver(mocker, query_type="rw")
+        result = await validate_query("INSERT (:SeizuWriteProbe {id: 'x'})")
+        assert result.has_errors
+
+    async def test_nodetach_delete(self, mocker):
+        _mock_cyver(mocker, query_type="w")
+        result = await validate_query("MATCH (n) NODETACH DELETE n")
+        assert result.has_errors
+
+    async def test_call_subquery_write(self, mocker):
+        _mock_cyver(mocker, query_type="rw")
+        result = await validate_query("CALL { CREATE (:SeizuWriteProbe {id: 'sub'}) } RETURN 1")
+        assert result.has_errors
+
+    async def test_call_subquery_in_transactions_write(self, mocker):
+        _mock_cyver(mocker, query_type="rw")
+        result = await validate_query(
+            "UNWIND [1] AS x CALL { WITH x CREATE (:SeizuWriteProbe {id: x}) } IN TRANSACTIONS RETURN x"
+        )
+        assert result.has_errors
+
+    async def test_optional_call_subquery_write(self, mocker):
+        _mock_cyver(mocker, query_type="rw")
+        result = await validate_query(
+            "MATCH (n) WITH n LIMIT 1 OPTIONAL CALL { WITH n "
+            "CREATE (n)-[:SEIZU_OPTIONAL_PROBE]->(:SeizuWriteProbe) RETURN n AS m } RETURN m"
+        )
+        assert result.has_errors
+
+    async def test_variable_scope_call_subquery_write(self, mocker):
+        _mock_cyver(mocker, query_type="rw")
+        result = await validate_query(
+            "MATCH (n) WITH n LIMIT 1 CALL (n) { CREATE (n)-[:SEIZU_SCOPE_PROBE]->(:SeizuWriteProbe) } RETURN n"
+        )
+        assert result.has_errors
+
+    async def test_nested_call_subquery_write(self, mocker):
+        _mock_cyver(mocker, query_type="rw")
+        result = await validate_query(
+            "CALL { CALL { CREATE (:SeizuWriteProbe {id: 'nested'}) } RETURN 1 AS x } RETURN x"
+        )
+        assert result.has_errors
+
+    async def test_union_branch_write(self, mocker):
+        _mock_cyver(mocker, query_type="rw")
+        query = "MATCH (n) RETURN count(n) AS c UNION CREATE (:SeizuWriteProbe) RETURN 1 AS c"
+        result = await validate_query(query)
+        assert result.has_errors
+
+    async def test_schema_command(self, mocker):
+        _mock_cyver(mocker, query_type="s")
+        query = "CREATE INDEX seizu_probe_index IF NOT EXISTS FOR (n:SeizuWriteProbe) ON (n.id)"
+        result = await validate_query(query)
+        assert result.has_errors
+
+    async def test_write_procedure(self, mocker):
+        _mock_cyver(mocker, query_type="w")
+        result = await validate_query("CALL db.createLabel('SeizuProbe')")
         assert result.has_errors
