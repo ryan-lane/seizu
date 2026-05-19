@@ -8,11 +8,7 @@ interface UserAvatarProps {
 
 function UserAvatar({ name, size = 32 }: UserAvatarProps) {
   return (
-    <BoringAvatar
-      size={size}
-      name={name ?? 'anonymous'}
-      variant="pixel"
-    />
+    <BoringAvatar size={size} name={name ?? 'anonymous'} variant="pixel" />
   );
 }
 

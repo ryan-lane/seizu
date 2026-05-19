@@ -5,7 +5,10 @@ import type { Panel, PanelThreshold } from 'src/config.context';
  * ThresholdsEditor. Users can also pick any color via the native color
  * input embedded next to these.
  */
-export const THRESHOLD_PRESET_COLORS: ReadonlyArray<{ label: string; hex: string }> = [
+export const THRESHOLD_PRESET_COLORS: ReadonlyArray<{
+  label: string;
+  hex: string;
+}> = [
   { label: 'Red', hex: '#F44336' },
   { label: 'Orange', hex: '#FF9800' },
   { label: 'Yellow', hex: '#FFC107' },
@@ -14,7 +17,7 @@ export const THRESHOLD_PRESET_COLORS: ReadonlyArray<{ label: string; hex: string
   { label: 'Blue', hex: '#2196F3' },
   { label: 'Purple', hex: '#9C27B0' },
   { label: 'Pink', hex: '#E91E63' },
-  { label: 'Grey', hex: '#9E9E9E' }
+  { label: 'Grey', hex: '#9E9E9E' },
 ];
 
 const LEGACY_PROGRESS_LOW = '#F44336';
@@ -28,7 +31,7 @@ const LEGACY_COUNT_HIGH = '#F44336';
  */
 export function resolveThresholdColor(
   metric: number,
-  thresholds: PanelThreshold[] | undefined
+  thresholds: PanelThreshold[] | undefined,
 ): string | undefined {
   if (!thresholds || thresholds.length === 0) return undefined;
   let best: PanelThreshold | undefined;

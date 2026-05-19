@@ -105,7 +105,11 @@ function getApiHeaders(accessToken: string | null): Record<string, string> {
 
 async function errorMessage(res: Response, fallback: string): Promise<string> {
   const data = await res.json().catch(() => ({}));
-  return (data as { errors?: string[]; detail?: string }).errors?.join(', ') ?? (data as { detail?: string }).detail ?? fallback;
+  return (
+    (data as { errors?: string[]; detail?: string }).errors?.join(', ') ??
+    (data as { detail?: string }).detail ??
+    fallback
+  );
 }
 
 export function useSkillsetsList(): {
@@ -158,9 +162,12 @@ export function useSkillsetVersionsList(skillsetId: string | null): {
     if (!skillsetId) return;
     if (auth_required && !accessToken) return;
     setLoading(true);
-    fetch(`/api/v1/skillsets/${skillsetId}/versions`, { headers: getApiHeaders(accessToken) })
+    fetch(`/api/v1/skillsets/${skillsetId}/versions`, {
+      headers: getApiHeaders(accessToken),
+    })
       .then((res) => {
-        if (!res.ok) throw new Error(`Failed to load skillset versions: ${res.status}`);
+        if (!res.ok)
+          throw new Error(`Failed to load skillset versions: ${res.status}`);
         return res.json();
       })
       .then((data: { versions: SkillsetVersion[] }) => {
@@ -178,32 +185,62 @@ export function useSkillsetVersionsList(skillsetId: string | null): {
 
 export function useSkillsetMutations(): {
   createSkillset: (req: CreateSkillsetRequest) => Promise<SkillsetListItem>;
-  updateSkillset: (id: string, req: UpdateSkillsetRequest) => Promise<SkillsetListItem>;
+  updateSkillset: (
+    id: string,
+    req: UpdateSkillsetRequest,
+  ) => Promise<SkillsetListItem>;
   deleteSkillset: (id: string) => Promise<void>;
 } {
   const { accessToken } = useContext(AuthContext);
-  const createSkillset = useCallback(async (req: CreateSkillsetRequest): Promise<SkillsetListItem> => {
-    const res = await fetch('/api/v1/skillsets', {
-      method: 'POST',
-      headers: { ...getApiHeaders(accessToken), 'Content-Type': 'application/json' },
-      body: JSON.stringify(req)
-    });
-    if (!res.ok) throw new Error(await errorMessage(res, `Failed to create skillset: ${res.status}`));
-    return res.json();
-  }, [accessToken]);
-  const updateSkillset = useCallback(async (id: string, req: UpdateSkillsetRequest): Promise<SkillsetListItem> => {
-    const res = await fetch(`/api/v1/skillsets/${id}`, {
-      method: 'PUT',
-      headers: { ...getApiHeaders(accessToken), 'Content-Type': 'application/json' },
-      body: JSON.stringify(req)
-    });
-    if (!res.ok) throw new Error(await errorMessage(res, `Failed to update skillset: ${res.status}`));
-    return res.json();
-  }, [accessToken]);
-  const deleteSkillset = useCallback(async (id: string): Promise<void> => {
-    const res = await fetch(`/api/v1/skillsets/${id}`, { method: 'DELETE', headers: getApiHeaders(accessToken) });
-    if (!res.ok) throw new Error(`Failed to delete skillset: ${res.status}`);
-  }, [accessToken]);
+  const createSkillset = useCallback(
+    async (req: CreateSkillsetRequest): Promise<SkillsetListItem> => {
+      const res = await fetch('/api/v1/skillsets', {
+        method: 'POST',
+        headers: {
+          ...getApiHeaders(accessToken),
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(req),
+      });
+      if (!res.ok)
+        throw new Error(
+          await errorMessage(res, `Failed to create skillset: ${res.status}`),
+        );
+      return res.json();
+    },
+    [accessToken],
+  );
+  const updateSkillset = useCallback(
+    async (
+      id: string,
+      req: UpdateSkillsetRequest,
+    ): Promise<SkillsetListItem> => {
+      const res = await fetch(`/api/v1/skillsets/${id}`, {
+        method: 'PUT',
+        headers: {
+          ...getApiHeaders(accessToken),
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(req),
+      });
+      if (!res.ok)
+        throw new Error(
+          await errorMessage(res, `Failed to update skillset: ${res.status}`),
+        );
+      return res.json();
+    },
+    [accessToken],
+  );
+  const deleteSkillset = useCallback(
+    async (id: string): Promise<void> => {
+      const res = await fetch(`/api/v1/skillsets/${id}`, {
+        method: 'DELETE',
+        headers: getApiHeaders(accessToken),
+      });
+      if (!res.ok) throw new Error(`Failed to delete skillset: ${res.status}`);
+    },
+    [accessToken],
+  );
   return { createSkillset, updateSkillset, deleteSkillset };
 }
 
@@ -225,7 +262,9 @@ export function useSkillsList(skillsetId: string | null): {
     if (!skillsetId) return;
     if (auth_required && !accessToken) return;
     setLoading(true);
-    fetch(`/api/v1/skillsets/${skillsetId}/skills`, { headers: getApiHeaders(accessToken) })
+    fetch(`/api/v1/skillsets/${skillsetId}/skills`, {
+      headers: getApiHeaders(accessToken),
+    })
       .then((res) => {
         if (!res.ok) throw new Error(`Failed to load skills: ${res.status}`);
         return res.json();
@@ -243,7 +282,10 @@ export function useSkillsList(skillsetId: string | null): {
   return { skills, loading, error, refresh };
 }
 
-export function useSkillVersionsList(skillsetId: string | null, skillId: string | null): {
+export function useSkillVersionsList(
+  skillsetId: string | null,
+  skillId: string | null,
+): {
   versions: SkillVersion[];
   loading: boolean;
   error: Error | null;
@@ -258,9 +300,12 @@ export function useSkillVersionsList(skillsetId: string | null, skillId: string 
     if (!skillsetId || !skillId) return;
     if (auth_required && !accessToken) return;
     setLoading(true);
-    fetch(`/api/v1/skillsets/${skillsetId}/skills/${skillId}/versions`, { headers: getApiHeaders(accessToken) })
+    fetch(`/api/v1/skillsets/${skillsetId}/skills/${skillId}/versions`, {
+      headers: getApiHeaders(accessToken),
+    })
       .then((res) => {
-        if (!res.ok) throw new Error(`Failed to load skill versions: ${res.status}`);
+        if (!res.ok)
+          throw new Error(`Failed to load skill versions: ${res.status}`);
         return res.json();
       })
       .then((data: { versions: SkillVersion[] }) => {
@@ -280,42 +325,87 @@ export function useSkillMutations(skillsetId: string): {
   createSkill: (req: CreateSkillRequest) => Promise<SkillItem>;
   updateSkill: (skillId: string, req: UpdateSkillRequest) => Promise<SkillItem>;
   deleteSkill: (skillId: string) => Promise<void>;
-  renderSkill: (skillId: string, args: Record<string, unknown>) => Promise<{ text: string }>;
+  renderSkill: (
+    skillId: string,
+    args: Record<string, unknown>,
+  ) => Promise<{ text: string }>;
 } {
   const { accessToken } = useContext(AuthContext);
-  const createSkill = useCallback(async (req: CreateSkillRequest): Promise<SkillItem> => {
-    const res = await fetch(`/api/v1/skillsets/${skillsetId}/skills`, {
-      method: 'POST',
-      headers: { ...getApiHeaders(accessToken), 'Content-Type': 'application/json' },
-      body: JSON.stringify(req)
-    });
-    if (!res.ok) throw new Error(await errorMessage(res, `Failed to create skill: ${res.status}`));
-    return res.json();
-  }, [accessToken, skillsetId]);
-  const updateSkill = useCallback(async (skillId: string, req: UpdateSkillRequest): Promise<SkillItem> => {
-    const res = await fetch(`/api/v1/skillsets/${skillsetId}/skills/${skillId}`, {
-      method: 'PUT',
-      headers: { ...getApiHeaders(accessToken), 'Content-Type': 'application/json' },
-      body: JSON.stringify(req)
-    });
-    if (!res.ok) throw new Error(await errorMessage(res, `Failed to update skill: ${res.status}`));
-    return res.json();
-  }, [accessToken, skillsetId]);
-  const deleteSkill = useCallback(async (skillId: string): Promise<void> => {
-    const res = await fetch(`/api/v1/skillsets/${skillsetId}/skills/${skillId}`, {
-      method: 'DELETE',
-      headers: getApiHeaders(accessToken)
-    });
-    if (!res.ok) throw new Error(`Failed to delete skill: ${res.status}`);
-  }, [accessToken, skillsetId]);
-  const renderSkill = useCallback(async (skillId: string, args: Record<string, unknown>): Promise<{ text: string }> => {
-    const res = await fetch(`/api/v1/skillsets/${skillsetId}/skills/${skillId}/render`, {
-      method: 'POST',
-      headers: { ...getApiHeaders(accessToken), 'Content-Type': 'application/json' },
-      body: JSON.stringify({ arguments: args })
-    });
-    if (!res.ok) throw new Error(await errorMessage(res, `Failed to render skill: ${res.status}`));
-    return res.json();
-  }, [accessToken, skillsetId]);
+  const createSkill = useCallback(
+    async (req: CreateSkillRequest): Promise<SkillItem> => {
+      const res = await fetch(`/api/v1/skillsets/${skillsetId}/skills`, {
+        method: 'POST',
+        headers: {
+          ...getApiHeaders(accessToken),
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(req),
+      });
+      if (!res.ok)
+        throw new Error(
+          await errorMessage(res, `Failed to create skill: ${res.status}`),
+        );
+      return res.json();
+    },
+    [accessToken, skillsetId],
+  );
+  const updateSkill = useCallback(
+    async (skillId: string, req: UpdateSkillRequest): Promise<SkillItem> => {
+      const res = await fetch(
+        `/api/v1/skillsets/${skillsetId}/skills/${skillId}`,
+        {
+          method: 'PUT',
+          headers: {
+            ...getApiHeaders(accessToken),
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(req),
+        },
+      );
+      if (!res.ok)
+        throw new Error(
+          await errorMessage(res, `Failed to update skill: ${res.status}`),
+        );
+      return res.json();
+    },
+    [accessToken, skillsetId],
+  );
+  const deleteSkill = useCallback(
+    async (skillId: string): Promise<void> => {
+      const res = await fetch(
+        `/api/v1/skillsets/${skillsetId}/skills/${skillId}`,
+        {
+          method: 'DELETE',
+          headers: getApiHeaders(accessToken),
+        },
+      );
+      if (!res.ok) throw new Error(`Failed to delete skill: ${res.status}`);
+    },
+    [accessToken, skillsetId],
+  );
+  const renderSkill = useCallback(
+    async (
+      skillId: string,
+      args: Record<string, unknown>,
+    ): Promise<{ text: string }> => {
+      const res = await fetch(
+        `/api/v1/skillsets/${skillsetId}/skills/${skillId}/render`,
+        {
+          method: 'POST',
+          headers: {
+            ...getApiHeaders(accessToken),
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ arguments: args }),
+        },
+      );
+      if (!res.ok)
+        throw new Error(
+          await errorMessage(res, `Failed to render skill: ${res.status}`),
+        );
+      return res.json();
+    },
+    [accessToken, skillsetId],
+  );
   return { createSkill, updateSkill, deleteSkill, renderSkill };
 }

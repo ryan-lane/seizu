@@ -15,7 +15,7 @@ import {
   TextField,
   ToggleButton,
   ToggleButtonGroup,
-  Tooltip
+  Tooltip,
 } from '@mui/material';
 import ChecklistIcon from '@mui/icons-material/Checklist';
 import CodeIcon from '@mui/icons-material/Code';
@@ -64,9 +64,8 @@ interface MarkdownEditorProps {
 }
 
 function getMarkdown(editor: Editor): string {
-  const storage = (editor.storage as unknown as Record<string, unknown>).markdown as
-    | MarkdownStorage
-    | undefined;
+  const storage = (editor.storage as unknown as Record<string, unknown>)
+    .markdown as MarkdownStorage | undefined;
   return storage?.getMarkdown() ?? '';
 }
 
@@ -86,7 +85,13 @@ interface ToolbarButtonProps {
   children: React.ReactNode;
 }
 
-function ToolbarButton({ label, onClick, active, disabled, children }: ToolbarButtonProps) {
+function ToolbarButton({
+  label,
+  onClick,
+  active,
+  disabled,
+  children,
+}: ToolbarButtonProps) {
   return (
     <Tooltip title={label}>
       <span>
@@ -123,7 +128,7 @@ function MarkdownEditorInner({
   const editor = useEditor({
     extensions: [
       StarterKit.configure({
-        link: { openOnClick: false, autolink: true }
+        link: { openOnClick: false, autolink: true },
       }),
       Table.configure({ resizable: true }),
       TableRow,
@@ -140,8 +145,8 @@ function MarkdownEditorInner({
         // rather than rendered.
         html: false,
         tightLists: true,
-        breaks: false
-      })
+        breaks: false,
+      }),
     ],
     // Tiptap's column-resize plugin (and a few other utilities) inject a
     // <style> tag at runtime via `createStyleTag`. Pass our CSP nonce so
@@ -151,7 +156,7 @@ function MarkdownEditorInner({
     onUpdate: ({ editor: e }) => {
       const md = getMarkdown(e);
       onChange(md.trim() ? md : undefined);
-    }
+    },
   });
 
   useEffect(() => {
@@ -172,12 +177,12 @@ function MarkdownEditorInner({
       editor.commands.setContent(value ?? '', { emitUpdate: false });
     }
     // We only want to resync when switching back to WYSIWYG; intentionally omit `value`.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mode, editor]);
 
   function openLinkDialog() {
     if (!editor) return;
-    const previous = (editor.getAttributes('link').href as string | undefined) ?? '';
+    const previous =
+      (editor.getAttributes('link').href as string | undefined) ?? '';
     setLinkUrl(previous);
     setLinkDialogOpen(true);
   }
@@ -186,7 +191,12 @@ function MarkdownEditorInner({
     if (!editor) return;
     const url = linkUrl.trim();
     if (url) {
-      editor.chain().focus().extendMarkRange('link').setLink({ href: url }).run();
+      editor
+        .chain()
+        .focus()
+        .extendMarkRange('link')
+        .setLink({ href: url })
+        .run();
     } else {
       editor.chain().focus().extendMarkRange('link').unsetLink().run();
     }
@@ -203,13 +213,19 @@ function MarkdownEditorInner({
     if (val === 'paragraph') {
       editor.chain().focus().setParagraph().run();
     } else {
-      editor.chain().focus().toggleHeading({ level: parseInt(val, 10) as HeadingLevel }).run();
+      editor
+        .chain()
+        .focus()
+        .toggleHeading({ level: parseInt(val, 10) as HeadingLevel })
+        .run();
     }
   }
 
   const inTable = editor?.isActive('table') ?? false;
 
-  function runTableCommand(cmd: (chain: ReturnType<Editor['chain']>) => ReturnType<Editor['chain']>) {
+  function runTableCommand(
+    cmd: (chain: ReturnType<Editor['chain']>) => ReturnType<Editor['chain']>,
+  ) {
     if (!editor) return;
     cmd(editor.chain().focus()).run();
     setTableMenuOpen(false);
@@ -217,7 +233,7 @@ function MarkdownEditorInner({
 
   const sortedVariables = useMemo(
     () => [...availableVariables].sort((a, b) => a.name.localeCompare(b.name)),
-    [availableVariables]
+    [availableVariables],
   );
 
   function insertVariable(name: string) {
@@ -263,7 +279,7 @@ function MarkdownEditorInner({
               p: 0.5,
               border: '1px solid',
               borderColor: 'divider',
-              borderRadius: 1
+              borderRadius: 1,
             }}
           >
             <ToolbarButton
@@ -301,16 +317,30 @@ function MarkdownEditorInner({
                 fontSize: '0.8rem',
                 minWidth: 120,
                 height: 30,
-                '& .MuiSelect-select': { py: '4px' }
+                '& .MuiSelect-select': { py: '4px' },
               }}
             >
-              <MenuItem value="paragraph" sx={{ fontSize: '0.85rem' }}>Normal text</MenuItem>
-              <MenuItem value="1" sx={{ fontSize: '0.85rem' }}>Heading 1</MenuItem>
-              <MenuItem value="2" sx={{ fontSize: '0.85rem' }}>Heading 2</MenuItem>
-              <MenuItem value="3" sx={{ fontSize: '0.85rem' }}>Heading 3</MenuItem>
-              <MenuItem value="4" sx={{ fontSize: '0.85rem' }}>Heading 4</MenuItem>
-              <MenuItem value="5" sx={{ fontSize: '0.85rem' }}>Heading 5</MenuItem>
-              <MenuItem value="6" sx={{ fontSize: '0.85rem' }}>Heading 6</MenuItem>
+              <MenuItem value="paragraph" sx={{ fontSize: '0.85rem' }}>
+                Normal text
+              </MenuItem>
+              <MenuItem value="1" sx={{ fontSize: '0.85rem' }}>
+                Heading 1
+              </MenuItem>
+              <MenuItem value="2" sx={{ fontSize: '0.85rem' }}>
+                Heading 2
+              </MenuItem>
+              <MenuItem value="3" sx={{ fontSize: '0.85rem' }}>
+                Heading 3
+              </MenuItem>
+              <MenuItem value="4" sx={{ fontSize: '0.85rem' }}>
+                Heading 4
+              </MenuItem>
+              <MenuItem value="5" sx={{ fontSize: '0.85rem' }}>
+                Heading 5
+              </MenuItem>
+              <MenuItem value="6" sx={{ fontSize: '0.85rem' }}>
+                Heading 6
+              </MenuItem>
             </Select>
             <Divider orientation="vertical" flexItem sx={{ mx: 0.5 }} />
             <ToolbarButton
@@ -362,7 +392,13 @@ function MarkdownEditorInner({
             >
               <DataObjectIcon fontSize="small" />
             </ToolbarButton>
-            <Tooltip title={sortedVariables.length === 0 ? 'No variables available' : 'Insert variable'}>
+            <Tooltip
+              title={
+                sortedVariables.length === 0
+                  ? 'No variables available'
+                  : 'Insert variable'
+              }
+            >
               <span>
                 <IconButton
                   ref={variableButtonRef}
@@ -385,7 +421,14 @@ function MarkdownEditorInner({
             >
               {sortedVariables.map((v) => (
                 <MenuItem key={v.name} onClick={() => insertVariable(v.name)}>
-                  <Box sx={{ fontFamily: 'monospace', fontSize: '0.85rem', color: 'primary.main', mr: 1 }}>
+                  <Box
+                    sx={{
+                      fontFamily: 'monospace',
+                      fontSize: '0.85rem',
+                      color: 'primary.main',
+                      mr: 1,
+                    }}
+                  >
                     {`$${v.name}`}
                   </Box>
                   {v.label && (
@@ -438,7 +481,7 @@ function MarkdownEditorInner({
               <MenuItem
                 onClick={() =>
                   runTableCommand((c) =>
-                    c.insertTable({ rows: 3, cols: 3, withHeaderRow: true })
+                    c.insertTable({ rows: 3, cols: 3, withHeaderRow: true }),
                   )
                 }
               >
@@ -550,22 +593,22 @@ function MarkdownEditorInner({
                       cursor: 'pointer',
                       userSelect: 'none',
                     },
-                    '& > div': { flex: 1 }
-                  }
+                    '& > div': { flex: 1 },
+                  },
                 },
                 '& blockquote': {
                   borderLeft: '4px solid',
                   borderColor: 'divider',
                   pl: 2,
                   my: 1,
-                  color: 'text.secondary'
+                  color: 'text.secondary',
                 },
                 '& code': {
                   fontFamily: 'monospace',
                   bgcolor: 'action.hover',
                   px: 0.5,
                   py: 0.25,
-                  borderRadius: 0.5
+                  borderRadius: 0.5,
                 },
                 '& pre': {
                   fontFamily: 'monospace',
@@ -573,17 +616,22 @@ function MarkdownEditorInner({
                   p: 1.5,
                   borderRadius: 1,
                   overflow: 'auto',
-                  my: 1
+                  my: 1,
                 },
                 '& pre code': { bgcolor: 'transparent', p: 0 },
                 '& a': { color: 'primary.main', textDecoration: 'underline' },
-                '& hr': { border: 'none', borderTop: '2px solid', borderColor: 'divider', my: 2 },
+                '& hr': {
+                  border: 'none',
+                  borderTop: '2px solid',
+                  borderColor: 'divider',
+                  my: 2,
+                },
                 '& table': {
                   borderCollapse: 'collapse',
                   tableLayout: 'fixed',
                   width: '100%',
                   my: 1,
-                  overflow: 'hidden'
+                  overflow: 'hidden',
                 },
                 '& table td, & table th': {
                   border: '1px solid',
@@ -591,15 +639,15 @@ function MarkdownEditorInner({
                   padding: '6px 10px',
                   minWidth: '80px',
                   verticalAlign: 'top',
-                  position: 'relative'
+                  position: 'relative',
                 },
                 '& table th': {
                   bgcolor: 'action.hover',
                   fontWeight: 700,
-                  textAlign: 'left'
+                  textAlign: 'left',
                 },
                 '& table .selectedCell': {
-                  bgcolor: 'action.selected'
+                  bgcolor: 'action.selected',
                 },
                 '& table .column-resize-handle': {
                   position: 'absolute',
@@ -608,10 +656,10 @@ function MarkdownEditorInner({
                   bottom: '-2px',
                   width: '4px',
                   bgcolor: 'primary.main',
-                  pointerEvents: 'none'
+                  pointerEvents: 'none',
                 },
-                '&.resize-cursor': { cursor: 'col-resize' }
-              }
+                '&.resize-cursor': { cursor: 'col-resize' },
+              },
             }}
           >
             <EditorContent editor={editor} />

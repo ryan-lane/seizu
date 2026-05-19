@@ -1,4 +1,10 @@
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { ThemeProvider, createTheme } from '@mui/material/styles';
 import Reports from 'src/pages/Reports';
@@ -10,7 +16,10 @@ jest.mock('src/hooks/usePermissions', () => ({
 }));
 
 const theme = createTheme();
-const mockUsePermissionState = permissionsModule.usePermissionState as jest.MockedFunction<typeof permissionsModule.usePermissionState>;
+const mockUsePermissionState =
+  permissionsModule.usePermissionState as jest.MockedFunction<
+    typeof permissionsModule.usePermissionState
+  >;
 
 function Wrapper({ children }: { children: React.ReactNode }) {
   return (
@@ -44,8 +53,14 @@ describe('Reports', () => {
       comment: null,
       query_capabilities: {},
     });
-    mockUseReport = jest.spyOn(reportsApiModule, 'useReport') as unknown as jest.Mock;
-    mockUseReportsMutations = jest.spyOn(reportsApiModule, 'useReportsMutations') as unknown as jest.Mock;
+    mockUseReport = jest.spyOn(
+      reportsApiModule,
+      'useReport',
+    ) as unknown as jest.Mock;
+    mockUseReportsMutations = jest.spyOn(
+      reportsApiModule,
+      'useReportsMutations',
+    ) as unknown as jest.Mock;
     mockUsePermissionState.mockReturnValue({
       hasPermission: () => true,
       loading: false,
@@ -99,7 +114,9 @@ describe('Reports', () => {
   it('populates edit-mode report name from report metadata when config name is absent', () => {
     render(<Reports />, { wrapper: Wrapper });
 
-    expect(screen.getByLabelText('Report name')).toHaveValue('Metadata Report Name');
+    expect(screen.getByLabelText('Report name')).toHaveValue(
+      'Metadata Report Name',
+    );
   });
 
   it('saves the edited report name through the new report version', async () => {
@@ -115,7 +132,7 @@ describe('Reports', () => {
       'r1',
       expect.objectContaining({ name: 'Renamed Report' }),
       undefined,
-      true
+      true,
     );
   });
 });

@@ -2,7 +2,7 @@ import type { Panel } from 'src/config.context';
 import {
   migrateLegacyThreshold,
   resolveThresholdColor,
-  THRESHOLD_PRESET_COLORS
+  THRESHOLD_PRESET_COLORS,
 } from '../thresholds';
 
 describe('resolveThresholdColor', () => {
@@ -14,7 +14,7 @@ describe('resolveThresholdColor', () => {
   it('returns undefined when the metric is below all thresholds', () => {
     const thresholds = [
       { value: 50, color: '#FF0000' },
-      { value: 100, color: '#00FF00' }
+      { value: 100, color: '#00FF00' },
     ];
     expect(resolveThresholdColor(10, thresholds)).toBeUndefined();
   });
@@ -23,7 +23,7 @@ describe('resolveThresholdColor', () => {
     const thresholds = [
       { value: 0, color: '#FF0000' },
       { value: 70, color: '#FFC107' },
-      { value: 100, color: '#4CAF50' }
+      { value: 100, color: '#4CAF50' },
     ];
     expect(resolveThresholdColor(0, thresholds)).toBe('#FF0000');
     expect(resolveThresholdColor(50, thresholds)).toBe('#FF0000');
@@ -36,7 +36,7 @@ describe('resolveThresholdColor', () => {
   it('does not assume thresholds are pre-sorted', () => {
     const thresholds = [
       { value: 100, color: '#00FF00' },
-      { value: 0, color: '#FF0000' }
+      { value: 0, color: '#FF0000' },
     ];
     expect(resolveThresholdColor(100, thresholds)).toBe('#00FF00');
     expect(resolveThresholdColor(50, thresholds)).toBe('#FF0000');
@@ -52,7 +52,7 @@ describe('migrateLegacyThreshold', () => {
   it('maps a count threshold to a single red threshold', () => {
     const panel: Panel = { type: 'count', threshold: 1000 };
     expect(migrateLegacyThreshold(panel)).toEqual([
-      { value: 1000, color: '#F44336' }
+      { value: 1000, color: '#F44336' },
     ]);
   });
 
@@ -60,7 +60,7 @@ describe('migrateLegacyThreshold', () => {
     const panel: Panel = { type: 'progress', threshold: 70 };
     expect(migrateLegacyThreshold(panel)).toEqual([
       { value: 0, color: '#F44336' },
-      { value: 100, color: '#4CAF50' }
+      { value: 100, color: '#4CAF50' },
     ]);
   });
 });

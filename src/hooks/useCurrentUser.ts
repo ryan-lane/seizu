@@ -1,4 +1,11 @@
-import { createContext, createElement, useState, useEffect, useContext, ReactNode } from 'react';
+import {
+  createContext,
+  createElement,
+  useState,
+  useEffect,
+  useContext,
+  ReactNode,
+} from 'react';
 import { AuthContext } from 'src/auth.context';
 import { AuthConfigContext } from 'src/authConfig.context';
 
@@ -25,7 +32,9 @@ interface MeApiResponse {
   permissions: string[];
 }
 
-const CurrentUserContext = createContext<CurrentUserState | undefined>(undefined);
+const CurrentUserContext = createContext<CurrentUserState | undefined>(
+  undefined,
+);
 
 function getApiHeaders(accessToken: string | null): Record<string, string> {
   const headers: Record<string, string> = {};
@@ -62,7 +71,8 @@ function useLoadCurrentUserState(enabled: boolean = true): CurrentUserState {
 
     fetch('/api/v1/me', { headers: getApiHeaders(accessToken) })
       .then((res) => {
-        if (!res.ok) throw new Error(`Failed to load current user: ${res.status}`);
+        if (!res.ok)
+          throw new Error(`Failed to load current user: ${res.status}`);
         return res.json();
       })
       .then((data: MeApiResponse) => {
@@ -88,7 +98,7 @@ function useLoadCurrentUserState(enabled: boolean = true): CurrentUserState {
 
 export function CurrentUserStateProvider({
   value,
-  children
+  children,
 }: {
   value: CurrentUserState;
   children: ReactNode;

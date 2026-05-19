@@ -19,9 +19,14 @@ jest.mock('src/components/UserDisplay', () => ({
   default: ({ userId }: { userId: string }) => <>{userId}</>,
 }));
 
-const mockUsePermissions = permissionsModule.usePermissions as jest.MockedFunction<typeof permissionsModule.usePermissions>;
-const mockUseToolsetsList = toolsetsApiModule.useToolsetsList as unknown as jest.Mock;
-const mockUseToolsetMutations = toolsetsApiModule.useToolsetMutations as unknown as jest.Mock;
+const mockUsePermissions =
+  permissionsModule.usePermissions as jest.MockedFunction<
+    typeof permissionsModule.usePermissions
+  >;
+const mockUseToolsetsList =
+  toolsetsApiModule.useToolsetsList as unknown as jest.Mock;
+const mockUseToolsetMutations =
+  toolsetsApiModule.useToolsetMutations as unknown as jest.Mock;
 const theme = createTheme();
 
 const TOOLSETS: toolsetsApiModule.ToolsetListItem[] = [
@@ -64,7 +69,9 @@ function Wrapper({ children }: { children: React.ReactNode }) {
 describe('Toolsets', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    mockUsePermissions.mockReturnValue((permission: string) => permission.startsWith('toolsets:'));
+    mockUsePermissions.mockReturnValue((permission: string) =>
+      permission.startsWith('toolsets:'),
+    );
     mockUseToolsetsList.mockReturnValue({
       toolsets: TOOLSETS,
       loading: false,
@@ -83,7 +90,9 @@ describe('Toolsets', () => {
   it('renders toolset type and update metadata columns consistently', () => {
     render(<Toolsets />, { wrapper: Wrapper });
 
-    expect(screen.getByRole('columnheader', { name: 'Type' })).toBeInTheDocument();
+    expect(
+      screen.getByRole('columnheader', { name: 'Type' }),
+    ).toBeInTheDocument();
     expect(screen.getByText('Last updated')).toBeInTheDocument();
     expect(screen.getByText('Updated by')).toBeInTheDocument();
 

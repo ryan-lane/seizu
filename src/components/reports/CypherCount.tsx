@@ -7,7 +7,7 @@ import {
   Divider,
   IconButton,
   Grid,
-  Typography
+  Typography,
 } from '@mui/material';
 import Info from '@mui/icons-material/Info';
 import Error from '@mui/icons-material/Error';
@@ -21,13 +21,13 @@ import { resolveThresholdColor } from 'src/components/reports/thresholds';
 const fillCardSx = {
   height: '100%',
   display: 'flex',
-  flexDirection: 'column' as const
+  flexDirection: 'column' as const,
 };
 
 const fillBodySx = {
   flex: 1,
   minHeight: 0,
-  justifyContent: 'center'
+  justifyContent: 'center',
 };
 
 // Bounds for the responsive number font size (px).
@@ -101,8 +101,10 @@ export default function CypherCount({
     };
   }, []);
 
-  const [runQuery, { loading, error, records, first, warnings, queryErrors, tokenExpired }] =
-    useLazyCypherQuery(cypher, reportQueryToken);
+  const [
+    runQuery,
+    { loading, error, records, first, warnings, queryErrors, tokenExpired },
+  ] = useLazyCypherQuery(cypher, reportQueryToken);
 
   // Always call the latest runQuery without re-running when only the token changes.
   const runQueryRef = useRef(runQuery);
@@ -111,7 +113,10 @@ export default function CypherCount({
   needInputsRef.current = needInputs;
 
   useEffect(() => {
-    if (needInputsRef.current === undefined || needInputsRef.current.length === 0) {
+    if (
+      needInputsRef.current === undefined ||
+      needInputsRef.current.length === 0
+    ) {
       runQueryRef.current(params, { force: (refreshKey ?? 0) > 0 });
     }
   }, [cypher, params, refreshKey]);
@@ -127,13 +132,21 @@ export default function CypherCount({
       <Card sx={fillCardSx}>
         {caption && (
           <>
-            <Grid container spacing={0} sx={{ flexDirection: 'column', alignItems: 'center' }}>
+            <Grid
+              container
+              spacing={0}
+              sx={{ flexDirection: 'column', alignItems: 'center' }}
+            >
               <CardHeader title={caption} />
             </Grid>
             <Divider />
           </>
         )}
-        <Grid container spacing={0} sx={[fillBodySx, { flexDirection: 'column', alignItems: 'center' }]}>
+        <Grid
+          container
+          spacing={0}
+          sx={[fillBodySx, { flexDirection: 'column', alignItems: 'center' }]}
+        >
           <CardContent>
             <Error />
             <Typography variant="body2">Missing cypher query</Typography>
@@ -148,13 +161,21 @@ export default function CypherCount({
       <Card sx={fillCardSx}>
         {caption && (
           <>
-            <Grid container spacing={0} sx={{ flexDirection: 'column', alignItems: 'center' }}>
+            <Grid
+              container
+              spacing={0}
+              sx={{ flexDirection: 'column', alignItems: 'center' }}
+            >
               <CardHeader title={caption} />
             </Grid>
             <Divider />
           </>
         )}
-        <Grid container spacing={0} sx={[fillBodySx, { flexDirection: 'column', alignItems: 'center' }]}>
+        <Grid
+          container
+          spacing={0}
+          sx={[fillBodySx, { flexDirection: 'column', alignItems: 'center' }]}
+        >
           <CardContent>
             <Typography variant="h4" align="center">
               N/A
@@ -182,17 +203,28 @@ export default function CypherCount({
       <Card sx={fillCardSx}>
         {caption && (
           <>
-            <Grid container sx={{ flexDirection: 'column', alignItems: 'center' }}>
+            <Grid
+              container
+              sx={{ flexDirection: 'column', alignItems: 'center' }}
+            >
               <CardHeader title={caption} />
             </Grid>
             <Divider />
           </>
         )}
         <QueryValidationBadge errors={queryErrors} warnings={warnings} />
-        <Grid container spacing={0} sx={[fillBodySx, { flexDirection: 'column', alignItems: 'center' }]}>
+        <Grid
+          container
+          spacing={0}
+          sx={[fillBodySx, { flexDirection: 'column', alignItems: 'center' }]}
+        >
           <CardContent>
-            <Typography variant="h4" align="center">N/A</Typography>
-            <Typography variant="body2" align="center">Query validation failed</Typography>
+            <Typography variant="h4" align="center">
+              N/A
+            </Typography>
+            <Typography variant="body2" align="center">
+              Query validation failed
+            </Typography>
           </CardContent>
         </Grid>
       </Card>
@@ -208,13 +240,21 @@ export default function CypherCount({
       <Card sx={fillCardSx}>
         {caption && (
           <>
-            <Grid container spacing={0} sx={{ flexDirection: 'column', alignItems: 'center' }}>
+            <Grid
+              container
+              spacing={0}
+              sx={{ flexDirection: 'column', alignItems: 'center' }}
+            >
               <CardHeader title={caption} />
             </Grid>
             <Divider />
           </>
         )}
-        <Grid container spacing={0} sx={[fillBodySx, { flexDirection: 'column', alignItems: 'center' }]}>
+        <Grid
+          container
+          spacing={0}
+          sx={[fillBodySx, { flexDirection: 'column', alignItems: 'center' }]}
+        >
           <CardContent>
             <Typography variant="h4">N/A</Typography>
           </CardContent>
@@ -237,18 +277,33 @@ export default function CypherCount({
 
   return (
     <>
-      <Card sx={{ ...fillCardSx, position: 'relative', '&:hover .panel-info-btn': { opacity: 1 } }}>
+      <Card
+        sx={{
+          ...fillCardSx,
+          position: 'relative',
+          '&:hover .panel-info-btn': { opacity: 1 },
+        }}
+      >
         <IconButton
           className="panel-info-btn"
           size="small"
           onClick={handleClickOpen}
-          sx={{ position: 'absolute', top: 8, right: 8, opacity: 0, transition: 'opacity 0.2s' }}
+          sx={{
+            position: 'absolute',
+            top: 8,
+            right: 8,
+            opacity: 0,
+            transition: 'opacity 0.2s',
+          }}
         >
           <Info fontSize="small" />
         </IconButton>
         {caption && (
           <>
-            <Grid container sx={{ flexDirection: 'column', alignItems: 'center' }}>
+            <Grid
+              container
+              sx={{ flexDirection: 'column', alignItems: 'center' }}
+            >
               <CardHeader title={caption} />
             </Grid>
             <Divider />
@@ -264,7 +319,7 @@ export default function CypherCount({
             alignItems: 'center',
             justifyContent: 'center',
             p: 1,
-            overflow: 'hidden'
+            overflow: 'hidden',
           }}
         >
           <Typography
@@ -281,7 +336,7 @@ export default function CypherCount({
                 const heightFit = heightBudget * HEIGHT_FILL_RATIO;
                 const fit = Math.min(widthFit, heightFit);
                 return Math.max(MIN_FONT_PX, Math.min(MAX_FONT_PX, fit));
-              })()}px`
+              })()}px`,
             }}
           >
             {total}

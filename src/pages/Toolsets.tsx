@@ -21,7 +21,7 @@ import {
   Switch,
   TextField,
   Tooltip,
-  Typography
+  Typography,
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import BuildIcon from '@mui/icons-material/Build';
@@ -39,7 +39,7 @@ import {
   useToolsetMutations,
   ToolsetListItem,
   CreateToolsetRequest,
-  UpdateToolsetRequest
+  UpdateToolsetRequest,
 } from 'src/hooks/useToolsetsApi';
 import ListTable, {
   ListTableColumn,
@@ -48,7 +48,7 @@ import ListTable, {
   listTableMonoCellSx,
   listTablePrimaryCellSx,
   listTableSecondaryCellSx,
-  listTableTruncateSx
+  listTableTruncateSx,
 } from 'src/components/ListTable';
 import UserDisplay from 'src/components/UserDisplay';
 import { usePermissions } from 'src/hooks/usePermissions';
@@ -112,8 +112,18 @@ function ToolsetDialog({ open, onClose, onSave, initial }: ToolsetDialogProps) {
       return;
     }
     const req = initial
-      ? ({ name: name.trim(), description: description.trim(), enabled, comment: comment.trim() || null } as UpdateToolsetRequest)
-      : ({ toolset_id: toolsetId.trim(), name: name.trim(), description: description.trim(), enabled } as CreateToolsetRequest);
+      ? ({
+          name: name.trim(),
+          description: description.trim(),
+          enabled,
+          comment: comment.trim() || null,
+        } as UpdateToolsetRequest)
+      : ({
+          toolset_id: toolsetId.trim(),
+          name: name.trim(),
+          description: description.trim(),
+          enabled,
+        } as CreateToolsetRequest);
     setSaving(true);
     try {
       await onSave(req);
@@ -162,7 +172,12 @@ function ToolsetDialog({ open, onClose, onSave, initial }: ToolsetDialogProps) {
             minRows={2}
           />
           <FormControlLabel
-            control={<Switch checked={enabled} onChange={(e) => setEnabled(e.target.checked)} />}
+            control={
+              <Switch
+                checked={enabled}
+                onChange={(e) => setEnabled(e.target.checked)}
+              />
+            }
             label="Enabled"
           />
           {initial && (
@@ -202,7 +217,13 @@ interface RowMenuProps {
   onDelete: () => void;
 }
 
-function RowMenu({ isBuiltin, onEdit, onTools, onHistory, onDelete }: RowMenuProps) {
+function RowMenu({
+  isBuiltin,
+  onEdit,
+  onTools,
+  onHistory,
+  onDelete,
+}: RowMenuProps) {
   const [anchor, setAnchor] = useState<null | HTMLElement>(null);
   const hasPermission = usePermissions();
   const close = () => setAnchor(null);
@@ -212,8 +233,16 @@ function RowMenu({ isBuiltin, onEdit, onTools, onHistory, onDelete }: RowMenuPro
 
   const editDisabled = isBuiltin || !canWrite;
   const deleteDisabled = isBuiltin || !canDelete;
-  const editTooltip = isBuiltin ? 'Built-in toolsets cannot be edited' : !canWrite ? 'You do not have permission to edit toolsets' : '';
-  const deleteTooltip = isBuiltin ? 'Built-in toolsets cannot be deleted' : !canDelete ? 'You do not have permission to delete toolsets' : '';
+  const editTooltip = isBuiltin
+    ? 'Built-in toolsets cannot be edited'
+    : !canWrite
+      ? 'You do not have permission to edit toolsets'
+      : '';
+  const deleteTooltip = isBuiltin
+    ? 'Built-in toolsets cannot be deleted'
+    : !canDelete
+      ? 'You do not have permission to delete toolsets'
+      : '';
 
   return (
     <>
@@ -233,22 +262,48 @@ function RowMenu({ isBuiltin, onEdit, onTools, onHistory, onDelete }: RowMenuPro
       >
         <Tooltip title={editTooltip} placement="left">
           <span>
-            <MenuItem onClick={() => { onEdit(); close(); }} disabled={editDisabled}>
-              <ListItemIcon><EditIcon fontSize="small" /></ListItemIcon>
+            <MenuItem
+              onClick={() => {
+                onEdit();
+                close();
+              }}
+              disabled={editDisabled}
+            >
+              <ListItemIcon>
+                <EditIcon fontSize="small" />
+              </ListItemIcon>
               <ListItemText>Edit</ListItemText>
             </MenuItem>
           </span>
         </Tooltip>
 
-        <MenuItem onClick={() => { onTools(); close(); }}>
-          <ListItemIcon><BuildIcon fontSize="small" /></ListItemIcon>
+        <MenuItem
+          onClick={() => {
+            onTools();
+            close();
+          }}
+        >
+          <ListItemIcon>
+            <BuildIcon fontSize="small" />
+          </ListItemIcon>
           <ListItemText>View tools</ListItemText>
         </MenuItem>
 
-        <Tooltip title={isBuiltin ? 'Built-in toolsets have no version history' : ''} placement="left">
+        <Tooltip
+          title={isBuiltin ? 'Built-in toolsets have no version history' : ''}
+          placement="left"
+        >
           <span>
-            <MenuItem onClick={() => { onHistory(); close(); }} disabled={isBuiltin}>
-              <ListItemIcon><HistoryIcon fontSize="small" /></ListItemIcon>
+            <MenuItem
+              onClick={() => {
+                onHistory();
+                close();
+              }}
+              disabled={isBuiltin}
+            >
+              <ListItemIcon>
+                <HistoryIcon fontSize="small" />
+              </ListItemIcon>
               <ListItemText>View history</ListItemText>
             </MenuItem>
           </span>
@@ -258,8 +313,20 @@ function RowMenu({ isBuiltin, onEdit, onTools, onHistory, onDelete }: RowMenuPro
 
         <Tooltip title={deleteTooltip} placement="left">
           <span>
-            <MenuItem onClick={() => { onDelete(); close(); }} disabled={deleteDisabled} sx={{ color: deleteDisabled ? undefined : 'error.main' }}>
-              <ListItemIcon><DeleteIcon fontSize="small" color={deleteDisabled ? 'disabled' : 'error'} /></ListItemIcon>
+            <MenuItem
+              onClick={() => {
+                onDelete();
+                close();
+              }}
+              disabled={deleteDisabled}
+              sx={{ color: deleteDisabled ? undefined : 'error.main' }}
+            >
+              <ListItemIcon>
+                <DeleteIcon
+                  fontSize="small"
+                  color={deleteDisabled ? 'disabled' : 'error'}
+                />
+              </ListItemIcon>
               <ListItemText>Delete</ListItemText>
             </MenuItem>
           </span>
@@ -281,7 +348,9 @@ function Toolsets() {
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editTarget, setEditTarget] = useState<ToolsetListItem | null>(null);
-  const [deleteTarget, setDeleteTarget] = useState<ToolsetListItem | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<ToolsetListItem | null>(
+    null,
+  );
   const [deleting, setDeleting] = useState(false);
 
   const openCreate = () => {
@@ -294,7 +363,9 @@ function Toolsets() {
     setDialogOpen(true);
   };
 
-  const handleSave = async (req: CreateToolsetRequest | UpdateToolsetRequest) => {
+  const handleSave = async (
+    req: CreateToolsetRequest | UpdateToolsetRequest,
+  ) => {
     if (editTarget) {
       await updateToolset(editTarget.toolset_id, req as UpdateToolsetRequest);
     } else {
@@ -327,14 +398,18 @@ function Toolsets() {
         <Typography
           variant="body2"
           sx={[
-            { cursor: 'pointer', fontWeight: 500, '&:hover': { textDecoration: 'underline' } },
-            listTableTruncateSx
+            {
+              cursor: 'pointer',
+              fontWeight: 500,
+              '&:hover': { textDecoration: 'underline' },
+            },
+            listTableTruncateSx,
           ]}
           onClick={() => navigate(`/app/toolsets/${item.toolset_id}/tools`)}
         >
           {item.name}
         </Typography>
-      )
+      ),
     },
     {
       key: 'type',
@@ -350,14 +425,14 @@ function Toolsets() {
             color={isBuiltin ? 'primary' : 'default'}
           />
         );
-      }
+      },
     },
     {
       key: 'slug',
       label: 'Slug',
       hideBelow: 'lg',
       cellSx: listTableMonoCellSx,
-      render: (item) => item.toolset_id
+      render: (item) => item.toolset_id,
     },
     {
       key: 'description',
@@ -372,7 +447,7 @@ function Toolsets() {
         >
           {item.description || '—'}
         </Typography>
-      )
+      ),
     },
     {
       key: 'status',
@@ -384,32 +459,39 @@ function Toolsets() {
           color={item.enabled ? 'success' : 'default'}
           size="small"
         />
-      )
+      ),
     },
     {
       key: 'version',
       label: 'Version',
       hideBelow: 'sm',
       cellSx: versionColumnSx,
-      render: (item) => isBuiltinToolset(item.toolset_id) ? '—' : `v${item.current_version}`
+      render: (item) =>
+        isBuiltinToolset(item.toolset_id) ? '—' : `v${item.current_version}`,
     },
     {
       key: 'updated_at',
       label: 'Last updated',
       hideBelow: 'xl',
       cellSx: updatedAtColumnSx,
-      render: (item) => isBuiltinToolset(item.toolset_id) || !item.updated_at ? '—' : new Date(item.updated_at).toLocaleString()
+      render: (item) =>
+        isBuiltinToolset(item.toolset_id) || !item.updated_at
+          ? '—'
+          : new Date(item.updated_at).toLocaleString(),
     },
     {
       key: 'updated_by',
       label: 'Updated by',
       hideBelow: 'lg',
       cellSx: updatedByColumnSx,
-      render: (item) => isBuiltinToolset(item.toolset_id) ? '—' : (
-        item.updated_by
-          ? <UserDisplay userId={item.updated_by} />
-          : <UserDisplay userId={item.created_by} />
-      )
+      render: (item) =>
+        isBuiltinToolset(item.toolset_id) ? (
+          '—'
+        ) : item.updated_by ? (
+          <UserDisplay userId={item.updated_by} />
+        ) : (
+          <UserDisplay userId={item.created_by} />
+        ),
     },
     {
       key: 'actions',
@@ -423,12 +505,16 @@ function Toolsets() {
             isBuiltin={isBuiltin}
             onEdit={() => openEdit(item)}
             onTools={() => navigate(`/app/toolsets/${item.toolset_id}/tools`)}
-            onHistory={() => navigate(`/app/toolsets/${item.toolset_id}/history`, { state: { fromLabel: 'Toolsets' } satisfies BackState })}
+            onHistory={() =>
+              navigate(`/app/toolsets/${item.toolset_id}/history`, {
+                state: { fromLabel: 'Toolsets' } satisfies BackState,
+              })
+            }
             onDelete={() => setDeleteTarget(item)}
           />
         );
-      }
-    }
+      },
+    },
   ];
   const filterGroups: ListTableFilterGroup<ToolsetListItem>[] = [
     {
@@ -440,15 +526,15 @@ function Toolsets() {
           key: 'builtin',
           label: 'Built-in',
           icon: <BadgeIcon fontSize="small" />,
-          matches: (item) => isBuiltinToolset(item.toolset_id)
+          matches: (item) => isBuiltinToolset(item.toolset_id),
         },
         {
           key: 'user_defined',
           label: 'User-defined',
           icon: <PersonOutlineIcon fontSize="small" />,
-          matches: (item) => !isBuiltinToolset(item.toolset_id)
-        }
-      ]
+          matches: (item) => !isBuiltinToolset(item.toolset_id),
+        },
+      ],
     },
     {
       key: 'enabled',
@@ -459,25 +545,36 @@ function Toolsets() {
           key: 'enabled',
           label: 'Enabled',
           icon: <ToggleOnIcon fontSize="small" />,
-          matches: (item) => item.enabled
+          matches: (item) => item.enabled,
         },
         {
           key: 'disabled',
           label: 'Disabled',
           icon: <ToggleOffIcon fontSize="small" />,
-          matches: (item) => !item.enabled
-        }
-      ]
-    }
+          matches: (item) => !item.enabled,
+        },
+      ],
+    },
   ];
 
   return (
     <>
       <Box sx={pageContentSx}>
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+        <Box
+          sx={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            mb: 3,
+          }}
+        >
           <Typography variant="h1">MCP Toolsets</Typography>
           {hasPermission('toolsets:write') && (
-            <Button variant="contained" startIcon={<AddIcon />} onClick={openCreate}>
+            <Button
+              variant="contained"
+              startIcon={<AddIcon />}
+              onClick={openCreate}
+            >
               New toolset
             </Button>
           )}
@@ -516,19 +613,29 @@ function Toolsets() {
       />
 
       {/* Delete confirmation dialog */}
-      <Dialog open={!!deleteTarget} onClose={() => setDeleteTarget(null)} maxWidth="xs" fullWidth>
+      <Dialog
+        open={!!deleteTarget}
+        onClose={() => setDeleteTarget(null)}
+        maxWidth="xs"
+        fullWidth
+      >
         <DialogTitle>Delete toolset?</DialogTitle>
         <DialogContent>
           <DialogContentText>
-            Permanently delete <strong>{deleteTarget?.name}</strong> and all its tools and versions?
-            This cannot be undone.
+            Permanently delete <strong>{deleteTarget?.name}</strong> and all its
+            tools and versions? This cannot be undone.
           </DialogContentText>
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setDeleteTarget(null)} disabled={deleting}>
             Cancel
           </Button>
-          <Button variant="contained" color="error" onClick={handleDeleteConfirm} disabled={deleting}>
+          <Button
+            variant="contained"
+            color="error"
+            onClick={handleDeleteConfirm}
+            disabled={deleting}
+          >
             {deleting ? <CircularProgress size={20} /> : 'Delete'}
           </Button>
         </DialogActions>

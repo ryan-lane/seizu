@@ -13,7 +13,7 @@ describe('UserAvatar', () => {
     const { container } = render(
       <Wrapper>
         <UserAvatar name="Alice Smith" />
-      </Wrapper>
+      </Wrapper>,
     );
     expect(container.querySelector('svg')).not.toBeNull();
   });
@@ -22,7 +22,7 @@ describe('UserAvatar', () => {
     const { container } = render(
       <Wrapper>
         <UserAvatar name={null} />
-      </Wrapper>
+      </Wrapper>,
     );
     expect(container.querySelector('svg')).not.toBeNull();
   });
@@ -31,7 +31,7 @@ describe('UserAvatar', () => {
     const { container } = render(
       <Wrapper>
         <UserAvatar />
-      </Wrapper>
+      </Wrapper>,
     );
     expect(container.querySelector('svg')).not.toBeNull();
   });
@@ -40,7 +40,7 @@ describe('UserAvatar', () => {
     const { container } = render(
       <Wrapper>
         <UserAvatar name="Alice" size={48} />
-      </Wrapper>
+      </Wrapper>,
     );
     const svg = container.querySelector('svg');
     expect(svg).not.toBeNull();

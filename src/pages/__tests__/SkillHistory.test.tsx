@@ -1,4 +1,11 @@
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from '@testing-library/react';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import { ThemeProvider, createTheme } from '@mui/material/styles';
 import SkillHistory from 'src/pages/SkillHistory';
@@ -28,10 +35,16 @@ jest.mock('react-helmet', () => ({
   Helmet: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 }));
 
-const mockUsePermissions = usePermissionsModule.usePermissions as jest.MockedFunction<typeof usePermissionsModule.usePermissions>;
-const mockUseSkillVersionsList = skillsetsApiModule.useSkillVersionsList as unknown as jest.Mock;
-const mockUseSkillMutations = skillsetsApiModule.useSkillMutations as unknown as jest.Mock;
-const mockUseToolCatalog = toolsetsApiModule.useToolCatalog as unknown as jest.Mock;
+const mockUsePermissions =
+  usePermissionsModule.usePermissions as jest.MockedFunction<
+    typeof usePermissionsModule.usePermissions
+  >;
+const mockUseSkillVersionsList =
+  skillsetsApiModule.useSkillVersionsList as unknown as jest.Mock;
+const mockUseSkillMutations =
+  skillsetsApiModule.useSkillMutations as unknown as jest.Mock;
+const mockUseToolCatalog =
+  toolsetsApiModule.useToolCatalog as unknown as jest.Mock;
 const theme = createTheme();
 
 const VERSION_1: skillsetsApiModule.SkillVersion = {
@@ -40,7 +53,15 @@ const VERSION_1: skillsetsApiModule.SkillVersion = {
   name: 'Summarize Findings',
   description: 'Older prompt',
   template: 'Older template',
-  parameters: [{ name: 'limit', type: 'integer', description: 'Result limit', required: false, default: 10 }],
+  parameters: [
+    {
+      name: 'limit',
+      type: 'integer',
+      description: 'Result limit',
+      required: false,
+      default: 10,
+    },
+  ],
   triggers: ['summarize'],
   tools_required: ['graph__query'],
   enabled: false,
@@ -68,16 +89,25 @@ const VERSION_2: skillsetsApiModule.SkillVersion = {
 
 function TestLocation() {
   const { pathname } = useLocation();
-  return <div data-testid="nav-location" style={{ display: 'none' }}>{pathname}</div>;
+  return (
+    <div data-testid="nav-location" style={{ display: 'none' }}>
+      {pathname}
+    </div>
+  );
 }
 
 function Wrapper({ children }: { children: React.ReactNode }) {
   return (
-    <MemoryRouter initialEntries={['/app/skillsets/skillset1/skills/skill1/history']}>
+    <MemoryRouter
+      initialEntries={['/app/skillsets/skillset1/skills/skill1/history']}
+    >
       <ThemeProvider theme={theme}>
         <TestLocation />
         <Routes>
-          <Route path="/app/skillsets/:skillsetId/skills/:skillId/history" element={<>{children}</>} />
+          <Route
+            path="/app/skillsets/:skillsetId/skills/:skillId/history"
+            element={<>{children}</>}
+          />
           <Route path="/app/skillsets/:skillsetId/skills" element={<div />} />
         </Routes>
       </ThemeProvider>
@@ -90,7 +120,9 @@ describe('SkillHistory', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
-    mockUsePermissions.mockReturnValue((permission: string) => permission === 'skills:write');
+    mockUsePermissions.mockReturnValue(
+      (permission: string) => permission === 'skills:write',
+    );
     mockUseSkillVersionsList.mockReturnValue({
       versions: [VERSION_1, VERSION_2],
       loading: false,
@@ -121,7 +153,10 @@ describe('SkillHistory', () => {
 
     fireEvent.click(screen.getAllByRole('button', { name: 'More actions' })[0]);
 
-    expect(screen.getByRole('menuitem', { name: /restore/i })).toHaveAttribute('aria-disabled', 'true');
+    expect(screen.getByRole('menuitem', { name: /restore/i })).toHaveAttribute(
+      'aria-disabled',
+      'true',
+    );
   });
 
   it('opens version details from the version link', () => {
@@ -129,7 +164,9 @@ describe('SkillHistory', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'v1' }));
 
-    expect(screen.getByRole('dialog', { name: 'Summarize Findings' })).toBeInTheDocument();
+    expect(
+      screen.getByRole('dialog', { name: 'Summarize Findings' }),
+    ).toBeInTheDocument();
     expect(screen.getByText('Older template')).toBeInTheDocument();
   });
 
@@ -144,7 +181,15 @@ describe('SkillHistory', () => {
         name: 'Summarize Findings',
         description: 'Older prompt',
         template: 'Older template',
-        parameters: [{ name: 'limit', type: 'integer', description: 'Result limit', required: false, default: 10 }],
+        parameters: [
+          {
+            name: 'limit',
+            type: 'integer',
+            description: 'Result limit',
+            required: false,
+            default: 10,
+          },
+        ],
         triggers: ['summarize'],
         tools_required: ['graph__query'],
         enabled: false,
@@ -152,7 +197,9 @@ describe('SkillHistory', () => {
       });
     });
     await waitFor(() => {
-      expect(screen.getByTestId('nav-location')).toHaveTextContent('/app/skillsets/skillset1/skills');
+      expect(screen.getByTestId('nav-location')).toHaveTextContent(
+        '/app/skillsets/skillset1/skills',
+      );
     });
   });
 
@@ -179,17 +226,28 @@ describe('SkillHistory', () => {
     fireEvent.click(screen.getAllByRole('button', { name: 'More actions' })[1]);
     fireEvent.click(screen.getByRole('menuitem', { name: /restore/i }));
 
-    const confirmDialog = screen.getByRole('dialog', { name: 'Remove missing tool references?' });
-    expect(within(confirmDialog).getByText('reports__update')).toBeInTheDocument();
-    expect(within(confirmDialog).getByText('graph_tools__missing')).toBeInTheDocument();
+    const confirmDialog = screen.getByRole('dialog', {
+      name: 'Remove missing tool references?',
+    });
+    expect(
+      within(confirmDialog).getByText('reports__update'),
+    ).toBeInTheDocument();
+    expect(
+      within(confirmDialog).getByText('graph_tools__missing'),
+    ).toBeInTheDocument();
 
-    fireEvent.click(within(confirmDialog).getByRole('button', { name: /restore anyway/i }));
+    fireEvent.click(
+      within(confirmDialog).getByRole('button', { name: /restore anyway/i }),
+    );
 
     await waitFor(() => {
-      expect(updateSkill).toHaveBeenCalledWith('skill1', expect.objectContaining({
-        tools_required: [],
-        comment: 'Restored from version 1',
-      }));
+      expect(updateSkill).toHaveBeenCalledWith(
+        'skill1',
+        expect.objectContaining({
+          tools_required: [],
+          comment: 'Restored from version 1',
+        }),
+      );
     });
   });
 });

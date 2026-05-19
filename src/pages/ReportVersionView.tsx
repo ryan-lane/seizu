@@ -8,7 +8,7 @@ import {
   CircularProgress,
   Divider,
   Tooltip,
-  Typography
+  Typography,
 } from '@mui/material';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import NavigateBeforeIcon from '@mui/icons-material/NavigateBefore';
@@ -18,7 +18,11 @@ import Error from '@mui/icons-material/Error';
 
 import ReportView from 'src/components/ReportView';
 import UserDisplay from 'src/components/UserDisplay';
-import { useReportVersion, useReportVersionsList, useReportsMutations } from 'src/hooks/useReportsApi';
+import {
+  useReportVersion,
+  useReportVersionsList,
+  useReportsMutations,
+} from 'src/hooks/useReportsApi';
 import { Report } from 'src/config.context';
 import { usePermissionState } from 'src/hooks/usePermissions';
 import type { BackState } from 'src/navigation';
@@ -41,11 +45,15 @@ function ReportVersionView() {
     .map((v) => v.version)
     .sort((a, b) => a - b);
   const currentVersionNum = reportVersion?.version ?? null;
-  const currentIdx = currentVersionNum !== null ? sortedVersionNums.indexOf(currentVersionNum) : -1;
+  const currentIdx =
+    currentVersionNum !== null
+      ? sortedVersionNums.indexOf(currentVersionNum)
+      : -1;
   const prevVersion = currentIdx > 0 ? sortedVersionNums[currentIdx - 1] : null;
-  const nextVersion = currentIdx !== -1 && currentIdx < sortedVersionNums.length - 1
-    ? sortedVersionNums[currentIdx + 1]
-    : null;
+  const nextVersion =
+    currentIdx !== -1 && currentIdx < sortedVersionNums.length - 1
+      ? sortedVersionNums[currentIdx + 1]
+      : null;
 
   const { hasPermission, loading: permissionsLoading } = usePermissionState();
   const canWrite = hasPermission('reports:write');
@@ -61,7 +69,7 @@ function ReportVersionView() {
       await saveReportVersion(
         id,
         reportVersion.config as Report,
-        `Restored from version ${reportVersion.version}`
+        `Restored from version ${reportVersion.version}`,
       );
       navigate(`/app/reports/${id}`);
     } catch (err) {
@@ -71,7 +79,11 @@ function ReportVersionView() {
     }
   }
 
-  if (loading || permissionsLoading || (reportVersion && reportVersion.query_capabilities === undefined)) {
+  if (
+    loading ||
+    permissionsLoading ||
+    (reportVersion && reportVersion.query_capabilities === undefined)
+  ) {
     return (
       <Box sx={{ display: 'flex', justifyContent: 'center', p: 4 }}>
         <CircularProgress />
@@ -81,7 +93,9 @@ function ReportVersionView() {
 
   if (error || !reportVersion) {
     return (
-      <Box sx={{ ...pageContentSx, display: 'flex', alignItems: 'center', gap: 1 }}>
+      <Box
+        sx={{ ...pageContentSx, display: 'flex', alignItems: 'center', gap: 1 }}
+      >
         <Error />
         <Typography>Failed to load this version</Typography>
       </Box>
@@ -107,7 +121,7 @@ function ReportVersionView() {
           py: 1.5,
           display: 'flex',
           alignItems: 'center',
-          gap: 2
+          gap: 2,
         }}
       >
         {fromLabel && (
@@ -135,7 +149,11 @@ function ReportVersionView() {
               size="small"
               startIcon={<NavigateBeforeIcon />}
               disabled={prevVersion === null}
-              onClick={() => navigate(`/app/reports/${id}/versions/${prevVersion}`, { state: backState })}
+              onClick={() =>
+                navigate(`/app/reports/${id}/versions/${prevVersion}`, {
+                  state: backState,
+                })
+              }
             >
               {prevVersion !== null ? `v${prevVersion}` : 'Older'}
             </Button>
@@ -147,7 +165,11 @@ function ReportVersionView() {
               size="small"
               endIcon={<NavigateNextIcon />}
               disabled={nextVersion === null}
-              onClick={() => navigate(`/app/reports/${id}/versions/${nextVersion}`, { state: backState })}
+              onClick={() =>
+                navigate(`/app/reports/${id}/versions/${nextVersion}`, {
+                  state: backState,
+                })
+              }
             >
               {nextVersion !== null ? `v${nextVersion}` : 'Newer'}
             </Button>
@@ -176,17 +198,25 @@ function ReportVersionView() {
           </Alert>
         )}
 
-        <Tooltip title={
-          nextVersion === null
-            ? 'This is already the current version'
-            : !canWrite
-              ? 'You do not have permission to restore report versions'
-              : ''
-        }>
+        <Tooltip
+          title={
+            nextVersion === null
+              ? 'This is already the current version'
+              : !canWrite
+                ? 'You do not have permission to restore report versions'
+                : ''
+          }
+        >
           <span>
             <Button
               variant="contained"
-              startIcon={restoring ? <CircularProgress size={16} color="inherit" /> : <RestoreIcon />}
+              startIcon={
+                restoring ? (
+                  <CircularProgress size={16} color="inherit" />
+                ) : (
+                  <RestoreIcon />
+                )
+              }
               onClick={handleRestore}
               disabled={restoring || nextVersion === null || !canWrite}
             >

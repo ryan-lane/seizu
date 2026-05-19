@@ -20,28 +20,31 @@ export default function FreeTextInput({
   labelName,
   value,
   setValue,
-  size = 'medium'
+  size = 'medium',
 }: FreeTextInputProps) {
   const [localValue, setLocalValue] = useState(
-    value?.[inputId || '']?.value ?? inputDefault?.value ?? ''
+    value?.[inputId || '']?.value ?? inputDefault?.value ?? '',
   );
 
   useEffect(() => {
     const timer = setTimeout(() => {
-      if (localValue === null || localValue === undefined || localValue === '') {
+      if (
+        localValue === null ||
+        localValue === undefined ||
+        localValue === ''
+      ) {
         setValue?.({ ...value, [inputId || '']: inputDefault });
         setQueryStringValue(inputId, inputDefault?.value);
       } else {
         setValue?.({
           ...value,
-          [inputId || '']: { label: '', value: localValue }
+          [inputId || '']: { label: '', value: localValue },
         });
         setQueryStringValue(inputId, localValue);
       }
     }, DEBOUNCE_MS);
 
     return () => clearTimeout(timer);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [localValue]);
 
   return (

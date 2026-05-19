@@ -11,7 +11,7 @@ import {
   TableBody,
   TableCell,
   TableContainer,
-  TableRow
+  TableRow,
 } from '@mui/material';
 import Info from '@mui/icons-material/Info';
 import Error from '@mui/icons-material/Error';
@@ -28,7 +28,11 @@ function flattenRecord(record: QueryRecord): QueryRecord {
     const val = record[keys[0]];
     if (val && typeof val === 'object' && !Array.isArray(val)) {
       const obj = val as QueryRecord;
-      if (obj.properties && typeof obj.properties === 'object' && !Array.isArray(obj.properties)) {
+      if (
+        obj.properties &&
+        typeof obj.properties === 'object' &&
+        !Array.isArray(obj.properties)
+      ) {
         return obj.properties as QueryRecord;
       }
       return obj;
@@ -44,17 +48,17 @@ const fillSx = {
   height: '100%',
   display: 'flex',
   flexDirection: 'column' as const,
-  minHeight: 0
+  minHeight: 0,
 };
 
 const scrollBodySx = {
   flex: 1,
   minHeight: 0,
-  overflow: 'auto'
+  overflow: 'auto',
 };
 
 const autoBodySx = {
-  flex: 'none'
+  flex: 'none',
 };
 
 interface CypherVerticalTableProps {
@@ -85,7 +89,10 @@ export default function CypherVerticalTable({
     setOpen(true);
   };
 
-  const [runQuery, { loading, error, records, warnings, queryErrors, tokenExpired }] = useLazyCypherQuery(cypher, reportQueryToken);
+  const [
+    runQuery,
+    { loading, error, records, warnings, queryErrors, tokenExpired },
+  ] = useLazyCypherQuery(cypher, reportQueryToken);
 
   const runQueryRef = useRef(runQuery);
   runQueryRef.current = runQuery;
@@ -93,7 +100,10 @@ export default function CypherVerticalTable({
   needInputsRef.current = needInputs;
 
   useEffect(() => {
-    if (needInputsRef.current === undefined || needInputsRef.current.length === 0) {
+    if (
+      needInputsRef.current === undefined ||
+      needInputsRef.current.length === 0
+    ) {
       runQueryRef.current(params, { force: (refreshKey ?? 0) > 0 });
     }
   }, [cypher, params, refreshKey]);
@@ -182,15 +192,15 @@ export default function CypherVerticalTable({
             mungedItem = String(item);
           }
           listItems.push(
-            // eslint-disable-next-line  react/no-array-index-key
+            // eslint-disable-next-line  @eslint-react/no-array-index-key
             <ListItem disableGutters key={`${key}-${index}`}>
               {mungedItem}
-            </ListItem>
+            </ListItem>,
           );
           if (uniqueItems.length !== 1) {
             listItems.push(
-              // eslint-disable-next-line  react/no-array-index-key
-              <Divider key={`${key}-${index}-divider`} component="li" />
+              // eslint-disable-next-line  @eslint-react/no-array-index-key
+              <Divider key={`${key}-${index}-divider`} component="li" />,
             );
           }
         });
@@ -212,7 +222,7 @@ export default function CypherVerticalTable({
           key={key}
         >
           {key}
-        </TableCell>
+        </TableCell>,
       );
       cells.push(
         <TableCell
@@ -221,12 +231,12 @@ export default function CypherVerticalTable({
           key={`${key}-data`}
         >
           {cellData}
-        </TableCell>
+        </TableCell>,
       );
       rows.push(
         <TableRow style={{ borderTop: '1px' }} key={key}>
           {cells}
-        </TableRow>
+        </TableRow>,
       );
     });
     return (
@@ -243,12 +253,21 @@ export default function CypherVerticalTable({
     const caption = String(mungedData[id]);
     const table = makeTable(mungedData);
     tables.push(
-      <Box key={i} sx={{ position: 'relative', '&:hover .panel-info-btn': { opacity: 1 } }}>
+      <Box
+        key={i}
+        sx={{ position: 'relative', '&:hover .panel-info-btn': { opacity: 1 } }}
+      >
         <IconButton
           className="panel-info-btn"
           size="small"
           onClick={handleClickOpen}
-          sx={{ position: 'absolute', top: 0, right: 0, opacity: 0, transition: 'opacity 0.2s' }}
+          sx={{
+            position: 'absolute',
+            top: 0,
+            right: 0,
+            opacity: 0,
+            transition: 'opacity 0.2s',
+          }}
         >
           <Info fontSize="small" />
         </IconButton>
@@ -260,7 +279,7 @@ export default function CypherVerticalTable({
         <TableContainer component={Paper} sx={{ p: 2 }}>
           {table}
         </TableContainer>
-      </Box>
+      </Box>,
     );
   }
 

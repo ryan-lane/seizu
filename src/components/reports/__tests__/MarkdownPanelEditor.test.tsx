@@ -18,18 +18,38 @@ describe('MarkdownPanelEditor', () => {
     render(<MarkdownPanelEditor value="" onChange={() => {}} />);
     expect(screen.getByRole('button', { name: 'Bold' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Italic' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Strikethrough' })).toBeInTheDocument();
-    expect(screen.getByRole('combobox', { name: 'Heading level' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Bullet list' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Ordered list' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Task list' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Blockquote' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Inline code' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Code block' })).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: 'Strikethrough' }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('combobox', { name: 'Heading level' }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: 'Bullet list' }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: 'Ordered list' }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: 'Task list' }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: 'Blockquote' }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: 'Inline code' }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: 'Code block' }),
+    ).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Link' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Remove link' })).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: 'Remove link' }),
+    ).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Table' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Horizontal rule' })).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: 'Horizontal rule' }),
+    ).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Undo' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Redo' })).toBeInTheDocument();
   });
@@ -37,37 +57,47 @@ describe('MarkdownPanelEditor', () => {
   it('opens a menu of table actions when the Table button is clicked', () => {
     render(<MarkdownPanelEditor value="" onChange={() => {}} />);
     fireEvent.click(screen.getByRole('button', { name: 'Table' }));
-    expect(screen.getByRole('menuitem', { name: 'Insert table' })).toBeInTheDocument();
-    expect(screen.getByRole('menuitem', { name: 'Add row below' })).toBeInTheDocument();
-    expect(screen.getByRole('menuitem', { name: 'Delete row' })).toBeInTheDocument();
-    expect(screen.getByRole('menuitem', { name: 'Add column after' })).toBeInTheDocument();
-    expect(screen.getByRole('menuitem', { name: 'Delete column' })).toBeInTheDocument();
-    expect(screen.getByRole('menuitem', { name: 'Delete table' })).toBeInTheDocument();
+    expect(
+      screen.getByRole('menuitem', { name: 'Insert table' }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('menuitem', { name: 'Add row below' }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('menuitem', { name: 'Delete row' }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('menuitem', { name: 'Add column after' }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('menuitem', { name: 'Delete column' }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('menuitem', { name: 'Delete table' }),
+    ).toBeInTheDocument();
   });
 
   it('disables cell manipulation menu items when not inside a table', () => {
     render(<MarkdownPanelEditor value="" onChange={() => {}} />);
     fireEvent.click(screen.getByRole('button', { name: 'Table' }));
-    expect(screen.getByRole('menuitem', { name: 'Insert table' })).not.toHaveAttribute(
-      'aria-disabled',
-      'true'
-    );
-    expect(screen.getByRole('menuitem', { name: 'Delete row' })).toHaveAttribute(
-      'aria-disabled',
-      'true'
-    );
-    expect(screen.getByRole('menuitem', { name: 'Delete column' })).toHaveAttribute(
-      'aria-disabled',
-      'true'
-    );
-    expect(screen.getByRole('menuitem', { name: 'Delete table' })).toHaveAttribute(
-      'aria-disabled',
-      'true'
-    );
+    expect(
+      screen.getByRole('menuitem', { name: 'Insert table' }),
+    ).not.toHaveAttribute('aria-disabled', 'true');
+    expect(
+      screen.getByRole('menuitem', { name: 'Delete row' }),
+    ).toHaveAttribute('aria-disabled', 'true');
+    expect(
+      screen.getByRole('menuitem', { name: 'Delete column' }),
+    ).toHaveAttribute('aria-disabled', 'true');
+    expect(
+      screen.getByRole('menuitem', { name: 'Delete table' }),
+    ).toHaveAttribute('aria-disabled', 'true');
   });
 
   it('switches to source mode and shows the markdown TextField populated with value', () => {
-    render(<MarkdownPanelEditor value={'# Title\n\nHello'} onChange={() => {}} />);
+    render(
+      <MarkdownPanelEditor value={'# Title\n\nHello'} onChange={() => {}} />,
+    );
     fireEvent.click(screen.getByRole('button', { name: /Markdown source/i }));
     const field = screen.getByLabelText('Markdown content');
     expect(field).toBeInTheDocument();
@@ -95,7 +125,9 @@ describe('MarkdownPanelEditor', () => {
   it('hides the toolbar when in source mode', () => {
     render(<MarkdownPanelEditor value="" onChange={() => {}} />);
     fireEvent.click(screen.getByRole('button', { name: /Markdown source/i }));
-    expect(screen.queryByRole('button', { name: 'Bold' })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: 'Bold' }),
+    ).not.toBeInTheDocument();
   });
 
   it('opens the link dialog when the link button is clicked', () => {
@@ -107,7 +139,9 @@ describe('MarkdownPanelEditor', () => {
 
   it('disables the Insert variable button when no variables are available', () => {
     render(<MarkdownPanelEditor value="" onChange={() => {}} />);
-    expect(screen.getByRole('button', { name: 'Insert variable' })).toBeDisabled();
+    expect(
+      screen.getByRole('button', { name: 'Insert variable' }),
+    ).toBeDisabled();
   });
 
   it('lists available variables in the Insert variable menu', () => {
@@ -119,11 +153,12 @@ describe('MarkdownPanelEditor', () => {
           { name: 'org', label: 'Organization' },
           { name: 'limit' },
         ]}
-      />
+      />,
     );
     fireEvent.click(screen.getByRole('button', { name: 'Insert variable' }));
-    expect(screen.getByRole('menuitem', { name: /\$limit/ })).toBeInTheDocument();
+    expect(
+      screen.getByRole('menuitem', { name: /\$limit/ }),
+    ).toBeInTheDocument();
     expect(screen.getByRole('menuitem', { name: /\$org/ })).toBeInTheDocument();
   });
-
 });

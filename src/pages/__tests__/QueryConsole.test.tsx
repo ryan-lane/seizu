@@ -1,15 +1,31 @@
-import { fireEvent, render, screen, cleanup, waitFor } from '@testing-library/react';
+import {
+  fireEvent,
+  render,
+  screen,
+  cleanup,
+  waitFor,
+} from '@testing-library/react';
 import { ThemeProvider, createTheme } from '@mui/material/styles';
 import { MemoryRouter } from 'react-router-dom';
 import QueryConsole from 'src/pages/QueryConsole';
 import * as usePermissionsModule from 'src/hooks/usePermissions';
 
-const mockSchemaPanel = jest.fn(({ open, onToggle }: { open: boolean; onToggle: (tab?: 'schema' | 'history') => void }) => (
-  <div>
-    <div data-testid="schema-panel" data-open={String(open)} />
-    <button type="button" onClick={() => onToggle()}>Toggle schema</button>
-  </div>
-));
+const mockSchemaPanel = jest.fn(
+  ({
+    open,
+    onToggle,
+  }: {
+    open: boolean;
+    onToggle: (tab?: 'schema' | 'history') => void;
+  }) => (
+    <div>
+      <div data-testid="schema-panel" data-open={String(open)} />
+      <button type="button" onClick={() => onToggle()}>
+        Toggle schema
+      </button>
+    </div>
+  ),
+);
 
 jest.mock('src/hooks/usePermissions', () => ({
   usePermissionState: jest.fn(),
@@ -17,7 +33,10 @@ jest.mock('src/hooks/usePermissions', () => ({
 
 jest.mock('src/components/QueryConsoleSchemaPanel', () => ({
   __esModule: true,
-  default: (props: { open: boolean; onToggle: (tab?: 'schema' | 'history') => void }) => mockSchemaPanel(props),
+  default: (props: {
+    open: boolean;
+    onToggle: (tab?: 'schema' | 'history') => void;
+  }) => mockSchemaPanel(props),
 }));
 
 jest.mock('src/components/reports/CypherGraph', () => ({
@@ -25,7 +44,10 @@ jest.mock('src/components/reports/CypherGraph', () => ({
   default: () => <div data-testid="cypher-graph" />,
 }));
 
-const mockUsePermissionState = usePermissionsModule.usePermissionState as jest.MockedFunction<typeof usePermissionsModule.usePermissionState>;
+const mockUsePermissionState =
+  usePermissionsModule.usePermissionState as jest.MockedFunction<
+    typeof usePermissionsModule.usePermissionState
+  >;
 const theme = createTheme();
 
 function Wrapper({ children }: { children: React.ReactNode }) {
@@ -45,20 +67,32 @@ describe('QueryConsole', () => {
   afterEach(cleanup);
 
   it('shows a spinner while permissions are loading', () => {
-    mockUsePermissionState.mockReturnValue({ hasPermission: () => false, loading: true, currentUser: null });
+    mockUsePermissionState.mockReturnValue({
+      hasPermission: () => false,
+      loading: true,
+      currentUser: null,
+    });
 
     render(<QueryConsole />, { wrapper: Wrapper });
 
     expect(screen.getByRole('progressbar')).toBeInTheDocument();
-    expect(screen.queryByText('You do not have access to the query console.')).not.toBeInTheDocument();
+    expect(
+      screen.queryByText('You do not have access to the query console.'),
+    ).not.toBeInTheDocument();
   });
 
   it('shows no-access message when loaded without query permission', () => {
-    mockUsePermissionState.mockReturnValue({ hasPermission: () => false, loading: false, currentUser: null });
+    mockUsePermissionState.mockReturnValue({
+      hasPermission: () => false,
+      loading: false,
+      currentUser: null,
+    });
 
     render(<QueryConsole />, { wrapper: Wrapper });
 
-    expect(screen.getByText('You do not have access to the query console.')).toBeInTheDocument();
+    expect(
+      screen.getByText('You do not have access to the query console.'),
+    ).toBeInTheDocument();
   });
 
   it('renders the console when query permission is present', () => {
@@ -71,11 +105,18 @@ describe('QueryConsole', () => {
     render(<QueryConsole />, { wrapper: Wrapper });
 
     expect(screen.getByTestId('schema-panel')).toBeInTheDocument();
-    expect(screen.getByPlaceholderText('Enter a Cypher query... (Ctrl+Enter to run)')).toBeInTheDocument();
+    expect(
+      screen.getByPlaceholderText(
+        'Enter a Cypher query... (Ctrl+Enter to run)',
+      ),
+    ).toBeInTheDocument();
   });
 
   it('restores the schema panel open state from localStorage', () => {
-    window.localStorage.setItem('seizu:query-console:schema-panel-open', 'false');
+    window.localStorage.setItem(
+      'seizu:query-console:schema-panel-open',
+      'false',
+    );
     mockUsePermissionState.mockReturnValue({
       hasPermission: (permission: string) => permission === 'query:execute',
       loading: false,
@@ -84,7 +125,10 @@ describe('QueryConsole', () => {
 
     render(<QueryConsole />, { wrapper: Wrapper });
 
-    expect(screen.getByTestId('schema-panel')).toHaveAttribute('data-open', 'false');
+    expect(screen.getByTestId('schema-panel')).toHaveAttribute(
+      'data-open',
+      'false',
+    );
   });
 
   it('persists the schema panel toggle state to localStorage', async () => {
@@ -96,12 +140,16 @@ describe('QueryConsole', () => {
 
     render(<QueryConsole />, { wrapper: Wrapper });
 
-    expect(window.localStorage.getItem('seizu:query-console:schema-panel-open')).toBe('true');
+    expect(
+      window.localStorage.getItem('seizu:query-console:schema-panel-open'),
+    ).toBe('true');
 
     fireEvent.click(screen.getByRole('button', { name: 'Toggle schema' }));
 
     await waitFor(() => {
-      expect(window.localStorage.getItem('seizu:query-console:schema-panel-open')).toBe('false');
+      expect(
+        window.localStorage.getItem('seizu:query-console:schema-panel-open'),
+      ).toBe('false');
     });
   });
 });

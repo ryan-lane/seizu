@@ -7,26 +7,26 @@ const MainLayoutRoot = styled('div')(({ theme }) => ({
   display: 'flex',
   height: '100%',
   overflow: 'hidden',
-  width: '100%'
+  width: '100%',
 }));
 
 const MainLayoutWrapper = styled('div')({
   display: 'flex',
   flex: '1 1 auto',
   overflow: 'hidden',
-  paddingTop: 64
+  paddingTop: 64,
 });
 
 const MainLayoutContainer = styled('div')({
   display: 'flex',
   flex: '1 1 auto',
-  overflow: 'hidden'
+  overflow: 'hidden',
 });
 
 const MainLayoutContent = styled('div')({
   flex: '1 1 auto',
   height: '100%',
-  overflow: 'auto'
+  overflow: 'auto',
 });
 
 function MainLayout() {

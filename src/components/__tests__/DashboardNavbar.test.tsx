@@ -1,4 +1,10 @@
-import { render, screen, fireEvent, cleanup, waitFor } from '@testing-library/react';
+import {
+  render,
+  screen,
+  fireEvent,
+  cleanup,
+  waitFor,
+} from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { ThemeProvider, createTheme } from '@mui/material/styles';
 import { AuthConfigContext, type AuthConfig } from 'src/authConfig.context';
@@ -12,11 +18,13 @@ import { useCurrentUser } from 'src/hooks/useCurrentUser';
 
 const theme = createTheme();
 
-const mockUseCurrentUser = useCurrentUser as jest.MockedFunction<typeof useCurrentUser>;
+const mockUseCurrentUser = useCurrentUser as jest.MockedFunction<
+  typeof useCurrentUser
+>;
 
 function Wrapper({
   authConfig,
-  children
+  children,
 }: {
   authConfig?: AuthConfig;
   children: React.ReactNode;
@@ -24,7 +32,15 @@ function Wrapper({
   return (
     <MemoryRouter>
       <ThemeProvider theme={theme}>
-        <AuthConfigContext.Provider value={authConfig ?? { auth_required: false, oidc: null, userManager: null }}>
+        <AuthConfigContext.Provider
+          value={
+            authConfig ?? {
+              auth_required: false,
+              oidc: null,
+              userManager: null,
+            }
+          }
+        >
           {children}
         </AuthConfigContext.Provider>
       </ThemeProvider>
@@ -46,7 +62,7 @@ const CURRENT_USER = {
 
 describe('DashboardNavbar', () => {
   const defaultProps = {
-    onMobileNavOpen: jest.fn()
+    onMobileNavOpen: jest.fn(),
   };
 
   beforeEach(() => {
@@ -60,7 +76,7 @@ describe('DashboardNavbar', () => {
     const { container } = render(
       <Wrapper>
         <DashboardNavbar {...defaultProps} />
-      </Wrapper>
+      </Wrapper>,
     );
     expect(container.firstChild).not.toBeNull();
   });
@@ -69,11 +85,8 @@ describe('DashboardNavbar', () => {
     const onSidebarToggle = jest.fn();
     render(
       <Wrapper>
-        <DashboardNavbar
-          {...defaultProps}
-          onSidebarToggle={onSidebarToggle}
-        />
-      </Wrapper>
+        <DashboardNavbar {...defaultProps} onSidebarToggle={onSidebarToggle} />
+      </Wrapper>,
     );
 
     fireEvent.click(screen.getByRole('button', { name: /collapse sidebar/i }));
@@ -86,7 +99,7 @@ describe('DashboardNavbar', () => {
     const { container } = render(
       <Wrapper>
         <DashboardNavbar {...defaultProps} />
-      </Wrapper>
+      </Wrapper>,
     );
     expect(container.querySelector('svg')).toBeNull();
     expect(screen.queryByText(/@/)).toBeNull();
@@ -97,7 +110,7 @@ describe('DashboardNavbar', () => {
     render(
       <Wrapper>
         <DashboardNavbar {...defaultProps} />
-      </Wrapper>
+      </Wrapper>,
     );
     expect(screen.getByText('alice@example.com')).toBeInTheDocument();
   });
@@ -117,7 +130,7 @@ describe('DashboardNavbar', () => {
     render(
       <Wrapper>
         <DashboardNavbar {...defaultProps} />
-      </Wrapper>
+      </Wrapper>,
     );
     expect(screen.getByText('Alice Smith')).toBeInTheDocument();
   });
@@ -137,7 +150,7 @@ describe('DashboardNavbar', () => {
     render(
       <Wrapper>
         <DashboardNavbar {...defaultProps} />
-      </Wrapper>
+      </Wrapper>,
     );
     expect(screen.getByText('uid1')).toBeInTheDocument();
   });
@@ -147,7 +160,7 @@ describe('DashboardNavbar', () => {
     const { container } = render(
       <Wrapper>
         <DashboardNavbar {...defaultProps} />
-      </Wrapper>
+      </Wrapper>,
     );
     expect(container.querySelector('svg')).not.toBeNull();
   });
@@ -157,7 +170,7 @@ describe('DashboardNavbar', () => {
     render(
       <Wrapper>
         <DashboardNavbar {...defaultProps} />
-      </Wrapper>
+      </Wrapper>,
     );
 
     fireEvent.click(screen.getByRole('button', { name: /user menu/i }));
@@ -179,7 +192,7 @@ describe('DashboardNavbar', () => {
         }}
       >
         <DashboardNavbar {...defaultProps} />
-      </Wrapper>
+      </Wrapper>,
     );
 
     fireEvent.click(screen.getByRole('button', { name: /user menu/i }));
@@ -208,7 +221,7 @@ describe('DashboardNavbar', () => {
     render(
       <Wrapper>
         <DashboardNavbar {...defaultProps} />
-      </Wrapper>
+      </Wrapper>,
     );
     expect(screen.getByText('dev@example.com')).toBeInTheDocument();
   });

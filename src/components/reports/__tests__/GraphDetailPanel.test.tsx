@@ -31,7 +31,9 @@ describe('GraphDetailPanel', () => {
     expect(screen.getByText('domain-alert-id')).toBeInTheDocument();
     expect(screen.getByText('openssl')).toBeInTheDocument();
     expect(screen.getByRole('list')).toBeInTheDocument();
-    expect(within(screen.getByRole('list')).getByText('GitHubDependabotAlert')).toBeInTheDocument();
+    expect(
+      within(screen.getByRole('list')).getByText('GitHubDependabotAlert'),
+    ).toBeInTheDocument();
     expect(screen.queryByText('Additional Fields')).not.toBeInTheDocument();
   });
 
@@ -60,14 +62,16 @@ describe('GraphDetailPanel', () => {
 
 describe('GraphSummaryPanel', () => {
   it('renders an empty overview instead of crashing when graph data is malformed', () => {
-    expect(() => render(
-      <GraphSummaryPanel
-        nodes={{ bad: 'shape' }}
-        links={null}
-        nodeGroupKey="group"
-        getColor={() => '#8FB4FF'}
-      />,
-    )).not.toThrow();
+    expect(() =>
+      render(
+        <GraphSummaryPanel
+          nodes={{ bad: 'shape' }}
+          links={null}
+          nodeGroupKey="group"
+          getColor={() => '#8FB4FF'}
+        />,
+      ),
+    ).not.toThrow();
 
     expect(screen.getByText('0 nodes')).toBeInTheDocument();
   });
@@ -79,9 +83,7 @@ describe('GraphSummaryPanel', () => {
           { id: 'a', group: 'CVE' },
           { id: 'b', properties: { group: 'Package' } },
         ]}
-        links={[
-          { source: 'a', target: 'b', type: 'AFFECTS' },
-        ]}
+        links={[{ source: 'a', target: 'b', type: 'AFFECTS' }]}
         nodeGroupKey="group"
         getColor={() => '#8FB4FF'}
       />,

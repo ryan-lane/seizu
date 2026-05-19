@@ -3,7 +3,7 @@ import {
   CONTENT_CONTAINER_PADDING,
   contentContainerRootStyles,
   contentContainerSx,
-  pageContentSx
+  pageContentSx,
 } from 'src/theme/layout';
 
 describe('layout spacing', () => {
@@ -18,7 +18,7 @@ describe('layout spacing', () => {
     expect(styles.paddingRight).toBe('12px');
     expect(styles['@media (min-width:600px)']).toEqual({
       paddingLeft: '16px',
-      paddingRight: '16px'
+      paddingRight: '16px',
     });
   });
 });

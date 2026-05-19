@@ -1,5 +1,10 @@
 import { useEffect, useRef } from 'react';
-import { CircularProgress, Typography, TextField, Autocomplete } from '@mui/material';
+import {
+  CircularProgress,
+  Typography,
+  TextField,
+  Autocomplete,
+} from '@mui/material';
 import { useLazyCypherQuery } from 'src/hooks/useCypherQuery';
 import { setQueryStringValue } from 'src/components/QueryString';
 
@@ -33,9 +38,12 @@ export default function CypherAutocomplete({
   reportQueryToken,
   refreshKey,
   onTokenExpired,
-  size = 'medium'
+  size = 'medium',
 }: CypherAutocompleteProps) {
-  const [run, { loading, error, records, tokenExpired }] = useLazyCypherQuery(cypher, reportQueryToken);
+  const [run, { loading, error, records, tokenExpired }] = useLazyCypherQuery(
+    cypher,
+    reportQueryToken,
+  );
 
   const runRef = useRef(run);
   runRef.current = run;
@@ -67,8 +75,8 @@ export default function CypherAutocomplete({
         variant="outlined"
         slotProps={{
           input: {
-            endAdornment: <CircularProgress size={16} />
-          }
+            endAdornment: <CircularProgress size={16} />,
+          },
         }}
       />
     );
@@ -88,7 +96,9 @@ export default function CypherAutocomplete({
   // Add a clear/default option only if it isn't already present in the results.
   const clearOption: AutocompleteOption = inputDefault ?? {};
   const clearValue = clearOption.value ?? '';
-  const alreadyPresent = mungedRecords.some((r) => (r.value ?? '') === clearValue);
+  const alreadyPresent = mungedRecords.some(
+    (r) => (r.value ?? '') === clearValue,
+  );
   if (!alreadyPresent) {
     mungedRecords.push(clearOption);
   }

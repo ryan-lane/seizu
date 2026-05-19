@@ -14,25 +14,32 @@ const scalar = fc.oneof(
   fc.integer({ min: -10000, max: 10000 }),
   fc.boolean(),
   fc.constant(null),
-  fc.constant(undefined)
+  fc.constant(undefined),
 );
 
-const propertyValue = fc.oneof(
-  scalar,
-  fc.array(scalar, { maxLength: 5 })
-);
+const propertyValue = fc.oneof(scalar, fc.array(scalar, { maxLength: 5 }));
 
 const chartProperties = fc
   .tuple(
-    fc.oneof(fc.string({ maxLength: 24 }), fc.integer({ min: -10000, max: 10000 }), fc.constant(null), fc.constant(undefined)),
-    fc.oneof(fc.string({ maxLength: 24 }), fc.integer({ min: -10000, max: 10000 }), fc.constant(null), fc.constant(undefined)),
-    fc.dictionary(safeKey, propertyValue, { maxKeys: 8 })
+    fc.oneof(
+      fc.string({ maxLength: 24 }),
+      fc.integer({ min: -10000, max: 10000 }),
+      fc.constant(null),
+      fc.constant(undefined),
+    ),
+    fc.oneof(
+      fc.string({ maxLength: 24 }),
+      fc.integer({ min: -10000, max: 10000 }),
+      fc.constant(null),
+      fc.constant(undefined),
+    ),
+    fc.dictionary(safeKey, propertyValue, { maxKeys: 8 }),
   )
   .map(([id, value, extra]) => ({ ...extra, id, value }));
 
 const chartRecord = fc.oneof(
   chartProperties.map((properties) => ({ details: properties })),
-  chartProperties.map((properties) => ({ details: { properties } }))
+  chartProperties.map((properties) => ({ details: { properties } })),
 );
 
 describe('Cypher-backed panel data fuzzing', () => {
@@ -48,7 +55,7 @@ describe('Cypher-backed panel data fuzzing', () => {
           }
         }
       }),
-      { numRuns: 100 }
+      { numRuns: 100 },
     );
   });
 
@@ -64,7 +71,7 @@ describe('Cypher-backed panel data fuzzing', () => {
           expect(Number.isFinite(item.value)).toBe(true);
         }
       }),
-      { numRuns: 100 }
+      { numRuns: 100 },
     );
   });
 
@@ -77,15 +84,18 @@ describe('Cypher-backed panel data fuzzing', () => {
           const percent = calculateProgressPercent(numerator, denominator);
 
           expect(Number.isFinite(percent)).toBe(true);
-          expect(percent).toBe(denominator === 0 ? 0 : Math.floor((numerator / denominator) * 100));
-        }
+          expect(percent).toBe(
+            denominator === 0 ? 0 : Math.floor((numerator / denominator) * 100),
+          );
+        },
       ),
-      { numRuns: 100 }
+      { numRuns: 100 },
     );
   });
 
   it('fuzzes table flattening and display formatting for Neo4j-like values', () => {
-    const nodeRecord = fc.dictionary(safeKey, propertyValue, { minKeys: 1, maxKeys: 8 })
+    const nodeRecord = fc
+      .dictionary(safeKey, propertyValue, { minKeys: 1, maxKeys: 8 })
       .map((properties) => ({
         n: {
           id: properties.id ?? 'neo4j-id',
@@ -103,7 +113,7 @@ describe('Cypher-backed panel data fuzzing', () => {
           expect(typeof formatValue(value)).toBe('string');
         }
       }),
-      { numRuns: 100 }
+      { numRuns: 100 },
     );
   });
 
@@ -115,10 +125,12 @@ describe('Cypher-backed panel data fuzzing', () => {
           name: fc.string({ minLength: 1, maxLength: 20 }),
           group: fc.string({ minLength: 1, maxLength: 12 }),
         }),
-        { minLength: 1, maxLength: 12 }
+        { minLength: 1, maxLength: 12 },
       )
       .map((items) => {
-        const deduped = [...new Map(items.map((item) => [item.id, item])).values()];
+        const deduped = [
+          ...new Map(items.map((item) => [item.id, item])).values(),
+        ];
         const nodes = deduped.map((item) => ({
           id: item.id,
           labels: [item.group],
@@ -146,14 +158,20 @@ describe('Cypher-backed panel data fuzzing', () => {
           expect(nodeIds.has(String(link.target))).toBe(true);
         }
 
-        const positions = computeLayout(graph!.nodes, graph!.links, 800, 450, 1);
+        const positions = computeLayout(
+          graph!.nodes,
+          graph!.links,
+          800,
+          450,
+          1,
+        );
         expect(positions.size).toBe(graph!.nodes.length);
         for (const position of positions.values()) {
           expect(Number.isFinite(position.x)).toBe(true);
           expect(Number.isFinite(position.y)).toBe(true);
         }
       }),
-      { numRuns: 50 }
+      { numRuns: 50 },
     );
   });
 });

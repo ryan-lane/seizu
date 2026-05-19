@@ -8,7 +8,7 @@ import {
   List,
   ListItemButton,
   Tooltip,
-  Typography
+  Typography,
 } from '@mui/material';
 import { useTheme } from '@mui/material/styles';
 import AccountTree from '@mui/icons-material/AccountTree';
@@ -38,10 +38,11 @@ function QueryConsoleSchemaPanel({
   onToggle,
   onQuerySelect,
   onHistorySelect,
-  historyRefreshTrigger
+  historyRefreshTrigger,
 }: QueryConsoleSchemaProps) {
   const theme = useTheme();
-  const graphPalette = theme.palette.mode === 'dark' ? chartPalette.dark : chartPalette.light;
+  const graphPalette =
+    theme.palette.mode === 'dark' ? chartPalette.dark : chartPalette.light;
   const [activeTab, setActiveTab] = useState<ActiveTab>('schema');
 
   const { schema, fetchSchema } = useGraphSchema();
@@ -75,7 +76,7 @@ function QueryConsoleSchemaPanel({
         display: 'flex',
         flexDirection: 'column',
         overflow: 'hidden',
-        transition: 'width 0.2s ease'
+        transition: 'width 0.2s ease',
       }}
     >
       {/* Header / toggle */}
@@ -88,7 +89,7 @@ function QueryConsoleSchemaPanel({
           minHeight: 40,
           borderBottom: 1,
           borderColor: 'divider',
-          flexShrink: 0
+          flexShrink: 0,
         }}
       >
         {open ? (
@@ -98,7 +99,7 @@ function QueryConsoleSchemaPanel({
               sx={{
                 fontWeight: 700,
                 letterSpacing: 0.8,
-                color: 'text.secondary'
+                color: 'text.secondary',
               }}
             >
               {activeTab === 'schema' ? 'DATABASE' : 'HISTORY'}
@@ -135,7 +136,7 @@ function QueryConsoleSchemaPanel({
               display: 'flex',
               flexDirection: 'column',
               alignItems: 'center',
-              gap: 0.5
+              gap: 0.5,
             }}
           >
             <Tooltip title="Database schema" placement="right">
@@ -161,7 +162,7 @@ function QueryConsoleSchemaPanel({
           sx={{
             flex: 1,
             minHeight: 0,
-            overflow: activeTab === 'history' ? 'hidden' : 'auto'
+            overflow: activeTab === 'history' ? 'hidden' : 'auto',
           }}
         >
           {activeTab === 'schema' ? (
@@ -179,7 +180,7 @@ function QueryConsoleSchemaPanel({
                   sx={{
                     minHeight: 36,
                     px: 1.5,
-                    '& .MuiAccordionSummary-content': { my: 0.5 }
+                    '& .MuiAccordionSummary-content': { my: 0.5 },
                   }}
                 >
                   <Typography
@@ -196,7 +197,7 @@ function QueryConsoleSchemaPanel({
                         key={label}
                         onClick={() =>
                           onQuerySelect(
-                            `MATCH path = (n:\`${label}\`)-[r]-(m) RETURN path LIMIT 25`
+                            `MATCH path = (n:\`${label}\`)-[r]-(m) RETURN path LIMIT 25`,
                           )
                         }
                         sx={{ py: 0.5, px: 1.5 }}
@@ -211,7 +212,7 @@ function QueryConsoleSchemaPanel({
                             flexShrink: 0,
                             mr: 1,
                             border: `2px solid ${theme.palette.background.paper}`,
-                            boxShadow: `0 0 0 1px ${colorForGroup(label, graphPalette)}`
+                            boxShadow: `0 0 0 1px ${colorForGroup(label, graphPalette)}`,
                           }}
                         />
                         <Typography variant="body2" noWrap>
@@ -232,7 +233,7 @@ function QueryConsoleSchemaPanel({
                 sx={{
                   '&:before': { display: 'none' },
                   borderTop: 1,
-                  borderColor: 'divider'
+                  borderColor: 'divider',
                 }}
               >
                 <AccordionSummary
@@ -240,7 +241,7 @@ function QueryConsoleSchemaPanel({
                   sx={{
                     minHeight: 36,
                     px: 1.5,
-                    '& .MuiAccordionSummary-content': { my: 0.5 }
+                    '& .MuiAccordionSummary-content': { my: 0.5 },
                   }}
                 >
                   <Typography
@@ -257,7 +258,7 @@ function QueryConsoleSchemaPanel({
                         key={type}
                         onClick={() =>
                           onQuerySelect(
-                            `MATCH path = (a)-[r:\`${type}\`]->(b) RETURN path LIMIT 25`
+                            `MATCH path = (a)-[r:\`${type}\`]->(b) RETURN path LIMIT 25`,
                           )
                         }
                         sx={{ py: 0.75, px: 1.5 }}
@@ -267,7 +268,7 @@ function QueryConsoleSchemaPanel({
                           sx={{
                             display: 'flex',
                             alignItems: 'center',
-                            minWidth: 0
+                            minWidth: 0,
                           }}
                         >
                           <Box
@@ -275,7 +276,7 @@ function QueryConsoleSchemaPanel({
                               width: 10,
                               height: 1.5,
                               bgcolor: 'text.disabled',
-                              flexShrink: 0
+                              flexShrink: 0,
                             }}
                           />
                           <Box
@@ -292,7 +293,7 @@ function QueryConsoleSchemaPanel({
                               overflow: 'hidden',
                               textOverflow: 'ellipsis',
                               maxWidth: 160,
-                              flexShrink: 1
+                              flexShrink: 1,
                             }}
                           >
                             {type}
@@ -302,7 +303,7 @@ function QueryConsoleSchemaPanel({
                               width: 10,
                               height: 1.5,
                               bgcolor: 'text.disabled',
-                              flexShrink: 0
+                              flexShrink: 0,
                             }}
                           />
                           {/* arrowhead */}
@@ -313,7 +314,7 @@ function QueryConsoleSchemaPanel({
                               borderTop: '4px solid transparent',
                               borderBottom: '4px solid transparent',
                               borderLeft: `5px solid ${theme.palette.text.disabled}`,
-                              flexShrink: 0
+                              flexShrink: 0,
                             }}
                           />
                         </Box>
@@ -332,7 +333,7 @@ function QueryConsoleSchemaPanel({
                 sx={{
                   '&:before': { display: 'none' },
                   borderTop: 1,
-                  borderColor: 'divider'
+                  borderColor: 'divider',
                 }}
               >
                 <AccordionSummary
@@ -340,7 +341,7 @@ function QueryConsoleSchemaPanel({
                   sx={{
                     minHeight: 36,
                     px: 1.5,
-                    '& .MuiAccordionSummary-content': { my: 0.5 }
+                    '& .MuiAccordionSummary-content': { my: 0.5 },
                   }}
                 >
                   <Typography
@@ -357,7 +358,7 @@ function QueryConsoleSchemaPanel({
                         key={key}
                         onClick={() =>
                           onQuerySelect(
-                            `MATCH (n) WHERE n.\`${key}\` IS NOT NULL RETURN n LIMIT 25`
+                            `MATCH (n) WHERE n.\`${key}\` IS NOT NULL RETURN n LIMIT 25`,
                           )
                         }
                         sx={{ py: 0.5, px: 1.5 }}
@@ -368,7 +369,7 @@ function QueryConsoleSchemaPanel({
                           sx={{
                             fontFamily: 'monospace',
                             fontSize: 12,
-                            color: 'text.secondary'
+                            color: 'text.secondary',
                           }}
                         >
                           # {key}

@@ -13,9 +13,18 @@ import type { GraphNode, GraphLink } from 'src/components/reports/CypherGraph';
 
 // XyFlow internal node properties — exclude from display.
 export const GRAPH_INTERNAL_PROPS = new Set([
-  'x', 'y', 'vx', 'vy', 'fx', 'fy', '__indexColor', 'index',
+  'x',
+  'y',
+  'vx',
+  'vy',
+  'fx',
+  'fy',
+  '__indexColor',
+  'index',
   // XyFlow node-data keys we add internally
-  'original', 'label', 'group',
+  'original',
+  'label',
+  'group',
 ]);
 
 // ─── Item detail panel ────────────────────────────────────────────────────────
@@ -73,7 +82,11 @@ function displayKey(key: string): string {
 
 function readGraphValue(item: GraphNode | GraphLink, key: string): unknown {
   const properties = item.properties;
-  if (key !== 'group' && properties && Object.prototype.hasOwnProperty.call(properties, key)) {
+  if (
+    key !== 'group' &&
+    properties &&
+    Object.prototype.hasOwnProperty.call(properties, key)
+  ) {
     return properties[key];
   }
   if (Object.prototype.hasOwnProperty.call(item, key)) {
@@ -137,7 +150,11 @@ function DetailSection({
               {entries.map(([k, v]) => (
                 <TableRow key={k}>
                   <TableCell>
-                    <Typography variant="caption" color="text.secondary" sx={{ wordBreak: 'break-word' }}>
+                    <Typography
+                      variant="caption"
+                      color="text.secondary"
+                      sx={{ wordBreak: 'break-word' }}
+                    >
                       {formatMetadataKeys ? displayKey(k) : k}
                     </Typography>
                   </TableCell>
@@ -154,11 +171,16 @@ function DetailSection({
   );
 }
 
-function metadataEntries(type: 'node' | 'link', data: GraphNode | GraphLink): DetailEntry[] {
+function metadataEntries(
+  type: 'node' | 'link',
+  data: GraphNode | GraphLink,
+): DetailEntry[] {
   if (type === 'node') {
     const node = data as GraphNode;
     return [
-      ...(node.neo4j_id !== undefined ? [['neo4j_id', node.neo4j_id] as DetailEntry] : [['id', node.id] as DetailEntry]),
+      ...(node.neo4j_id !== undefined
+        ? [['neo4j_id', node.neo4j_id] as DetailEntry]
+        : [['id', node.id] as DetailEntry]),
       ...(node.labels ? [['labels', node.labels] as DetailEntry] : []),
     ];
   }
@@ -176,22 +198,48 @@ function metadataEntries(type: 'node' | 'link', data: GraphNode | GraphLink): De
   ];
 }
 
-export default function GraphDetailPanel({ type, data }: GraphDetailPanelProps) {
+export default function GraphDetailPanel({
+  type,
+  data,
+}: GraphDetailPanelProps) {
   const nestedProperties = isRecord(data.properties) ? data.properties : null;
-  const metadataKeys = new Set(['id', 'neo4j_id', 'labels', 'source', 'target', 'type', 'properties']);
+  const metadataKeys = new Set([
+    'id',
+    'neo4j_id',
+    'labels',
+    'source',
+    'target',
+    'type',
+    'properties',
+  ]);
   const additionalEntries = Object.entries(data).filter(
     ([k]) => !metadataKeys.has(k) && !GRAPH_INTERNAL_PROPS.has(k),
   );
-  const propertyEntries = nestedProperties ? Object.entries(nestedProperties) : additionalEntries;
+  const propertyEntries = nestedProperties
+    ? Object.entries(nestedProperties)
+    : additionalEntries;
   const otherEntries = nestedProperties ? additionalEntries : [];
 
   return (
     <Box>
-      <Typography variant="overline" color="text.secondary" sx={{ display: 'block' }} gutterBottom>
+      <Typography
+        variant="overline"
+        color="text.secondary"
+        sx={{ display: 'block' }}
+        gutterBottom
+      >
         {type === 'node' ? 'Node' : 'Relationship'}
       </Typography>
-      <DetailSection title="Metadata" entries={metadataEntries(type, data)} formatMetadataKeys />
-      <DetailSection title="Properties" entries={propertyEntries} emptyText="No properties" />
+      <DetailSection
+        title="Metadata"
+        entries={metadataEntries(type, data)}
+        formatMetadataKeys
+      />
+      <DetailSection
+        title="Properties"
+        entries={propertyEntries}
+        emptyText="No properties"
+      />
       <DetailSection title="Additional Fields" entries={otherEntries} />
     </Box>
   );
@@ -207,31 +255,41 @@ interface GraphSummaryPanelProps {
 }
 
 function graphNodes(value: unknown): GraphNode[] {
-  return Array.isArray(value) ? value as GraphNode[] : [];
+  return Array.isArray(value) ? (value as GraphNode[]) : [];
 }
 
 function graphLinks(value: unknown): GraphLink[] {
-  return Array.isArray(value) ? value as GraphLink[] : [];
+  return Array.isArray(value) ? (value as GraphLink[]) : [];
 }
 
-export function GraphSummaryPanel({ nodes, links, nodeGroupKey, getColor }: GraphSummaryPanelProps) {
+export function GraphSummaryPanel({
+  nodes,
+  links,
+  nodeGroupKey,
+  getColor,
+}: GraphSummaryPanelProps) {
   const safeNodes = graphNodes(nodes);
   const safeLinks = graphLinks(links);
   const groupCounts = new Map<string, number>();
-  safeNodes.forEach(n => {
+  safeNodes.forEach((n) => {
     const g = String(readGraphValue(n, nodeGroupKey) ?? 'default');
     groupCounts.set(g, (groupCounts.get(g) ?? 0) + 1);
   });
 
   const typeCounts = new Map<string, number>();
-  safeLinks.forEach(l => {
+  safeLinks.forEach((l) => {
     const t = l.type ? String(l.type) : null;
     if (t) typeCounts.set(t, (typeCounts.get(t) ?? 0) + 1);
   });
 
   return (
     <Box>
-      <Typography variant="overline" color="text.secondary" sx={{ display: 'block' }} gutterBottom>
+      <Typography
+        variant="overline"
+        color="text.secondary"
+        sx={{ display: 'block' }}
+        gutterBottom
+      >
         Graph Overview
       </Typography>
 
@@ -239,7 +297,10 @@ export function GraphSummaryPanel({ nodes, links, nodeGroupKey, getColor }: Grap
         {safeNodes.length} {safeNodes.length === 1 ? 'node' : 'nodes'}
       </Typography>
       {[...groupCounts.entries()].map(([group, count]) => (
-        <Box key={group} sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5, pl: 1 }}>
+        <Box
+          key={group}
+          sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5, pl: 1 }}
+        >
           <Box
             sx={{
               width: 10,
@@ -259,7 +320,8 @@ export function GraphSummaryPanel({ nodes, links, nodeGroupKey, getColor }: Grap
         <>
           <Divider sx={{ my: 1.5 }} />
           <Typography variant="body2" gutterBottom>
-            {safeLinks.length} {safeLinks.length === 1 ? 'relationship' : 'relationships'}
+            {safeLinks.length}{' '}
+            {safeLinks.length === 1 ? 'relationship' : 'relationships'}
           </Typography>
           {typeCounts.size > 0
             ? [...typeCounts.entries()].map(([type, count]) => (

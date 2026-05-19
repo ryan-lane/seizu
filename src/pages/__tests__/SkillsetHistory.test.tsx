@@ -1,4 +1,10 @@
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from '@testing-library/react';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import { ThemeProvider, createTheme } from '@mui/material/styles';
 import SkillsetHistory from 'src/pages/SkillsetHistory';
@@ -23,9 +29,14 @@ jest.mock('react-helmet', () => ({
   Helmet: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 }));
 
-const mockUsePermissions = usePermissionsModule.usePermissions as jest.MockedFunction<typeof usePermissionsModule.usePermissions>;
-const mockUseSkillsetVersionsList = skillsetsApiModule.useSkillsetVersionsList as unknown as jest.Mock;
-const mockUseSkillsetMutations = skillsetsApiModule.useSkillsetMutations as unknown as jest.Mock;
+const mockUsePermissions =
+  usePermissionsModule.usePermissions as jest.MockedFunction<
+    typeof usePermissionsModule.usePermissions
+  >;
+const mockUseSkillsetVersionsList =
+  skillsetsApiModule.useSkillsetVersionsList as unknown as jest.Mock;
+const mockUseSkillsetMutations =
+  skillsetsApiModule.useSkillsetMutations as unknown as jest.Mock;
 const theme = createTheme();
 
 const VERSION_1: skillsetsApiModule.SkillsetVersion = {
@@ -52,7 +63,11 @@ const VERSION_2: skillsetsApiModule.SkillsetVersion = {
 
 function TestLocation() {
   const { pathname } = useLocation();
-  return <div data-testid="nav-location" style={{ display: 'none' }}>{pathname}</div>;
+  return (
+    <div data-testid="nav-location" style={{ display: 'none' }}>
+      {pathname}
+    </div>
+  );
 }
 
 function Wrapper({ children }: { children: React.ReactNode }) {
@@ -61,7 +76,10 @@ function Wrapper({ children }: { children: React.ReactNode }) {
       <ThemeProvider theme={theme}>
         <TestLocation />
         <Routes>
-          <Route path="/app/skillsets/:skillsetId/history" element={<>{children}</>} />
+          <Route
+            path="/app/skillsets/:skillsetId/history"
+            element={<>{children}</>}
+          />
           <Route path="/app/skillsets" element={<div />} />
         </Routes>
       </ThemeProvider>
@@ -74,7 +92,9 @@ describe('SkillsetHistory', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
-    mockUsePermissions.mockReturnValue((permission: string) => permission === 'skillsets:write');
+    mockUsePermissions.mockReturnValue(
+      (permission: string) => permission === 'skillsets:write',
+    );
     mockUseSkillsetVersionsList.mockReturnValue({
       versions: [VERSION_1, VERSION_2],
       loading: false,
@@ -91,7 +111,10 @@ describe('SkillsetHistory', () => {
 
     fireEvent.click(screen.getAllByRole('button', { name: 'More actions' })[0]);
 
-    expect(screen.getByRole('menuitem', { name: /restore/i })).toHaveAttribute('aria-disabled', 'true');
+    expect(screen.getByRole('menuitem', { name: /restore/i })).toHaveAttribute(
+      'aria-disabled',
+      'true',
+    );
   });
 
   it('opens version details from the version link', () => {
@@ -99,7 +122,9 @@ describe('SkillsetHistory', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'v1' }));
 
-    expect(screen.getByRole('dialog', { name: 'Agent Skills' })).toBeInTheDocument();
+    expect(
+      screen.getByRole('dialog', { name: 'Agent Skills' }),
+    ).toBeInTheDocument();
     expect(screen.getByText('Older description')).toBeInTheDocument();
   });
 
@@ -118,7 +143,9 @@ describe('SkillsetHistory', () => {
       });
     });
     await waitFor(() => {
-      expect(screen.getByTestId('nav-location')).toHaveTextContent('/app/skillsets');
+      expect(screen.getByTestId('nav-location')).toHaveTextContent(
+        '/app/skillsets',
+      );
     });
   });
 });

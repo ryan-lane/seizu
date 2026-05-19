@@ -1,5 +1,8 @@
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
-import ListTable, { ListTableColumn, ListTableFilterGroup } from 'src/components/ListTable';
+import ListTable, {
+  ListTableColumn,
+  ListTableFilterGroup,
+} from 'src/components/ListTable';
 
 interface Row {
   id: string;
@@ -10,7 +13,8 @@ interface Row {
 const rows: Row[] = Array.from({ length: 12 }, (_, index) => ({
   id: `row-${index + 1}`,
   name: `Row ${index + 1}`,
-  status: index % 3 === 0 ? 'draft' : index % 3 === 1 ? 'public' : 'user-defined'
+  status:
+    index % 3 === 0 ? 'draft' : index % 3 === 1 ? 'public' : 'user-defined',
 }));
 
 const columns: ListTableColumn<Row>[] = [
@@ -26,11 +30,23 @@ const filterGroups: ListTableFilterGroup<Row>[] = [
     key: 'status',
     label: 'Status',
     options: [
-      { key: 'draft', label: 'Draft', matches: (row) => row.status === 'draft' },
-      { key: 'public', label: 'Public', matches: (row) => row.status === 'public' },
-      { key: 'user-defined', label: 'User-defined', matches: (row) => row.status === 'user-defined' }
-    ]
-  }
+      {
+        key: 'draft',
+        label: 'Draft',
+        matches: (row) => row.status === 'draft',
+      },
+      {
+        key: 'public',
+        label: 'Public',
+        matches: (row) => row.status === 'public',
+      },
+      {
+        key: 'user-defined',
+        label: 'User-defined',
+        matches: (row) => row.status === 'user-defined',
+      },
+    ],
+  },
 ];
 
 describe('ListTable', () => {
@@ -49,7 +65,7 @@ describe('ListTable', () => {
         columns={columns}
         getRowKey={(row) => row.id}
         emptyMessage="No rows."
-      />
+      />,
     );
 
     expect(screen.getByText('Row 1')).toBeInTheDocument();
@@ -62,7 +78,10 @@ describe('ListTable', () => {
   });
 
   it('restores the rows per page selection from localStorage', () => {
-    window.localStorage.setItem(`seizu:list-table:rows-per-page:${window.location.pathname}`, '25');
+    window.localStorage.setItem(
+      `seizu:list-table:rows-per-page:${window.location.pathname}`,
+      '25',
+    );
 
     render(
       <ListTable
@@ -70,12 +89,14 @@ describe('ListTable', () => {
         columns={columns}
         getRowKey={(row) => row.id}
         emptyMessage="No rows."
-      />
+      />,
     );
 
     expect(screen.getByRole('combobox')).toHaveTextContent('25');
     expect(screen.getByText('Row 12')).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Go to next page' })).toBeDisabled();
+    expect(
+      screen.queryByRole('button', { name: 'Go to next page' }),
+    ).toBeDisabled();
   });
 
   it('keeps pagination controls visible when rows per page exceeds the row count', () => {
@@ -85,7 +106,7 @@ describe('ListTable', () => {
         columns={columns}
         getRowKey={(row) => row.id}
         emptyMessage="No rows."
-      />
+      />,
     );
 
     fireEvent.click(screen.getByLabelText('Go to next page'));
@@ -94,7 +115,9 @@ describe('ListTable', () => {
 
     expect(screen.getByRole('combobox')).toBeInTheDocument();
     expect(screen.getByText('Row 1')).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Go to next page' })).toBeDisabled();
+    expect(
+      screen.queryByRole('button', { name: 'Go to next page' }),
+    ).toBeDisabled();
   });
 
   it('persists rows per page selection to localStorage', () => {
@@ -104,13 +127,17 @@ describe('ListTable', () => {
         columns={columns}
         getRowKey={(row) => row.id}
         emptyMessage="No rows."
-      />
+      />,
     );
 
     fireEvent.mouseDown(screen.getByRole('combobox'));
     fireEvent.click(screen.getByRole('option', { name: '25' }));
 
-    expect(window.localStorage.getItem(`seizu:list-table:rows-per-page:${window.location.pathname}`)).toBe('25');
+    expect(
+      window.localStorage.getItem(
+        `seizu:list-table:rows-per-page:${window.location.pathname}`,
+      ),
+    ).toBe('25');
   });
 
   it('shows an empty row when there are no rows', () => {
@@ -120,7 +147,7 @@ describe('ListTable', () => {
         columns={columns}
         getRowKey={(row) => row.id}
         emptyMessage="No rows."
-      />
+      />,
     );
 
     expect(screen.getByText('No rows.')).toBeInTheDocument();
@@ -133,13 +160,13 @@ describe('ListTable', () => {
         columns={columns}
         getRowKey={(row) => row.id}
         emptyMessage="No rows."
-      />
+      />,
     );
 
     fireEvent.click(screen.getByLabelText('Search'));
 
     fireEvent.change(screen.getByRole('textbox', { name: 'Search rows' }), {
-      target: { value: 'Row 11' }
+      target: { value: 'Row 11' },
     });
 
     expect(screen.getByText('Row 11')).toBeInTheDocument();
@@ -155,7 +182,7 @@ describe('ListTable', () => {
         getRowKey={(row) => row.id}
         emptyMessage="No rows."
         filterGroups={filterGroups}
-      />
+      />,
     );
 
     fireEvent.click(screen.getByLabelText('Filters'));
@@ -175,7 +202,7 @@ describe('ListTable', () => {
         getRowKey={(row) => row.id}
         emptyMessage="No rows."
         filterGroups={filterGroups}
-      />
+      />,
     );
 
     fireEvent.click(screen.getByLabelText('Filters'));

@@ -178,10 +178,11 @@ export function useToolsetVersionsList(toolsetId: string | null): {
 
     setLoading(true);
     fetch(`/api/v1/toolsets/${toolsetId}/versions`, {
-      headers: getApiHeaders(accessToken)
+      headers: getApiHeaders(accessToken),
     })
       .then((res) => {
-        if (!res.ok) throw new Error(`Failed to load toolset versions: ${res.status}`);
+        if (!res.ok)
+          throw new Error(`Failed to load toolset versions: ${res.status}`);
         return res.json();
       })
       .then((data: { versions: ToolsetVersion[] }) => {
@@ -199,7 +200,10 @@ export function useToolsetVersionsList(toolsetId: string | null): {
 
 export function useToolsetMutations(): {
   createToolset: (req: CreateToolsetRequest) => Promise<ToolsetListItem>;
-  updateToolset: (id: string, req: UpdateToolsetRequest) => Promise<ToolsetListItem>;
+  updateToolset: (
+    id: string,
+    req: UpdateToolsetRequest,
+  ) => Promise<ToolsetListItem>;
   deleteToolset: (id: string) => Promise<void>;
 } {
   const { accessToken } = useContext(AuthContext);
@@ -208,37 +212,43 @@ export function useToolsetMutations(): {
     async (req: CreateToolsetRequest): Promise<ToolsetListItem> => {
       const res = await fetch('/api/v1/toolsets', {
         method: 'POST',
-        headers: { ...getApiHeaders(accessToken), 'Content-Type': 'application/json' },
-        body: JSON.stringify(req)
+        headers: {
+          ...getApiHeaders(accessToken),
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(req),
       });
       if (!res.ok) throw new Error(`Failed to create toolset: ${res.status}`);
       return res.json();
     },
-    [accessToken]
+    [accessToken],
   );
 
   const updateToolset = useCallback(
     async (id: string, req: UpdateToolsetRequest): Promise<ToolsetListItem> => {
       const res = await fetch(`/api/v1/toolsets/${id}`, {
         method: 'PUT',
-        headers: { ...getApiHeaders(accessToken), 'Content-Type': 'application/json' },
-        body: JSON.stringify(req)
+        headers: {
+          ...getApiHeaders(accessToken),
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(req),
       });
       if (!res.ok) throw new Error(`Failed to update toolset: ${res.status}`);
       return res.json();
     },
-    [accessToken]
+    [accessToken],
   );
 
   const deleteToolset = useCallback(
     async (id: string): Promise<void> => {
       const res = await fetch(`/api/v1/toolsets/${id}`, {
         method: 'DELETE',
-        headers: getApiHeaders(accessToken)
+        headers: getApiHeaders(accessToken),
       });
       if (!res.ok) throw new Error(`Failed to delete toolset: ${res.status}`);
     },
-    [accessToken]
+    [accessToken],
   );
 
   return { createToolset, updateToolset, deleteToolset };
@@ -269,7 +279,7 @@ export function useToolsList(toolsetId: string | null): {
 
     setLoading(true);
     fetch(`/api/v1/toolsets/${toolsetId}/tools`, {
-      headers: getApiHeaders(accessToken)
+      headers: getApiHeaders(accessToken),
     })
       .then((res) => {
         if (!res.ok) throw new Error(`Failed to load tools: ${res.status}`);
@@ -307,29 +317,40 @@ export function useToolCatalog(): {
       setLoading(true);
       setError(null);
       try {
-        const toolsetRes = await fetch('/api/v1/toolsets', { headers: getApiHeaders(accessToken) });
-        if (!toolsetRes.ok) throw new Error(`Failed to load toolsets: ${toolsetRes.status}`);
-        const toolsetData = await toolsetRes.json() as { toolsets: ToolsetListItem[] };
+        const toolsetRes = await fetch('/api/v1/toolsets', {
+          headers: getApiHeaders(accessToken),
+        });
+        if (!toolsetRes.ok)
+          throw new Error(`Failed to load toolsets: ${toolsetRes.status}`);
+        const toolsetData = (await toolsetRes.json()) as {
+          toolsets: ToolsetListItem[];
+        };
         const toolsets = toolsetData.toolsets ?? [];
         const nested = await Promise.all(
           toolsets.map(async (toolset) => {
-            const toolsRes = await fetch(`/api/v1/toolsets/${toolset.toolset_id}/tools`, {
-              headers: getApiHeaders(accessToken)
-            });
-            if (!toolsRes.ok) throw new Error(`Failed to load tools: ${toolsRes.status}`);
-            const toolsData = await toolsRes.json() as { tools: ToolItem[] };
+            const toolsRes = await fetch(
+              `/api/v1/toolsets/${toolset.toolset_id}/tools`,
+              {
+                headers: getApiHeaders(accessToken),
+              },
+            );
+            if (!toolsRes.ok)
+              throw new Error(`Failed to load tools: ${toolsRes.status}`);
+            const toolsData = (await toolsRes.json()) as { tools: ToolItem[] };
             return (toolsData.tools ?? []).map((tool) => ({
               mcp_name: mcpNameForTool(tool),
               toolset_id: tool.toolset_id,
               tool_id: tool.tool_id,
               toolset_name: toolset.name,
               name: tool.name,
-              enabled: tool.effective_enabled ?? tool.enabled
+              enabled: tool.effective_enabled ?? tool.enabled,
             }));
-          })
+          }),
         );
         if (!cancelled) {
-          setTools(nested.flat().sort((a, b) => a.mcp_name.localeCompare(b.mcp_name)));
+          setTools(
+            nested.flat().sort((a, b) => a.mcp_name.localeCompare(b.mcp_name)),
+          );
           setLoading(false);
         }
       } catch (err) {
@@ -341,13 +362,18 @@ export function useToolCatalog(): {
     }
 
     void load();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [accessToken, auth_required]);
 
   return { tools, loading, error };
 }
 
-export function useToolVersionsList(toolsetId: string | null, toolId: string | null): {
+export function useToolVersionsList(
+  toolsetId: string | null,
+  toolId: string | null,
+): {
   versions: ToolVersion[];
   loading: boolean;
   error: Error | null;
@@ -364,10 +390,11 @@ export function useToolVersionsList(toolsetId: string | null, toolId: string | n
 
     setLoading(true);
     fetch(`/api/v1/toolsets/${toolsetId}/tools/${toolId}/versions`, {
-      headers: getApiHeaders(accessToken)
+      headers: getApiHeaders(accessToken),
     })
       .then((res) => {
-        if (!res.ok) throw new Error(`Failed to load tool versions: ${res.status}`);
+        if (!res.ok)
+          throw new Error(`Failed to load tool versions: ${res.status}`);
         return res.json();
       })
       .then((data: { versions: ToolVersion[] }) => {
@@ -394,45 +421,55 @@ export function useToolMutations(toolsetId: string): {
     async (req: CreateToolRequest): Promise<ToolItem> => {
       const res = await fetch(`/api/v1/toolsets/${toolsetId}/tools`, {
         method: 'POST',
-        headers: { ...getApiHeaders(accessToken), 'Content-Type': 'application/json' },
-        body: JSON.stringify(req)
+        headers: {
+          ...getApiHeaders(accessToken),
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(req),
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
-        const msg = (data as { errors?: string[] }).errors?.join(', ') ?? `Failed to create tool: ${res.status}`;
+        const msg =
+          (data as { errors?: string[] }).errors?.join(', ') ??
+          `Failed to create tool: ${res.status}`;
         throw new Error(msg);
       }
       return res.json();
     },
-    [accessToken, toolsetId]
+    [accessToken, toolsetId],
   );
 
   const updateTool = useCallback(
     async (toolId: string, req: UpdateToolRequest): Promise<ToolItem> => {
       const res = await fetch(`/api/v1/toolsets/${toolsetId}/tools/${toolId}`, {
         method: 'PUT',
-        headers: { ...getApiHeaders(accessToken), 'Content-Type': 'application/json' },
-        body: JSON.stringify(req)
+        headers: {
+          ...getApiHeaders(accessToken),
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(req),
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
-        const msg = (data as { errors?: string[] }).errors?.join(', ') ?? `Failed to update tool: ${res.status}`;
+        const msg =
+          (data as { errors?: string[] }).errors?.join(', ') ??
+          `Failed to update tool: ${res.status}`;
         throw new Error(msg);
       }
       return res.json();
     },
-    [accessToken, toolsetId]
+    [accessToken, toolsetId],
   );
 
   const deleteTool = useCallback(
     async (toolId: string): Promise<void> => {
       const res = await fetch(`/api/v1/toolsets/${toolsetId}/tools/${toolId}`, {
         method: 'DELETE',
-        headers: getApiHeaders(accessToken)
+        headers: getApiHeaders(accessToken),
       });
       if (!res.ok) throw new Error(`Failed to delete tool: ${res.status}`);
     },
-    [accessToken, toolsetId]
+    [accessToken, toolsetId],
   );
 
   return { createTool, updateTool, deleteTool };
@@ -442,26 +479,37 @@ export interface CallToolResponse {
   results: unknown[];
 }
 
-export function useToolCall(toolsetId: string, toolId: string): {
+export function useToolCall(
+  toolsetId: string,
+  toolId: string,
+): {
   callTool: (args: Record<string, unknown>) => Promise<CallToolResponse>;
 } {
   const { accessToken } = useContext(AuthContext);
 
   const callTool = useCallback(
     async (args: Record<string, unknown>): Promise<CallToolResponse> => {
-      const res = await fetch(`/api/v1/toolsets/${toolsetId}/tools/${toolId}/call`, {
-        method: 'POST',
-        headers: { ...getApiHeaders(accessToken), 'Content-Type': 'application/json' },
-        body: JSON.stringify({ arguments: args })
-      });
+      const res = await fetch(
+        `/api/v1/toolsets/${toolsetId}/tools/${toolId}/call`,
+        {
+          method: 'POST',
+          headers: {
+            ...getApiHeaders(accessToken),
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ arguments: args }),
+        },
+      );
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
-        const msg = (data as { detail?: string }).detail ?? `Failed to call tool: ${res.status}`;
+        const msg =
+          (data as { detail?: string }).detail ??
+          `Failed to call tool: ${res.status}`;
         throw new Error(msg);
       }
       return res.json();
     },
-    [accessToken, toolsetId, toolId]
+    [accessToken, toolsetId, toolId],
   );
 
   return { callTool };

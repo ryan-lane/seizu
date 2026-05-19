@@ -1,4 +1,12 @@
-import { isValidElement, type MouseEvent as ReactMouseEvent, ReactNode, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  isValidElement,
+  type MouseEvent as ReactMouseEvent,
+  ReactNode,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import {
   Badge,
   Box,
@@ -20,7 +28,7 @@ import {
   TableHead,
   TablePagination,
   TableRow,
-  Typography
+  Typography,
 } from '@mui/material';
 import AllInclusiveIcon from '@mui/icons-material/AllInclusive';
 import CheckIcon from '@mui/icons-material/Check';
@@ -72,15 +80,18 @@ interface ListTableProps<T> {
   rowsPerPageOptions?: number[];
 }
 
-const LIST_TABLE_ROWS_PER_PAGE_STORAGE_PREFIX = 'seizu:list-table:rows-per-page';
+const LIST_TABLE_ROWS_PER_PAGE_STORAGE_PREFIX =
+  'seizu:list-table:rows-per-page';
 
-function hideBelowSx(hideBelow: ListTableColumn<unknown>['hideBelow']): SxProps<Theme> {
+function hideBelowSx(
+  hideBelow: ListTableColumn<unknown>['hideBelow'],
+): SxProps<Theme> {
   if (!hideBelow) return {};
   return {
     display: {
       xs: 'none',
-      [hideBelow]: 'table-cell'
-    }
+      [hideBelow]: 'table-cell',
+    },
   };
 }
 
@@ -88,10 +99,14 @@ function mergeSx(...items: Array<SxProps<Theme> | undefined>): SxProps<Theme> {
   return items.filter(Boolean) as SxProps<Theme>;
 }
 
-function extractWidthSx(sx: SxProps<Theme> | undefined): ColumnWidth | undefined {
+function extractWidthSx(
+  sx: SxProps<Theme> | undefined,
+): ColumnWidth | undefined {
   if (!sx || Array.isArray(sx) || typeof sx === 'function') return undefined;
   const width = (sx as Record<string, unknown>).width;
-  return typeof width === 'number' || typeof width === 'string' ? width : undefined;
+  return typeof width === 'number' || typeof width === 'string'
+    ? width
+    : undefined;
 }
 
 function widthToCss(width: ColumnWidth): string {
@@ -99,10 +114,14 @@ function widthToCss(width: ColumnWidth): string {
 }
 
 function getNodeTextContent(node: ReactNode): string {
-  if (node === null || node === undefined || typeof node === 'boolean') return '';
+  if (node === null || node === undefined || typeof node === 'boolean')
+    return '';
   if (typeof node === 'string' || typeof node === 'number') return String(node);
   if (Array.isArray(node)) {
-    return node.map((child) => getNodeTextContent(child)).filter(Boolean).join(' ');
+    return node
+      .map((child) => getNodeTextContent(child))
+      .filter(Boolean)
+      .join(' ');
   }
   if (isValidElement(node)) {
     const props = node.props as {
@@ -115,8 +134,10 @@ function getNodeTextContent(node: ReactNode): string {
       getNodeTextContent(props.label),
       getNodeTextContent(props.title),
       getNodeTextContent(props['aria-label']),
-      getNodeTextContent(props.children)
-    ].filter(Boolean).join(' ');
+      getNodeTextContent(props.children),
+    ]
+      .filter(Boolean)
+      .join(' ');
   }
   return '';
 }
@@ -132,14 +153,15 @@ function getRowsPerPageStorageKey(): string {
 function getStoredRowsPerPage(
   storageKey: string,
   fallback: number,
-  allowedValues: number[]
+  allowedValues: number[],
 ): number {
   const storedValue = window.localStorage.getItem(storageKey);
   if (!storedValue) return fallback;
 
   const parsedValue = Number.parseInt(storedValue, 10);
   if (!Number.isFinite(parsedValue) || parsedValue <= 0) return fallback;
-  if (allowedValues.length > 0 && !allowedValues.includes(parsedValue)) return fallback;
+  if (allowedValues.length > 0 && !allowedValues.includes(parsedValue))
+    return fallback;
 
   return parsedValue;
 }
@@ -152,45 +174,45 @@ function isResizingDisabled(column: ListTableColumn<unknown>): boolean {
 export const listTableActionColumnSx = {
   width: 48,
   minWidth: 48,
-  pr: 1
+  pr: 1,
 } as const;
 
 export const listTablePrimaryCellSx = {
-  minWidth: 0
+  minWidth: 0,
 } as const;
 
 export const listTableSecondaryCellSx = {
-  color: 'text.secondary'
+  color: 'text.secondary',
 } as const;
 
 export const listTableMonoCellSx = {
   color: 'text.secondary',
-  fontFamily: 'monospace'
+  fontFamily: 'monospace',
 } as const;
 
 export const listTableTruncateSx = {
   overflow: 'hidden',
   textOverflow: 'ellipsis',
   whiteSpace: 'nowrap',
-  minWidth: 0
+  minWidth: 0,
 } as const;
 
 const listTableCellContentSx = {
   ...listTableTruncateSx,
   display: 'block',
-  maxWidth: '100%'
+  maxWidth: '100%',
 } as const;
 
 const listTableHeaderContentSx = {
   ...listTableCellContentSx,
   display: 'flex',
   alignItems: 'center',
-  gap: 0.5
+  gap: 0.5,
 } as const;
 
 function TableCellHoverTooltip({
   content,
-  children
+  children,
 }: {
   content: ReactNode;
   children: ReactNode;
@@ -217,19 +239,27 @@ export default function ListTable<T>({
   filterGroups = [],
   pagination = true,
   initialRowsPerPage = 10,
-  rowsPerPageOptions = [10, 25, 50, 75, 100]
+  rowsPerPageOptions = [10, 25, 50, 75, 100],
 }: ListTableProps<T>) {
   const [page, setPage] = useState(0);
   const rowsPerPageStorageKey = useMemo(getRowsPerPageStorageKey, []);
   const [rowsPerPage, setRowsPerPage] = useState(() => {
     if (typeof window === 'undefined') return initialRowsPerPage;
-    return getStoredRowsPerPage(rowsPerPageStorageKey, initialRowsPerPage, rowsPerPageOptions);
+    return getStoredRowsPerPage(
+      rowsPerPageStorageKey,
+      initialRowsPerPage,
+      rowsPerPageOptions,
+    );
   });
   const [columnWidths, setColumnWidths] = useState<Record<string, number>>({});
   const [filterText, setFilterText] = useState('');
   const [searchOpen, setSearchOpen] = useState(false);
-  const [filterAnchorEl, setFilterAnchorEl] = useState<HTMLElement | null>(null);
-  const [selectedFilterKeys, setSelectedFilterKeys] = useState<Record<string, string[]>>({});
+  const [filterAnchorEl, setFilterAnchorEl] = useState<HTMLElement | null>(
+    null,
+  );
+  const [selectedFilterKeys, setSelectedFilterKeys] = useState<
+    Record<string, string[]>
+  >({});
   const paginationEnabled = pagination && rows.length > 0;
   const headerCellRefs = useRef<Record<string, HTMLElement | null>>({});
   const searchInputRef = useRef<HTMLInputElement | null>(null);
@@ -267,27 +297,34 @@ export default function ListTable<T>({
     window.localStorage.setItem(rowsPerPageStorageKey, String(rowsPerPage));
   }, [rowsPerPage, rowsPerPageStorageKey]);
 
-  useEffect(() => () => {
-    if (resizeListenersRef.current) {
-      const { handleMouseMove, handleMouseUp } = resizeListenersRef.current;
-      window.removeEventListener('mousemove', handleMouseMove);
-      window.removeEventListener('mouseup', handleMouseUp);
-      resizeListenersRef.current = null;
-    }
-    resizeDragRef.current = null;
-  }, []);
+  useEffect(
+    () => () => {
+      if (resizeListenersRef.current) {
+        const { handleMouseMove, handleMouseUp } = resizeListenersRef.current;
+        window.removeEventListener('mousemove', handleMouseMove);
+        window.removeEventListener('mouseup', handleMouseUp);
+        resizeListenersRef.current = null;
+      }
+      resizeDragRef.current = null;
+    },
+    [],
+  );
 
   const filteredRows = useMemo(() => {
     const normalizedFilter = normalizeFilterText(filterText);
-    const activeFilterEntries = Object.entries(selectedFilterKeys).filter(([, value]) => value.length > 0);
+    const activeFilterEntries = Object.entries(selectedFilterKeys).filter(
+      ([, value]) => value.length > 0,
+    );
     if (!normalizedFilter && activeFilterEntries.length === 0) return rows;
 
     return rows.filter((row) => {
-      const matchesSearch = !normalizedFilter || columns
-        .map((column) => getNodeTextContent(column.render(row)))
-        .join(' ')
-        .toLowerCase()
-        .includes(normalizedFilter);
+      const matchesSearch =
+        !normalizedFilter ||
+        columns
+          .map((column) => getNodeTextContent(column.render(row)))
+          .join(' ')
+          .toLowerCase()
+          .includes(normalizedFilter);
 
       if (!matchesSearch) return false;
 
@@ -295,7 +332,9 @@ export default function ListTable<T>({
         const selectedKeys = selectedFilterKeys[group.key] ?? [];
         if (selectedKeys.length === 0) return true;
         return selectedKeys.some((selectedKey) => {
-          const option = group.options.find((candidate) => candidate.key === selectedKey);
+          const option = group.options.find(
+            (candidate) => candidate.key === selectedKey,
+          );
           return option ? option.matches(row) : false;
         });
       });
@@ -308,17 +347,22 @@ export default function ListTable<T>({
     return filteredRows.slice(start, start + rowsPerPage);
   }, [filteredRows, page, pagination, rowsPerPage]);
 
-  const getColumnMinWidth = (column: ListTableColumn<T>): number => Math.max(48, column.minWidth ?? 48);
+  const getColumnMinWidth = (column: ListTableColumn<T>): number =>
+    Math.max(48, column.minWidth ?? 48);
 
   const getColumnWidth = (column: ListTableColumn<T>): number => {
     const explicitWidth = columnWidths[column.key];
     if (explicitWidth !== undefined) return explicitWidth;
 
-    const measuredWidth = headerCellRefs.current[column.key]?.getBoundingClientRect().width ?? 0;
+    const measuredWidth =
+      headerCellRefs.current[column.key]?.getBoundingClientRect().width ?? 0;
     if (measuredWidth > 0) return Math.round(measuredWidth);
 
     if (typeof column.width === 'number') return column.width;
-    if (typeof column.width === 'string' && column.width.trim().endsWith('px')) {
+    if (
+      typeof column.width === 'string' &&
+      column.width.trim().endsWith('px')
+    ) {
       const parsed = Number.parseFloat(column.width);
       if (Number.isFinite(parsed)) return parsed;
     }
@@ -326,18 +370,19 @@ export default function ListTable<T>({
     return 0;
   };
 
-  const snapshotColumnWidths = () => columns.reduce<Record<string, number>>((acc, column) => {
-    const width = getColumnWidth(column);
-    if (width > 0) {
-      acc[column.key] = width;
-    }
-    return acc;
-  }, {});
+  const snapshotColumnWidths = () =>
+    columns.reduce<Record<string, number>>((acc, column) => {
+      const width = getColumnWidth(column);
+      if (width > 0) {
+        acc[column.key] = width;
+      }
+      return acc;
+    }, {});
 
   const redistributeWidths = (
     baseWidths: Record<string, number>,
     targetIndex: number,
-    delta: number
+    delta: number,
   ): Record<string, number> => {
     const nextWidths = { ...baseWidths };
     const targetColumn = columns[targetIndex];
@@ -346,11 +391,17 @@ export default function ListTable<T>({
     let targetWidth = Math.max(targetMinWidth, currentTargetWidth + delta);
     let appliedDelta = targetWidth - currentTargetWidth;
 
-    const absorbShrink = (orderedColumns: ListTableColumn<T>[], amount: number): number => {
+    const absorbShrink = (
+      orderedColumns: ListTableColumn<T>[],
+      amount: number,
+    ): number => {
       let remaining = amount;
       for (const column of orderedColumns) {
         if (remaining <= 0) break;
-        const currentWidth = nextWidths[column.key] ?? baseWidths[column.key] ?? getColumnMinWidth(column);
+        const currentWidth =
+          nextWidths[column.key] ??
+          baseWidths[column.key] ??
+          getColumnMinWidth(column);
         const minWidth = getColumnMinWidth(column);
         const reducible = Math.max(0, currentWidth - minWidth);
         if (reducible === 0) continue;
@@ -361,11 +412,17 @@ export default function ListTable<T>({
       return remaining;
     };
 
-    const absorbGrowth = (orderedColumns: ListTableColumn<T>[], amount: number): number => {
+    const absorbGrowth = (
+      orderedColumns: ListTableColumn<T>[],
+      amount: number,
+    ): number => {
       let remaining = amount;
       for (const column of orderedColumns) {
         if (remaining <= 0) break;
-        const currentWidth = nextWidths[column.key] ?? baseWidths[column.key] ?? getColumnMinWidth(column);
+        const currentWidth =
+          nextWidths[column.key] ??
+          baseWidths[column.key] ??
+          getColumnMinWidth(column);
         nextWidths[column.key] = currentWidth + remaining;
         remaining = 0;
       }
@@ -377,14 +434,16 @@ export default function ListTable<T>({
 
     if (appliedDelta > 0) {
       const remainingAfterRight = absorbShrink(rightColumns, appliedDelta);
-      const remainingAfterLeft = remainingAfterRight > 0
-        ? absorbShrink(leftColumns, remainingAfterRight)
-        : 0;
+      const remainingAfterLeft =
+        remainingAfterRight > 0
+          ? absorbShrink(leftColumns, remainingAfterRight)
+          : 0;
       appliedDelta -= remainingAfterLeft;
       targetWidth = currentTargetWidth + appliedDelta;
     } else if (appliedDelta < 0) {
       const growthAmount = -appliedDelta;
-      const receiverColumns = rightColumns.length > 0 ? [rightColumns[0]] : leftColumns.slice(0, 1);
+      const receiverColumns =
+        rightColumns.length > 0 ? [rightColumns[0]] : leftColumns.slice(0, 1);
       const remainingAfterGrowth = absorbGrowth(receiverColumns, growthAmount);
       if (remainingAfterGrowth > 0) {
         targetWidth = currentTargetWidth;
@@ -395,23 +454,30 @@ export default function ListTable<T>({
     return nextWidths;
   };
 
-  const startResize = (column: ListTableColumn<T>, event: ReactMouseEvent<HTMLSpanElement>) => {
+  const startResize = (
+    column: ListTableColumn<T>,
+    event: ReactMouseEvent<HTMLSpanElement>,
+  ) => {
     if (isResizingDisabled(column)) return;
     if (resizeDragRef.current) return;
-    const targetIndex = columns.findIndex((candidate) => candidate.key === column.key);
+    const targetIndex = columns.findIndex(
+      (candidate) => candidate.key === column.key,
+    );
     if (targetIndex < 0) return;
     const baseWidths = snapshotColumnWidths();
     resizeDragRef.current = {
       targetIndex,
       startX: event.clientX,
-      baseWidths
+      baseWidths,
     };
 
     const handleMouseMove = (moveEvent: MouseEvent) => {
       const drag = resizeDragRef.current;
       if (!drag) return;
       const delta = moveEvent.clientX - drag.startX;
-      setColumnWidths(redistributeWidths(drag.baseWidths, drag.targetIndex, delta));
+      setColumnWidths(
+        redistributeWidths(drag.baseWidths, drag.targetIndex, delta),
+      );
     };
 
     const handleMouseUp = () => {
@@ -433,15 +499,22 @@ export default function ListTable<T>({
   };
 
   const getWidthStyle = (column: ListTableColumn<T>): SxProps<Theme> => {
-    const width = columnWidths[column.key] ?? column.width ?? extractWidthSx(column.cellSx) ?? extractWidthSx(column.headerSx);
+    const width =
+      columnWidths[column.key] ??
+      column.width ??
+      extractWidthSx(column.cellSx) ??
+      extractWidthSx(column.headerSx);
     if (width === undefined) return {};
     return {
       width: widthToCss(width),
-      minWidth: widthToCss(getColumnMinWidth(column))
+      minWidth: widthToCss(getColumnMinWidth(column)),
     };
   };
 
-  const activeFilterOptionCount = Object.values(selectedFilterKeys).reduce((sum, values) => sum + values.length, 0);
+  const activeFilterOptionCount = Object.values(selectedFilterKeys).reduce(
+    (sum, values) => sum + values.length,
+    0,
+  );
   const hasSearch = normalizeFilterText(filterText).length > 0;
   const hasActiveFilters = activeFilterOptionCount > 0;
 
@@ -476,7 +549,7 @@ export default function ListTable<T>({
       ...prev,
       [groupKey]: prev[groupKey]?.includes(optionKey)
         ? prev[groupKey].filter((value) => value !== optionKey)
-        : [...(prev[groupKey] ?? []), optionKey]
+        : [...(prev[groupKey] ?? []), optionKey],
     }));
   };
 
@@ -487,7 +560,7 @@ export default function ListTable<T>({
           px: 2,
           pt: searchOpen ? 2.25 : 0,
           pb: searchOpen ? 1.25 : 0,
-          transition: 'padding 180ms ease'
+          transition: 'padding 180ms ease',
         }}
       >
         <Stack
@@ -511,10 +584,11 @@ export default function ListTable<T>({
               flex: searchOpen ? '0 0 360px' : '0 0 0px',
               width: searchOpen ? 360 : 0,
               opacity: searchOpen ? 1 : 0,
-              transition: 'width 180ms ease, opacity 180ms ease, flex-basis 180ms ease',
+              transition:
+                'width 180ms ease, opacity 180ms ease, flex-basis 180ms ease',
               minWidth: 0,
               position: 'relative',
-              mt: searchOpen ? 0.25 : 0
+              mt: searchOpen ? 0.25 : 0,
             }}
           >
             <Tooltip title={searchPlaceholder} placement="top" arrow>
@@ -544,8 +618,8 @@ export default function ListTable<T>({
                             <Clear fontSize="small" />
                           </IconButton>
                         </InputAdornment>
-                      ) : undefined
-                    }
+                      ) : undefined,
+                    },
                   }}
                 />
               </Box>
@@ -553,7 +627,11 @@ export default function ListTable<T>({
           </Box>
           {filterGroups.length > 0 && (
             <>
-              <Badge color="primary" badgeContent={activeFilterOptionCount} invisible={activeFilterOptionCount === 0}>
+              <Badge
+                color="primary"
+                badgeContent={activeFilterOptionCount}
+                invisible={activeFilterOptionCount === 0}
+              >
                 <Tooltip title="Filters" placement="top" arrow>
                   <IconButton
                     aria-label="Filters"
@@ -578,9 +656,19 @@ export default function ListTable<T>({
                     <Box key={group.key}>
                       {groupIndex > 0 && <Divider />}
                       <Box sx={{ px: 2, pt: 1.25, pb: 0.5 }}>
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
+                        <Box
+                          sx={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 0.75,
+                          }}
+                        >
                           {group.icon}
-                          <Typography variant="overline" color="text.secondary" sx={{ lineHeight: 1 }}>
+                          <Typography
+                            variant="overline"
+                            color="text.secondary"
+                            sx={{ lineHeight: 1 }}
+                          >
                             {group.label}
                           </Typography>
                         </Box>
@@ -590,20 +678,30 @@ export default function ListTable<T>({
                         selected={allSelected}
                       >
                         <ListItemIcon>
-                          {allSelected ? <CheckIcon fontSize="small" /> : <AllInclusiveIcon fontSize="small" />}
+                          {allSelected ? (
+                            <CheckIcon fontSize="small" />
+                          ) : (
+                            <AllInclusiveIcon fontSize="small" />
+                          )}
                         </ListItemIcon>
                         <ListItemText primary="All" />
                       </MenuItem>
                       {group.options.map((option) => (
                         <MenuItem
                           key={option.key}
-                          onClick={() => selectFilterOption(group.key, option.key)}
+                          onClick={() =>
+                            selectFilterOption(group.key, option.key)
+                          }
                           selected={selectedKeys.includes(option.key)}
                         >
                           <ListItemIcon>
-                            {selectedKeys.includes(option.key)
-                              ? <CheckIcon fontSize="small" />
-                              : (option.icon ?? <Box sx={{ width: 20, height: 20 }} />)}
+                            {selectedKeys.includes(option.key) ? (
+                              <CheckIcon fontSize="small" />
+                            ) : (
+                              (option.icon ?? (
+                                <Box sx={{ width: 20, height: 20 }} />
+                              ))
+                            )}
                           </ListItemIcon>
                           <ListItemText primary={option.label} />
                         </MenuItem>
@@ -625,7 +723,8 @@ export default function ListTable<T>({
                   key={column.key}
                   align={column.align}
                   ref={(node) => {
-                    headerCellRefs.current[column.key] = node as HTMLElement | null;
+                    headerCellRefs.current[column.key] =
+                      node as HTMLElement | null;
                   }}
                   sx={mergeSx(
                     hideBelowSx(column.hideBelow),
@@ -638,14 +737,17 @@ export default function ListTable<T>({
                       textOverflow: 'ellipsis',
                       whiteSpace: 'nowrap',
                       '&:hover .list-table-resize-handle': {
-                        opacity: 1
-                      }
-                    }
+                        opacity: 1,
+                      },
+                    },
                   )}
                 >
                   <Box sx={{ ...listTableHeaderContentSx, pr: 1.5 }}>
                     <TableCellHoverTooltip content={column.label}>
-                      <Box component="span" sx={{ ...listTableCellContentSx, flex: '1 1 auto' }}>
+                      <Box
+                        component="span"
+                        sx={{ ...listTableCellContentSx, flex: '1 1 auto' }}
+                      >
                         {column.label}
                       </Box>
                     </TableCellHoverTooltip>
@@ -671,14 +773,14 @@ export default function ListTable<T>({
                             left: '50%',
                             width: 1,
                             transform: 'translateX(-50%)',
-                            bgcolor: 'divider'
+                            bgcolor: 'divider',
                           },
                           '&:hover::after': {
-                            bgcolor: 'primary.main'
+                            bgcolor: 'primary.main',
                           },
                           '&:hover': {
-                            opacity: 1
-                          }
+                            opacity: 1,
+                          },
                         }}
                       />
                     )}
@@ -693,7 +795,9 @@ export default function ListTable<T>({
                 <TableCell colSpan={columns.length}>
                   <Box component="div" sx={listTableCellContentSx}>
                     <Typography color="text.secondary" sx={{ py: 1 }}>
-                      {hasSearch || hasActiveFilters ? 'No rows match your filters.' : emptyMessage}
+                      {hasSearch || hasActiveFilters
+                        ? 'No rows match your filters.'
+                        : emptyMessage}
                     </Typography>
                   </Box>
                 </TableCell>
@@ -714,8 +818,8 @@ export default function ListTable<T>({
                         {
                           overflow: 'hidden',
                           textOverflow: 'ellipsis',
-                          whiteSpace: 'nowrap'
-                        }
+                          whiteSpace: 'nowrap',
+                        },
                       )}
                     >
                       <TableCellHoverTooltip content={cellContent}>

@@ -28,7 +28,7 @@ import {
   TextField,
   Tooltip,
   Typography,
-  Alert
+  Alert,
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import BadgeIcon from '@mui/icons-material/Badge';
@@ -53,11 +53,11 @@ import {
   ScheduledQueryRequest,
   ScheduledQueryParam,
   ScheduledQueryWatchScan,
-  ScheduledQueryAction
+  ScheduledQueryAction,
 } from 'src/hooks/useScheduledQueriesApi';
 import { ActionConfigFieldDef, SeizuConfig } from 'src/config.context';
 import ScheduledQueryDetailDialog, {
-  ScheduledQueryViewData
+  ScheduledQueryViewData,
 } from 'src/components/ScheduledQueryDetailDialog';
 import UserDisplay from 'src/components/UserDisplay';
 import { usePermissions } from 'src/hooks/usePermissions';
@@ -67,7 +67,7 @@ import ListTable, {
   listTableActionColumnSx,
   listTablePrimaryCellSx,
   listTableSecondaryCellSx,
-  listTableTruncateSx
+  listTableTruncateSx,
 } from 'src/components/ListTable';
 import type { BackState } from 'src/navigation';
 import { pageContentSx } from 'src/theme/layout';
@@ -83,7 +83,7 @@ const EMPTY_FORM: ScheduledQueryRequest = {
   watch_scans: [],
   enabled: true,
   actions: [],
-  comment: null
+  comment: null,
 };
 
 type TriggerType = 'frequency' | 'watch_scans';
@@ -103,12 +103,22 @@ type ActionFormState = {
 
 function paramToFormState(p: ScheduledQueryParam): ParamFormState {
   if (Array.isArray(p.value)) {
-    return { name: p.name, value_str: (p.value as unknown[]).join(', '), value_type: 'list' };
+    return {
+      name: p.name,
+      value_str: (p.value as unknown[]).join(', '),
+      value_type: 'list',
+    };
   }
-  return { name: p.name, value_str: String(p.value ?? ''), value_type: 'string' };
+  return {
+    name: p.name,
+    value_str: String(p.value ?? ''),
+    value_type: 'string',
+  };
 }
 
-function schemaDefaults(fields: ActionConfigFieldDef[]): Record<string, unknown> {
+function schemaDefaults(
+  fields: ActionConfigFieldDef[],
+): Record<string, unknown> {
   const defaults: Record<string, unknown> = {};
   for (const field of fields) {
     if (field.default !== undefined && field.default !== null) {
@@ -121,7 +131,6 @@ function schemaDefaults(fields: ActionConfigFieldDef[]): Record<string, unknown>
 function actionToFormState(a: ScheduledQueryAction): ActionFormState {
   return { action_type: a.action_type, action_config: { ...a.action_config } };
 }
-
 
 interface ActionConfigFieldProps {
   field: ActionConfigFieldDef;
@@ -163,7 +172,11 @@ function ActionConfigField({ field, value, onChange }: ActionConfigFieldProps) {
           ))}
         </Select>
         {field.description && (
-          <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, ml: 1.5 }}>
+          <Typography
+            variant="caption"
+            color="text.secondary"
+            sx={{ mt: 0.5, ml: 1.5 }}
+          >
             {field.description}
           </Typography>
         )}
@@ -199,7 +212,9 @@ function ActionConfigField({ field, value, onChange }: ActionConfigFieldProps) {
         multiline
         minRows={3}
         helperText={field.description}
-        slotProps={{ htmlInput: { style: { fontFamily: 'monospace', fontSize: 12 } } }}
+        slotProps={{
+          htmlInput: { style: { fontFamily: 'monospace', fontSize: 12 } },
+        }}
       />
     );
   }
@@ -210,7 +225,9 @@ function ActionConfigField({ field, value, onChange }: ActionConfigFieldProps) {
         label={label}
         type="number"
         value={String(value ?? field.default ?? '')}
-        onChange={(e) => onChange(e.target.value === '' ? '' : Number(e.target.value))}
+        onChange={(e) =>
+          onChange(e.target.value === '' ? '' : Number(e.target.value))
+        }
         size="small"
         fullWidth
         helperText={field.description}
@@ -246,25 +263,27 @@ function ScheduledQueryDialog({
   onSave,
   initial,
   actionTypes,
-  actionSchemas
+  actionSchemas,
 }: ScheduledQueryDialogProps) {
   const [name, setName] = useState(initial?.name ?? EMPTY_FORM.name);
   const [cypher, setCypher] = useState(initial?.cypher ?? EMPTY_FORM.cypher);
-  const [enabled, setEnabled] = useState(initial?.enabled ?? EMPTY_FORM.enabled);
+  const [enabled, setEnabled] = useState(
+    initial?.enabled ?? EMPTY_FORM.enabled,
+  );
   const [triggerType, setTriggerType] = useState<TriggerType>(
-    initial && initial.watch_scans.length > 0 ? 'watch_scans' : 'frequency'
+    initial && initial.watch_scans.length > 0 ? 'watch_scans' : 'frequency',
   );
   const [frequency, setFrequency] = useState<string>(
-    initial?.frequency != null ? String(initial.frequency) : '60'
+    initial?.frequency != null ? String(initial.frequency) : '60',
   );
   const [watchScans, setWatchScans] = useState<ScheduledQueryWatchScan[]>(
-    initial?.watch_scans ?? []
+    initial?.watch_scans ?? [],
   );
   const [params, setParams] = useState<ParamFormState[]>(
-    (initial?.params ?? []).map(paramToFormState)
+    (initial?.params ?? []).map(paramToFormState),
   );
   const [actions, setActions] = useState<ActionFormState[]>(
-    (initial?.actions ?? []).map(actionToFormState)
+    (initial?.actions ?? []).map(actionToFormState),
   );
   const [comment, setComment] = useState('');
   const [saving, setSaving] = useState(false);
@@ -301,12 +320,18 @@ function ScheduledQueryDialog({
       for (const [key, val] of Object.entries(a.action_config)) {
         const fieldDef = schemaMap[key];
         if (fieldDef?.type === 'string_list' && typeof val === 'string') {
-          serialized[key] = val.split(',').map((s) => s.trim()).filter(Boolean);
+          serialized[key] = val
+            .split(',')
+            .map((s) => s.trim())
+            .filter(Boolean);
         } else {
           serialized[key] = val;
         }
       }
-      parsedActions.push({ action_type: a.action_type, action_config: serialized });
+      parsedActions.push({
+        action_type: a.action_type,
+        action_config: serialized,
+      });
     }
 
     const req: ScheduledQueryRequest = {
@@ -316,14 +341,18 @@ function ScheduledQueryDialog({
         name: p.name,
         value:
           p.value_type === 'list'
-            ? p.value_str.split(',').map((s) => s.trim()).filter(Boolean)
+            ? p.value_str
+                .split(',')
+                .map((s) => s.trim())
+                .filter(Boolean)
             : p.value_str,
       })),
-      frequency: triggerType === 'frequency' ? (parseInt(frequency, 10) || null) : null,
+      frequency:
+        triggerType === 'frequency' ? parseInt(frequency, 10) || null : null,
       watch_scans: triggerType === 'watch_scans' ? watchScans : [],
       enabled,
       actions: parsedActions,
-      comment: comment.trim() || null
+      comment: comment.trim() || null,
     };
 
     setSaving(true);
@@ -339,44 +368,75 @@ function ScheduledQueryDialog({
   };
 
   const addParam = () =>
-    setParams((ps) => [...ps, { name: '', value_str: '', value_type: 'string' }]);
-  const removeParam = (i: number) => setParams((ps) => ps.filter((_, idx) => idx !== i));
+    setParams((ps) => [
+      ...ps,
+      { name: '', value_str: '', value_type: 'string' },
+    ]);
+  const removeParam = (i: number) =>
+    setParams((ps) => ps.filter((_, idx) => idx !== i));
   const updateParamName = (i: number, val: string) =>
-    setParams((ps) => ps.map((p, idx) => (idx === i ? { ...p, name: val } : p)));
+    setParams((ps) =>
+      ps.map((p, idx) => (idx === i ? { ...p, name: val } : p)),
+    );
   const updateParamValueStr = (i: number, val: string) =>
-    setParams((ps) => ps.map((p, idx) => (idx === i ? { ...p, value_str: val } : p)));
+    setParams((ps) =>
+      ps.map((p, idx) => (idx === i ? { ...p, value_str: val } : p)),
+    );
   const toggleParamType = (i: number) =>
     setParams((ps) =>
       ps.map((p, idx) =>
         idx === i
           ? { ...p, value_type: p.value_type === 'string' ? 'list' : 'string' }
-          : p
-      )
+          : p,
+      ),
     );
 
   const addWatchScan = () =>
-    setWatchScans((ws) => [...ws, { grouptype: '.*', syncedtype: '.*', groupid: '.*' }]);
-  const removeWatchScan = (i: number) => setWatchScans((ws) => ws.filter((_, idx) => idx !== i));
-  const updateWatchScan = (i: number, field: keyof ScheduledQueryWatchScan, val: string) =>
-    setWatchScans((ws) => ws.map((w, idx) => (idx === i ? { ...w, [field]: val } : w)));
+    setWatchScans((ws) => [
+      ...ws,
+      { grouptype: '.*', syncedtype: '.*', groupid: '.*' },
+    ]);
+  const removeWatchScan = (i: number) =>
+    setWatchScans((ws) => ws.filter((_, idx) => idx !== i));
+  const updateWatchScan = (
+    i: number,
+    field: keyof ScheduledQueryWatchScan,
+    val: string,
+  ) =>
+    setWatchScans((ws) =>
+      ws.map((w, idx) => (idx === i ? { ...w, [field]: val } : w)),
+    );
 
   const addAction = () =>
     setActions((as) => [...as, { action_type: '', action_config: {} }]);
-  const removeAction = (i: number) => setActions((as) => as.filter((_, idx) => idx !== i));
+  const removeAction = (i: number) =>
+    setActions((as) => as.filter((_, idx) => idx !== i));
   const updateActionType = (i: number, val: string) => {
     const defaults = schemaDefaults(actionSchemas[val] ?? []);
-    setActions((as) => as.map((a, idx) => (idx === i ? { action_type: val, action_config: defaults } : a)));
-  };
-  const updateActionConfigField = (i: number, fieldName: string, val: unknown) =>
     setActions((as) =>
       as.map((a, idx) =>
-        idx === i ? { ...a, action_config: { ...a.action_config, [fieldName]: val } } : a
-      )
+        idx === i ? { action_type: val, action_config: defaults } : a,
+      ),
+    );
+  };
+  const updateActionConfigField = (
+    i: number,
+    fieldName: string,
+    val: unknown,
+  ) =>
+    setActions((as) =>
+      as.map((a, idx) =>
+        idx === i
+          ? { ...a, action_config: { ...a.action_config, [fieldName]: val } }
+          : a,
+      ),
     );
 
   return (
     <Dialog open={open} onClose={handleClose} maxWidth="md" fullWidth>
-      <DialogTitle>{initial ? 'Edit Scheduled Query' : 'New Scheduled Query'}</DialogTitle>
+      <DialogTitle>
+        {initial ? 'Edit Scheduled Query' : 'New Scheduled Query'}
+      </DialogTitle>
       <DialogContent dividers>
         {error && (
           <Alert severity="error" sx={{ mb: 2 }}>
@@ -399,10 +459,17 @@ function ScheduledQueryDialog({
             required
             multiline
             minRows={4}
-            slotProps={{ htmlInput: { style: { fontFamily: 'monospace', fontSize: 13 } } }}
+            slotProps={{
+              htmlInput: { style: { fontFamily: 'monospace', fontSize: 13 } },
+            }}
           />
           <FormControlLabel
-            control={<Switch checked={enabled} onChange={(e) => setEnabled(e.target.checked)} />}
+            control={
+              <Switch
+                checked={enabled}
+                onChange={(e) => setEnabled(e.target.checked)}
+              />
+            }
             label="Enabled"
           />
 
@@ -415,8 +482,16 @@ function ScheduledQueryDialog({
               value={triggerType}
               onChange={(e) => setTriggerType(e.target.value as TriggerType)}
             >
-              <FormControlLabel value="frequency" control={<Radio />} label="Fixed frequency" />
-              <FormControlLabel value="watch_scans" control={<Radio />} label="Watch scans" />
+              <FormControlLabel
+                value="frequency"
+                control={<Radio />}
+                label="Fixed frequency"
+              />
+              <FormControlLabel
+                value="watch_scans"
+                control={<Radio />}
+                label="Watch scans"
+              />
             </RadioGroup>
           </FormControl>
 
@@ -433,7 +508,9 @@ function ScheduledQueryDialog({
 
           {triggerType === 'watch_scans' && (
             <Box>
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+              <Box
+                sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}
+              >
                 <Typography variant="subtitle2">Watch Scans</Typography>
                 <IconButton size="small" onClick={addWatchScan}>
                   <AddCircleOutlineIcon fontSize="small" />
@@ -445,25 +522,34 @@ function ScheduledQueryDialog({
                 </Typography>
               )}
               {watchScans.map((ws, i) => (
-                <Box key={i} sx={{ display: 'flex', gap: 1, mb: 1, alignItems: 'center' }}>
+                <Box
+                  key={i}
+                  sx={{ display: 'flex', gap: 1, mb: 1, alignItems: 'center' }}
+                >
                   <TextField
                     label="grouptype"
                     value={ws.grouptype ?? ''}
-                    onChange={(e) => updateWatchScan(i, 'grouptype', e.target.value)}
+                    onChange={(e) =>
+                      updateWatchScan(i, 'grouptype', e.target.value)
+                    }
                     size="small"
                     sx={{ flex: 1 }}
                   />
                   <TextField
                     label="syncedtype"
                     value={ws.syncedtype ?? ''}
-                    onChange={(e) => updateWatchScan(i, 'syncedtype', e.target.value)}
+                    onChange={(e) =>
+                      updateWatchScan(i, 'syncedtype', e.target.value)
+                    }
                     size="small"
                     sx={{ flex: 1 }}
                   />
                   <TextField
                     label="groupid"
                     value={ws.groupid ?? ''}
-                    onChange={(e) => updateWatchScan(i, 'groupid', e.target.value)}
+                    onChange={(e) =>
+                      updateWatchScan(i, 'groupid', e.target.value)
+                    }
                     size="small"
                     sx={{ flex: 1 }}
                   />
@@ -490,7 +576,15 @@ function ScheduledQueryDialog({
               </Typography>
             )}
             {params.map((p, i) => (
-              <Box key={i} sx={{ display: 'flex', gap: 1, mb: 1, alignItems: 'flex-start' }}>
+              <Box
+                key={i}
+                sx={{
+                  display: 'flex',
+                  gap: 1,
+                  mb: 1,
+                  alignItems: 'flex-start',
+                }}
+              >
                 <TextField
                   label="Name"
                   value={p.name}
@@ -499,23 +593,43 @@ function ScheduledQueryDialog({
                   sx={{ flex: 1 }}
                 />
                 <TextField
-                  label={p.value_type === 'list' ? 'Values (comma-separated)' : 'Value'}
+                  label={
+                    p.value_type === 'list'
+                      ? 'Values (comma-separated)'
+                      : 'Value'
+                  }
                   value={p.value_str}
                   onChange={(e) => updateParamValueStr(i, e.target.value)}
                   size="small"
                   sx={{ flex: 2 }}
                 />
-                <Tooltip title={p.value_type === 'list' ? 'Switch to single value' : 'Switch to list'}>
+                <Tooltip
+                  title={
+                    p.value_type === 'list'
+                      ? 'Switch to single value'
+                      : 'Switch to list'
+                  }
+                >
                   <Button
                     size="small"
                     variant={p.value_type === 'list' ? 'contained' : 'outlined'}
                     onClick={() => toggleParamType(i)}
-                    sx={{ minWidth: 44, px: 1, mt: 0.25, flexShrink: 0, fontSize: 11 }}
+                    sx={{
+                      minWidth: 44,
+                      px: 1,
+                      mt: 0.25,
+                      flexShrink: 0,
+                      fontSize: 11,
+                    }}
                   >
                     list
                   </Button>
                 </Tooltip>
-                <IconButton size="small" onClick={() => removeParam(i)} sx={{ mt: 0.25 }}>
+                <IconButton
+                  size="small"
+                  onClick={() => removeParam(i)}
+                  sx={{ mt: 0.25 }}
+                >
                   <RemoveCircleOutlineIcon fontSize="small" />
                 </IconButton>
               </Box>
@@ -554,9 +668,22 @@ function ScheduledQueryDialog({
               return (
                 <Box
                   key={i}
-                  sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 1, p: 1.5, mb: 1.5 }}
+                  sx={{
+                    border: '1px solid',
+                    borderColor: 'divider',
+                    borderRadius: 1,
+                    p: 1.5,
+                    mb: 1.5,
+                  }}
                 >
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: schema.length > 0 ? 1.5 : 0 }}>
+                  <Box
+                    sx={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 1,
+                      mb: schema.length > 0 ? 1.5 : 0,
+                    }}
+                  >
                     {actionTypes.length > 0 ? (
                       <FormControl size="small" sx={{ width: 220 }}>
                         <InputLabel>Action type</InputLabel>
@@ -587,13 +714,21 @@ function ScheduledQueryDialog({
                     </IconButton>
                   </Box>
                   {schema.length > 0 && (
-                    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+                    <Box
+                      sx={{
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: 1.5,
+                      }}
+                    >
                       {schema.map((field) => (
                         <ActionConfigField
                           key={field.name}
                           field={field}
                           value={a.action_config[field.name]}
-                          onChange={(val) => updateActionConfigField(i, field.name, val)}
+                          onChange={(val) =>
+                            updateActionConfigField(i, field.name, val)
+                          }
                         />
                       ))}
                     </Box>
@@ -617,16 +752,10 @@ function ScheduledQueryDialog({
 }
 
 function triggerSummary(item: ScheduledQueryItem): string {
-  if (item.watch_scans.length > 0) return `Watch scans (${item.watch_scans.length})`;
+  if (item.watch_scans.length > 0)
+    return `Watch scans (${item.watch_scans.length})`;
   if (item.frequency != null) return `Every ${item.frequency} min`;
   return 'Not configured';
-}
-
-function statusSummary(item: ScheduledQueryItem): string {
-  if (!item.enabled) return 'Disabled';
-  if (item.last_run_status === 'success') return 'Enabled, last run succeeded';
-  if (item.last_run_status === 'failure') return 'Enabled, last run failed';
-  return 'Enabled, no runs yet';
 }
 
 // ---------------------------------------------------------------------------
@@ -664,26 +793,67 @@ function RowMenu({ item: _item, onEdit, onHistory, onDelete }: RowMenuProps) {
         transformOrigin={{ vertical: 'top', horizontal: 'right' }}
         slotProps={{ paper: { sx: { minWidth: 180 } } }}
       >
-        <Tooltip title={!canWrite ? 'You do not have permission to edit scheduled queries' : ''} placement="left">
+        <Tooltip
+          title={
+            !canWrite
+              ? 'You do not have permission to edit scheduled queries'
+              : ''
+          }
+          placement="left"
+        >
           <span>
-            <MenuItem onClick={() => { onEdit(); close(); }} disabled={!canWrite}>
-              <ListItemIcon><EditIcon fontSize="small" /></ListItemIcon>
+            <MenuItem
+              onClick={() => {
+                onEdit();
+                close();
+              }}
+              disabled={!canWrite}
+            >
+              <ListItemIcon>
+                <EditIcon fontSize="small" />
+              </ListItemIcon>
               <ListItemText>Edit</ListItemText>
             </MenuItem>
           </span>
         </Tooltip>
 
-        <MenuItem onClick={() => { onHistory(); close(); }}>
-          <ListItemIcon><HistoryIcon fontSize="small" /></ListItemIcon>
+        <MenuItem
+          onClick={() => {
+            onHistory();
+            close();
+          }}
+        >
+          <ListItemIcon>
+            <HistoryIcon fontSize="small" />
+          </ListItemIcon>
           <ListItemText>View history</ListItemText>
         </MenuItem>
 
         <Divider />
 
-        <Tooltip title={!canDelete ? 'You do not have permission to delete scheduled queries' : ''} placement="left">
+        <Tooltip
+          title={
+            !canDelete
+              ? 'You do not have permission to delete scheduled queries'
+              : ''
+          }
+          placement="left"
+        >
           <span>
-            <MenuItem onClick={() => { onDelete(); close(); }} disabled={!canDelete} sx={{ color: canDelete ? 'error.main' : undefined }}>
-              <ListItemIcon><DeleteIcon fontSize="small" color={canDelete ? 'error' : 'disabled'} /></ListItemIcon>
+            <MenuItem
+              onClick={() => {
+                onDelete();
+                close();
+              }}
+              disabled={!canDelete}
+              sx={{ color: canDelete ? 'error.main' : undefined }}
+            >
+              <ListItemIcon>
+                <DeleteIcon
+                  fontSize="small"
+                  color={canDelete ? 'error' : 'disabled'}
+                />
+              </ListItemIcon>
               <ListItemText>Delete</ListItemText>
             </MenuItem>
           </span>
@@ -699,33 +869,43 @@ function RowMenu({ item: _item, onEdit, onHistory, onDelete }: RowMenuProps) {
 
 function ScheduledQueries() {
   const navigate = useNavigate();
-  const { scheduledQueries, loading, error, refresh } = useScheduledQueriesList();
+  const { scheduledQueries, loading, error, refresh } =
+    useScheduledQueriesList();
   const { createScheduledQuery, updateScheduledQuery, deleteScheduledQuery } =
     useScheduledQueriesMutations();
   const hasPermission = usePermissions();
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editTarget, setEditTarget] = useState<ScheduledQueryItem | null>(null);
-  const [deleteTarget, setDeleteTarget] = useState<ScheduledQueryItem | null>(null);
-  const [detailItem, setDetailItem] = useState<ScheduledQueryViewData | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<ScheduledQueryItem | null>(
+    null,
+  );
+  const [detailItem, setDetailItem] = useState<ScheduledQueryViewData | null>(
+    null,
+  );
   const [deleting, setDeleting] = useState(false);
   const [actionConfig, setActionConfig] = useState<SeizuConfig>({
     scheduled_query_action_types: [],
-    scheduled_query_action_schemas: {}
+    scheduled_query_action_schemas: {},
   });
 
   useEffect(() => {
     let cancelled = false;
     fetch('/api/v1/config')
       .then((res) => {
-        if (!res.ok) throw new globalThis.Error(`Failed to load scheduled query action config: ${res.status}`);
+        if (!res.ok)
+          throw new globalThis.Error(
+            `Failed to load scheduled query action config: ${res.status}`,
+          );
         return res.json();
       })
       .then((config: SeizuConfig) => {
         if (!cancelled) {
           setActionConfig({
-            scheduled_query_action_types: config.scheduled_query_action_types ?? [],
-            scheduled_query_action_schemas: config.scheduled_query_action_schemas ?? {}
+            scheduled_query_action_types:
+              config.scheduled_query_action_types ?? [],
+            scheduled_query_action_schemas:
+              config.scheduled_query_action_schemas ?? {},
           });
         }
       })
@@ -781,57 +961,79 @@ function ScheduledQueries() {
           <Typography
             variant="body2"
             sx={[
-              { cursor: 'pointer', fontWeight: 500, '&:hover': { textDecoration: 'underline' } },
-              listTableTruncateSx
+              {
+                cursor: 'pointer',
+                fontWeight: 500,
+                '&:hover': { textDecoration: 'underline' },
+              },
+              listTableTruncateSx,
             ]}
-            onClick={() => setDetailItem({
-              name: item.name,
-              cypher: item.cypher,
-              params: item.params,
-              frequency: item.frequency,
-              watch_scans: item.watch_scans,
-              enabled: item.enabled,
-              actions: item.actions,
-              last_run_status: item.last_run_status,
-              last_run_at: item.last_run_at,
-              last_errors: item.last_errors,
-            })}
+            onClick={() =>
+              setDetailItem({
+                name: item.name,
+                cypher: item.cypher,
+                params: item.params,
+                frequency: item.frequency,
+                watch_scans: item.watch_scans,
+                enabled: item.enabled,
+                actions: item.actions,
+                last_run_status: item.last_run_status,
+                last_run_at: item.last_run_at,
+                last_errors: item.last_errors,
+              })
+            }
           >
             {item.name}
           </Typography>
           <Typography
             variant="caption"
             color="text.secondary"
-            sx={{ ...listTableTruncateSx, fontFamily: 'monospace', display: 'block' }}
+            sx={{
+              ...listTableTruncateSx,
+              fontFamily: 'monospace',
+              display: 'block',
+            }}
           >
             {item.cypher.split('\n')[0]}
           </Typography>
         </Box>
-      )
+      ),
     },
     {
       key: 'trigger',
       label: 'Trigger',
       hideBelow: 'md',
       cellSx: { ...listTableSecondaryCellSx, width: 150 },
-      render: (item) => triggerSummary(item)
+      render: (item) => triggerSummary(item),
     },
     {
       key: 'configured_actions',
       label: 'Actions',
       hideBelow: 'lg',
       cellSx: actionsColumnSx,
-      render: (item) => (
+      render: (item) =>
         item.actions.length === 0 ? (
-          <Typography variant="body2" color="text.secondary">None</Typography>
+          <Typography variant="body2" color="text.secondary">
+            None
+          </Typography>
         ) : (
-          <Box sx={{ display: 'flex', flexWrap: 'nowrap', gap: 0.5, overflow: 'hidden' }}>
+          <Box
+            sx={{
+              display: 'flex',
+              flexWrap: 'nowrap',
+              gap: 0.5,
+              overflow: 'hidden',
+            }}
+          >
             {item.actions.map((action, index) => (
-              <Chip key={`${action.action_type}-${index}`} label={action.action_type} size="small" />
+              <Chip
+                key={`${action.action_type}-${index}`}
+                label={action.action_type}
+                size="small"
+              />
             ))}
           </Box>
-        )
-      )
+        ),
     },
     {
       key: 'status',
@@ -844,51 +1046,55 @@ function ScheduledQueries() {
             color={item.enabled ? 'success' : 'default'}
             size="small"
           />
-          <Tooltip title={
-            item.last_run_status === 'success'
-              ? `Last run succeeded${item.last_run_at ? ` at ${new Date(item.last_run_at).toLocaleString()}` : ''}`
-              : item.last_run_status === 'failure'
-                ? `Last run failed${item.last_run_at ? ` at ${new Date(item.last_run_at).toLocaleString()}` : ''}`
-                : 'No runs yet'
-          }>
+          <Tooltip
+            title={
+              item.last_run_status === 'success'
+                ? `Last run succeeded${item.last_run_at ? ` at ${new Date(item.last_run_at).toLocaleString()}` : ''}`
+                : item.last_run_status === 'failure'
+                  ? `Last run failed${item.last_run_at ? ` at ${new Date(item.last_run_at).toLocaleString()}` : ''}`
+                  : 'No runs yet'
+            }
+          >
             <FiberManualRecordIcon
               sx={{
                 fontSize: 12,
-                color: item.last_run_status === 'success'
-                  ? 'success.main'
-                  : item.last_run_status === 'failure'
-                    ? 'error.main'
-                    : 'warning.main',
+                color:
+                  item.last_run_status === 'success'
+                    ? 'success.main'
+                    : item.last_run_status === 'failure'
+                      ? 'error.main'
+                      : 'warning.main',
               }}
             />
           </Tooltip>
         </Box>
-      )
+      ),
     },
     {
       key: 'version',
       label: 'Version',
       hideBelow: 'sm',
       cellSx: { ...listTableSecondaryCellSx, width: 96 },
-      render: (item) => `v${item.current_version}`
+      render: (item) => `v${item.current_version}`,
     },
     {
       key: 'updated_at',
       label: 'Last updated',
       hideBelow: 'xl',
       cellSx: { ...listTableSecondaryCellSx, width: 180 },
-      render: (item) => new Date(item.updated_at).toLocaleString()
+      render: (item) => new Date(item.updated_at).toLocaleString(),
     },
     {
       key: 'updated_by',
       label: 'Updated by',
       hideBelow: 'lg',
       cellSx: { ...listTableSecondaryCellSx, width: 150 },
-      render: (item) => item.updated_by ? (
-        <UserDisplay userId={item.updated_by} />
-      ) : (
-        <UserDisplay userId={item.created_by} />
-      )
+      render: (item) =>
+        item.updated_by ? (
+          <UserDisplay userId={item.updated_by} />
+        ) : (
+          <UserDisplay userId={item.created_by} />
+        ),
     },
     {
       key: 'row_actions',
@@ -898,82 +1104,109 @@ function ScheduledQueries() {
         <RowMenu
           item={item}
           onEdit={() => openEdit(item)}
-          onHistory={() => navigate(`/app/scheduled-queries/${item.scheduled_query_id}/history`, { state: { fromLabel: 'Scheduled Queries' } satisfies BackState })}
+          onHistory={() =>
+            navigate(
+              `/app/scheduled-queries/${item.scheduled_query_id}/history`,
+              { state: { fromLabel: 'Scheduled Queries' } satisfies BackState },
+            )
+          }
           onDelete={() => setDeleteTarget(item)}
         />
-      )
-    }
+      ),
+    },
   ];
   const actionTypes = useMemo(
-    () => Array.from(new Set(scheduledQueries.flatMap((item) => item.actions.map((action) => action.action_type)).filter(Boolean))).sort(),
-    [scheduledQueries]
+    () =>
+      Array.from(
+        new Set(
+          scheduledQueries
+            .flatMap((item) => item.actions.map((action) => action.action_type))
+            .filter(Boolean),
+        ),
+      ).sort(),
+    [scheduledQueries],
   );
-  const filterGroups: ListTableFilterGroup<ScheduledQueryItem>[] = useMemo(() => [
-    {
-      key: 'actions',
-      label: 'Actions',
-      icon: <BadgeIcon fontSize="small" />,
-      options: [
-        {
-          key: 'none',
-          label: 'No actions',
-          icon: <HelpOutlineIcon fontSize="small" />,
-          matches: (item) => item.actions.length === 0
-        },
-        ...actionTypes.map((actionType) => ({
-          key: actionType,
-          label: actionType,
-          icon: <BadgeIcon fontSize="small" />,
-          matches: (item) => item.actions.some((action) => action.action_type === actionType)
-        }))
-      ]
-    },
-    {
-      key: 'status',
-      label: 'Status',
-      icon: <ToggleOnIcon fontSize="small" />,
-      options: [
-        {
-          key: 'enabled',
-          label: 'Enabled',
-          icon: <ToggleOnIcon fontSize="small" />,
-          matches: (item) => item.enabled
-        },
-        {
-          key: 'disabled',
-          label: 'Disabled',
-          icon: <ToggleOffIcon fontSize="small" />,
-          matches: (item) => !item.enabled
-        },
-        {
-          key: 'success',
-          label: 'Last run succeeded',
-          icon: <CheckCircleOutlineIcon fontSize="small" />,
-          matches: (item) => item.last_run_status === 'success'
-        },
-        {
-          key: 'failure',
-          label: 'Last run failed',
-          icon: <ErrorOutlineIcon fontSize="small" />,
-          matches: (item) => item.last_run_status === 'failure'
-        },
-        {
-          key: 'none',
-          label: 'No runs yet',
-          icon: <CancelOutlinedIcon fontSize="small" />,
-          matches: (item) => item.last_run_status === null
-        }
-      ]
-    }
-  ], [actionTypes]);
+  const filterGroups: ListTableFilterGroup<ScheduledQueryItem>[] = useMemo(
+    () => [
+      {
+        key: 'actions',
+        label: 'Actions',
+        icon: <BadgeIcon fontSize="small" />,
+        options: [
+          {
+            key: 'none',
+            label: 'No actions',
+            icon: <HelpOutlineIcon fontSize="small" />,
+            matches: (item) => item.actions.length === 0,
+          },
+          ...actionTypes.map((actionType) => ({
+            key: actionType,
+            label: actionType,
+            icon: <BadgeIcon fontSize="small" />,
+            matches: (item) =>
+              item.actions.some((action) => action.action_type === actionType),
+          })),
+        ],
+      },
+      {
+        key: 'status',
+        label: 'Status',
+        icon: <ToggleOnIcon fontSize="small" />,
+        options: [
+          {
+            key: 'enabled',
+            label: 'Enabled',
+            icon: <ToggleOnIcon fontSize="small" />,
+            matches: (item) => item.enabled,
+          },
+          {
+            key: 'disabled',
+            label: 'Disabled',
+            icon: <ToggleOffIcon fontSize="small" />,
+            matches: (item) => !item.enabled,
+          },
+          {
+            key: 'success',
+            label: 'Last run succeeded',
+            icon: <CheckCircleOutlineIcon fontSize="small" />,
+            matches: (item) => item.last_run_status === 'success',
+          },
+          {
+            key: 'failure',
+            label: 'Last run failed',
+            icon: <ErrorOutlineIcon fontSize="small" />,
+            matches: (item) => item.last_run_status === 'failure',
+          },
+          {
+            key: 'none',
+            label: 'No runs yet',
+            icon: <CancelOutlinedIcon fontSize="small" />,
+            matches: (item) => item.last_run_status === null,
+          },
+        ],
+      },
+    ],
+    [actionTypes],
+  );
 
   return (
     <>
       <Box sx={pageContentSx}>
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+        <Box
+          sx={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            mb: 3,
+          }}
+        >
           <Typography variant="h1">Scheduled Queries</Typography>
           {hasPermission('scheduled_queries:write') && (
-            <Button variant="contained" startIcon={<AddIcon />} onClick={openCreate}>
+            <Button
+              variant="contained"
+              startIcon={<AddIcon />}
+              onClick={openCreate}
+            >
               New scheduled query
             </Button>
           )}
@@ -1020,19 +1253,29 @@ function ScheduledQueries() {
       />
 
       {/* Delete confirmation dialog */}
-      <Dialog open={!!deleteTarget} onClose={() => setDeleteTarget(null)} maxWidth="xs" fullWidth>
+      <Dialog
+        open={!!deleteTarget}
+        onClose={() => setDeleteTarget(null)}
+        maxWidth="xs"
+        fullWidth
+      >
         <DialogTitle>Delete scheduled query?</DialogTitle>
         <DialogContent>
           <DialogContentText>
-            Permanently delete <strong>{deleteTarget?.name}</strong> and all its versions? This
-            cannot be undone.
+            Permanently delete <strong>{deleteTarget?.name}</strong> and all its
+            versions? This cannot be undone.
           </DialogContentText>
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setDeleteTarget(null)} disabled={deleting}>
             Cancel
           </Button>
-          <Button variant="contained" color="error" onClick={handleDeleteConfirm} disabled={deleting}>
+          <Button
+            variant="contained"
+            color="error"
+            onClick={handleDeleteConfirm}
+            disabled={deleting}
+          >
             {deleting ? <CircularProgress size={20} /> : 'Delete'}
           </Button>
         </DialogActions>

@@ -7,7 +7,7 @@ import {
   Divider,
   IconButton,
   Paper,
-  Typography
+  Typography,
 } from '@mui/material';
 import Error from '@mui/icons-material/Error';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
@@ -27,7 +27,7 @@ import FreeTextInput from 'src/components/reports/FreeTextInput';
 import PanelGridRow from 'src/components/reports/PanelGridRow';
 import {
   DASHBOARD_NAVBAR_HEIGHT,
-  DASHBOARD_SIDEBAR_WIDTH_VAR
+  DASHBOARD_SIDEBAR_WIDTH_VAR,
 } from 'src/components/dashboardLayoutConstants';
 import { contentContainerSx } from 'src/theme/layout';
 
@@ -45,51 +45,68 @@ interface PanelItemProps {
   onTokenExpired: () => void;
 }
 
-const PanelItem = memo(function PanelItem({ item, rowIndex, index, varData, allInputs, resolveQuery, resolveCapability, refreshKey, onTokenExpired }: PanelItemProps) {
-  const needInputs: string[] = [];
-  const params: Record<string, string | undefined> = {};
-  if (item.params !== undefined) {
-    item.params.forEach((inputData) => {
-      const paramName = inputData.name;
-      const paramValue = inputData?.value;
-      const paramInputId = inputData?.input_id;
-      if (paramValue != null) {
-        params[paramName] = paramValue;
-      } else if (paramInputId != null) {
-        params[paramName] = varData[paramInputId]?.value;
-        if (
-          params[paramName] === undefined ||
-          params[paramName] === null ||
-          params[paramName] === ''
-        ) {
-          try {
-            const input = allInputs.find((obj) => obj.input_id === paramInputId);
-            needInputs.push(input!.label);
-          } catch (err) {
-            console.log(err);
-            needInputs.push(`*(Error: undefined input: ${paramInputId})`);
+const PanelItem = memo(
+  function PanelItem({
+    item,
+    rowIndex,
+    index,
+    varData,
+    allInputs,
+    resolveQuery,
+    resolveCapability,
+    refreshKey,
+    onTokenExpired,
+  }: PanelItemProps) {
+    const needInputs: string[] = [];
+    const params: Record<string, string | undefined> = {};
+    if (item.params !== undefined) {
+      item.params.forEach((inputData) => {
+        const paramName = inputData.name;
+        const paramValue = inputData?.value;
+        const paramInputId = inputData?.input_id;
+        if (paramValue != null) {
+          params[paramName] = paramValue;
+        } else if (paramInputId != null) {
+          params[paramName] = varData[paramInputId]?.value;
+          if (
+            params[paramName] === undefined ||
+            params[paramName] === null ||
+            params[paramName] === ''
+          ) {
+            try {
+              const input = allInputs.find(
+                (obj) => obj.input_id === paramInputId,
+              );
+              needInputs.push(input!.label);
+            } catch (err) {
+              console.log(err);
+              needInputs.push(`*(Error: undefined input: ${paramInputId})`);
+            }
           }
         }
-      }
-    });
-  }
+      });
+    }
 
-  const effectiveCaption = item.hide_caption ? undefined : item.caption;
+    const effectiveCaption = item.hide_caption ? undefined : item.caption;
 
-  const details = {
-    cypher: resolveQuery(item.cypher),
-    details_cypher: resolveQuery(item.details_cypher),
-    type: item.type,
-    columns: item.columns,
-    caption: effectiveCaption,
-    params,
-    reportQueryToken: resolveCapability(`rows.${rowIndex}.panels.${index}.cypher`),
-    detailsQueryToken: resolveCapability(`rows.${rowIndex}.panels.${index}.details_cypher`)
-  };
+    const details = {
+      cypher: resolveQuery(item.cypher),
+      details_cypher: resolveQuery(item.details_cypher),
+      type: item.type,
+      columns: item.columns,
+      caption: effectiveCaption,
+      params,
+      reportQueryToken: resolveCapability(
+        `rows.${rowIndex}.panels.${index}.cypher`,
+      ),
+      detailsQueryToken: resolveCapability(
+        `rows.${rowIndex}.panels.${index}.details_cypher`,
+      ),
+    };
 
-  let itemComponent;
-  if (item.type === 'progress') {
-    itemComponent = (
+    let itemComponent;
+    if (item.type === 'progress') {
+      itemComponent = (
         <CypherProgress
           cypher={resolveQuery(item.cypher)}
           params={params}
@@ -99,13 +116,15 @@ const PanelItem = memo(function PanelItem({ item, rowIndex, index, varData, allI
           progressSettings={item.progress_settings}
           details={details}
           needInputs={needInputs}
-          reportQueryToken={resolveCapability(`rows.${rowIndex}.panels.${index}.cypher`)}
+          reportQueryToken={resolveCapability(
+            `rows.${rowIndex}.panels.${index}.cypher`,
+          )}
           refreshKey={refreshKey}
           onTokenExpired={onTokenExpired}
         />
       );
-  } else if (item.type === 'pie') {
-    itemComponent = (
+    } else if (item.type === 'pie') {
+      itemComponent = (
         <CypherPie
           cypher={resolveQuery(item.cypher)}
           params={params}
@@ -113,13 +132,15 @@ const PanelItem = memo(function PanelItem({ item, rowIndex, index, varData, allI
           pieSettings={item.pie_settings}
           details={details}
           needInputs={needInputs}
-          reportQueryToken={resolveCapability(`rows.${rowIndex}.panels.${index}.cypher`)}
+          reportQueryToken={resolveCapability(
+            `rows.${rowIndex}.panels.${index}.cypher`,
+          )}
           refreshKey={refreshKey}
           onTokenExpired={onTokenExpired}
         />
       );
-  } else if (item.type === 'bar') {
-    itemComponent = (
+    } else if (item.type === 'bar') {
+      itemComponent = (
         <CypherBar
           cypher={resolveQuery(item.cypher)}
           params={params}
@@ -127,13 +148,15 @@ const PanelItem = memo(function PanelItem({ item, rowIndex, index, varData, allI
           barSettings={item.bar_settings}
           details={details}
           needInputs={needInputs}
-          reportQueryToken={resolveCapability(`rows.${rowIndex}.panels.${index}.cypher`)}
+          reportQueryToken={resolveCapability(
+            `rows.${rowIndex}.panels.${index}.cypher`,
+          )}
           refreshKey={refreshKey}
           onTokenExpired={onTokenExpired}
         />
       );
-  } else if (item.type === 'graph') {
-    itemComponent = (
+    } else if (item.type === 'graph') {
+      itemComponent = (
         <CypherGraph
           cypher={resolveQuery(item.cypher)}
           params={params}
@@ -141,13 +164,15 @@ const PanelItem = memo(function PanelItem({ item, rowIndex, index, varData, allI
           graphSettings={item.graph_settings}
           needInputs={needInputs}
           fillHeight
-          reportQueryToken={resolveCapability(`rows.${rowIndex}.panels.${index}.cypher`)}
+          reportQueryToken={resolveCapability(
+            `rows.${rowIndex}.panels.${index}.cypher`,
+          )}
           refreshKey={refreshKey}
           onTokenExpired={onTokenExpired}
         />
       );
-  } else if (item.type === 'count') {
-    itemComponent = (
+    } else if (item.type === 'count') {
+      itemComponent = (
         <CypherCount
           cypher={resolveQuery(item.cypher)}
           params={params}
@@ -156,13 +181,15 @@ const PanelItem = memo(function PanelItem({ item, rowIndex, index, varData, allI
           thresholds={item.thresholds}
           details={details}
           needInputs={needInputs}
-          reportQueryToken={resolveCapability(`rows.${rowIndex}.panels.${index}.cypher`)}
+          reportQueryToken={resolveCapability(
+            `rows.${rowIndex}.panels.${index}.cypher`,
+          )}
           refreshKey={refreshKey}
           onTokenExpired={onTokenExpired}
         />
       );
-  } else if (item.type === 'table') {
-    itemComponent = (
+    } else if (item.type === 'table') {
+      itemComponent = (
         <CypherTable
           cypher={resolveQuery(item.cypher)}
           params={params}
@@ -170,13 +197,15 @@ const PanelItem = memo(function PanelItem({ item, rowIndex, index, varData, allI
           caption={effectiveCaption}
           details={details}
           needInputs={needInputs}
-          reportQueryToken={resolveCapability(`rows.${rowIndex}.panels.${index}.cypher`)}
+          reportQueryToken={resolveCapability(
+            `rows.${rowIndex}.panels.${index}.cypher`,
+          )}
           refreshKey={refreshKey}
           onTokenExpired={onTokenExpired}
         />
       );
-  } else if (item.type === 'vertical-table') {
-    itemComponent = (
+    } else if (item.type === 'vertical-table') {
+      itemComponent = (
         <CypherVerticalTable
           cypher={resolveQuery(item.cypher)}
           params={params}
@@ -184,82 +213,100 @@ const PanelItem = memo(function PanelItem({ item, rowIndex, index, varData, allI
           details={details}
           needInputs={needInputs}
           autoHeight={item.auto_height ?? false}
-          reportQueryToken={resolveCapability(`rows.${rowIndex}.panels.${index}.cypher`)}
+          reportQueryToken={resolveCapability(
+            `rows.${rowIndex}.panels.${index}.cypher`,
+          )}
           refreshKey={refreshKey}
           onTokenExpired={onTokenExpired}
         />
       );
-  } else if (item.type === 'markdown') {
-    // Markdoc's truthy check treats '' and 0 as truthy; only undefined/null/false are falsy.
-    // Omit unset/empty values so {% if not($foo) %} works when an input is cleared.
-    const flatVars: Record<string, string> = {};
-    allInputs.forEach((input) => {
-      const value = varData[input.input_id]?.value;
-      if (value !== undefined && value !== '') {
-        flatVars[input.input_id] = value;
-      }
-    });
-    itemComponent = (
-      <Box sx={{
-        ...(item.auto_height
-          ? { height: 'auto' }
-          : { height: '100%', minHeight: 0, overflow: 'auto' }),
-        '& p': { mb: 1 },
-        '& h2, & h3, & h4, & h5, & h6': { mb: 1 },
-        '& ul, & ol': { mb: 1 },
-        '& hr': { my: 2 },
-        '& li:has(> input[type="checkbox"])': {
-          listStyle: 'none',
+    } else if (item.type === 'markdown') {
+      // Markdoc's truthy check treats '' and 0 as truthy; only undefined/null/false are falsy.
+      // Omit unset/empty values so {% if not($foo) %} works when an input is cleared.
+      const flatVars: Record<string, string> = {};
+      allInputs.forEach((input) => {
+        const value = varData[input.input_id]?.value;
+        if (value !== undefined && value !== '') {
+          flatVars[input.input_id] = value;
+        }
+      });
+      itemComponent = (
+        <Box
+          sx={{
+            ...(item.auto_height
+              ? { height: 'auto' }
+              : { height: '100%', minHeight: 0, overflow: 'auto' }),
+            '& p': { mb: 1 },
+            '& h2, & h3, & h4, & h5, & h6': { mb: 1 },
+            '& ul, & ol': { mb: 1 },
+            '& hr': { my: 2 },
+            '& li:has(> input[type="checkbox"])': {
+              listStyle: 'none',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              ml: '-1.5em',
+              '& p': { my: 0 },
+            },
+          }}
+        >
+          <MarkdocRenderer source={item.markdown ?? ''} variables={flatVars} />
+        </Box>
+      );
+    }
+
+    // ``auto_height`` panels render at content height; the parent grid grows
+    // the cell to match. Other panels flex-fill their assigned cell.
+    if (item.auto_height) {
+      return <Box sx={{ width: '100%' }}>{itemComponent}</Box>;
+    }
+    return (
+      <Box
+        sx={{
+          height: '100%',
+          minHeight: 0,
           display: 'flex',
-          alignItems: 'center',
-          gap: '6px',
-          ml: '-1.5em',
-          '& p': { my: 0 },
-        },
-      }}>
-        <MarkdocRenderer source={item.markdown ?? ''} variables={flatVars} />
+          flexDirection: 'column',
+        }}
+      >
+        {itemComponent}
       </Box>
     );
-  }
+  },
+  function areEqual(prevProps, nextProps) {
+    // refreshKey drives explicit re-renders (user refresh, token recovery after expiry).
+    // Capability identity changes alone do not trigger re-renders; refreshKey handles that.
+    if (prevProps.refreshKey !== nextProps.refreshKey) return false;
+    if (prevProps.resolveQuery !== nextProps.resolveQuery) return false;
+    if (prevProps.onTokenExpired !== nextProps.onTokenExpired) return false;
+    if (prevProps.rowIndex !== nextProps.rowIndex) return false;
+    if (prevProps.index !== nextProps.index) return false;
+    if (prevProps.item !== nextProps.item) return false;
 
-  // ``auto_height`` panels render at content height; the parent grid grows
-  // the cell to match. Other panels flex-fill their assigned cell.
-  if (item.auto_height) {
-    return <Box sx={{ width: '100%' }}>{itemComponent}</Box>;
-  }
-  return (
-    <Box sx={{ height: '100%', minHeight: 0, display: 'flex', flexDirection: 'column' }}>
-      {itemComponent}
-    </Box>
-  );
-}, function areEqual(prevProps, nextProps) {
-  // refreshKey drives explicit re-renders (user refresh, token recovery after expiry).
-  // Capability identity changes alone do not trigger re-renders; refreshKey handles that.
-  if (prevProps.refreshKey !== nextProps.refreshKey) return false;
-  if (prevProps.resolveQuery !== nextProps.resolveQuery) return false;
-  if (prevProps.onTokenExpired !== nextProps.onTokenExpired) return false;
-  if (prevProps.rowIndex !== nextProps.rowIndex) return false;
-  if (prevProps.index !== nextProps.index) return false;
-  if (prevProps.item !== nextProps.item) return false;
+    // Markdown panels can reference any input via {% $id %} — check all inputs.
+    if (nextProps.item.type === 'markdown') {
+      for (const input of nextProps.allInputs) {
+        if (
+          prevProps.varData[input.input_id]?.value !==
+          nextProps.varData[input.input_id]?.value
+        )
+          return false;
+      }
+      return true;
+    }
 
-  // Markdown panels can reference any input via {% $id %} — check all inputs.
-  if (nextProps.item.type === 'markdown') {
-    for (const input of nextProps.allInputs) {
-      if (prevProps.varData[input.input_id]?.value !== nextProps.varData[input.input_id]?.value) return false;
+    // Only re-render if a varData value for an input this panel uses has changed
+    const inputIds = (nextProps.item.params ?? [])
+      .map((p) => p.input_id)
+      .filter((id): id is string => id != null);
+
+    for (const id of inputIds) {
+      if (prevProps.varData[id]?.value !== nextProps.varData[id]?.value)
+        return false;
     }
     return true;
-  }
-
-  // Only re-render if a varData value for an input this panel uses has changed
-  const inputIds = (nextProps.item.params ?? [])
-    .map((p) => p.input_id)
-    .filter((id): id is string => id != null);
-
-  for (const id of inputIds) {
-    if (prevProps.varData[id]?.value !== nextProps.varData[id]?.value) return false;
-  }
-  return true;
-});
+  },
+);
 
 export interface RefreshControls {
   onRefresh: () => void;
@@ -295,15 +342,23 @@ function ReportView({
   const displayTitle = title ?? report.name;
   const reportQueries = useMemo(() => report.queries ?? {}, [report]);
   const capabilities = queryCapabilities ?? EMPTY_QUERY_CAPABILITIES;
-  const resolveQuery = useCallback((cypher: string | undefined): string | undefined => {
-    if (cypher === undefined) return undefined;
-    return reportQueries[cypher] ?? cypher;
-  }, [reportQueries]);
-  const resolveCapability = useCallback((path: string): string | undefined => capabilities[path], [capabilities]);
+  const resolveQuery = useCallback(
+    (cypher: string | undefined): string | undefined => {
+      if (cypher === undefined) return undefined;
+      return reportQueries[cypher] ?? cypher;
+    },
+    [reportQueries],
+  );
+  const resolveCapability = useCallback(
+    (path: string): string | undefined => capabilities[path],
+    [capabilities],
+  );
   const [varData, setVarData] = useState({});
   const toolbarRef = useRef<HTMLDivElement | null>(null);
   const [toolbarHeight, setToolbarHeight] = useState(64);
-  const [collapsedRows, setCollapsedRows] = useState<Record<number, boolean>>({});
+  const [collapsedRows, setCollapsedRows] = useState<Record<number, boolean>>(
+    {},
+  );
 
   // Track refresh state for decoupled data fetching
   const [refreshKey, setRefreshKey] = useState(0);
@@ -354,7 +409,10 @@ function ReportView({
         const inputValue = getQueryStringValue(input.input_id);
         if (inputValue !== undefined) {
           // TODO(ryan-lane): Figure out a way to pass the label along with the value in the param
-          initialVarState[input.input_id] = { label: inputValue, value: inputValue };
+          initialVarState[input.input_id] = {
+            label: inputValue,
+            value: inputValue,
+          };
         } else if (input.default !== undefined) {
           initialVarState[input.input_id] = input.default;
         } else {
@@ -374,14 +432,14 @@ function ReportView({
             key={`undefined-input-${index}`}
             sx={{
               minWidth: 180,
-              width: { xs: '100%', sm: inputWidth() }
+              width: { xs: '100%', sm: inputWidth() },
             }}
           >
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
               <Error />
               <Typography>Undefined input</Typography>
             </Box>
-          </Box>
+          </Box>,
         );
         return;
       }
@@ -422,16 +480,17 @@ function ReportView({
           sx={{
             flex: { xs: '1 1 100%', sm: `0 1 ${inputWidth(input.size)}px` },
             minWidth: { xs: '100%', sm: 180 },
-            maxWidth: { xs: 'none', sm: inputWidth(input.size) }
+            maxWidth: { xs: 'none', sm: inputWidth(input.size) },
           }}
         >
           {inputComponent}
-        </Box>
+        </Box>,
       );
     });
   }
 
-  const hasInputsOrActions = inputControls.length > 0 || toolbarActions !== undefined;
+  const hasInputsOrActions =
+    inputControls.length > 0 || toolbarActions !== undefined;
   const isSticky = stickyToolbar && hasInputsOrActions;
 
   useEffect(() => {
@@ -475,7 +534,9 @@ function ReportView({
         position: isSticky ? 'fixed' : 'static',
         top: isSticky ? DASHBOARD_NAVBAR_HEIGHT : 'auto',
         right: isSticky ? 0 : 'auto',
-        left: isSticky ? { xs: 0, lg: `var(${DASHBOARD_SIDEBAR_WIDTH_VAR})` } : 'auto',
+        left: isSticky
+          ? { xs: 0, lg: `var(${DASHBOARD_SIDEBAR_WIDTH_VAR})` }
+          : 'auto',
         zIndex: isSticky ? (theme) => theme.zIndex.appBar - 1 : 'auto',
         bgcolor: 'background.paper',
         borderBottom: 1,
@@ -488,7 +549,7 @@ function ReportView({
         alignItems: 'center',
         justifyContent: 'space-between',
         gap: 1.5,
-        flexWrap: 'wrap'
+        flexWrap: 'wrap',
       }}
     >
       {inputControls.length > 0 && (
@@ -499,7 +560,7 @@ function ReportView({
             gap: 1,
             flex: '1 1 320px',
             flexWrap: 'wrap',
-            minWidth: 0
+            minWidth: 0,
           }}
         >
           {inputControls}
@@ -516,15 +577,15 @@ function ReportView({
             flexWrap: 'wrap',
             ml: hasInputsOrActions ? 0 : 'auto',
             '& .MuiButton-root': {
-              minHeight: 40
+              minHeight: 40,
             },
             '& .MuiIconButton-root': {
               height: 40,
-              width: 40
+              width: 40,
             },
             '& .MuiChip-root': {
-              height: 32
-            }
+              height: 32,
+            },
           }}
         >
           {toolbarActions({ onRefresh: handleRefresh, refreshedAtLabel })}
@@ -540,7 +601,8 @@ function ReportView({
   const rows = report.rows.map((row, rowIndex) => {
     // collapsible defaults to true; only disabled when explicitly set false
     const effectiveCollapsible = row.collapsible !== false;
-    const isCollapsed = effectiveCollapsible && collapsedRows[rowIndex] === true;
+    const isCollapsed =
+      effectiveCollapsible && collapsedRows[rowIndex] === true;
     const hideHeader = row.hide_header === true;
 
     const collapseBtn = effectiveCollapsible ? (
@@ -588,7 +650,11 @@ function ReportView({
     );
 
     return (
-      <Container key={row.name} maxWidth={false} sx={{ ...contentContainerSx, pb: 1.5 }}>
+      <Container
+        key={row.name}
+        maxWidth={false}
+        sx={{ ...contentContainerSx, pb: 1.5 }}
+      >
         <Paper
           elevation={1}
           sx={{
@@ -622,7 +688,9 @@ function ReportView({
             <Collapse in={!isCollapsed} timeout="auto">
               {panelArea}
             </Collapse>
-          ) : panelArea}
+          ) : (
+            panelArea
+          )}
         </Paper>
       </Container>
     );
@@ -644,14 +712,14 @@ function ReportView({
               bgcolor: 'background.paper',
               borderBottom: 1,
               borderColor: 'divider',
-              mb: 2
+              mb: 2,
             }}
           >
             <Container
               maxWidth={false}
               sx={{
                 ...contentContainerSx,
-                py: 1.75
+                py: 1.75,
               }}
             >
               <Typography component="h1" variant="h2" sx={{ lineHeight: 1.25 }}>
@@ -660,9 +728,7 @@ function ReportView({
             </Container>
           </Box>
         )}
-        <Box>
-          {rows}
-        </Box>
+        <Box>{rows}</Box>
       </Box>
     </>
   );

@@ -1,5 +1,10 @@
 import { useState } from 'react';
-import { useParams, useNavigate, useLocation, Link as RouterLink } from 'react-router-dom';
+import {
+  useParams,
+  useNavigate,
+  useLocation,
+  Link as RouterLink,
+} from 'react-router-dom';
 import { Helmet } from 'react-helmet';
 import {
   Box,
@@ -13,7 +18,7 @@ import {
   Menu,
   MenuItem,
   Tooltip,
-  Typography
+  Typography,
 } from '@mui/material';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import HistoryIcon from '@mui/icons-material/History';
@@ -22,12 +27,16 @@ import RestoreIcon from '@mui/icons-material/Restore';
 import VisibilityIcon from '@mui/icons-material/Visibility';
 import Error from '@mui/icons-material/Error';
 
-import { ReportVersion, useReportVersionsList, useReportsMutations } from 'src/hooks/useReportsApi';
+import {
+  ReportVersion,
+  useReportVersionsList,
+  useReportsMutations,
+} from 'src/hooks/useReportsApi';
 import { Report } from 'src/config.context';
 import ListTable, {
   ListTableColumn,
   listTableActionColumnSx,
-  listTableSecondaryCellSx
+  listTableSecondaryCellSx,
 } from 'src/components/ListTable';
 import UserDisplay from 'src/components/UserDisplay';
 import { usePermissions } from 'src/hooks/usePermissions';
@@ -49,7 +58,12 @@ interface RowMenuProps {
   onRestore: () => void;
 }
 
-function RowMenu({ version: _version, isCurrent, onView, onRestore }: RowMenuProps) {
+function RowMenu({
+  version: _version,
+  isCurrent,
+  onView,
+  onRestore,
+}: RowMenuProps) {
   const [anchor, setAnchor] = useState<null | HTMLElement>(null);
   const hasPermission = usePermissions();
   const close = () => setAnchor(null);
@@ -65,7 +79,11 @@ function RowMenu({ version: _version, isCurrent, onView, onRestore }: RowMenuPro
   return (
     <>
       <Tooltip title="More actions">
-        <IconButton aria-label="More actions" size="small" onClick={(e) => setAnchor(e.currentTarget)}>
+        <IconButton
+          aria-label="More actions"
+          size="small"
+          onClick={(e) => setAnchor(e.currentTarget)}
+        >
           <MoreVertIcon fontSize="small" />
         </IconButton>
       </Tooltip>
@@ -78,8 +96,15 @@ function RowMenu({ version: _version, isCurrent, onView, onRestore }: RowMenuPro
         transformOrigin={{ vertical: 'top', horizontal: 'right' }}
         slotProps={{ paper: { sx: { minWidth: 180 } } }}
       >
-        <MenuItem onClick={() => { onView(); close(); }}>
-          <ListItemIcon><VisibilityIcon fontSize="small" /></ListItemIcon>
+        <MenuItem
+          onClick={() => {
+            onView();
+            close();
+          }}
+        >
+          <ListItemIcon>
+            <VisibilityIcon fontSize="small" />
+          </ListItemIcon>
           <ListItemText>View</ListItemText>
         </MenuItem>
 
@@ -88,11 +113,17 @@ function RowMenu({ version: _version, isCurrent, onView, onRestore }: RowMenuPro
         <Tooltip title={restoreTooltip} placement="left">
           <span>
             <MenuItem
-              onClick={() => { onRestore(); close(); }}
+              onClick={() => {
+                onRestore();
+                close();
+              }}
               disabled={restoreDisabled}
             >
               <ListItemIcon>
-                <RestoreIcon fontSize="small" color={restoreDisabled ? 'disabled' : 'inherit'} />
+                <RestoreIcon
+                  fontSize="small"
+                  color={restoreDisabled ? 'disabled' : 'inherit'}
+                />
               </ListItemIcon>
               <ListItemText>Restore</ListItemText>
             </MenuItem>
@@ -123,7 +154,7 @@ function ReportHistory() {
   const versionBackState = {
     fromLabel: reportName ? `History – ${reportName}` : 'history',
     returnTo: `/app/reports/${id}/history`,
-    originReturnTo: historyBackTarget
+    originReturnTo: historyBackTarget,
   } satisfies BackState;
   const columns: ListTableColumn<ReportVersion>[] = [
     {
@@ -134,14 +165,14 @@ function ReportHistory() {
         const isCurrent = version.version === latestVersion;
         return (
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-          <Link
-            component={RouterLink}
-            to={`/app/reports/${id}/versions/${version.version}`}
-            state={versionBackState}
-            underline="hover"
-            color="inherit"
-            sx={{ fontWeight: isCurrent ? 'bold' : 'medium' }}
-          >
+            <Link
+              component={RouterLink}
+              to={`/app/reports/${id}/versions/${version.version}`}
+              state={versionBackState}
+              underline="hover"
+              color="inherit"
+              sx={{ fontWeight: isCurrent ? 'bold' : 'medium' }}
+            >
               v{version.version}
             </Link>
             {isCurrent && (
@@ -151,34 +182,34 @@ function ReportHistory() {
             )}
           </Box>
         );
-      }
+      },
     },
     {
       key: 'name',
       label: 'Name',
       cellSx: { width: '24%' },
-      render: (version) => version.name
+      render: (version) => version.name,
     },
     {
       key: 'saved',
       label: 'Saved',
       hideBelow: 'sm',
       cellSx: savedColumnSx,
-      render: (version) => new Date(version.created_at).toLocaleString()
+      render: (version) => new Date(version.created_at).toLocaleString(),
     },
     {
       key: 'author',
       label: 'Author',
       hideBelow: 'md',
       cellSx: authorColumnSx,
-      render: (version) => <UserDisplay userId={version.created_by} />
+      render: (version) => <UserDisplay userId={version.created_by} />,
     },
     {
       key: 'comment',
       label: 'Comment',
       hideBelow: 'lg',
       cellSx: commentColumnSx,
-      render: (version) => version.comment || '—'
+      render: (version) => version.comment || '—',
     },
     {
       key: 'actions',
@@ -188,11 +219,15 @@ function ReportHistory() {
         <RowMenu
           version={version}
           isCurrent={version.version === latestVersion}
-          onView={() => navigate(`/app/reports/${id}/versions/${version.version}`, { state: versionBackState })}
+          onView={() =>
+            navigate(`/app/reports/${id}/versions/${version.version}`, {
+              state: versionBackState,
+            })
+          }
           onRestore={() => handleRestore(version)}
         />
-      )
-    }
+      ),
+    },
   ];
 
   async function handleRestore(version: ReportVersion) {
@@ -200,7 +235,7 @@ function ReportHistory() {
     await saveReportVersion(
       id,
       version.config as Report,
-      `Restored from version ${version.version}`
+      `Restored from version ${version.version}`,
     );
     navigate(`/app/reports/${id}`);
   }
@@ -208,7 +243,9 @@ function ReportHistory() {
   return (
     <>
       <Helmet>
-        <title>{reportName ? `History – ${reportName} | Seizu` : `History | Seizu`}</title>
+        <title>
+          {reportName ? `History – ${reportName} | Seizu` : `History | Seizu`}
+        </title>
       </Helmet>
       <Box sx={pageContentSx}>
         {fromLabel && (

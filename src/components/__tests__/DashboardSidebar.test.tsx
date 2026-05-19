@@ -9,13 +9,16 @@ jest.mock('src/hooks/usePermissions', () => ({
   usePermissions: jest.fn(),
 }));
 
-const mockUsePermissions = usePermissionsModule.usePermissions as jest.MockedFunction<typeof usePermissionsModule.usePermissions>;
+const mockUsePermissions =
+  usePermissionsModule.usePermissions as jest.MockedFunction<
+    typeof usePermissionsModule.usePermissions
+  >;
 const lightTheme = createTheme({ palette: { mode: 'light' } });
 const darkTheme = createTheme({ palette: { mode: 'dark' } });
 
 function Wrapper({
   children,
-  theme = lightTheme
+  theme = lightTheme,
 }: {
   children: React.ReactNode;
   theme?: ReturnType<typeof createTheme>;
@@ -28,7 +31,9 @@ function Wrapper({
 }
 
 function renderSidebar(permissions: string[]) {
-  mockUsePermissions.mockReturnValue((permission: string) => permissions.includes(permission));
+  mockUsePermissions.mockReturnValue((permission: string) =>
+    permissions.includes(permission),
+  );
   return render(<DashboardSidebar />, { wrapper: Wrapper });
 }
 
@@ -37,8 +42,16 @@ describe('DashboardSidebar', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
-    useReportsList = jest.spyOn(reportsApiModule, 'useReportsList') as unknown as jest.Mock;
-    useReportsList.mockReturnValue({ reports: [], loading: false, error: null, refresh: jest.fn() });
+    useReportsList = jest.spyOn(
+      reportsApiModule,
+      'useReportsList',
+    ) as unknown as jest.Mock;
+    useReportsList.mockReturnValue({
+      reports: [],
+      loading: false,
+      error: null,
+      refresh: jest.fn(),
+    });
   });
 
   afterEach(cleanup);
@@ -46,13 +59,18 @@ describe('DashboardSidebar', () => {
   it('hides Roles when roles:read is absent', () => {
     renderSidebar([]);
 
-    expect(screen.queryByRole('link', { name: 'Roles' })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('link', { name: 'Roles' }),
+    ).not.toBeInTheDocument();
   });
 
   it('shows Roles when roles:read is present', () => {
     renderSidebar(['roles:read']);
 
-    expect(screen.getByRole('link', { name: 'Roles' })).toHaveAttribute('href', '/app/roles');
+    expect(screen.getByRole('link', { name: 'Roles' })).toHaveAttribute(
+      'href',
+      '/app/roles',
+    );
   });
 
   it('renders the full logo in the expanded sidebar', () => {
@@ -60,7 +78,10 @@ describe('DashboardSidebar', () => {
 
     render(<DashboardSidebar />, { wrapper: Wrapper });
 
-    expect(screen.getByAltText('Seizu')).toHaveAttribute('src', '/static/images/logo-horizontal-black.svg');
+    expect(screen.getByAltText('Seizu')).toHaveAttribute(
+      'src',
+      '/static/images/logo-horizontal-black.svg',
+    );
   });
 
   it('renders the mark in the collapsed sidebar', () => {
@@ -68,7 +89,10 @@ describe('DashboardSidebar', () => {
 
     render(<DashboardSidebar collapsed />, { wrapper: Wrapper });
 
-    expect(screen.getByAltText('Seizu')).toHaveAttribute('src', '/static/images/logo-mark-light.svg');
+    expect(screen.getByAltText('Seizu')).toHaveAttribute(
+      'src',
+      '/static/images/logo-mark-light.svg',
+    );
   });
 
   it('uses dark-surface logo assets in dark mode', () => {
@@ -77,10 +101,13 @@ describe('DashboardSidebar', () => {
     render(
       <Wrapper theme={darkTheme}>
         <DashboardSidebar />
-      </Wrapper>
+      </Wrapper>,
     );
 
-    expect(screen.getByAltText('Seizu')).toHaveAttribute('src', '/static/images/logo-horizontal-white.svg');
+    expect(screen.getByAltText('Seizu')).toHaveAttribute(
+      'src',
+      '/static/images/logo-horizontal-white.svg',
+    );
   });
 
   it('uses the dark-surface mark in dark mode when collapsed', () => {
@@ -89,9 +116,12 @@ describe('DashboardSidebar', () => {
     render(
       <Wrapper theme={darkTheme}>
         <DashboardSidebar collapsed />
-      </Wrapper>
+      </Wrapper>,
     );
 
-    expect(screen.getByAltText('Seizu')).toHaveAttribute('src', '/static/images/logo-mark.svg');
+    expect(screen.getByAltText('Seizu')).toHaveAttribute(
+      'src',
+      '/static/images/logo-mark.svg',
+    );
   });
 });

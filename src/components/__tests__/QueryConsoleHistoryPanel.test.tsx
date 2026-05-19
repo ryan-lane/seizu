@@ -1,4 +1,10 @@
-import { render, screen, fireEvent, act, cleanup } from '@testing-library/react';
+import {
+  render,
+  screen,
+  fireEvent,
+  act,
+  cleanup,
+} from '@testing-library/react';
 import { ThemeProvider, createTheme } from '@mui/material/styles';
 import QueryConsoleHistoryPanel from 'src/components/QueryConsoleHistoryPanel';
 import * as useQueryHistoryModule from 'src/hooks/useQueryHistory';
@@ -14,24 +20,26 @@ const ITEMS = [
     history_id: '1',
     user_id: 'u1',
     query: 'MATCH (n) RETURN n',
-    executed_at: '2024-01-01T12:00:00Z'
+    executed_at: '2024-01-01T12:00:00Z',
   },
   {
     history_id: '2',
     user_id: 'u1',
     query: 'MATCH (a)-[r]->(b) RETURN a, r, b',
-    executed_at: '2024-01-02T08:30:00Z'
-  }
+    executed_at: '2024-01-02T08:30:00Z',
+  },
 ];
 
-function mockHook(overrides: Partial<ReturnType<typeof useQueryHistoryModule.useQueryHistory>>) {
+function mockHook(
+  overrides: Partial<ReturnType<typeof useQueryHistoryModule.useQueryHistory>>,
+) {
   const fetchHistory = jest.fn();
   jest.spyOn(useQueryHistoryModule, 'useQueryHistory').mockReturnValue({
     loading: false,
     error: null,
     data: null,
     fetchHistory,
-    ...overrides
+    ...overrides,
   });
   return fetchHistory;
 }
@@ -47,7 +55,7 @@ describe('QueryConsoleHistoryPanel', () => {
     render(
       <Wrapper>
         <QueryConsoleHistoryPanel onQuerySelect={jest.fn()} />
-      </Wrapper>
+      </Wrapper>,
     );
     // CircularProgress renders an svg role="progressbar"
     expect(screen.getByRole('progressbar')).toBeInTheDocument();
@@ -58,7 +66,7 @@ describe('QueryConsoleHistoryPanel', () => {
     render(
       <Wrapper>
         <QueryConsoleHistoryPanel onQuerySelect={jest.fn()} />
-      </Wrapper>
+      </Wrapper>,
     );
     expect(screen.getByText('Failed to load history')).toBeInTheDocument();
   });
@@ -68,7 +76,7 @@ describe('QueryConsoleHistoryPanel', () => {
     render(
       <Wrapper>
         <QueryConsoleHistoryPanel onQuerySelect={jest.fn()} />
-      </Wrapper>
+      </Wrapper>,
     );
     expect(screen.getByText(/No history yet/)).toBeInTheDocument();
   });
@@ -78,10 +86,12 @@ describe('QueryConsoleHistoryPanel', () => {
     render(
       <Wrapper>
         <QueryConsoleHistoryPanel onQuerySelect={jest.fn()} />
-      </Wrapper>
+      </Wrapper>,
     );
     expect(screen.getByText('MATCH (n) RETURN n')).toBeInTheDocument();
-    expect(screen.getByText('MATCH (a)-[r]->(b) RETURN a, r, b')).toBeInTheDocument();
+    expect(
+      screen.getByText('MATCH (a)-[r]->(b) RETURN a, r, b'),
+    ).toBeInTheDocument();
   });
 
   it('calls onQuerySelect with the full history item when an item is clicked', () => {
@@ -90,7 +100,7 @@ describe('QueryConsoleHistoryPanel', () => {
     render(
       <Wrapper>
         <QueryConsoleHistoryPanel onQuerySelect={onQuerySelect} />
-      </Wrapper>
+      </Wrapper>,
     );
     fireEvent.click(screen.getByText('MATCH (n) RETURN n'));
     expect(onQuerySelect).toHaveBeenCalledWith(ITEMS[0]);
@@ -101,7 +111,7 @@ describe('QueryConsoleHistoryPanel', () => {
     const { container } = render(
       <Wrapper>
         <QueryConsoleHistoryPanel onQuerySelect={jest.fn()} />
-      </Wrapper>
+      </Wrapper>,
     );
     // MUI Pagination nav element only renders when totalPages > 1
     expect(container.querySelector('nav')).toBeNull();
@@ -112,7 +122,7 @@ describe('QueryConsoleHistoryPanel', () => {
     const { container } = render(
       <Wrapper>
         <QueryConsoleHistoryPanel onQuerySelect={jest.fn()} />
-      </Wrapper>
+      </Wrapper>,
     );
     expect(container.querySelector('nav')).not.toBeNull();
   });
@@ -122,7 +132,7 @@ describe('QueryConsoleHistoryPanel', () => {
     render(
       <Wrapper>
         <QueryConsoleHistoryPanel onQuerySelect={jest.fn()} />
-      </Wrapper>
+      </Wrapper>,
     );
     expect(fetchHistory).toHaveBeenCalledWith(1, 20);
   });
@@ -131,16 +141,22 @@ describe('QueryConsoleHistoryPanel', () => {
     const fetchHistory = mockHook({});
     const { rerender } = render(
       <Wrapper>
-        <QueryConsoleHistoryPanel onQuerySelect={jest.fn()} refreshTrigger={0} />
-      </Wrapper>
+        <QueryConsoleHistoryPanel
+          onQuerySelect={jest.fn()}
+          refreshTrigger={0}
+        />
+      </Wrapper>,
     );
     fetchHistory.mockClear();
 
     act(() => {
       rerender(
         <Wrapper>
-          <QueryConsoleHistoryPanel onQuerySelect={jest.fn()} refreshTrigger={1} />
-        </Wrapper>
+          <QueryConsoleHistoryPanel
+            onQuerySelect={jest.fn()}
+            refreshTrigger={1}
+          />
+        </Wrapper>,
       );
     });
     expect(fetchHistory).toHaveBeenCalledWith(1, 20);
@@ -150,8 +166,11 @@ describe('QueryConsoleHistoryPanel', () => {
     const fetchHistory = mockHook({});
     render(
       <Wrapper>
-        <QueryConsoleHistoryPanel onQuerySelect={jest.fn()} refreshTrigger={0} />
-      </Wrapper>
+        <QueryConsoleHistoryPanel
+          onQuerySelect={jest.fn()}
+          refreshTrigger={0}
+        />
+      </Wrapper>,
     );
     // Only the mount fetch should have fired (page=1), not a second one for refreshTrigger=0
     expect(fetchHistory).toHaveBeenCalledTimes(1);

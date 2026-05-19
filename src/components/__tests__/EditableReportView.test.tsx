@@ -1,4 +1,10 @@
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from '@testing-library/react';
 import { ThemeProvider, createTheme } from '@mui/material/styles';
 import EditableReportView from 'src/components/EditableReportView';
 import { Report } from 'src/config.context';
@@ -20,7 +26,7 @@ jest.mock('src/components/reports/PanelGridRow', () => ({
     renderPanel: (panel: unknown, idx: number) => React.ReactNode;
   }) =>
     panels.map((panel, idx) => (
-      // eslint-disable-next-line react/no-array-index-key
+      // eslint-disable-next-line @eslint-react/no-array-index-key
       <div key={idx}>{renderPanel(panel, idx)}</div>
     )),
 }));
@@ -63,8 +69,13 @@ describe('EditableReportView', () => {
   it('renders the edit toolbar and editable rows', () => {
     render(
       <Wrapper>
-        <EditableReportView report={REPORT} reportId="r1" onSave={jest.fn()} onCancel={jest.fn()} />
-      </Wrapper>
+        <EditableReportView
+          report={REPORT}
+          reportId="r1"
+          onSave={jest.fn()}
+          onCancel={jest.fn()}
+        />
+      </Wrapper>,
     );
 
     expect(screen.getByText('Editing report')).toBeInTheDocument();
@@ -78,8 +89,13 @@ describe('EditableReportView', () => {
     const onSave = jest.fn().mockResolvedValue(undefined);
     render(
       <Wrapper>
-        <EditableReportView report={REPORT} reportId="r1" onSave={onSave} onCancel={jest.fn()} />
-      </Wrapper>
+        <EditableReportView
+          report={REPORT}
+          reportId="r1"
+          onSave={onSave}
+          onCancel={jest.fn()}
+        />
+      </Wrapper>,
     );
 
     fireEvent.change(screen.getByLabelText('Report name'), {
@@ -90,18 +106,25 @@ describe('EditableReportView', () => {
     });
     fireEvent.click(screen.getByRole('button', { name: /save version/i }));
 
-    await waitFor(() => expect(onSave).toHaveBeenCalledWith(
-      expect.objectContaining({ name: 'Updated Risk Dashboard' }),
-      'Tighten layout'
-    ));
+    await waitFor(() =>
+      expect(onSave).toHaveBeenCalledWith(
+        expect.objectContaining({ name: 'Updated Risk Dashboard' }),
+        'Tighten layout',
+      ),
+    );
   });
 
   it('saves a locally edited row name', async () => {
     const onSave = jest.fn().mockResolvedValue(undefined);
     render(
       <Wrapper>
-        <EditableReportView report={REPORT} reportId="r1" onSave={onSave} onCancel={jest.fn()} />
-      </Wrapper>
+        <EditableReportView
+          report={REPORT}
+          reportId="r1"
+          onSave={onSave}
+          onCancel={jest.fn()}
+        />
+      </Wrapper>,
     );
 
     fireEvent.change(screen.getByLabelText('Row name'), {
@@ -110,20 +133,27 @@ describe('EditableReportView', () => {
     fireEvent.blur(screen.getByLabelText('Row name'));
     fireEvent.click(screen.getByRole('button', { name: /save version/i }));
 
-    await waitFor(() => expect(onSave).toHaveBeenCalledWith(
-      expect.objectContaining({
-        rows: [expect.objectContaining({ name: 'Updated Overview' })],
-      }),
-      ''
-    ));
+    await waitFor(() =>
+      expect(onSave).toHaveBeenCalledWith(
+        expect.objectContaining({
+          rows: [expect.objectContaining({ name: 'Updated Overview' })],
+        }),
+        '',
+      ),
+    );
   });
 
   it('saves a locally edited named query value', async () => {
     const onSave = jest.fn().mockResolvedValue(undefined);
     render(
       <Wrapper>
-        <EditableReportView report={REPORT} reportId="r1" onSave={onSave} onCancel={jest.fn()} />
-      </Wrapper>
+        <EditableReportView
+          report={REPORT}
+          reportId="r1"
+          onSave={onSave}
+          onCancel={jest.fn()}
+        />
+      </Wrapper>,
     );
 
     fireEvent.change(screen.getByLabelText('Cypher'), {
@@ -132,11 +162,13 @@ describe('EditableReportView', () => {
     fireEvent.blur(screen.getByLabelText('Cypher'));
     fireEvent.click(screen.getByRole('button', { name: /save version/i }));
 
-    await waitFor(() => expect(onSave).toHaveBeenCalledWith(
-      expect.objectContaining({
-        queries: { total: 'MATCH (n) RETURN n LIMIT 1' },
-      }),
-      ''
-    ));
+    await waitFor(() =>
+      expect(onSave).toHaveBeenCalledWith(
+        expect.objectContaining({
+          queries: { total: 'MATCH (n) RETURN n LIMIT 1' },
+        }),
+        '',
+      ),
+    );
   });
 });

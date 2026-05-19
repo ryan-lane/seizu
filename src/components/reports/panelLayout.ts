@@ -66,7 +66,10 @@ function clampWidth(value: number, cols: number): number {
   return Math.max(1, Math.min(cols, Math.trunc(value)));
 }
 
-export function defaultPanelWidth(panel: Panel, cols: number = MAX_COLS): number {
+export function defaultPanelWidth(
+  panel: Panel,
+  cols: number = MAX_COLS,
+): number {
   const raw = panel.w ?? FALLBACK_WIDTH;
   return clampWidth(raw, cols);
 }
@@ -87,7 +90,10 @@ function panelKey(panel: Panel, idx: number): string {
  * Auto-packed panels share the topmost free row alongside other auto-packed
  * panels; explicit-coordinate panels are not re-flowed.
  */
-export function deriveRowLayout(panels: Panel[], cols: number = MAX_COLS): LayoutCoords[] {
+export function deriveRowLayout(
+  panels: Panel[],
+  cols: number = MAX_COLS,
+): LayoutCoords[] {
   const result: LayoutCoords[] = [];
   let cursorX = 0;
   let cursorY = 0;

@@ -1,4 +1,10 @@
-import { Box, CircularProgress, IconButton, Tooltip, Typography } from '@mui/material';
+import {
+  Box,
+  CircularProgress,
+  IconButton,
+  Tooltip,
+  Typography,
+} from '@mui/material';
 import RefreshIcon from '@mui/icons-material/Refresh';
 
 import ReportView from 'src/components/ReportView';
@@ -29,10 +35,18 @@ function Dashboard() {
       report={report}
       title="Dashboard"
       queryCapabilities={queryCapabilities}
-      boxSx={{ backgroundColor: 'background.default', minHeight: '100%', py: 3 }}
+      boxSx={{
+        backgroundColor: 'background.default',
+        minHeight: '100%',
+        py: 3,
+      }}
       toolbarActions={({ onRefresh, refreshedAtLabel }) => (
         <Tooltip title={refreshedAtLabel ?? 'Refresh data'}>
-          <IconButton size="small" onClick={onRefresh} aria-label="Refresh data">
+          <IconButton
+            size="small"
+            onClick={onRefresh}
+            aria-label="Refresh data"
+          >
             <RefreshIcon fontSize="small" />
           </IconButton>
         </Tooltip>
