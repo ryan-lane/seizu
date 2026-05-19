@@ -1,6 +1,9 @@
 default_language_version:
     # force all unspecified python hooks to run python3
     python: python3
+    # ESLint 10 + @eslint-react require Node >= 22.13; pin so the hook does
+    # not fall back to an older system Node.
+    node: 24.15.0
 repos:
 -   repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v3.2.0
@@ -32,7 +35,7 @@ repos:
           - types-PyYAML
           - types-requests
 -   repo: https://github.com/pre-commit/mirrors-eslint
-    rev: v8.56.0
+    rev: v10.4.0
     hooks:
     -   id: eslint
         verbose: true
@@ -41,14 +44,17 @@ repos:
         args:
           - '--fix'
         additional_dependencies:
-        -   eslint@8.56.0
-        -   "@typescript-eslint/eslint-plugin@8.59.3"
-        -   "@typescript-eslint/parser@8.59.3"
-        -   eslint-config-airbnb@19.0.4
+        -   eslint@10.4.0
+        -   "@eslint/js@10.0.1"
+        -   "@eslint-react/eslint-plugin@5.8.1"
+        -   "@typescript-eslint/eslint-plugin@8.59.4"
+        -   "@typescript-eslint/parser@8.59.4"
         -   eslint-config-prettier@10.1.8
-        -   eslint-plugin-import@2.32.0
+        -   eslint-import-resolver-typescript@4.4.4
+        -   eslint-plugin-import-x@4.16.2
         -   eslint-plugin-jsx-a11y@6.10.2
         -   eslint-plugin-prettier@5.5.5
-        -   eslint-plugin-react@7.37.5
-        -   eslint-plugin-react-hooks@4.3.0
-        -   prettier@2.6.2
+        -   eslint-plugin-react-hooks@7.1.1
+        -   globals@17.6.0
+        -   prettier@3.8.3
+        -   typescript@5.9.3

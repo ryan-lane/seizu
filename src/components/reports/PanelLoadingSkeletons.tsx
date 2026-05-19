@@ -133,7 +133,7 @@ export function ChartPanelSkeleton({
     return (
       <Box sx={{ display: 'flex', alignItems: 'flex-end', gap: 0.75, height: '100%', px: 0.5, pb: 0.5 }}>
         {[50, 75, 55, 90, 65, 40, 80].map((h, index) => (
-          // eslint-disable-next-line react/no-array-index-key
+          // eslint-disable-next-line @eslint-react/no-array-index-key
           <Skeleton animation={false} key={index} variant="rectangular" sx={{ flex: 1, height: `${h}%`, borderRadius: 0.5 }} />
         ))}
       </Box>
@@ -160,7 +160,7 @@ export function ChartPanelSkeleton({
         ) : (
           <Box sx={{ width: '100%', height: '100%', display: 'flex', alignItems: 'flex-end', gap: 1.5, px: 4, pb: 4 }}>
             {[45, 72, 54, 88, 64, 38, 78].map((height, index) => (
-              // eslint-disable-next-line react/no-array-index-key
+              // eslint-disable-next-line @eslint-react/no-array-index-key
               <Skeleton key={index} variant="rectangular" width="12%" height={`${height}%`} sx={{ borderRadius: 1 }} />
             ))}
           </Box>
@@ -226,7 +226,7 @@ export function TablePanelSkeleton({ height, inline = false }: { height?: string
         <Skeleton animation={false} variant="rectangular" width="100%" height={26} sx={{ borderRadius: 0.5, flexShrink: 0, mb: 0.5 }} />
         <Box sx={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column', justifyContent: 'space-around' }}>
           {[0, 1, 2, 3, 4, 5, 6].map((index) => (
-            // eslint-disable-next-line react/no-array-index-key
+            // eslint-disable-next-line @eslint-react/no-array-index-key
             <Box key={index} sx={{ display: 'flex', gap: 0.5 }}>
               <Skeleton animation={false} variant="rectangular" sx={{ flex: 2 }} height={20} />
               <Skeleton animation={false} variant="rectangular" sx={{ flex: 3 }} height={20} />
@@ -256,7 +256,7 @@ export function TablePanelSkeleton({ height, inline = false }: { height?: string
       </Box>
       <Box sx={{ height: bodyHeight, px: 1.5, py: 1 }}>
         {Array.from({ length: 8 }).map((_, index) => (
-          // eslint-disable-next-line react/no-array-index-key
+          // eslint-disable-next-line @eslint-react/no-array-index-key
           <Box key={index} sx={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr 1fr', gap: 2, py: 0.75 }}>
             <Skeleton variant="text" height={20} />
             <Skeleton variant="text" height={20} />
@@ -278,7 +278,7 @@ export function VerticalTableSkeleton({ inline = false }: { inline?: boolean } =
       <Box sx={{ height: '100%', overflow: 'hidden', display: 'flex', flexDirection: 'column', px: 0.5 }}>
         <Box sx={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column', justifyContent: 'space-around' }}>
           {[0, 1, 2, 3, 4, 5, 6].map((index) => (
-            // eslint-disable-next-line react/no-array-index-key
+            // eslint-disable-next-line @eslint-react/no-array-index-key
             <Box key={index} sx={{ display: 'grid', gridTemplateColumns: '40% 1fr', gap: 1 }}>
               <Skeleton animation={false} variant="rectangular" height={20} />
               <Skeleton animation={false} variant="rectangular" height={20} />
@@ -297,7 +297,7 @@ export function VerticalTableSkeleton({ inline = false }: { inline?: boolean } =
       <Divider />
       <Paper sx={{ p: 2, mt: 1 }}>
         {Array.from({ length: 7 }).map((_, index) => (
-          // eslint-disable-next-line react/no-array-index-key
+          // eslint-disable-next-line @eslint-react/no-array-index-key
           <Box key={index} sx={{ display: 'grid', gridTemplateColumns: '180px 1fr', gap: 2, py: 1 }}>
             <Skeleton variant="text" height={22} />
             <Skeleton variant="text" height={22} />

@@ -468,7 +468,7 @@ function PanelEditor({ open, panel, onClose, onSave, availableVariables }: Panel
                 </Box>
                 <Stack spacing={1}>
                   {params.map((p, i) => (
-                    // eslint-disable-next-line react/no-array-index-key
+                    // eslint-disable-next-line @eslint-react/no-array-index-key
                     <ParamRow
                       key={i}
                       param={p}
@@ -507,7 +507,7 @@ function PanelEditor({ open, panel, onClose, onSave, availableVariables }: Panel
                 </Box>
                 <Stack spacing={1}>
                   {columns.map((c, i) => (
-                    // eslint-disable-next-line react/no-array-index-key
+                    // eslint-disable-next-line @eslint-react/no-array-index-key
                     <ColumnRow
                       key={i}
                       col={c}

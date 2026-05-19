@@ -20,7 +20,7 @@ jest.mock('src/components/reports/PanelGridRow', () => ({
     renderPanel: (panel: unknown, idx: number) => React.ReactNode;
   }) =>
     panels.map((panel, idx) => (
-      // eslint-disable-next-line react/no-array-index-key
+      // eslint-disable-next-line @eslint-react/no-array-index-key
       <div key={idx}>{renderPanel(panel, idx)}</div>
     )),
 }));

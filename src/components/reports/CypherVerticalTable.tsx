@@ -182,14 +182,14 @@ export default function CypherVerticalTable({
             mungedItem = String(item);
           }
           listItems.push(
-            // eslint-disable-next-line  react/no-array-index-key
+            // eslint-disable-next-line  @eslint-react/no-array-index-key
             <ListItem disableGutters key={`${key}-${index}`}>
               {mungedItem}
             </ListItem>
           );
           if (uniqueItems.length !== 1) {
             listItems.push(
-              // eslint-disable-next-line  react/no-array-index-key
+              // eslint-disable-next-line  @eslint-react/no-array-index-key
               <Divider key={`${key}-${index}-divider`} component="li" />
             );
           }

@@ -54,7 +54,7 @@ export default function QueryValidationBadge({ errors, warnings }: QueryValidati
               </Typography>
               <List dense disablePadding>
                 {errors.map((err, i) => (
-                  // eslint-disable-next-line react/no-array-index-key
+                  // eslint-disable-next-line @eslint-react/no-array-index-key
                   <ListItem key={i} disableGutters>
                     <ListItemIcon sx={{ minWidth: 32 }}>
                       <ErrorIcon color="error" fontSize="small" />
@@ -73,7 +73,7 @@ export default function QueryValidationBadge({ errors, warnings }: QueryValidati
               </Typography>
               <List dense disablePadding>
                 {warnings.map((w, i) => (
-                  // eslint-disable-next-line react/no-array-index-key
+                  // eslint-disable-next-line @eslint-react/no-array-index-key
                   <ListItem key={i} disableGutters>
                     <ListItemIcon sx={{ minWidth: 32 }}>
                       <WarningIcon color="warning" fontSize="small" />

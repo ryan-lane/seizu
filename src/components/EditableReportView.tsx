@@ -1210,7 +1210,7 @@ function EditableReportView({ report, reportId: _reportId, onSave, onCancel }: E
                 </Typography>
               )}
               {editableInputs.map((inp, i) => (
-                // eslint-disable-next-line react/no-array-index-key
+                // eslint-disable-next-line @eslint-react/no-array-index-key
                 <InputCard
                   key={i}
                   input={inp}

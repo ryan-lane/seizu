@@ -226,7 +226,7 @@ function ThresholdsEditor({ thresholds, onChange, helperText }: ThresholdsEditor
         )}
         {thresholds.map((t, idx) => (
           <ThresholdRow
-            // eslint-disable-next-line react/no-array-index-key
+            // eslint-disable-next-line @eslint-react/no-array-index-key
             key={idx}
             threshold={t}
             onChange={(next) => setRow(idx, next)}
