@@ -137,6 +137,28 @@ QUERY_VALIDATOR_ALLOWED_PROCEDURES = list_env("QUERY_VALIDATOR_ALLOWED_PROCEDURE
 # default so local work still runs.
 REPORT_QUERY_SIGNING_SECRET = str_env("REPORT_QUERY_SIGNING_SECRET", "")
 
+# AES-256-GCM key used to encrypt the IDP refresh token stored in the
+# browser session cookie. Must be exactly 32 bytes after base64 decoding.
+# Generate with: python -c 'import base64,os;print(base64.b64encode(os.urandom(32)).decode())'
+# Rotate if exposed; rotation invalidates all outstanding browser sessions
+# (users will be forced to log in again).
+SESSION_TOKEN_ENCRYPTION_KEY = str_env("SESSION_TOKEN_ENCRYPTION_KEY", "")
+
+# Name of the session cookie that carries the encrypted IDP refresh token.
+SESSION_COOKIE_NAME = str_env("SESSION_COOKIE_NAME", "seizu_session")
+
+# Lifetime of the session cookie, in seconds. The cookie is rolling: each
+# successful /api/v1/auth/refresh re-issues it with this Max-Age reset,
+# capped by the IDP refresh token's own absolute expiry (recorded in the
+# cookie at login). Default: 18 hours.
+SESSION_COOKIE_MAX_AGE_SECONDS = int_env("SESSION_COOKIE_MAX_AGE_SECONDS", 18 * 60 * 60)
+
+# Whether to call the OIDC provider's end_session_endpoint on logout in
+# addition to clearing the session cookie. Set False for IDPs that don't
+# implement RP-initiated logout. Failures are caught and logged; the
+# user's local logout still succeeds.
+OIDC_END_SESSION_ON_LOGOUT = bool_env("OIDC_END_SESSION_ON_LOGOUT", True)
+
 # Whether or not scheduled queries should be enabled.
 ENABLE_SCHEDULED_QUERIES = bool_env("ENABLE_SCHEDULED_QUERIES", True)
 # The frequency in seconds for how often we'll attempt to run scheduled queries
