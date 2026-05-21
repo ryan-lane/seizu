@@ -1,9 +1,17 @@
 """OAuth/OIDC client for the BFF auth flow.
 
-Talks to the configured IDP's token endpoint and (optionally) its
-end-session endpoint. Discovery is lazy and cached process-wide; the
-discovery document is fetched once and re-used for the life of the
-process. To re-discover (e.g. after IDP config changes), restart the app.
+Thin facade over authlib's ``AsyncOAuth2Client`` plus a hand-rolled
+discovery cache. Authlib handles the RFC 6749 / 7636 / OIDC token-endpoint
+mechanics (PKCE, multiple ``token_endpoint_auth_method`` styles, error
+parsing per RFC 6749 §5.2). We keep three things outside authlib:
+
+- **Discovery fetching** — so we can use ``OIDC_INTERNAL_AUTHORITY`` for
+  the server-side fetch while exposing the public ``OIDC_AUTHORITY`` to
+  the browser.
+- **``rewrite_to_external_origin``** — for IDPs that base discovery URLs
+  on the request Host header and lack an explicit "browser host" setting.
+- **``end_session``** — RP-initiated logout isn't standardized the way
+  the token endpoint is, and authlib doesn't ship a helper.
 """
 
 from __future__ import annotations
@@ -15,6 +23,8 @@ from typing import Any
 from urllib.parse import urlparse
 
 import httpx
+from authlib.common.errors import AuthlibBaseError
+from authlib.integrations.httpx_client import AsyncOAuth2Client
 
 from reporting import settings
 
@@ -122,10 +132,11 @@ def reset_metadata_cache() -> None:
     _metadata_cache = None
 
 
-def _parse_token_response(data: dict[str, Any]) -> TokenResponse:
+def _coerce_token(data: Any) -> TokenResponse:
+    """Convert authlib's OAuth2Token (a dict subclass) into our TokenResponse."""
     try:
         access_token = data["access_token"]
-    except KeyError as exc:
+    except (KeyError, TypeError) as exc:
         raise OAuthClientError("IDP token response missing access_token") from exc
     return TokenResponse(
         access_token=access_token,
@@ -138,51 +149,50 @@ def _parse_token_response(data: dict[str, Any]) -> TokenResponse:
     )
 
 
-async def _post_token_endpoint(form: dict[str, str]) -> TokenResponse:
-    metadata = await get_metadata()
-    try:
-        async with httpx.AsyncClient(timeout=_OIDC_REQUEST_TIMEOUT) as client:
-            resp = await client.post(metadata.token_endpoint, data=form)
-    except httpx.HTTPError as exc:
-        raise OAuthClientError(f"Token endpoint request failed: {exc}") from exc
-    if resp.status_code != 200:
-        # IDPs return RFC 6749 errors as JSON; surface them in the exception
-        # but do not log token-endpoint bodies (may contain tokens on success).
-        try:
-            err = resp.json()
-            detail = err.get("error_description") or err.get("error") or "unknown_error"
-        except ValueError:
-            detail = f"HTTP {resp.status_code}"
-        raise OAuthClientError(f"Token endpoint returned error: {detail}")
-    return _parse_token_response(resp.json())
+def _build_oauth_client() -> AsyncOAuth2Client:
+    if not settings.OIDC_CLIENT_ID:
+        raise OAuthClientError("OIDC_CLIENT_ID must be configured")
+    # token_endpoint_auth_method="none" → public client + PKCE; no client_secret.
+    return AsyncOAuth2Client(
+        client_id=settings.OIDC_CLIENT_ID,
+        token_endpoint_auth_method="none",
+        timeout=_OIDC_REQUEST_TIMEOUT,
+    )
 
 
 async def exchange_code(*, code: str, code_verifier: str, redirect_uri: str) -> TokenResponse:
     """Exchange an authorization code (with PKCE verifier) for tokens."""
-    if not settings.OIDC_CLIENT_ID:
-        raise OAuthClientError("OIDC_CLIENT_ID must be configured")
-    return await _post_token_endpoint(
-        {
-            "grant_type": "authorization_code",
-            "code": code,
-            "redirect_uri": redirect_uri,
-            "client_id": settings.OIDC_CLIENT_ID,
-            "code_verifier": code_verifier,
-        }
-    )
+    metadata = await get_metadata()
+    async with _build_oauth_client() as client:
+        try:
+            token = await client.fetch_token(
+                url=metadata.token_endpoint,
+                grant_type="authorization_code",
+                code=code,
+                code_verifier=code_verifier,
+                redirect_uri=redirect_uri,
+            )
+        except AuthlibBaseError as exc:
+            raise OAuthClientError(f"Token exchange failed: {exc}") from exc
+        except httpx.HTTPError as exc:
+            raise OAuthClientError(f"Token endpoint request failed: {exc}") from exc
+    return _coerce_token(token)
 
 
 async def refresh_tokens(*, refresh_token: str) -> TokenResponse:
     """Exchange a refresh token for a new access (and possibly refresh) token."""
-    if not settings.OIDC_CLIENT_ID:
-        raise OAuthClientError("OIDC_CLIENT_ID must be configured")
-    return await _post_token_endpoint(
-        {
-            "grant_type": "refresh_token",
-            "refresh_token": refresh_token,
-            "client_id": settings.OIDC_CLIENT_ID,
-        }
-    )
+    metadata = await get_metadata()
+    async with _build_oauth_client() as client:
+        try:
+            token = await client.refresh_token(
+                url=metadata.token_endpoint,
+                refresh_token=refresh_token,
+            )
+        except AuthlibBaseError as exc:
+            raise OAuthClientError(f"Token refresh failed: {exc}") from exc
+        except httpx.HTTPError as exc:
+            raise OAuthClientError(f"Token endpoint request failed: {exc}") from exc
+    return _coerce_token(token)
 
 
 async def end_session(
@@ -196,7 +206,8 @@ async def end_session(
     Best-effort: any failure is logged and swallowed so the user's local
     logout always succeeds. The endpoint may not exist on every IDP — in
     that case ``get_metadata().end_session_endpoint`` is ``None`` and this
-    function is a no-op.
+    function is a no-op. Authlib doesn't ship an RP-initiated-logout
+    helper, so this stays hand-rolled.
     """
     try:
         metadata = await get_metadata()
