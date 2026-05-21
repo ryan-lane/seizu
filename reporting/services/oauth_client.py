@@ -12,6 +12,7 @@ import asyncio
 import logging
 from dataclasses import dataclass
 from typing import Any
+from urllib.parse import urlparse
 
 import httpx
 
@@ -56,6 +57,32 @@ def _authority_for_discovery() -> str:
     if not authority:
         raise OAuthClientError("OIDC_AUTHORITY (or OIDC_INTERNAL_AUTHORITY) must be configured")
     return authority
+
+
+def rewrite_to_external_origin(url: str) -> str:
+    """Swap an internal-authority origin for the externally-reachable one.
+
+    Authentik (and some other IDPs) base discovery-document URLs on the
+    request's Host header. In split-hostname docker-dev setups, the server
+    fetches discovery from ``OIDC_INTERNAL_AUTHORITY`` (e.g.
+    ``http://authentik-server:9000``) and gets back URLs with that
+    docker-internal hostname — which the browser can't reach. For any URL
+    we hand to the browser (currently just the authorize URL), rewrite the
+    scheme+host+port to match ``OIDC_AUTHORITY``. URLs already on the
+    external origin, or with no internal/external split configured, are
+    returned unchanged.
+    """
+    internal_raw = settings.OIDC_INTERNAL_AUTHORITY
+    external_raw = settings.OIDC_AUTHORITY
+    if not internal_raw or not external_raw or internal_raw == external_raw:
+        return url
+    internal = urlparse(internal_raw)
+    external = urlparse(external_raw)
+    internal_origin = f"{internal.scheme}://{internal.netloc}"
+    external_origin = f"{external.scheme}://{external.netloc}"
+    if url.startswith(internal_origin):
+        return external_origin + url[len(internal_origin) :]
+    return url
 
 
 async def get_metadata() -> OIDCMetadata:

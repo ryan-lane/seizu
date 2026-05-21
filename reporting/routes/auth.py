@@ -178,7 +178,10 @@ async def auth_login(
         "code_challenge": challenge,
         "code_challenge_method": "S256",
     }
-    return LoginResponse(authorize_url=f"{metadata.authorization_endpoint}?{urlencode(params)}")
+    # Discovery may return endpoints with the docker-internal hostname; the
+    # browser needs the externally-reachable equivalent.
+    browser_authorize_endpoint = oauth_client.rewrite_to_external_origin(metadata.authorization_endpoint)
+    return LoginResponse(authorize_url=f"{browser_authorize_endpoint}?{urlencode(params)}")
 
 
 @router.get("/api/v1/auth/callback", name="auth_callback", include_in_schema=False)

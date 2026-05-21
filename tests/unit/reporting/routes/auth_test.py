@@ -84,6 +84,30 @@ async def test_login_safe_return_to_is_preserved(mocker):
     assert payload.return_to == "/reports/123"
 
 
+async def test_login_rewrites_internal_authorize_endpoint_to_external(mocker):
+    """When discovery returns an internal-host URL, the SPA-facing authorize URL is externalized."""
+    mocker.patch("reporting.settings.OIDC_AUTHORITY", "http://localhost:9000/application/o/seizu")
+    mocker.patch(
+        "reporting.settings.OIDC_INTERNAL_AUTHORITY",
+        "http://authentik-server:9000/application/o/seizu",
+    )
+    internal_metadata = oauth_client.OIDCMetadata(
+        issuer="http://authentik-server:9000/application/o/seizu/",
+        authorization_endpoint="http://authentik-server:9000/application/o/authorize/",
+        token_endpoint="http://authentik-server:9000/application/o/token/",
+        end_session_endpoint="http://authentik-server:9000/application/o/end-session/",
+        jwks_uri="http://authentik-server:9000/application/o/seizu/jwks/",
+    )
+    mocker.patch("reporting.services.oauth_client.get_metadata", AsyncMock(return_value=internal_metadata))
+    app = create_app()
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        resp = await client.get("/api/v1/auth/login")
+    assert resp.status_code == 200
+    authorize_url = resp.json()["authorize_url"]
+    assert authorize_url.startswith("http://localhost:9000/application/o/authorize/?")
+    assert "authentik-server" not in authorize_url
+
+
 async def test_callback_rejects_missing_state_cookie(mocker):
     mocker.patch("reporting.services.oauth_client.get_metadata", AsyncMock(return_value=_mock_metadata()))
     app = create_app()

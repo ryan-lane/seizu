@@ -269,7 +269,10 @@ services:
       # OIDC_AUTHORITY in docker dev due to split internal/external hostnames).
       - OIDC_INTERNAL_AUTHORITY=http://authentik-server:9000/application/o/seizu
       - OIDC_CLIENT_ID=seizu
-      - OIDC_REDIRECT_URI=http://localhost:3000/auth/callback
+      # OIDC_REDIRECT_URI intentionally unset: the backend derives the
+      # callback URL from each incoming request's Host header, so the same
+      # build serves users on :3000 (vite dev proxy) and :8080 (FastAPI
+      # serving the prod build) without one redirect URL clobbering the other.
       # offline_access requests a refresh_token, which oidc-client-ts uses for
       # silent renewal via direct POST to the token endpoint. Without it, the
       # client falls back to a hidden iframe against the IDP's authorize
