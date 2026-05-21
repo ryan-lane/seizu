@@ -84,11 +84,10 @@ React 19 + TypeScript + Bun + Material-UI + MUI X Charts + `@xyflow/react`.
 
 **Key files:**
 - `src/config.context.ts` — `ConfigContext` from `GET /api/v1/config`; OIDC + stats config; Cypher query resolution is per-report via `Report.queries`
-- `src/authConfig.context.ts` — `AuthConfigContext`; holds `auth_required`; gates API calls until a token is present
-- `src/auth.context.ts` — `AuthContext`; OIDC `user` + `accessToken`
-- `src/userManager.ts` — `oidc-client-ts` `UserManager` singleton; returns `null` when auth is off
-- `src/components/AuthProvider.tsx` — OIDC flow; registers events, calls `getUser()`, triggers `signinRedirect()` when unauthenticated
-- `src/components/OidcCallback.tsx` — `/auth/callback`; calls `signinRedirectCallback()` then navigates to `/`
+- `src/authConfig.context.ts` — `AuthConfigContext`; holds `auth_required` and (informational) OIDC config; gates API calls until a token is present
+- `src/auth.context.ts` — `AuthContext`; in-memory `accessToken` only
+- `src/api/authClient.ts` — `beginLogin(returnTo)`, `refreshSession()`, `logout()`; thin wrappers for the BFF auth endpoints, send `X-Seizu-Csrf` on mutating calls
+- `src/components/AuthProvider.tsx` — calls `refreshSession()` on mount; on success stores the access token and schedules proactive refresh ~30s before expiry; on failure captures the current URL and navigates to `/api/v1/auth/login`. Module-level in-flight promise dedupes concurrent refreshes (React StrictMode safety).
 - `src/hooks/useCypherQuery.ts` — wraps `POST /api/v1/query`; skips if `auth_required` and no token; `saveHistory` param forwards `save_history: true` to record in console history
 - `src/hooks/useQueryHistory.ts` — fetches `GET /api/v1/query-history` for the current user; returns `{ loading, error, data, fetchHistory }`
 - `src/hooks/useReportsApi.ts` — `useReportsList()`, `useReport(id)`, `useDashboardReport()`, `useAllReports()`, `useReportVersionsList(id)`, `useReportVersion(id, v)`; `useReportsMutations()` for create/save-version/set-dashboard/delete
@@ -134,6 +133,10 @@ FastAPI, Python 3.12, Gunicorn + UvicornWorker (ASGI). All I/O is async (neo4j a
 
 | Method | Path | Description |
 |--------|------|-------------|
+| GET | `/api/v1/auth/login` | Start a BFF OIDC flow; returns the IDP authorize URL. Sets the short-lived OAuth state cookie. |
+| GET | `/api/v1/auth/callback` | IDP redirect target; exchanges the code, sets the session cookie, 302s to `return_to`. |
+| POST | `/api/v1/auth/refresh` | Mint a fresh access token from the cookie's refresh token; rolls the cookie. Requires `X-Seizu-Csrf`. |
+| POST | `/api/v1/auth/logout` | Clear the session cookie + best-effort RP-initiated logout. Requires `X-Seizu-Csrf`. |
 | GET | `/api/v1/config` | OIDC config, stats config, JSON schema |
 | POST | `/api/v1/query` | Execute validated read-only Cypher; returns `{results, errors, warnings}`; pass `save_history: true` to record in console history |
 | POST | `/api/v1/validate` | Validate Cypher without executing; returns `{errors, warnings}` |
@@ -308,7 +311,19 @@ docker compose up && make seed_dashboard
 
 ### Authentication
 
-Backend validates JWTs via `PyJWKClient` (PyJWT) against any OIDC JWKS endpoint.
+Two authentication mechanisms resolve to the same `CurrentUser`:
+
+1. **Cookie-based BFF flow** (browser SPA only). The backend owns the OIDC Authorization Code + PKCE exchange. The IDP refresh token lives only in an AES-256-GCM-encrypted, HttpOnly, Secure, SameSite=Strict cookie (`seizu_session`); the access token is held in React state in the browser and never persisted to storage. The SPA gets a fresh access token by POSTing to `/api/v1/auth/refresh`, which the cookie authenticates.
+2. **Bearer JWT** (CLI, MCP, programmatic clients). Unchanged. Backend validates the JWT via `PyJWKClient` (PyJWT) against the configured OIDC JWKS endpoint.
+
+`get_current_user` only consumes the Bearer path; the cookie is consumed solely by the four `/api/v1/auth/*` routes. CSRF protection is enforced by `_CSRFMiddleware` (`reporting/app.py`), which requires `X-Seizu-Csrf: 1` on mutating methods whenever the session cookie is present. Bearer-only requests are exempt by design.
+
+**Auth-flow endpoints** (browser-only):
+
+- `GET  /api/v1/auth/login?return_to=<path>` — generates PKCE verifier + state, stashes them in a 5-minute `seizu_oauth_state` cookie (SameSite=Lax — must survive the cross-site redirect *back* from the IDP), returns the IDP authorize URL.
+- `GET  /api/v1/auth/callback?code=...&state=...` — verifies state, exchanges the code at the IDP, sets the session cookie, 302s to `return_to` (path-only, open-redirect-guarded).
+- `POST /api/v1/auth/refresh` — exchanges the cookie's refresh token for a new access token; rolls the cookie's Max-Age (capped at the IDP refresh token's absolute expiry recorded at login). Returns 401 + clears cookie when the IDP rejects.
+- `POST /api/v1/auth/logout` — clears the cookie and, gated by `OIDC_END_SESSION_ON_LOGOUT`, best-effort-calls the IDP's end-session endpoint.
 
 | Env var | Default | Notes |
 |---------|---------|-------|
@@ -318,11 +333,15 @@ Backend validates JWTs via `PyJWKClient` (PyJWT) against any OIDC JWKS endpoint.
 | `JWT_AUDIENCE` | `""` | Must match OIDC client ID when using Authentik |
 | `DEVELOPMENT_ONLY_REQUIRE_AUTH` | `true` | Set `false` to bypass auth in dev |
 | `TALISMAN_FORCE_HTTPS` | `true` | Set `false` in dev/behind LB |
-| `OIDC_AUTHORITY` | `""` | Served to frontend via `/api/v1/config` |
-| `OIDC_CLIENT_ID` | `""` | Served to frontend |
-| `OIDC_SCOPE` | `"openid email"` | Served to frontend |
-
-Frontend PKCE flow is driven entirely by runtime config from `GET /api/v1/config` — no build-time `REACT_APP_OIDC_*` vars. `redirect_uri` is always derived from `window.location.origin`.
+| `OIDC_AUTHORITY` | `""` | OIDC issuer URL (used by backend for discovery and surfaced to the frontend via `/api/v1/config`) |
+| `OIDC_INTERNAL_AUTHORITY` | `""` | Override discovery URL when the server's network view differs from the public authority |
+| `OIDC_CLIENT_ID` | `""` | OIDC client ID; required for the BFF code/refresh exchange |
+| `OIDC_REDIRECT_URI` | `""` | Optional override for the BFF callback URL; defaults to the backend's own `/api/v1/auth/callback` derived from the request |
+| `OIDC_SCOPE` | `"openid email offline_access"` | `offline_access` is required so the IDP issues a refresh token |
+| `OIDC_END_SESSION_ON_LOGOUT` | `true` | Whether `/auth/logout` calls the IDP's end-session endpoint (best-effort; failures logged) |
+| `SESSION_TOKEN_ENCRYPTION_KEY` | `""` | AES-256-GCM key for the session cookie. 32 random bytes, base64-encoded. Required when auth is enabled. |
+| `SESSION_COOKIE_NAME` | `seizu_session` | Override the cookie name |
+| `SESSION_COOKIE_MAX_AGE_SECONDS` | `64800` (18h) | Rolling cookie lifetime; each successful refresh resets it (capped by the IDP refresh token's absolute expiry) |
 
 ### RBAC
 
