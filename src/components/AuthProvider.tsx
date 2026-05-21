@@ -1,61 +1,97 @@
 import { ReactNode, useState, useEffect, useContext } from 'react';
-import type { User } from 'oidc-client-ts';
+import {
+  beginLogin,
+  refreshSession,
+  type RefreshResponse,
+} from 'src/api/authClient';
 import { AuthContext } from 'src/auth.context';
 import { AuthConfigContext } from 'src/authConfig.context';
 
-// Paths that should never trigger an OIDC redirect, even when unauthenticated.
-const UNAUTHENTICATED_PATHS = ['/auth/callback'];
+// Module-level dedup of in-flight refreshes. React StrictMode double-mounts
+// effects in dev, which would fire two /auth/refresh calls in parallel — and
+// since Authentik rotates refresh tokens, the second call would race the
+// first and get 401 from a now-rotated cookie. Sharing one in-flight promise
+// across concurrent callers eliminates the race.
+let inflightRefresh: Promise<RefreshResponse> | null = null;
+
+function refreshOnce(): Promise<RefreshResponse> {
+  if (!inflightRefresh) {
+    inflightRefresh = refreshSession().finally(() => {
+      inflightRefresh = null;
+    });
+  }
+  return inflightRefresh;
+}
+
+// Reset hook for tests — concurrent module state would otherwise leak
+// between test cases.
+export function _resetInflightRefreshForTests(): void {
+  inflightRefresh = null;
+}
+
+const REFRESH_LEAD_TIME_SECONDS = 30;
+const REFRESH_LEAD_TIME_FLOOR_MS = 5_000;
+const DEFAULT_ACCESS_TOKEN_TTL_SECONDS = 300;
 
 interface AuthProviderProps {
   children: ReactNode;
 }
 
 function AuthProvider({ children }: AuthProviderProps) {
-  const { userManager } = useContext(AuthConfigContext);
-  const [user, setUser] = useState<User | null>(null);
-  const [isLoading, setIsLoading] = useState(userManager !== null);
+  const { auth_required } = useContext(AuthConfigContext);
+  const [accessToken, setAccessToken] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(auth_required);
 
   useEffect(() => {
-    if (!userManager) {
+    if (!auth_required) {
+      setIsLoading(false);
       return;
     }
 
-    const onUserLoaded = (loadedUser: User) => {
-      setUser(loadedUser);
-      setIsLoading(false);
-    };
-    const onUserUnloaded = () => setUser(null);
+    let cancelled = false;
+    let refreshTimer: ReturnType<typeof setTimeout> | null = null;
 
-    userManager.events.addUserLoaded(onUserLoaded);
-    userManager.events.addUserUnloaded(onUserUnloaded);
-
-    // On the OIDC callback path, OidcCallback drives the flow via
-    // signinRedirectCallback(). The userLoaded event above will fire when it
-    // completes — don't try to load or redirect here.
-    if (UNAUTHENTICATED_PATHS.includes(window.location.pathname)) {
-      setIsLoading(false);
-    } else {
-      userManager.getUser().then((loadedUser) => {
-        if (loadedUser && !loadedUser.expired) {
-          setUser(loadedUser);
-          setIsLoading(false);
-        } else {
-          // Redirect to OIDC; page will leave so we stay in loading state.
-          userManager.signinRedirect();
+    async function tick(): Promise<void> {
+      try {
+        const { access_token, expires_in } = await refreshOnce();
+        if (cancelled) return;
+        setAccessToken(access_token);
+        setIsLoading(false);
+        const ttl = expires_in ?? DEFAULT_ACCESS_TOKEN_TTL_SECONDS;
+        const delay = Math.max(
+          REFRESH_LEAD_TIME_FLOOR_MS,
+          (ttl - REFRESH_LEAD_TIME_SECONDS) * 1000,
+        );
+        refreshTimer = setTimeout(() => {
+          void tick();
+        }, delay);
+      } catch {
+        if (cancelled) return;
+        const returnTo =
+          window.location.pathname +
+          window.location.search +
+          window.location.hash;
+        try {
+          const { authorize_url } = await beginLogin(returnTo);
+          window.location.assign(authorize_url);
+        } catch {
+          // IDP unreachable — leave the user on the loading state. There's
+          // no useful programmatic recovery from this; ops needs to fix the
+          // IDP.
         }
-      });
+      }
     }
 
-    return () => {
-      userManager.events.removeUserLoaded(onUserLoaded);
-      userManager.events.removeUserUnloaded(onUserUnloaded);
-    };
-  }, [userManager]);
+    void tick();
 
-  const accessToken = user?.access_token ?? null;
+    return () => {
+      cancelled = true;
+      if (refreshTimer !== null) clearTimeout(refreshTimer);
+    };
+  }, [auth_required]);
 
   return (
-    <AuthContext.Provider value={{ user, accessToken, isLoading }}>
+    <AuthContext.Provider value={{ accessToken, isLoading }}>
       {isLoading ? null : children}
     </AuthContext.Provider>
   );

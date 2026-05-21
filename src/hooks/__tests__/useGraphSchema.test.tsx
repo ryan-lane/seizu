@@ -15,9 +15,7 @@ function makeWrapper(authRequired: boolean, accessToken: string | null) {
       <AuthConfigContext.Provider
         value={{ ...AUTH_CONFIG_NO_OIDC, auth_required: authRequired }}
       >
-        <AuthContext.Provider
-          value={{ user: null, accessToken, isLoading: false }}
-        >
+        <AuthContext.Provider value={{ accessToken, isLoading: false }}>
           {children}
         </AuthContext.Provider>
       </AuthConfigContext.Provider>

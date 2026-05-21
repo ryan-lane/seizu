@@ -54,9 +54,7 @@ function makeWrapper(
       <AuthConfigContext.Provider
         value={{ ...AUTH_CONFIG_NO_OIDC, auth_required: authRequired }}
       >
-        <AuthContext.Provider
-          value={{ user: null, accessToken, isLoading: false }}
-        >
+        <AuthContext.Provider value={{ accessToken, isLoading: false }}>
           <CurrentUserStateProvider value={currentUserState}>
             {children}
           </CurrentUserStateProvider>
@@ -75,9 +73,7 @@ function StatefulWrapper({ children }: { children: React.ReactNode }) {
     <AuthConfigContext.Provider
       value={{ ...AUTH_CONFIG_NO_OIDC, auth_required: true }}
     >
-      <AuthContext.Provider
-        value={{ user: null, accessToken, isLoading: false }}
-      >
+      <AuthContext.Provider value={{ accessToken, isLoading: false }}>
         <CurrentUserStateProvider
           value={{ currentUser: CURRENT_USER, loading: false }}
         >
