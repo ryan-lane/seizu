@@ -339,6 +339,7 @@ Two authentication mechanisms resolve to the same `CurrentUser`:
 | `OIDC_REDIRECT_URI` | `""` | Optional override for the BFF callback URL; defaults to the backend's own `/api/v1/auth/callback` derived from the request |
 | `OIDC_SCOPE` | `"openid email offline_access"` | `offline_access` is required so the IDP issues a refresh token |
 | `OIDC_END_SESSION_ON_LOGOUT` | `true` | Whether `/auth/logout` calls the IDP's end-session endpoint (best-effort; failures logged) |
+| `OIDC_REFRESH_TOKEN_FALLBACK_TTL_SECONDS` | `2592000` (30d) | Absolute session cap used only when the IDP's token response omits `refresh_expires_in` |
 | `SESSION_TOKEN_ENCRYPTION_KEY` | `""` | AES-256-GCM key for the session cookie. 32 random bytes, base64-encoded. Required when auth is enabled. |
 | `SESSION_COOKIE_NAME` | `seizu_session` | Override the cookie name |
 | `SESSION_COOKIE_MAX_AGE_SECONDS` | `64800` (18h) | Rolling cookie lifetime; each successful refresh resets it (capped by the IDP refresh token's absolute expiry) |

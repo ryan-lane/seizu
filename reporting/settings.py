@@ -159,6 +159,16 @@ SESSION_COOKIE_MAX_AGE_SECONDS = int_env("SESSION_COOKIE_MAX_AGE_SECONDS", 18 * 
 # user's local logout still succeeds.
 OIDC_END_SESSION_ON_LOGOUT = bool_env("OIDC_END_SESSION_ON_LOGOUT", True)
 
+# Fallback absolute upper bound on the session, in seconds, used when the
+# IDP's token response doesn't advertise ``refresh_expires_in``. Most IDPs
+# do advertise it; Authentik's default refresh-token lifetime is 30 days,
+# which we mirror here. This is the cap on rolling re-issues — the cookie
+# never extends past iat + this many seconds without the IDP confirming.
+OIDC_REFRESH_TOKEN_FALLBACK_TTL_SECONDS = int_env(
+    "OIDC_REFRESH_TOKEN_FALLBACK_TTL_SECONDS",
+    30 * 24 * 60 * 60,
+)
+
 # Whether or not scheduled queries should be enabled.
 ENABLE_SCHEDULED_QUERIES = bool_env("ENABLE_SCHEDULED_QUERIES", True)
 # The frequency in seconds for how often we'll attempt to run scheduled queries

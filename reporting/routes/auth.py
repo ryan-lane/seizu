@@ -33,10 +33,6 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
-# Authentik's default refresh-token lifetime is 30 days; if the IDP doesn't
-# advertise refresh_expires_in, we use this as the absolute upper bound.
-_DEFAULT_REFRESH_EXPIRES_IN_SECONDS = 30 * 24 * 60 * 60
-
 
 class LoginResponse(BaseModel):
     """Body returned by GET /api/v1/auth/login — SPA reads ``authorize_url`` and navigates to it."""
@@ -250,7 +246,7 @@ async def auth_callback(
         )
 
     now = int(time.time())
-    refresh_expires_in = token_response.refresh_expires_in or _DEFAULT_REFRESH_EXPIRES_IN_SECONDS
+    refresh_expires_in = token_response.refresh_expires_in or settings.OIDC_REFRESH_TOKEN_FALLBACK_TTL_SECONDS
     abs_exp = now + refresh_expires_in
     session_payload = session_cookie.SessionPayload(
         refresh_token=token_response.refresh_token,
