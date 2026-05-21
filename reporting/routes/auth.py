@@ -75,6 +75,14 @@ def _build_callback_url(request: Request) -> str:
     return str(request.url_for("auth_callback"))
 
 
+# Cookie path scoped to where the cookies are actually consumed. Narrowing
+# from "/" to "/api/v1/auth" keeps the cookies off every regular API call
+# (query, reports, etc.) — those use Bearer auth and would otherwise drag
+# the cookie along, tripping the CSRF middleware. Browser cookie-path rules:
+# this prefix matches every /api/v1/auth/* path (refresh, logout, callback).
+_AUTH_COOKIE_PATH = "/api/v1/auth"
+
+
 def _set_session_cookie(response: Response, payload: session_cookie.SessionPayload) -> None:
     max_age = session_cookie.compute_cookie_max_age(payload.abs_exp)
     response.set_cookie(
@@ -84,14 +92,14 @@ def _set_session_cookie(response: Response, payload: session_cookie.SessionPaylo
         httponly=True,
         secure=settings.TALISMAN_FORCE_HTTPS,
         samesite="strict",
-        path="/",
+        path=_AUTH_COOKIE_PATH,
     )
 
 
 def _clear_session_cookie(response: Response) -> None:
     response.delete_cookie(
         key=settings.SESSION_COOKIE_NAME,
-        path="/",
+        path=_AUTH_COOKIE_PATH,
         httponly=True,
         secure=settings.TALISMAN_FORCE_HTTPS,
         samesite="strict",
@@ -108,14 +116,14 @@ def _set_state_cookie(response: Response, payload: oauth_state_cookie.OAuthState
         # Lax is required: the IDP redirects back via a top-level cross-site
         # navigation, and Strict would suppress the cookie on that hop.
         samesite="lax",
-        path="/",
+        path=_AUTH_COOKIE_PATH,
     )
 
 
 def _clear_state_cookie(response: Response) -> None:
     response.delete_cookie(
         key=oauth_state_cookie.STATE_COOKIE_NAME,
-        path="/",
+        path=_AUTH_COOKIE_PATH,
         httponly=True,
         secure=settings.TALISMAN_FORCE_HTTPS,
         samesite="lax",
