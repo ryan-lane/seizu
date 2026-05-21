@@ -4,6 +4,7 @@ import os
 import secrets
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from http.cookies import SimpleCookie
 from typing import Any
 from urllib.parse import urlparse
 
@@ -150,6 +151,80 @@ class _TimeoutMiddleware:
                 )
 
 
+_CSRF_HEADER_NAME = "x-seizu-csrf"
+_CSRF_SAFE_METHODS = frozenset({"GET", "HEAD", "OPTIONS"})
+_CSRF_FAILURE_BODY = b'{"error":"Missing or invalid CSRF header"}'
+
+
+class _CSRFMiddleware:
+    """Require ``X-Seizu-Csrf`` on mutating requests authenticated by cookie.
+
+    CSRF is only possible when the browser attaches credentials automatically
+    (cookies), not when the client sets ``Authorization: Bearer`` itself.  So
+    this middleware checks for the session cookie on mutating requests; if
+    the cookie is present, it requires the custom header (defended by the
+    browser's preflight rules — an attacker page cannot add a non-CORS-safe
+    header on a cross-origin request without preflight, and our CORS posture
+    never authorizes the header for foreign origins).
+
+    Bearer-only requests (CLI, MCP, programmatic) skip the check entirely.
+    """
+
+    def __init__(self, app: StarletteASGIApp, *, cookie_name: str) -> None:
+        self._app = app
+        self._cookie_name = cookie_name
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] != "http":
+            await self._app(scope, receive, send)
+            return
+
+        method = scope.get("method", "GET")
+        if method in _CSRF_SAFE_METHODS:
+            await self._app(scope, receive, send)
+            return
+
+        raw_headers: list[tuple[bytes, bytes]] = scope.get("headers", [])
+        cookie_value = b""
+        csrf_header_present = False
+        for name, value in raw_headers:
+            if name == b"cookie":
+                cookie_value = value
+            elif name == _CSRF_HEADER_NAME.encode("ascii"):
+                if value.strip():
+                    csrf_header_present = True
+
+        if not cookie_value:
+            await self._app(scope, receive, send)
+            return
+
+        cookies: SimpleCookie = SimpleCookie()
+        try:
+            cookies.load(cookie_value.decode("latin-1"))
+        except Exception:  # noqa: BLE001 — malformed cookies = no session cookie present
+            await self._app(scope, receive, send)
+            return
+        if self._cookie_name not in cookies:
+            await self._app(scope, receive, send)
+            return
+
+        if csrf_header_present:
+            await self._app(scope, receive, send)
+            return
+
+        await send(
+            {
+                "type": "http.response.start",
+                "status": 403,
+                "headers": [
+                    (b"content-type", b"application/json"),
+                    (b"content-length", str(len(_CSRF_FAILURE_BODY)).encode()),
+                ],
+            }
+        )
+        await send({"type": "http.response.body", "body": _CSRF_FAILURE_BODY, "more_body": False})
+
+
 class _MCPMiddleware:
     """Pure ASGI middleware that intercepts /api/v1/mcp* before FastAPI routing.
 
@@ -208,6 +283,7 @@ def create_app() -> FastAPI:
     )
     app.add_middleware(_SecurityHeadersMiddleware, secure_headers=secure_headers)
     app.add_middleware(_TimeoutMiddleware, timeout=settings.API_REQUEST_TIMEOUT)
+    app.add_middleware(_CSRFMiddleware, cookie_name=settings.SESSION_COOKIE_NAME)
 
     @app.exception_handler(HTTPException)
     async def http_exception_handler(request: Request, exc: HTTPException) -> JSONResponse:

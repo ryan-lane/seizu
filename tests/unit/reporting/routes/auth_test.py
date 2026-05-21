@@ -155,7 +155,7 @@ async def test_callback_rejects_when_idp_returns_no_refresh_token(mocker):
 async def test_refresh_returns_401_when_no_cookie():
     app = create_app()
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
-        resp = await client.post("/api/v1/auth/refresh")
+        resp = await client.post("/api/v1/auth/refresh", headers={"X-Seizu-Csrf": "1"})
     assert resp.status_code == 401
 
 
@@ -172,7 +172,7 @@ async def test_refresh_returns_new_access_token_and_rolls_cookie(mocker):
     app = create_app()
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         client.cookies.set("seizu_session", session_cookie.encrypt(payload))
-        resp = await client.post("/api/v1/auth/refresh")
+        resp = await client.post("/api/v1/auth/refresh", headers={"X-Seizu-Csrf": "1"})
     assert resp.status_code == 200
     body = resp.json()
     assert body["access_token"] == "at-new"
@@ -195,7 +195,7 @@ async def test_refresh_clears_cookie_when_idp_rejects(mocker):
     app = create_app()
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         client.cookies.set("seizu_session", session_cookie.encrypt(payload))
-        resp = await client.post("/api/v1/auth/refresh")
+        resp = await client.post("/api/v1/auth/refresh", headers={"X-Seizu-Csrf": "1"})
     assert resp.status_code == 401
     # delete_cookie produces a Set-Cookie that expires the cookie.
     set_cookie = resp.headers.get("set-cookie", "")
@@ -214,7 +214,7 @@ async def test_logout_clears_cookie_and_calls_end_session(mocker):
     app = create_app()
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         client.cookies.set("seizu_session", session_cookie.encrypt(payload))
-        resp = await client.post("/api/v1/auth/logout")
+        resp = await client.post("/api/v1/auth/logout", headers={"X-Seizu-Csrf": "1"})
     assert resp.status_code == 204
     end_session_mock.assert_awaited_once()
     # passed the refresh token
@@ -226,7 +226,7 @@ async def test_logout_succeeds_without_cookie(mocker):
     mocker.patch("reporting.services.oauth_client.end_session", end_session_mock)
     app = create_app()
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
-        resp = await client.post("/api/v1/auth/logout")
+        resp = await client.post("/api/v1/auth/logout", headers={"X-Seizu-Csrf": "1"})
     assert resp.status_code == 204
     end_session_mock.assert_not_awaited()
 
@@ -240,7 +240,7 @@ async def test_logout_swallows_idp_end_session_errors(mocker):
     app = create_app()
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         client.cookies.set("seizu_session", session_cookie.encrypt(payload))
-        resp = await client.post("/api/v1/auth/logout")
+        resp = await client.post("/api/v1/auth/logout", headers={"X-Seizu-Csrf": "1"})
     assert resp.status_code == 204
 
 
@@ -252,6 +252,6 @@ async def test_logout_skips_end_session_when_disabled(mocker):
     app = create_app()
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         client.cookies.set("seizu_session", session_cookie.encrypt(payload))
-        resp = await client.post("/api/v1/auth/logout")
+        resp = await client.post("/api/v1/auth/logout", headers={"X-Seizu-Csrf": "1"})
     assert resp.status_code == 204
     end_session_mock.assert_not_awaited()
