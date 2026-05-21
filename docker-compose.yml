@@ -303,6 +303,10 @@ services:
       - STATIC_FOLDER=/home/seizu/seizu/build
       # Cryptographically random secret used to sign report-query capability tokens.
       - REPORT_QUERY_SIGNING_SECRET
+      # AES-256-GCM key (32 bytes, base64-encoded) for the BFF session cookie.
+      # Required when DEVELOPMENT_ONLY_REQUIRE_AUTH=true. Generate with:
+      #   python -c 'import base64,os;print(base64.b64encode(os.urandom(32)).decode())'
+      - SESSION_TOKEN_ENCRYPTION_KEY
     healthcheck:
       test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8080/healthcheck')"]
       interval: 30s
