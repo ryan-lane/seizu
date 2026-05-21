@@ -1,5 +1,4 @@
 import { createContext } from 'react';
-import type { UserManager } from 'oidc-client-ts';
 
 export interface OidcConfig {
   authority: string;
@@ -11,7 +10,6 @@ export interface OidcConfig {
 export interface AuthConfig {
   auth_required: boolean;
   oidc: OidcConfig | null;
-  userManager: UserManager | null;
 }
 
 // Default to requiring auth so queries wait for a token until the real
@@ -19,5 +17,4 @@ export interface AuthConfig {
 export const AuthConfigContext = createContext<AuthConfig>({
   auth_required: true,
   oidc: null,
-  userManager: null,
 });

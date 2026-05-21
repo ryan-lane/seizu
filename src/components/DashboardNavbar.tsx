@@ -16,6 +16,7 @@ import LogoutIcon from '@mui/icons-material/Logout';
 import MenuIcon from '@mui/icons-material/Menu';
 import MenuOpenIcon from '@mui/icons-material/MenuOpen';
 
+import { logout } from 'src/api/authClient';
 import { AuthConfigContext } from 'src/authConfig.context';
 import { useCurrentUser } from 'src/hooks/useCurrentUser';
 import { DASHBOARD_SIDEBAR_WIDTH_VAR } from 'src/components/dashboardLayoutConstants';
@@ -36,23 +37,23 @@ function DashboardNavbar({
   ...rest
 }: DashboardNavbarProps) {
   const currentUser = useCurrentUser();
-  const { userManager } = useContext(AuthConfigContext);
+  const { auth_required } = useContext(AuthConfigContext);
   const [userMenuAnchor, setUserMenuAnchor] = useState<null | HTMLElement>(
     null,
   );
 
   const handleLogout = async () => {
     setUserMenuAnchor(null);
-    if (!userManager) return;
-
+    // Swallow logout errors — the backend clears the cookie on its side
+    // regardless, so the user always ends up effectively logged out after
+    // the page navigation below. Surfacing an error here would be more
+    // confusing than helpful.
     try {
-      await userManager.signoutRedirect({
-        post_logout_redirect_uri: window.location.origin,
-      });
+      await logout();
     } catch {
-      await userManager.removeUser();
-      window.location.assign('/');
+      /* noop */
     }
+    window.location.assign('/');
   };
 
   const userName = currentUser
@@ -125,7 +126,7 @@ function DashboardNavbar({
                   {userName}
                 </Typography>
               </Box>
-              {userManager && (
+              {auth_required && (
                 <MenuItem onClick={handleLogout}>
                   <ListItemIcon>
                     <LogoutIcon fontSize="small" />

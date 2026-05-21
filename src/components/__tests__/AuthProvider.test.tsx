@@ -10,13 +10,11 @@ import AuthProvider, {
 const AUTH_CONFIG_REQUIRED = {
   auth_required: true,
   oidc: null,
-  userManager: null,
 };
 
 const AUTH_CONFIG_DISABLED = {
   auth_required: false,
   oidc: null,
-  userManager: null,
 };
 
 function ChildThatReadsAuth(): ReactElement {

@@ -1,7 +1,6 @@
 import { Navigate } from 'react-router-dom';
 import DashboardLayout from 'src/components/DashboardLayout';
 import MainLayout from 'src/components/MainLayout';
-import OidcCallback from 'src/components/OidcCallback';
 import Dashboard from 'src/pages/Dashboard';
 import Reports from 'src/pages/Reports';
 import ReportHistory from 'src/pages/ReportHistory';
@@ -23,10 +22,6 @@ import Roles from 'src/pages/Roles';
 import RoleHistory from 'src/pages/RoleHistory';
 
 const routes = [
-  {
-    path: '/auth/callback',
-    element: <OidcCallback />,
-  },
   {
     path: 'app',
     element: <DashboardLayout />,

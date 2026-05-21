@@ -15,7 +15,6 @@ import {
 const AUTH_CONFIG_NO_OIDC = {
   auth_required: false,
   oidc: null,
-  userManager: null,
 };
 
 function makeWrapper(authRequired: boolean, accessToken: string | null) {

@@ -15,7 +15,6 @@ import {
   type AuthConfig,
   type OidcConfig,
 } from 'src/authConfig.context';
-import { createUserManager } from 'src/userManager';
 import { CurrentUserProvider } from 'src/hooks/useCurrentUser';
 import 'react-grid-layout/css/styles.css';
 import 'react-resizable/css/styles.css';
@@ -25,17 +24,16 @@ function App() {
   const [authConfig, setAuthConfig] = useState<AuthConfig>({
     auth_required: true,
     oidc: null,
-    userManager: null,
   });
 
   useEffect(() => {
     fetch('/api/v1/config')
       .then((r) => r.json())
       .then((data: { auth_required: boolean; oidc: OidcConfig | null }) => {
-        const oidc = data.oidc ?? null;
-        const userManager =
-          data.auth_required && oidc ? createUserManager(oidc) : null;
-        setAuthConfig({ auth_required: data.auth_required, oidc, userManager });
+        setAuthConfig({
+          auth_required: data.auth_required,
+          oidc: data.oidc ?? null,
+        });
       })
       .catch(() => {
         // Keep default (auth_required: true) on error — safe fallback.
