@@ -156,6 +156,14 @@ services:
       AUTHENTIK_BOOTSTRAP_EMAIL: admin@localhost
       AUTHENTIK_BOOTSTRAP_PASSWORD: devpassword
       AUTHENTIK_ERROR_REPORTING__ENABLED: "false"
+      # Tell Authentik what URL to advertise to browsers in OIDC discovery,
+      # regardless of which Host header the request arrived under. Without
+      # this, Authentik bases endpoint URLs on the request's Host — so the
+      # seizu container (which discovers via http://authentik-server:9000)
+      # would get back docker-internal URLs that the browser can't reach.
+      # IDPs that lack an equivalent setting still work via the fallback
+      # rewrite in reporting/services/oauth_client.py.
+      AUTHENTIK_HOST_BROWSER: http://localhost:9000
     volumes:
       - authentik_media:/data
       - ./.config/dev/authentik/blueprints:/blueprints/custom:ro
