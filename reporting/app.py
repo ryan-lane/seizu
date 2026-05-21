@@ -17,6 +17,7 @@ from starlette.types import ASGIApp as StarletteASGIApp
 from starlette.types import Receive, Scope, Send
 
 from reporting import settings
+from reporting.routes import auth as auth_routes
 from reporting.routes import config as config_routes
 from reporting.routes import graph as graph_routes
 from reporting.routes import me as me_routes
@@ -219,6 +220,7 @@ def create_app() -> FastAPI:
 
     # API routers
     for router_module in [
+        auth_routes,
         config_routes,
         graph_routes,
         me_routes,
