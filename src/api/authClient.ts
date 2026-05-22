@@ -71,7 +71,7 @@ export async function refreshSession(): Promise<RefreshResponse> {
 }
 
 /**
- * Clear the session cookie and (server-side, best-effort) end the IDP session.
+ * Clear the session cookie and (server-side, best-effort) revoke the refresh token.
  * Always succeeds from the client's perspective — backend swallows IDP errors.
  */
 export async function logout(): Promise<void> {

@@ -5,7 +5,7 @@ Browser-only auth flow that keeps the IDP refresh token out of JavaScript:
 - ``GET  /api/v1/auth/login``     — start an Authorization Code + PKCE flow
 - ``GET  /api/v1/auth/callback``  — IDP redirects here; we exchange code, set cookie
 - ``POST /api/v1/auth/refresh``   — silent renewal; returns a new access token
-- ``POST /api/v1/auth/logout``    — clear cookie + best-effort RP-initiated logout
+- ``POST /api/v1/auth/logout``    — clear cookie + best-effort refresh-token revocation
 
 The session cookie itself is the entire session state; see
 ``reporting/services/session_cookie.py``. The browser only ever holds the
@@ -322,7 +322,7 @@ async def auth_logout(
     response: Response,
     seizu_session: Annotated[str | None, Cookie(alias="seizu_session")] = None,
 ) -> Response:
-    """Drop the session cookie and (optionally) call the IDP's end_session_endpoint.
+    """Drop the session cookie and (optionally) revoke the IDP refresh token.
 
     Always succeeds from the user's perspective. Best-effort IDP logout
     failures are logged but never block the local logout.
@@ -336,9 +336,9 @@ async def auth_logout(
 
     if settings.OIDC_END_SESSION_ON_LOGOUT and refresh_token:
         try:
-            await oauth_client.end_session(refresh_token=refresh_token)
+            await oauth_client.revoke_refresh_token(refresh_token=refresh_token)
         except Exception as exc:  # noqa: BLE001 — defensive: never let logout fail
-            logger.warning("IDP end_session failed (continuing logout): %s", exc)
+            logger.warning("IDP refresh-token revocation failed (continuing logout): %s", exc)
 
     _clear_session_cookie(response)
     return Response(status_code=status.HTTP_204_NO_CONTENT)

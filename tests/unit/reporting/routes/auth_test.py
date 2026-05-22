@@ -34,6 +34,7 @@ def _mock_metadata():
         authorization_endpoint="http://idp.test/authorize",
         token_endpoint="http://idp.test/token",
         end_session_endpoint="http://idp.test/end-session",
+        revocation_endpoint="http://idp.test/revoke",
         jwks_uri="http://idp.test/jwks",
     )
 
@@ -96,6 +97,7 @@ async def test_login_rewrites_internal_authorize_endpoint_to_external(mocker):
         authorization_endpoint="http://authentik-server:9000/application/o/authorize/",
         token_endpoint="http://authentik-server:9000/application/o/token/",
         end_session_endpoint="http://authentik-server:9000/application/o/end-session/",
+        revocation_endpoint="http://authentik-server:9000/application/o/revoke/",
         jwks_uri="http://authentik-server:9000/application/o/seizu/jwks/",
     )
     mocker.patch("reporting.services.oauth_client.get_metadata", AsyncMock(return_value=internal_metadata))
@@ -227,9 +229,9 @@ async def test_refresh_clears_cookie_when_idp_rejects(mocker):
     assert "Max-Age=0" in set_cookie or "expires=" in set_cookie.lower()
 
 
-async def test_logout_clears_cookie_and_calls_end_session(mocker):
-    end_session_mock = AsyncMock()
-    mocker.patch("reporting.services.oauth_client.end_session", end_session_mock)
+async def test_logout_clears_cookie_and_revokes_refresh_token(mocker):
+    revoke_mock = AsyncMock()
+    mocker.patch("reporting.services.oauth_client.revoke_refresh_token", revoke_mock)
     payload = session_cookie.SessionPayload(
         refresh_token="rt-active",
         iat=int(time.time()) - 60,
@@ -240,24 +242,24 @@ async def test_logout_clears_cookie_and_calls_end_session(mocker):
         client.cookies.set("seizu_session", session_cookie.encrypt(payload))
         resp = await client.post("/api/v1/auth/logout", headers={"X-Seizu-Csrf": "1"})
     assert resp.status_code == 204
-    end_session_mock.assert_awaited_once()
+    revoke_mock.assert_awaited_once()
     # passed the refresh token
-    assert end_session_mock.await_args.kwargs["refresh_token"] == "rt-active"
+    assert revoke_mock.await_args.kwargs["refresh_token"] == "rt-active"
 
 
 async def test_logout_succeeds_without_cookie(mocker):
-    end_session_mock = AsyncMock()
-    mocker.patch("reporting.services.oauth_client.end_session", end_session_mock)
+    revoke_mock = AsyncMock()
+    mocker.patch("reporting.services.oauth_client.revoke_refresh_token", revoke_mock)
     app = create_app()
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         resp = await client.post("/api/v1/auth/logout", headers={"X-Seizu-Csrf": "1"})
     assert resp.status_code == 204
-    end_session_mock.assert_not_awaited()
+    revoke_mock.assert_not_awaited()
 
 
 async def test_logout_swallows_idp_end_session_errors(mocker):
     mocker.patch(
-        "reporting.services.oauth_client.end_session",
+        "reporting.services.oauth_client.revoke_refresh_token",
         AsyncMock(side_effect=RuntimeError("network down")),
     )
     payload = session_cookie.SessionPayload(refresh_token="rt", iat=int(time.time()), abs_exp=int(time.time()) + 60)
@@ -270,12 +272,12 @@ async def test_logout_swallows_idp_end_session_errors(mocker):
 
 async def test_logout_skips_end_session_when_disabled(mocker):
     mocker.patch("reporting.settings.OIDC_END_SESSION_ON_LOGOUT", False)
-    end_session_mock = AsyncMock()
-    mocker.patch("reporting.services.oauth_client.end_session", end_session_mock)
+    revoke_mock = AsyncMock()
+    mocker.patch("reporting.services.oauth_client.revoke_refresh_token", revoke_mock)
     payload = session_cookie.SessionPayload(refresh_token="rt", iat=int(time.time()), abs_exp=int(time.time()) + 60)
     app = create_app()
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         client.cookies.set("seizu_session", session_cookie.encrypt(payload))
         resp = await client.post("/api/v1/auth/logout", headers={"X-Seizu-Csrf": "1"})
     assert resp.status_code == 204
-    end_session_mock.assert_not_awaited()
+    revoke_mock.assert_not_awaited()

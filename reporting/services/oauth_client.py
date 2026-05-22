@@ -12,6 +12,8 @@ parsing per RFC 6749 §5.2). We keep three things outside authlib:
   on the request Host header and lack an explicit "browser host" setting.
 - **``end_session``** — RP-initiated logout isn't standardized the way
   the token endpoint is, and authlib doesn't ship a helper.
+- **``revoke_refresh_token``** — revoke the BFF session's refresh token on
+  logout when the IDP advertises an OAuth2 revocation endpoint.
 """
 
 from __future__ import annotations
@@ -20,7 +22,7 @@ import asyncio
 import logging
 from dataclasses import dataclass
 from typing import Any
-from urllib.parse import urlparse
+from urllib.parse import urlencode, urlparse
 
 import httpx
 from authlib.common.errors import AuthlibBaseError
@@ -44,6 +46,7 @@ class OIDCMetadata:
     authorization_endpoint: str
     token_endpoint: str
     end_session_endpoint: str | None
+    revocation_endpoint: str | None
     jwks_uri: str | None
 
 
@@ -118,6 +121,7 @@ async def get_metadata() -> OIDCMetadata:
                 authorization_endpoint=doc["authorization_endpoint"],
                 token_endpoint=doc["token_endpoint"],
                 end_session_endpoint=doc.get("end_session_endpoint"),
+                revocation_endpoint=doc.get("revocation_endpoint"),
                 jwks_uri=doc.get("jwks_uri"),
             )
         except KeyError as exc:
@@ -232,6 +236,40 @@ async def end_session(
 
     try:
         async with httpx.AsyncClient(timeout=_OIDC_REQUEST_TIMEOUT) as client:
-            await client.post(metadata.end_session_endpoint, data=params)
+            await client.get(metadata.end_session_endpoint, params=params)
     except httpx.HTTPError as exc:
         logger.warning("end_session_endpoint call failed (continuing logout): %s", exc)
+
+
+async def revoke_refresh_token(*, refresh_token: str) -> None:
+    """Revoke the session refresh token when the IDP supports RFC 7009.
+
+    This is the server-to-server logout operation that matches Seizu's BFF
+    session model. Authentik's ``end_session_endpoint`` is intended for a
+    browser redirect, so posting to it from the backend can fail with 403
+    because the request has no user's authentik browser session.
+    """
+    try:
+        metadata = await get_metadata()
+    except OAuthClientError as exc:
+        logger.warning("Skipping refresh-token revocation — discovery unavailable: %s", exc)
+        return
+    if not metadata.revocation_endpoint:
+        logger.info("IDP advertises no revocation_endpoint; skipping refresh-token revocation")
+        return
+
+    body = ""
+    if settings.OIDC_CLIENT_ID:
+        body = urlencode({"client_id": settings.OIDC_CLIENT_ID})
+
+    try:
+        async with _build_oauth_client() as client:
+            resp = client.revoke_token(
+                metadata.revocation_endpoint,
+                token=refresh_token,
+                token_type_hint="refresh_token",
+                body=body,
+            )
+            resp.raise_for_status()
+    except (AuthlibBaseError, httpx.HTTPError) as exc:
+        logger.warning("refresh-token revocation failed (continuing logout): %s", exc)

@@ -153,10 +153,10 @@ SESSION_COOKIE_NAME = str_env("SESSION_COOKIE_NAME", "seizu_session")
 # cookie at login). Default: 18 hours.
 SESSION_COOKIE_MAX_AGE_SECONDS = int_env("SESSION_COOKIE_MAX_AGE_SECONDS", 18 * 60 * 60)
 
-# Whether to call the OIDC provider's end_session_endpoint on logout in
-# addition to clearing the session cookie. Set False for IDPs that don't
-# implement RP-initiated logout. Failures are caught and logged; the
-# user's local logout still succeeds.
+# Whether to revoke the OIDC refresh token on logout in addition to clearing
+# the session cookie. Set False for IDPs that don't advertise or support
+# RFC 7009 revocation. Failures are caught and logged; the user's local
+# logout still succeeds.
 OIDC_END_SESSION_ON_LOGOUT = bool_env("OIDC_END_SESSION_ON_LOGOUT", True)
 
 # Fallback absolute upper bound on the session, in seconds, used when the
