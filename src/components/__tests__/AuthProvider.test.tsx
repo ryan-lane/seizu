@@ -27,6 +27,14 @@ function ChildThatReadsAuth(): ReactElement {
   );
 }
 
+// Flush several microtask rounds — enough to settle the refresh promise,
+// its .finally() dedup reset, and the resulting React state update.
+async function flushMicrotasks(): Promise<void> {
+  for (let i = 0; i < 5; i += 1) {
+    await Promise.resolve();
+  }
+}
+
 const originalLocation = window.location;
 let refreshSpy: jest.SpyInstance;
 let beginLoginSpy: jest.SpyInstance;
@@ -132,17 +140,11 @@ describe('AuthProvider', () => {
   });
 
   it('schedules a follow-up refresh ~30s before expiry', async () => {
-    refreshSpy
-      .mockResolvedValueOnce({
-        access_token: 'AT-1',
-        expires_in: 300,
-        token_type: 'Bearer',
-      })
-      .mockResolvedValueOnce({
-        access_token: 'AT-2',
-        expires_in: 300,
-        token_type: 'Bearer',
-      });
+    refreshSpy.mockResolvedValue({
+      access_token: 'AT-1',
+      expires_in: 300,
+      token_type: 'Bearer',
+    });
 
     render(
       <AuthConfigContext.Provider value={AUTH_CONFIG_REQUIRED}>
@@ -152,16 +154,29 @@ describe('AuthProvider', () => {
       </AuthConfigContext.Provider>,
     );
 
-    await waitFor(() => {
-      expect(screen.getByTestId('token').textContent).toBe('AT-1');
-    });
-
-    // Lead time is 30s; with expires_in=300 the next refresh fires at 270_000 ms.
+    // NB: with fake timers active, @testing-library's waitFor can deadlock
+    // once we manually advance the clock — its polling can't make progress.
+    // Drive the async refresh deterministically via explicit microtask
+    // flushing instead. The flush must outlast the dedup chain
+    // (refreshSession → .finally clears inflightRefresh) so the next tick
+    // issues a fresh call rather than reusing the resolved promise.
     await act(async () => {
-      jest.advanceTimersByTime(270_000);
+      await flushMicrotasks();
     });
-    await waitFor(() => {
-      expect(screen.getByTestId('token').textContent).toBe('AT-2');
+    expect(refreshSpy).toHaveBeenCalledTimes(1);
+    expect(screen.getByTestId('token').textContent).toBe('AT-1');
+
+    // ttl(300s) - lead(30s) = 270s. Just before the boundary: no new call.
+    await act(async () => {
+      jest.advanceTimersByTime(269_000);
+      await flushMicrotasks();
+    });
+    expect(refreshSpy).toHaveBeenCalledTimes(1);
+
+    // Crossing 270s fires the scheduled refresh.
+    await act(async () => {
+      jest.advanceTimersByTime(2_000);
+      await flushMicrotasks();
     });
     expect(refreshSpy).toHaveBeenCalledTimes(2);
   });
