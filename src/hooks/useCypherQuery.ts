@@ -1,4 +1,4 @@
-import { useState, useCallback, useContext } from 'react';
+import { useState, useCallback, useContext, useEffect, useRef } from 'react';
 import { AuthContext } from 'src/auth.context';
 import { AuthConfigContext } from 'src/authConfig.context';
 import { usePermissionState } from 'src/hooks/usePermissions';
@@ -59,6 +59,11 @@ export interface RunOptions {
   force?: boolean;
 }
 
+interface PendingRun {
+  params?: Record<string, unknown>;
+  options?: RunOptions;
+}
+
 export function useLazyCypherQuery(
   cypher?: string,
   reportToken?: string,
@@ -69,6 +74,7 @@ export function useLazyCypherQuery(
   const { accessToken } = useContext(AuthContext);
   const { auth_required } = useContext(AuthConfigContext);
   const { hasPermission, loading: permissionsLoading } = usePermissionState();
+  const pendingRunRef = useRef<PendingRun | null>(null);
   const [state, setState] = useState<QueryState>({
     loading: false,
     error: null,
@@ -84,8 +90,14 @@ export function useLazyCypherQuery(
     (params?: Record<string, unknown>, options?: RunOptions) => {
       if (!cypher) return;
       // When auth is required, wait until we have a token before querying.
-      if (auth_required && !accessToken) return;
-      if (permissionsLoading) return;
+      if (auth_required && !accessToken) {
+        pendingRunRef.current = { params, options };
+        return;
+      }
+      if (permissionsLoading) {
+        pendingRunRef.current = { params, options };
+        return;
+      }
 
       const requiredPermission = reportToken ? 'reports:read' : 'query:execute';
       if (!hasPermission(requiredPermission)) {
@@ -239,6 +251,16 @@ export function useLazyCypherQuery(
     ],
   );
 
+  useEffect(() => {
+    const pendingRun = pendingRunRef.current;
+    if (!pendingRun) return;
+    if (auth_required && !accessToken) return;
+    if (permissionsLoading) return;
+
+    pendingRunRef.current = null;
+    run(pendingRun.params, pendingRun.options);
+  }, [accessToken, auth_required, permissionsLoading, run]);
+
   return [run, state];
 }
 
@@ -249,6 +271,7 @@ export function useLazyHistoryQuery(): [
   const { accessToken } = useContext(AuthContext);
   const { auth_required } = useContext(AuthConfigContext);
   const { hasPermission, loading: permissionsLoading } = usePermissionState();
+  const pendingHistoryIdRef = useRef<string | null>(null);
   const [state, setState] = useState<QueryState>({
     loading: false,
     error: null,
@@ -263,8 +286,14 @@ export function useLazyHistoryQuery(): [
   const run = useCallback(
     (historyId: string) => {
       if (!historyId) return;
-      if (auth_required && !accessToken) return;
-      if (permissionsLoading) return;
+      if (auth_required && !accessToken) {
+        pendingHistoryIdRef.current = historyId;
+        return;
+      }
+      if (permissionsLoading) {
+        pendingHistoryIdRef.current = historyId;
+        return;
+      }
 
       if (!hasPermission('query:execute')) {
         setState({
@@ -366,6 +395,16 @@ export function useLazyHistoryQuery(): [
     },
     [accessToken, auth_required, permissionsLoading, hasPermission],
   );
+
+  useEffect(() => {
+    const pendingHistoryId = pendingHistoryIdRef.current;
+    if (!pendingHistoryId) return;
+    if (auth_required && !accessToken) return;
+    if (permissionsLoading) return;
+
+    pendingHistoryIdRef.current = null;
+    run(pendingHistoryId);
+  }, [accessToken, auth_required, permissionsLoading, run]);
 
   return [run, state];
 }

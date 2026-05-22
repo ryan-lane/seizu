@@ -323,7 +323,7 @@ Two authentication mechanisms resolve to the same `CurrentUser`:
 - `GET  /api/v1/auth/login?return_to=<path>` — generates PKCE verifier + state, stashes them in a 5-minute `seizu_oauth_state` cookie (SameSite=Lax — must survive the cross-site redirect *back* from the IDP), returns the IDP authorize URL.
 - `GET  /api/v1/auth/callback?code=...&state=...` — verifies state, exchanges the code at the IDP, sets the session cookie, 302s to `return_to` (path-only, open-redirect-guarded).
 - `POST /api/v1/auth/refresh` — exchanges the cookie's refresh token for a new access token; rolls the cookie's Max-Age (capped at the IDP refresh token's absolute expiry recorded at login). Returns 401 + clears cookie when the IDP rejects.
-- `POST /api/v1/auth/logout` — clears the cookie and, gated by `OIDC_END_SESSION_ON_LOGOUT`, best-effort-calls the IDP's end-session endpoint.
+- `POST /api/v1/auth/logout` — clears the cookie and, gated by `OIDC_REVOKE_REFRESH_TOKEN_ON_LOGOUT`, best-effort-revokes the IDP refresh token via the revocation endpoint.
 
 | Env var | Default | Notes |
 |---------|---------|-------|
@@ -336,9 +336,12 @@ Two authentication mechanisms resolve to the same `CurrentUser`:
 | `OIDC_AUTHORITY` | `""` | OIDC issuer URL (used by backend for discovery and surfaced to the frontend via `/api/v1/config`) |
 | `OIDC_INTERNAL_AUTHORITY` | `""` | Override discovery URL when the server's network view differs from the public authority |
 | `OIDC_CLIENT_ID` | `""` | OIDC client ID; required for the BFF code/refresh exchange |
+| `OIDC_CLIENT_SECRET` | `""` | Optional secret for confidential-client deployments |
+| `OIDC_TOKEN_ENDPOINT_AUTH_METHOD` | `none` | Authlib client auth method for token requests; use `client_secret_basic`/`client_secret_post` for confidential clients |
+| `OIDC_REVOCATION_ENDPOINT_AUTH_METHOD` | `OIDC_TOKEN_ENDPOINT_AUTH_METHOD` | Authlib client auth method for refresh-token revocation |
 | `OIDC_REDIRECT_URI` | `""` | Optional override for the BFF callback URL; defaults to the backend's own `/api/v1/auth/callback` derived from the request |
 | `OIDC_SCOPE` | `"openid email offline_access"` | `offline_access` is required so the IDP issues a refresh token |
-| `OIDC_END_SESSION_ON_LOGOUT` | `true` | Whether `/auth/logout` calls the IDP's end-session endpoint (best-effort; failures logged) |
+| `OIDC_REVOKE_REFRESH_TOKEN_ON_LOGOUT` | `true` | Whether `/auth/logout` revokes the IDP refresh token (best-effort; failures logged) |
 | `OIDC_REFRESH_TOKEN_FALLBACK_TTL_SECONDS` | `2592000` (30d) | Absolute session cap used only when the IDP's token response omits `refresh_expires_in` |
 | `SESSION_TOKEN_ENCRYPTION_KEY` | `""` | AES-256-GCM key for the session cookie. 32 random bytes, base64-encoded. Required when auth is enabled. |
 | `SESSION_COOKIE_NAME` | `seizu_session` | Override the cookie name |

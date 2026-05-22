@@ -31,6 +31,13 @@ async def test_encrypt_then_decrypt_roundtrips():
     assert out == payload
 
 
+async def test_encrypt_then_decrypt_roundtrips_with_id_token():
+    payload = SessionPayload(refresh_token="rt-xyz", iat=42, abs_exp=10**12, id_token="id-token")
+    cookie = encrypt(payload)
+    out = decrypt(cookie)
+    assert out == payload
+
+
 async def test_encrypt_produces_distinct_ciphertexts_for_same_payload():
     # Random nonce → cookies differ even for the same payload.
     payload = _payload()

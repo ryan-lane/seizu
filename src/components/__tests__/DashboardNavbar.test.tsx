@@ -179,11 +179,11 @@ describe('DashboardNavbar', () => {
     expect(screen.getAllByText('alice@example.com').length).toBeGreaterThan(1);
   });
 
-  it('calls the BFF logout endpoint and navigates to / when Log out is clicked', async () => {
+  it('calls the BFF logout endpoint and navigates to the logged-out page when Log out is clicked', async () => {
     mockUseCurrentUser.mockReturnValue(CURRENT_USER);
     const logoutSpy = jest
       .spyOn(authClient, 'logout')
-      .mockResolvedValue(undefined);
+      .mockResolvedValue({ post_logout_url: null });
     const assignMock = jest.fn();
     const originalLocation = window.location;
     Object.defineProperty(window, 'location', {
@@ -204,7 +204,7 @@ describe('DashboardNavbar', () => {
         expect(logoutSpy).toHaveBeenCalled();
       });
       await waitFor(() => {
-        expect(assignMock).toHaveBeenCalledWith('/');
+        expect(assignMock).toHaveBeenCalledWith('/logged-out');
       });
     } finally {
       Object.defineProperty(window, 'location', {
@@ -215,7 +215,43 @@ describe('DashboardNavbar', () => {
     }
   });
 
-  it('still navigates to / when the logout endpoint fails', async () => {
+  it('navigates to the IDP post-logout URL when one is returned', async () => {
+    mockUseCurrentUser.mockReturnValue(CURRENT_USER);
+    const logoutSpy = jest
+      .spyOn(authClient, 'logout')
+      .mockResolvedValue({ post_logout_url: 'http://idp/end-session' });
+    const assignMock = jest.fn();
+    const originalLocation = window.location;
+    Object.defineProperty(window, 'location', {
+      configurable: true,
+      value: { ...originalLocation, assign: assignMock },
+    });
+    try {
+      render(
+        <Wrapper authConfig={{ auth_required: true, oidc: null }}>
+          <DashboardNavbar {...defaultProps} />
+        </Wrapper>,
+      );
+
+      fireEvent.click(screen.getByRole('button', { name: /user menu/i }));
+      fireEvent.click(screen.getByRole('menuitem', { name: /log out/i }));
+
+      await waitFor(() => {
+        expect(logoutSpy).toHaveBeenCalled();
+      });
+      await waitFor(() => {
+        expect(assignMock).toHaveBeenCalledWith('http://idp/end-session');
+      });
+    } finally {
+      Object.defineProperty(window, 'location', {
+        configurable: true,
+        value: originalLocation,
+      });
+      logoutSpy.mockRestore();
+    }
+  });
+
+  it('still navigates to the logged-out page when the logout endpoint fails', async () => {
     mockUseCurrentUser.mockReturnValue(CURRENT_USER);
     const logoutSpy = jest
       .spyOn(authClient, 'logout')
@@ -237,7 +273,7 @@ describe('DashboardNavbar', () => {
       fireEvent.click(screen.getByRole('menuitem', { name: /log out/i }));
 
       await waitFor(() => {
-        expect(assignMock).toHaveBeenCalledWith('/');
+        expect(assignMock).toHaveBeenCalledWith('/logged-out');
       });
     } finally {
       Object.defineProperty(window, 'location', {

@@ -32,6 +32,7 @@ export function _resetInflightRefreshForTests(): void {
 const REFRESH_LEAD_TIME_SECONDS = 30;
 const REFRESH_LEAD_TIME_FLOOR_MS = 5_000;
 const DEFAULT_ACCESS_TOKEN_TTL_SECONDS = 300;
+const LOGGED_OUT_PATH = '/logged-out';
 
 interface AuthProviderProps {
   children: ReactNode;
@@ -44,6 +45,12 @@ function AuthProvider({ children }: AuthProviderProps) {
 
   useEffect(() => {
     if (!auth_required) {
+      setIsLoading(false);
+      return;
+    }
+
+    if (window.location.pathname === LOGGED_OUT_PATH) {
+      setAccessToken(null);
       setIsLoading(false);
       return;
     }

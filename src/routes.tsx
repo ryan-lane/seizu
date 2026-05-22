@@ -20,6 +20,7 @@ import SkillsetHistory from 'src/pages/SkillsetHistory';
 import SkillHistory from 'src/pages/SkillHistory';
 import Roles from 'src/pages/Roles';
 import RoleHistory from 'src/pages/RoleHistory';
+import LoggedOut from 'src/pages/LoggedOut';
 
 const routes = [
   {
@@ -61,6 +62,7 @@ const routes = [
     element: <MainLayout />,
     children: [
       { path: '404', element: <NotFound /> },
+      { path: 'logged-out', element: <LoggedOut /> },
       { path: '/', element: <Navigate to="/app/dashboard" /> },
       { path: '*', element: <Navigate to="/404" /> },
     ],

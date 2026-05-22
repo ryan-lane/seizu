@@ -106,10 +106,14 @@ describe('logout', () => {
   });
 
   it('POSTs /api/v1/auth/logout with the CSRF header', async () => {
-    global.fetch = jest
-      .fn()
-      .mockResolvedValue({ ok: true, json: () => Promise.resolve(null) });
-    await logout();
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: () =>
+        Promise.resolve({
+          post_logout_url: 'http://idp/end-session',
+        }),
+    });
+    const result = await logout();
     expect(global.fetch).toHaveBeenCalledWith(
       '/api/v1/auth/logout',
       expect.objectContaining({
@@ -118,6 +122,7 @@ describe('logout', () => {
         headers: { 'X-Seizu-Csrf': '1' },
       }),
     );
+    expect(result.post_logout_url).toBe('http://idp/end-session');
   });
 
   it('throws AuthRequestError on non-2xx', async () => {

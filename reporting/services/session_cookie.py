@@ -1,9 +1,10 @@
 """Encrypted session cookie carrying the IDP refresh token.
 
 The cookie is the entire BFF session — there is no server-side session store.
-After AES-GCM decryption, the payload is a JSON object with three fields:
+After AES-GCM decryption, the payload is a JSON object with four fields:
 
 - ``rt``       — the opaque IDP refresh token
+- ``id_token`` — the ID token from login, used only as an RP logout hint
 - ``iat``      — unix timestamp the session was first established
 - ``abs_exp``  — unix timestamp upper bound; rolling refreshes never extend
                  the cookie past this point. Set at login time to the IDP
@@ -43,6 +44,7 @@ class SessionPayload:
     refresh_token: str
     iat: int
     abs_exp: int
+    id_token: str | None = None
 
 
 def _get_key() -> bytes:
@@ -70,7 +72,12 @@ def _b64url_decode(data: str) -> bytes:
 def encrypt(payload: SessionPayload) -> str:
     """Encrypt a SessionPayload into the cookie wire value."""
     plaintext = json.dumps(
-        {"rt": payload.refresh_token, "iat": payload.iat, "abs_exp": payload.abs_exp},
+        {
+            "rt": payload.refresh_token,
+            "id_token": payload.id_token,
+            "iat": payload.iat,
+            "abs_exp": payload.abs_exp,
+        },
         separators=(",", ":"),
     ).encode("utf-8")
     aesgcm = AESGCM(_get_key())
@@ -110,18 +117,21 @@ def decrypt(cookie_value: str, *, now: int | None = None) -> SessionPayload:
 
     try:
         rt = data["rt"]
+        id_token = data.get("id_token")
         iat = int(data["iat"])
         abs_exp = int(data["abs_exp"])
     except (KeyError, TypeError, ValueError) as exc:
         raise SessionCookieError("Session cookie payload is missing required fields") from exc
     if not isinstance(rt, str) or not rt:
         raise SessionCookieError("Session cookie payload has an invalid refresh token")
+    if id_token is not None and (not isinstance(id_token, str) or not id_token):
+        raise SessionCookieError("Session cookie payload has an invalid ID token")
 
     current = int(time.time()) if now is None else now
     if abs_exp <= current:
         raise SessionCookieError("Session cookie has passed its absolute expiry")
 
-    return SessionPayload(refresh_token=rt, iat=iat, abs_exp=abs_exp)
+    return SessionPayload(refresh_token=rt, id_token=id_token, iat=iat, abs_exp=abs_exp)
 
 
 def compute_cookie_max_age(abs_exp: int, *, now: int | None = None) -> int:

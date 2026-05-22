@@ -48,12 +48,13 @@ function DashboardNavbar({
     // regardless, so the user always ends up effectively logged out after
     // the page navigation below. Surfacing an error here would be more
     // confusing than helpful.
+    let postLogoutUrl: string | null = null;
     try {
-      await logout();
+      postLogoutUrl = (await logout()).post_logout_url;
     } catch {
       /* noop */
     }
-    window.location.assign('/');
+    window.location.assign(postLogoutUrl ?? '/logged-out');
   };
 
   const userName = currentUser

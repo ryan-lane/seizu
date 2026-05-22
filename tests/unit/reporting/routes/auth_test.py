@@ -20,7 +20,7 @@ def _auth_env(mocker):
     mocker.patch("reporting.settings.OIDC_SCOPE", "openid email offline_access")
     mocker.patch("reporting.settings.OIDC_REDIRECT_URI", "http://test/api/v1/auth/callback")
     mocker.patch("reporting.settings.TALISMAN_FORCE_HTTPS", False)
-    mocker.patch("reporting.settings.OIDC_END_SESSION_ON_LOGOUT", True)
+    mocker.patch("reporting.settings.OIDC_REVOKE_REFRESH_TOKEN_ON_LOGOUT", True)
     mocker.patch("reporting.settings.SESSION_COOKIE_NAME", "seizu_session")
     mocker.patch("reporting.settings.SESSION_COOKIE_MAX_AGE_SECONDS", 18 * 60 * 60)
     oauth_client.reset_metadata_cache()
@@ -39,13 +39,13 @@ def _mock_metadata():
     )
 
 
-def _mock_token_response(refresh_token: str = "rt-new"):
+def _mock_token_response(refresh_token: str = "rt-new", id_token: str | None = "id-token-1"):
     return oauth_client.TokenResponse(
         access_token="at-new",
         refresh_token=refresh_token,
         expires_in=300,
         refresh_expires_in=30 * 24 * 60 * 60,
-        id_token=None,
+        id_token=id_token,
         token_type="Bearer",
         scope="openid email offline_access",
     )
@@ -118,6 +118,24 @@ async def test_callback_rejects_missing_state_cookie(mocker):
     assert resp.status_code == 400
 
 
+async def test_callback_clears_state_cookie_on_error(mocker):
+    mocker.patch("reporting.services.oauth_client.get_metadata", AsyncMock(return_value=_mock_metadata()))
+    state_payload = oauth_state_cookie.OAuthStatePayload(
+        state="real-state",
+        verifier="v",
+        return_to="/",
+        exp=int(time.time()) + 60,
+    )
+    app = create_app()
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        client.cookies.set(oauth_state_cookie.STATE_COOKIE_NAME, oauth_state_cookie.encrypt(state_payload))
+        resp = await client.get("/api/v1/auth/callback", params={"code": "c", "state": "wrong-state"})
+    assert resp.status_code == 400
+    set_cookie = resp.headers.get("set-cookie", "")
+    assert f"{oauth_state_cookie.STATE_COOKIE_NAME}=" in set_cookie
+    assert "Max-Age=0" in set_cookie or "expires=" in set_cookie.lower()
+
+
 async def test_callback_rejects_state_mismatch(mocker):
     mocker.patch("reporting.services.oauth_client.get_metadata", AsyncMock(return_value=_mock_metadata()))
     state_payload = oauth_state_cookie.OAuthStatePayload(
@@ -159,6 +177,7 @@ async def test_callback_exchanges_code_sets_session_cookie_and_redirects(mocker)
     assert "seizu_session" in resp.cookies
     session_payload = session_cookie.decrypt(resp.cookies["seizu_session"])
     assert session_payload.refresh_token == "rt-1"
+    assert session_payload.id_token == "id-token-1"
 
 
 async def test_callback_rejects_when_idp_returns_no_refresh_token(mocker):
@@ -206,6 +225,26 @@ async def test_refresh_returns_new_access_token_and_rolls_cookie(mocker):
     # New cookie carries the rotated refresh token.
     new_payload = session_cookie.decrypt(resp.cookies["seizu_session"])
     assert new_payload.refresh_token == "rt-rotated"
+    assert new_payload.id_token == "id-token-1"
+
+
+async def test_refresh_uses_configured_session_cookie_name(mocker):
+    mocker.patch("reporting.settings.SESSION_COOKIE_NAME", "custom_session")
+    mocker.patch(
+        "reporting.services.oauth_client.refresh_tokens",
+        AsyncMock(return_value=_mock_token_response(refresh_token="rt-rotated")),
+    )
+    payload = session_cookie.SessionPayload(
+        refresh_token="rt-old",
+        iat=int(time.time()) - 60,
+        abs_exp=int(time.time()) + 30 * 24 * 60 * 60,
+    )
+    app = create_app()
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        client.cookies.set("custom_session", session_cookie.encrypt(payload))
+        resp = await client.post("/api/v1/auth/refresh", headers={"X-Seizu-Csrf": "1"})
+    assert resp.status_code == 200
+    assert "custom_session" in resp.cookies
 
 
 async def test_refresh_clears_cookie_when_idp_rejects(mocker):
@@ -232,6 +271,57 @@ async def test_refresh_clears_cookie_when_idp_rejects(mocker):
 async def test_logout_clears_cookie_and_revokes_refresh_token(mocker):
     revoke_mock = AsyncMock()
     mocker.patch("reporting.services.oauth_client.revoke_refresh_token", revoke_mock)
+    mocker.patch(
+        "reporting.services.oauth_client.build_post_logout_url",
+        AsyncMock(return_value="http://idp.test/end-session?x=1"),
+    )
+    payload = session_cookie.SessionPayload(
+        refresh_token="rt-active",
+        iat=int(time.time()) - 60,
+        abs_exp=int(time.time()) + 30 * 24 * 60 * 60,
+        id_token="id-token-1",
+    )
+    app = create_app()
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        client.cookies.set("seizu_session", session_cookie.encrypt(payload))
+        resp = await client.post("/api/v1/auth/logout", headers={"X-Seizu-Csrf": "1"})
+    assert resp.status_code == 200
+    assert resp.json()["post_logout_url"] == "http://idp.test/end-session?x=1"
+    revoke_mock.assert_awaited_once()
+    # passed the refresh token
+    assert revoke_mock.await_args.kwargs["refresh_token"] == "rt-active"
+    set_cookie = resp.headers.get("set-cookie", "")
+    assert "seizu_session=" in set_cookie
+    assert "Max-Age=0" in set_cookie or "expires=" in set_cookie.lower()
+
+
+async def test_logout_builds_post_logout_url_with_id_token(mocker):
+    revoke_mock = AsyncMock()
+    build_post_logout_mock = AsyncMock(return_value="http://idp.test/end-session?x=1")
+    mocker.patch("reporting.services.oauth_client.revoke_refresh_token", revoke_mock)
+    mocker.patch("reporting.services.oauth_client.build_post_logout_url", build_post_logout_mock)
+    payload = session_cookie.SessionPayload(
+        refresh_token="rt-active",
+        iat=int(time.time()) - 60,
+        abs_exp=int(time.time()) + 30 * 24 * 60 * 60,
+        id_token="id-token-1",
+    )
+    app = create_app()
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        client.cookies.set("seizu_session", session_cookie.encrypt(payload))
+        resp = await client.post("/api/v1/auth/logout", headers={"X-Seizu-Csrf": "1"})
+    assert resp.status_code == 200
+    assert resp.json()["post_logout_url"] == "http://idp.test/end-session?x=1"
+    build_post_logout_mock.assert_awaited_once_with(
+        id_token_hint="id-token-1",
+        post_logout_redirect_uri="http://test/logged-out",
+    )
+
+
+async def test_logout_uses_configured_session_cookie_name(mocker):
+    mocker.patch("reporting.settings.SESSION_COOKIE_NAME", "custom_session")
+    revoke_mock = AsyncMock()
+    mocker.patch("reporting.services.oauth_client.revoke_refresh_token", revoke_mock)
     payload = session_cookie.SessionPayload(
         refresh_token="rt-active",
         iat=int(time.time()) - 60,
@@ -239,12 +329,12 @@ async def test_logout_clears_cookie_and_revokes_refresh_token(mocker):
     )
     app = create_app()
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
-        client.cookies.set("seizu_session", session_cookie.encrypt(payload))
+        client.cookies.set("custom_session", session_cookie.encrypt(payload))
         resp = await client.post("/api/v1/auth/logout", headers={"X-Seizu-Csrf": "1"})
-    assert resp.status_code == 204
+    assert resp.status_code == 200
     revoke_mock.assert_awaited_once()
-    # passed the refresh token
-    assert revoke_mock.await_args.kwargs["refresh_token"] == "rt-active"
+    set_cookie = resp.headers.get("set-cookie", "")
+    assert "custom_session=" in set_cookie
 
 
 async def test_logout_succeeds_without_cookie(mocker):
@@ -253,7 +343,7 @@ async def test_logout_succeeds_without_cookie(mocker):
     app = create_app()
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         resp = await client.post("/api/v1/auth/logout", headers={"X-Seizu-Csrf": "1"})
-    assert resp.status_code == 204
+    assert resp.status_code == 200
     revoke_mock.assert_not_awaited()
 
 
@@ -267,11 +357,11 @@ async def test_logout_swallows_idp_end_session_errors(mocker):
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         client.cookies.set("seizu_session", session_cookie.encrypt(payload))
         resp = await client.post("/api/v1/auth/logout", headers={"X-Seizu-Csrf": "1"})
-    assert resp.status_code == 204
+    assert resp.status_code == 200
 
 
 async def test_logout_skips_end_session_when_disabled(mocker):
-    mocker.patch("reporting.settings.OIDC_END_SESSION_ON_LOGOUT", False)
+    mocker.patch("reporting.settings.OIDC_REVOKE_REFRESH_TOKEN_ON_LOGOUT", False)
     revoke_mock = AsyncMock()
     mocker.patch("reporting.services.oauth_client.revoke_refresh_token", revoke_mock)
     payload = session_cookie.SessionPayload(refresh_token="rt", iat=int(time.time()), abs_exp=int(time.time()) + 60)
@@ -279,5 +369,5 @@ async def test_logout_skips_end_session_when_disabled(mocker):
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         client.cookies.set("seizu_session", session_cookie.encrypt(payload))
         resp = await client.post("/api/v1/auth/logout", headers={"X-Seizu-Csrf": "1"})
-    assert resp.status_code == 204
+    assert resp.status_code == 200
     revoke_mock.assert_not_awaited()

@@ -72,12 +72,15 @@ OIDC_AUTHORITY = str_env("OIDC_AUTHORITY", "")
 # with split internal/external hostnames). Defaults to OIDC_AUTHORITY when unset.
 OIDC_INTERNAL_AUTHORITY = str_env("OIDC_INTERNAL_AUTHORITY", "")
 OIDC_CLIENT_ID = str_env("OIDC_CLIENT_ID", "")
+OIDC_CLIENT_SECRET = str_env("OIDC_CLIENT_SECRET", "")
+OIDC_TOKEN_ENDPOINT_AUTH_METHOD = str_env("OIDC_TOKEN_ENDPOINT_AUTH_METHOD", "none")
+OIDC_REVOCATION_ENDPOINT_AUTH_METHOD = str_env(
+    "OIDC_REVOCATION_ENDPOINT_AUTH_METHOD",
+    OIDC_TOKEN_ENDPOINT_AUTH_METHOD,
+)
 OIDC_REDIRECT_URI = str_env("OIDC_REDIRECT_URI", "")
-# Default includes offline_access so the OIDC client gets a refresh_token and
-# can renew silently via direct POST to the token endpoint. Without it,
-# oidc-client-ts falls back to a hidden iframe against the IDP's authorize
-# endpoint, which most IDPs (including Authentik) block via
-# X-Frame-Options: deny.
+# Default includes offline_access so the BFF gets a refresh_token and can
+# renew silently via direct POST to the token endpoint.
 OIDC_SCOPE = str_env("OIDC_SCOPE", "openid email offline_access")
 
 # Whether or not to require authentication.
@@ -157,7 +160,7 @@ SESSION_COOKIE_MAX_AGE_SECONDS = int_env("SESSION_COOKIE_MAX_AGE_SECONDS", 18 * 
 # the session cookie. Set False for IDPs that don't advertise or support
 # RFC 7009 revocation. Failures are caught and logged; the user's local
 # logout still succeeds.
-OIDC_END_SESSION_ON_LOGOUT = bool_env("OIDC_END_SESSION_ON_LOGOUT", True)
+OIDC_REVOKE_REFRESH_TOKEN_ON_LOGOUT = bool_env("OIDC_REVOKE_REFRESH_TOKEN_ON_LOGOUT", True)
 
 # Fallback absolute upper bound on the session, in seconds, used when the
 # IDP's token response doesn't advertise ``refresh_expires_in``. Most IDPs

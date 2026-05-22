@@ -1,19 +1,15 @@
 """OAuth/OIDC client for the BFF auth flow.
 
 Thin facade over authlib's ``AsyncOAuth2Client`` plus a hand-rolled
-discovery cache. Authlib handles the RFC 6749 / 7636 / OIDC token-endpoint
-mechanics (PKCE, multiple ``token_endpoint_auth_method`` styles, error
-parsing per RFC 6749 §5.2). We keep three things outside authlib:
+discovery cache. Authlib handles the RFC 6749 / 7636 / RFC 7009 mechanics
+(PKCE, multiple client-auth styles, error parsing per RFC 6749 §5.2).
+We keep two things outside authlib:
 
 - **Discovery fetching** — so we can use ``OIDC_INTERNAL_AUTHORITY`` for
   the server-side fetch while exposing the public ``OIDC_AUTHORITY`` to
   the browser.
 - **``rewrite_to_external_origin``** — for IDPs that base discovery URLs
   on the request Host header and lack an explicit "browser host" setting.
-- **``end_session``** — RP-initiated logout isn't standardized the way
-  the token endpoint is, and authlib doesn't ship a helper.
-- **``revoke_refresh_token``** — revoke the BFF session's refresh token on
-  logout when the IDP advertises an OAuth2 revocation endpoint.
 """
 
 from __future__ import annotations
@@ -72,6 +68,23 @@ def _authority_for_discovery() -> str:
     return authority
 
 
+def _normalize_issuer(value: str) -> str:
+    return value.rstrip("/")
+
+
+def _expected_issuers() -> set[str]:
+    issuers = {
+        _normalize_issuer(value)
+        for value in (
+            settings.OIDC_AUTHORITY,
+            settings.OIDC_INTERNAL_AUTHORITY,
+            settings.JWT_ISSUER,
+        )
+        if value
+    }
+    return issuers
+
+
 def rewrite_to_external_origin(url: str) -> str:
     """Swap an internal-authority origin for the externally-reachable one.
 
@@ -126,6 +139,11 @@ async def get_metadata() -> OIDCMetadata:
             )
         except KeyError as exc:
             raise OAuthClientError(f"OIDC discovery document missing required field: {exc}") from exc
+        expected_issuers = _expected_issuers()
+        if expected_issuers and _normalize_issuer(metadata.issuer) not in expected_issuers:
+            raise OAuthClientError(
+                f"OIDC discovery issuer mismatch: got {metadata.issuer!r}, expected one of {sorted(expected_issuers)!r}"
+            )
         _metadata_cache = metadata
         return metadata
 
@@ -153,28 +171,75 @@ def _coerce_token(data: Any) -> TokenResponse:
     )
 
 
-def _build_oauth_client() -> AsyncOAuth2Client:
+def _build_oauth_client(*, redirect_uri: str | None = None) -> AsyncOAuth2Client:
     if not settings.OIDC_CLIENT_ID:
         raise OAuthClientError("OIDC_CLIENT_ID must be configured")
-    # token_endpoint_auth_method="none" → public client + PKCE; no client_secret.
     return AsyncOAuth2Client(
         client_id=settings.OIDC_CLIENT_ID,
-        token_endpoint_auth_method="none",
+        client_secret=settings.OIDC_CLIENT_SECRET or None,
+        token_endpoint_auth_method=settings.OIDC_TOKEN_ENDPOINT_AUTH_METHOD,
+        revocation_endpoint_auth_method=settings.OIDC_REVOCATION_ENDPOINT_AUTH_METHOD,
+        redirect_uri=redirect_uri,
+        scope=settings.OIDC_SCOPE,
+        code_challenge_method="S256",
         timeout=_OIDC_REQUEST_TIMEOUT,
     )
+
+
+async def build_authorize_url(
+    *,
+    authorization_endpoint: str,
+    state: str,
+    code_verifier: str,
+    redirect_uri: str,
+) -> str:
+    """Build a PKCE authorization URL using Authlib's URL constructor."""
+    browser_authorize_endpoint = rewrite_to_external_origin(authorization_endpoint)
+    async with _build_oauth_client(redirect_uri=redirect_uri) as client:
+        authorize_url, _ = client.create_authorization_url(
+            browser_authorize_endpoint,
+            state=state,
+            code_verifier=code_verifier,
+        )
+    return authorize_url
+
+
+async def build_post_logout_url(
+    *,
+    id_token_hint: str | None,
+    post_logout_redirect_uri: str,
+) -> str | None:
+    """Build the browser-facing RP-initiated logout URL when available."""
+    try:
+        metadata = await get_metadata()
+    except OAuthClientError as exc:
+        logger.warning("Skipping RP-initiated logout URL — discovery unavailable: %s", exc)
+        return None
+    if not metadata.end_session_endpoint:
+        logger.info("IDP advertises no end_session_endpoint; skipping RP-initiated logout")
+        return None
+
+    params = {
+        "client_id": settings.OIDC_CLIENT_ID,
+        "post_logout_redirect_uri": post_logout_redirect_uri,
+    }
+    if id_token_hint:
+        params["id_token_hint"] = id_token_hint
+
+    browser_end_session_endpoint = rewrite_to_external_origin(metadata.end_session_endpoint)
+    return f"{browser_end_session_endpoint}?{urlencode(params)}"
 
 
 async def exchange_code(*, code: str, code_verifier: str, redirect_uri: str) -> TokenResponse:
     """Exchange an authorization code (with PKCE verifier) for tokens."""
     metadata = await get_metadata()
-    async with _build_oauth_client() as client:
+    async with _build_oauth_client(redirect_uri=redirect_uri) as client:
         try:
             token = await client.fetch_token(
                 url=metadata.token_endpoint,
                 grant_type="authorization_code",
                 code=code,
                 code_verifier=code_verifier,
-                redirect_uri=redirect_uri,
             )
         except AuthlibBaseError as exc:
             raise OAuthClientError(f"Token exchange failed: {exc}") from exc
@@ -199,48 +264,6 @@ async def refresh_tokens(*, refresh_token: str) -> TokenResponse:
     return _coerce_token(token)
 
 
-async def end_session(
-    *,
-    id_token_hint: str | None = None,
-    refresh_token: str | None = None,
-    post_logout_redirect_uri: str | None = None,
-) -> None:
-    """Call the IDP's RP-initiated logout endpoint.
-
-    Best-effort: any failure is logged and swallowed so the user's local
-    logout always succeeds. The endpoint may not exist on every IDP — in
-    that case ``get_metadata().end_session_endpoint`` is ``None`` and this
-    function is a no-op. Authlib doesn't ship an RP-initiated-logout
-    helper, so this stays hand-rolled.
-    """
-    try:
-        metadata = await get_metadata()
-    except OAuthClientError as exc:
-        logger.warning("Skipping end_session — discovery unavailable: %s", exc)
-        return
-    if not metadata.end_session_endpoint:
-        logger.info("IDP advertises no end_session_endpoint; skipping RP-initiated logout")
-        return
-
-    params: dict[str, str] = {}
-    if settings.OIDC_CLIENT_ID:
-        params["client_id"] = settings.OIDC_CLIENT_ID
-    if id_token_hint:
-        params["id_token_hint"] = id_token_hint
-    if refresh_token:
-        # Some IDPs (Keycloak, Authentik) accept a refresh_token to revoke the
-        # whole grant; ignored by others.
-        params["refresh_token"] = refresh_token
-    if post_logout_redirect_uri:
-        params["post_logout_redirect_uri"] = post_logout_redirect_uri
-
-    try:
-        async with httpx.AsyncClient(timeout=_OIDC_REQUEST_TIMEOUT) as client:
-            await client.get(metadata.end_session_endpoint, params=params)
-    except httpx.HTTPError as exc:
-        logger.warning("end_session_endpoint call failed (continuing logout): %s", exc)
-
-
 async def revoke_refresh_token(*, refresh_token: str) -> None:
     """Revoke the session refresh token when the IDP supports RFC 7009.
 
@@ -259,7 +282,7 @@ async def revoke_refresh_token(*, refresh_token: str) -> None:
         return
 
     body = ""
-    if settings.OIDC_CLIENT_ID:
+    if settings.OIDC_REVOCATION_ENDPOINT_AUTH_METHOD == "none" and settings.OIDC_CLIENT_ID:
         body = urlencode({"client_id": settings.OIDC_CLIENT_ID})
 
     try:

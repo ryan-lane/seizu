@@ -16,6 +16,10 @@ export interface RefreshResponse {
   token_type: string;
 }
 
+export interface LogoutResponse {
+  post_logout_url: string | null;
+}
+
 export class AuthRequestError extends Error {
   constructor(
     public readonly status: number,
@@ -74,7 +78,7 @@ export async function refreshSession(): Promise<RefreshResponse> {
  * Clear the session cookie and (server-side, best-effort) revoke the refresh token.
  * Always succeeds from the client's perspective — backend swallows IDP errors.
  */
-export async function logout(): Promise<void> {
+export async function logout(): Promise<LogoutResponse> {
   const res = await fetch('/api/v1/auth/logout', {
     method: 'POST',
     credentials: 'same-origin',
@@ -83,4 +87,5 @@ export async function logout(): Promise<void> {
   if (!res.ok) {
     throw new AuthRequestError(res.status, await readErrorMessage(res));
   }
+  return (await res.json()) as LogoutResponse;
 }

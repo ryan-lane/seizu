@@ -15,7 +15,6 @@ short-lived access token in memory.
 from __future__ import annotations
 
 import base64
-import hashlib
 import logging
 import secrets
 import time
@@ -48,15 +47,19 @@ class RefreshResponse(BaseModel):
     token_type: str
 
 
+class LogoutResponse(BaseModel):
+    """Body returned by POST /api/v1/auth/logout."""
+
+    post_logout_url: str | None = None
+
+
 def _b64url(data: bytes) -> str:
     return base64.urlsafe_b64encode(data).rstrip(b"=").decode("ascii")
 
 
-def _generate_pkce_pair() -> tuple[str, str]:
-    """Return ``(code_verifier, code_challenge)`` per RFC 7636 S256."""
-    verifier = _b64url(secrets.token_bytes(64))
-    challenge = _b64url(hashlib.sha256(verifier.encode("ascii")).digest())
-    return verifier, challenge
+def _generate_pkce_verifier() -> str:
+    """Return a high-entropy PKCE code verifier."""
+    return _b64url(secrets.token_bytes(64))
 
 
 def _build_callback_url(request: Request) -> str:
@@ -160,7 +163,7 @@ async def auth_login(
             detail="OIDC provider unavailable",
         ) from exc
 
-    verifier, challenge = _generate_pkce_pair()
+    verifier = _generate_pkce_verifier()
     state = _b64url(secrets.token_bytes(32))
     safe_return_to = _safe_return_to(return_to)
     redirect_uri = _build_callback_url(request)
@@ -173,19 +176,13 @@ async def auth_login(
     )
     _set_state_cookie(response, state_payload)
 
-    params = {
-        "response_type": "code",
-        "client_id": settings.OIDC_CLIENT_ID,
-        "redirect_uri": redirect_uri,
-        "scope": settings.OIDC_SCOPE,
-        "state": state,
-        "code_challenge": challenge,
-        "code_challenge_method": "S256",
-    }
-    # Discovery may return endpoints with the docker-internal hostname; the
-    # browser needs the externally-reachable equivalent.
-    browser_authorize_endpoint = oauth_client.rewrite_to_external_origin(metadata.authorization_endpoint)
-    return LoginResponse(authorize_url=f"{browser_authorize_endpoint}?{urlencode(params)}")
+    authorize_url = await oauth_client.build_authorize_url(
+        authorization_endpoint=metadata.authorization_endpoint,
+        state=state,
+        code_verifier=verifier,
+        redirect_uri=redirect_uri,
+    )
+    return LoginResponse(authorize_url=authorize_url)
 
 
 @router.get("/api/v1/auth/callback", name="auth_callback", include_in_schema=False)
@@ -206,25 +203,28 @@ async def auth_callback(
     """
     if error:
         logger.warning("IDP returned error on callback: %s (%s)", error, error_description)
-        response = RedirectResponse(url="/?auth_error=" + error, status_code=status.HTTP_302_FOUND)
+        response = RedirectResponse(
+            url=f"/?{urlencode({'auth_error': error})}",
+            status_code=status.HTTP_302_FOUND,
+        )
         _clear_state_cookie(response)
         return response
 
     if not code or not state:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Missing code or state")
+        return _callback_error_response("Missing code or state")
 
     if not seizu_oauth_state:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Missing OAuth state cookie")
+        return _callback_error_response("Missing OAuth state cookie")
 
     try:
         state_payload = oauth_state_cookie.decrypt(seizu_oauth_state)
     except oauth_state_cookie.OAuthStateCookieError as exc:
         logger.warning("Invalid state cookie on callback: %s", exc)
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid OAuth state") from exc
+        return _callback_error_response("Invalid OAuth state")
 
     if not secrets.compare_digest(state_payload.state, state):
         logger.warning("State mismatch on OAuth callback")
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="OAuth state mismatch")
+        return _callback_error_response("OAuth state mismatch")
 
     try:
         token_response = await oauth_client.exchange_code(
@@ -234,16 +234,13 @@ async def auth_callback(
         )
     except oauth_client.OAuthClientError as exc:
         logger.warning("Token exchange failed: %s", exc)
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Token exchange failed") from exc
+        return _callback_error_response("Token exchange failed")
 
     if not token_response.refresh_token:
         # offline_access scope wasn't honored, or the IDP refused to issue
         # a refresh token. We can't run a BFF session without one.
         logger.error("IDP did not return a refresh token; check OIDC_SCOPE includes offline_access")
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="IDP did not return a refresh token",
-        )
+        return _callback_error_response("IDP did not return a refresh token")
 
     now = int(time.time())
     refresh_expires_in = token_response.refresh_expires_in or settings.OIDC_REFRESH_TOKEN_FALLBACK_TTL_SECONDS
@@ -252,6 +249,7 @@ async def auth_callback(
         refresh_token=token_response.refresh_token,
         iat=now,
         abs_exp=abs_exp,
+        id_token=token_response.id_token,
     )
 
     response = RedirectResponse(url=state_payload.return_to, status_code=status.HTTP_302_FOUND)
@@ -272,10 +270,16 @@ def _unauthenticated_response(detail: str, *, clear_cookie: bool) -> JSONRespons
     return response
 
 
+def _callback_error_response(detail: str, status_code: int = status.HTTP_400_BAD_REQUEST) -> JSONResponse:
+    response = JSONResponse(status_code=status_code, content={"error": detail})
+    _clear_state_cookie(response)
+    return response
+
+
 @router.post("/api/v1/auth/refresh", response_model=RefreshResponse)
 async def auth_refresh(
     response: Response,
-    seizu_session: Annotated[str | None, Cookie(alias="seizu_session")] = None,
+    request: Request,
 ) -> RefreshResponse | JSONResponse:
     """Exchange the cookie's refresh token for a new access token.
 
@@ -284,9 +288,7 @@ async def auth_refresh(
     refresh token — that's the path where the user is logged out and must
     re-authenticate.
     """
-    # NB: ``seizu_session`` is a static parameter name because FastAPI's Cookie
-    # extractor needs a literal name; we keep settings.SESSION_COOKIE_NAME for
-    # consistency on the *set* side, but reads here are by the default name.
+    seizu_session = request.cookies.get(settings.SESSION_COOKIE_NAME)
     if not seizu_session:
         return _unauthenticated_response("No session", clear_cookie=False)
 
@@ -307,6 +309,7 @@ async def auth_refresh(
         refresh_token=new_refresh_token,
         iat=session_payload.iat,
         abs_exp=session_payload.abs_exp,
+        id_token=token_response.id_token or session_payload.id_token,
     )
     _set_session_cookie(response, new_payload)
 
@@ -317,28 +320,37 @@ async def auth_refresh(
     )
 
 
-@router.post("/api/v1/auth/logout", status_code=status.HTTP_204_NO_CONTENT)
+@router.post("/api/v1/auth/logout", response_model=LogoutResponse)
 async def auth_logout(
     response: Response,
-    seizu_session: Annotated[str | None, Cookie(alias="seizu_session")] = None,
-) -> Response:
+    request: Request,
+) -> LogoutResponse:
     """Drop the session cookie and (optionally) revoke the IDP refresh token.
 
     Always succeeds from the user's perspective. Best-effort IDP logout
     failures are logged but never block the local logout.
     """
     refresh_token: str | None = None
+    id_token: str | None = None
+    seizu_session = request.cookies.get(settings.SESSION_COOKIE_NAME)
     if seizu_session:
         try:
-            refresh_token = session_cookie.decrypt(seizu_session).refresh_token
+            session_payload = session_cookie.decrypt(seizu_session)
+            refresh_token = session_payload.refresh_token
+            id_token = session_payload.id_token
         except session_cookie.SessionCookieError:
             refresh_token = None
 
-    if settings.OIDC_END_SESSION_ON_LOGOUT and refresh_token:
+    post_logout_url = await oauth_client.build_post_logout_url(
+        id_token_hint=id_token,
+        post_logout_redirect_uri=str(request.url_for("spa_fallback", full_path="logged-out")),
+    )
+
+    if settings.OIDC_REVOKE_REFRESH_TOKEN_ON_LOGOUT and refresh_token:
         try:
             await oauth_client.revoke_refresh_token(refresh_token=refresh_token)
         except Exception as exc:  # noqa: BLE001 — defensive: never let logout fail
             logger.warning("IDP refresh-token revocation failed (continuing logout): %s", exc)
 
     _clear_session_cookie(response)
-    return Response(status_code=status.HTTP_204_NO_CONTENT)
+    return LogoutResponse(post_logout_url=post_logout_url)

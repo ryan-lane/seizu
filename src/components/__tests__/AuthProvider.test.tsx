@@ -131,6 +131,24 @@ describe('AuthProvider', () => {
     });
   });
 
+  it('does not auto-start login on the logged-out page', async () => {
+    withMockLocation('http://test/logged-out');
+    render(
+      <AuthConfigContext.Provider value={AUTH_CONFIG_REQUIRED}>
+        <AuthProvider>
+          <ChildThatReadsAuth />
+        </AuthProvider>
+      </AuthConfigContext.Provider>,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId('loading').textContent).toBe('READY');
+    });
+    expect(screen.getByTestId('token').textContent).toBe('NO_TOKEN');
+    expect(refreshSpy).not.toHaveBeenCalled();
+    expect(beginLoginSpy).not.toHaveBeenCalled();
+  });
+
   it('schedules a follow-up refresh ~30s before token expiry', async () => {
     // Don't try to *drive* the follow-up refresh — that requires manually
     // advancing fake timers, which deadlocks @testing-library's waitFor
