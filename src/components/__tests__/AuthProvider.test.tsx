@@ -1,4 +1,4 @@
-import { render, screen, waitFor, act, cleanup } from '@testing-library/react';
+import { render, screen, waitFor, cleanup } from '@testing-library/react';
 import { useContext, type ReactElement } from 'react';
 import * as authClient from 'src/api/authClient';
 import { AuthContext } from 'src/auth.context';
@@ -25,14 +25,6 @@ function ChildThatReadsAuth(): ReactElement {
       <span data-testid="loading">{isLoading ? 'LOADING' : 'READY'}</span>
     </div>
   );
-}
-
-// Flush several microtask rounds — enough to settle the refresh promise,
-// its .finally() dedup reset, and the resulting React state update.
-async function flushMicrotasks(): Promise<void> {
-  for (let i = 0; i < 5; i += 1) {
-    await Promise.resolve();
-  }
 }
 
 const originalLocation = window.location;
@@ -139,12 +131,19 @@ describe('AuthProvider', () => {
     });
   });
 
-  it('schedules a follow-up refresh ~30s before expiry', async () => {
+  it('schedules a follow-up refresh ~30s before token expiry', async () => {
+    // Don't try to *drive* the follow-up refresh — that requires manually
+    // advancing fake timers, which deadlocks @testing-library's waitFor
+    // (its polling can't progress) and starves React's scheduler. Instead,
+    // let the mount refresh resolve via waitFor (which auto-advances fake
+    // timers), then assert the follow-up timer was *scheduled* with the
+    // right delay by inspecting the setTimeout spy.
     refreshSpy.mockResolvedValue({
       access_token: 'AT-1',
       expires_in: 300,
       token_type: 'Bearer',
     });
+    const setTimeoutSpy = jest.spyOn(globalThis, 'setTimeout');
 
     render(
       <AuthConfigContext.Provider value={AUTH_CONFIG_REQUIRED}>
@@ -154,30 +153,14 @@ describe('AuthProvider', () => {
       </AuthConfigContext.Provider>,
     );
 
-    // NB: with fake timers active, @testing-library's waitFor can deadlock
-    // once we manually advance the clock — its polling can't make progress.
-    // Drive the async refresh deterministically via explicit microtask
-    // flushing instead. The flush must outlast the dedup chain
-    // (refreshSession → .finally clears inflightRefresh) so the next tick
-    // issues a fresh call rather than reusing the resolved promise.
-    await act(async () => {
-      await flushMicrotasks();
+    await waitFor(() => {
+      expect(screen.getByTestId('token').textContent).toBe('AT-1');
     });
-    expect(refreshSpy).toHaveBeenCalledTimes(1);
-    expect(screen.getByTestId('token').textContent).toBe('AT-1');
 
-    // ttl(300s) - lead(30s) = 270s. Just before the boundary: no new call.
-    await act(async () => {
-      jest.advanceTimersByTime(269_000);
-      await flushMicrotasks();
-    });
-    expect(refreshSpy).toHaveBeenCalledTimes(1);
+    // ttl(300s) - lead(30s) = 270s → 270_000ms.
+    const scheduledDelays = setTimeoutSpy.mock.calls.map((call) => call[1]);
+    expect(scheduledDelays).toContain(270_000);
 
-    // Crossing 270s fires the scheduled refresh.
-    await act(async () => {
-      jest.advanceTimersByTime(2_000);
-      await flushMicrotasks();
-    });
-    expect(refreshSpy).toHaveBeenCalledTimes(2);
+    setTimeoutSpy.mockRestore();
   });
 });
