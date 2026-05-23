@@ -217,6 +217,7 @@ async def test_facade_delegates_remaining_methods(mock_store):
         iss="i",
         email="e@example.com",
         display_name=None,
+        preferred_username=None,
     )
 
     await report_store.update_user_profile(user_id="u1", email="e@example.com")
@@ -224,6 +225,7 @@ async def test_facade_delegates_remaining_methods(mock_store):
         user_id="u1",
         email="e@example.com",
         display_name=None,
+        preferred_username=None,
         token_iat=None,
     )
 

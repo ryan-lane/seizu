@@ -125,6 +125,73 @@ def test__get_jwks_client_uses_configured_timeout(mocker):
     )
 
 
+async def test_validate_bearer_token_returns_jwt_payload_on_success(mocker):
+    """A verifiable JWT short-circuits — introspection is never consulted."""
+    from reporting.authnz import validate_bearer_token
+
+    mocker.patch("reporting.authnz._get_jwt_payload", new=AsyncMock(return_value={"sub": "s1"}))
+    introspect = mocker.patch("reporting.services.oauth_client.introspect_token", new=AsyncMock())
+
+    payload = await validate_bearer_token("tok")
+
+    assert payload == {"sub": "s1"}
+    introspect.assert_not_called()
+
+
+async def test_validate_bearer_token_reraises_when_introspection_disabled(mocker):
+    """A non-JWT token is rejected outright when introspection is off."""
+    from reporting.authnz import validate_bearer_token
+
+    mocker.patch("reporting.settings.OIDC_ENABLE_TOKEN_INTROSPECTION", False)
+    mocker.patch(
+        "reporting.authnz._get_jwt_payload",
+        new=AsyncMock(side_effect=jwt.DecodeError("not a jwt")),
+    )
+    introspect = mocker.patch("reporting.services.oauth_client.introspect_token", new=AsyncMock())
+
+    with pytest.raises(jwt.PyJWTError):
+        await validate_bearer_token("opaque")
+    introspect.assert_not_called()
+
+
+async def test_validate_bearer_token_falls_back_to_introspection(mocker):
+    """An opaque token is validated via RFC 7662 introspection when enabled."""
+    from reporting.authnz import validate_bearer_token
+
+    mocker.patch("reporting.settings.OIDC_ENABLE_TOKEN_INTROSPECTION", True)
+    mocker.patch(
+        "reporting.authnz._get_jwt_payload",
+        new=AsyncMock(side_effect=jwt.DecodeError("not a jwt")),
+    )
+    mocker.patch(
+        "reporting.services.oauth_client.introspect_token",
+        new=AsyncMock(return_value={"active": True, "sub": "opaque-sub", "email": "u@example.com"}),
+    )
+
+    payload = await validate_bearer_token("opaque")
+
+    assert payload["sub"] == "opaque-sub"
+
+
+async def test_validate_bearer_token_introspection_failure_raises_invalid_token(mocker):
+    """Introspection rejection surfaces as a PyJWTError so callers handle it uniformly."""
+    from reporting.authnz import validate_bearer_token
+    from reporting.services import oauth_client
+
+    mocker.patch("reporting.settings.OIDC_ENABLE_TOKEN_INTROSPECTION", True)
+    mocker.patch(
+        "reporting.authnz._get_jwt_payload",
+        new=AsyncMock(side_effect=jwt.DecodeError("not a jwt")),
+    )
+    mocker.patch(
+        "reporting.services.oauth_client.introspect_token",
+        new=AsyncMock(side_effect=oauth_client.OAuthClientError("token inactive")),
+    )
+
+    with pytest.raises(jwt.PyJWTError):
+        await validate_bearer_token("opaque")
+
+
 async def test_get_current_user_auth_disabled(mocker):
     """In dev mode (auth disabled) a synthetic dev user is returned without a token."""
     mocker.patch("reporting.settings.DEVELOPMENT_ONLY_REQUIRE_AUTH", False)
@@ -154,6 +221,7 @@ async def test_get_current_user_auth_disabled(mocker):
         iss="dev",
         email="devuser@example.com",
         display_name=None,
+        preferred_username=None,
     )
 
 
@@ -185,6 +253,7 @@ async def test_get_current_user_extracts_sub_and_iss(mocker):
         iss="https://idp.example.com",
         email="alice@example.com",
         display_name="Alice",
+        preferred_username="alice",
         created_at="2024-01-01T00:00:00+00:00",
         last_login="2024-01-01T00:00:00+00:00",
     )
@@ -199,6 +268,7 @@ async def test_get_current_user_extracts_sub_and_iss(mocker):
             "sub": "sub123",
             "iss": "https://idp.example.com",
             "name": "Alice",
+            "preferred_username": "alice",
             "iat": 1704067200,
         },
         base64.b64decode(FAKE_PRIVATE_KEY),
@@ -211,8 +281,115 @@ async def test_get_current_user_extracts_sub_and_iss(mocker):
         iss="https://idp.example.com",
         email="alice@example.com",
         display_name="Alice",
+        preferred_username="alice",
     )
     assert result.user.user_id == "uid1"
+
+
+async def test_get_current_user_allows_missing_email(mocker):
+    """Email is optional profile data; durable identity is still iss + sub."""
+    mocker.patch("reporting.settings.DEVELOPMENT_ONLY_REQUIRE_AUTH", True)
+    mocker.patch("reporting.settings.JWT_AUDIENCE", "")
+    signing_key = _make_mock_signing_key(mocker)
+    mock_client = _make_mock_client(mocker, signing_key)
+    mocker.patch("reporting.authnz._get_jwks_client", return_value=mock_client)
+
+    from fastapi.security import HTTPAuthorizationCredentials
+
+    from reporting.schema.report_config import User
+
+    fake_user = User(
+        user_id="uid1",
+        sub="sub123",
+        iss="https://idp.example.com",
+        email=None,
+        display_name=None,
+        preferred_username="alice",
+        created_at="2024-01-01T00:00:00+00:00",
+        last_login="2024-01-01T00:00:00+00:00",
+    )
+    mock_get_or_create = mocker.patch(
+        "reporting.services.report_store.get_or_create_user",
+        new=AsyncMock(return_value=fake_user),
+    )
+
+    encoded = jwt.encode(
+        {
+            "sub": "sub123",
+            "iss": "https://idp.example.com",
+            "preferred_username": "alice",
+            "iat": 1704067200,
+        },
+        base64.b64decode(FAKE_PRIVATE_KEY),
+        algorithm="ES256",
+    )
+    credentials = HTTPAuthorizationCredentials(scheme="Bearer", credentials=encoded)
+    result = await get_current_user(credentials=credentials)
+
+    mock_get_or_create.assert_called_once_with(
+        sub="sub123",
+        iss="https://idp.example.com",
+        email=None,
+        display_name=None,
+        preferred_username="alice",
+    )
+    assert result.user.email is None
+
+
+async def test_get_current_user_rejects_missing_subject_claim(mocker):
+    mocker.patch("reporting.settings.DEVELOPMENT_ONLY_REQUIRE_AUTH", True)
+    mocker.patch("reporting.settings.JWT_AUDIENCE", "")
+    signing_key = _make_mock_signing_key(mocker)
+    mock_client = _make_mock_client(mocker, signing_key)
+    mocker.patch("reporting.authnz._get_jwks_client", return_value=mock_client)
+    get_or_create = mocker.patch("reporting.services.report_store.get_or_create_user", new=AsyncMock())
+
+    from fastapi import HTTPException
+    from fastapi.security import HTTPAuthorizationCredentials
+
+    encoded = jwt.encode(
+        {
+            "iss": "https://idp.example.com",
+            "iat": 1704067200,
+        },
+        base64.b64decode(FAKE_PRIVATE_KEY),
+        algorithm="ES256",
+    )
+    credentials = HTTPAuthorizationCredentials(scheme="Bearer", credentials=encoded)
+
+    with pytest.raises(HTTPException) as exc_info:
+        await get_current_user(credentials=credentials)
+
+    assert exc_info.value.status_code == 401
+    get_or_create.assert_not_called()
+
+
+async def test_get_current_user_rejects_missing_issuer_claim(mocker):
+    mocker.patch("reporting.settings.DEVELOPMENT_ONLY_REQUIRE_AUTH", True)
+    mocker.patch("reporting.settings.JWT_AUDIENCE", "")
+    signing_key = _make_mock_signing_key(mocker)
+    mock_client = _make_mock_client(mocker, signing_key)
+    mocker.patch("reporting.authnz._get_jwks_client", return_value=mock_client)
+    get_or_create = mocker.patch("reporting.services.report_store.get_or_create_user", new=AsyncMock())
+
+    from fastapi import HTTPException
+    from fastapi.security import HTTPAuthorizationCredentials
+
+    encoded = jwt.encode(
+        {
+            "sub": "sub123",
+            "iat": 1704067200,
+        },
+        base64.b64decode(FAKE_PRIVATE_KEY),
+        algorithm="ES256",
+    )
+    credentials = HTTPAuthorizationCredentials(scheme="Bearer", credentials=encoded)
+
+    with pytest.raises(HTTPException) as exc_info:
+        await get_current_user(credentials=credentials)
+
+    assert exc_info.value.status_code == 401
+    get_or_create.assert_not_called()
 
 
 async def test_get_current_user_resolves_permissions_from_role_claim(mocker):

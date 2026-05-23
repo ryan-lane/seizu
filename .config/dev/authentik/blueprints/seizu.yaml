@@ -128,11 +128,14 @@ entries:
       invalidation_flow: !Find
         - authentik_flows.flow
         - [slug, default-provider-invalidation-flow]
-      # Allow redirects to both the bun dev server and the FastAPI backend.
+      # BFF auth callback — both the bun dev server (which proxies /api to
+      # the backend, preserving Host) and the FastAPI backend directly.
+      # The :8888/callback entry is for the CLI's device-code post-auth
+      # browser landing page.
       redirect_uris:
-        - url: http://localhost:3000/auth/callback
+        - url: http://localhost:3000/api/v1/auth/callback
           matching_mode: strict
-        - url: http://localhost:8080/auth/callback
+        - url: http://localhost:8080/api/v1/auth/callback
           matching_mode: strict
         - url: http://localhost:8888/callback
           matching_mode: strict
@@ -151,10 +154,8 @@ entries:
         - !Find
           - authentik_providers_oauth2.scopemapping
           - [managed, "goauthentik.io/providers/oauth2/scope-profile"]
-        # offline_access issues a refresh_token, used by oidc-client-ts for
-        # silent renewal via the token endpoint instead of a hidden iframe.
-        # Authentik blocks iframe embedding via X-Frame-Options: deny, so the
-        # iframe path would fail.
+        # offline_access issues a refresh_token, used by the BFF for silent
+        # renewal via the token endpoint.
         - !Find
           - authentik_providers_oauth2.scopemapping
           - [managed, "goauthentik.io/providers/oauth2/scope-offline_access"]

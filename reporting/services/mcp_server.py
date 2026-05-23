@@ -7,7 +7,6 @@ validates the Bearer token using the same JWT logic as the rest of the API.
 The session manager lifespan is managed by the FastAPI app's lifespan context.
 """
 
-import asyncio
 import contextvars
 import json
 import logging
@@ -16,7 +15,6 @@ from typing import Any
 
 import httpx
 import jwt
-from jwt import PyJWKClient
 from mcp.server.fastmcp.server import StreamableHTTPASGIApp
 from mcp.server.lowlevel import Server
 from mcp.server.streamable_http_manager import StreamableHTTPSessionManager
@@ -26,7 +24,7 @@ from starlette.responses import JSONResponse as StarletteJSONResponse
 from starlette.types import ASGIApp, Receive, Scope, Send
 
 from reporting import settings
-from reporting.authnz import CurrentUser
+from reporting.authnz import CurrentUser, validate_bearer_token
 from reporting.routes.query import _serialize_neo4j_value
 from reporting.schema.mcp_config import render_skill_prompt, validate_tool_arguments
 from reporting.services import report_store, reporting_neo4j
@@ -275,15 +273,6 @@ def _build_mcp_server() -> Server:
 # Auth middleware
 # ---------------------------------------------------------------------------
 
-_jwks_client_cache: PyJWKClient | None = None
-
-
-def _get_jwks_client() -> PyJWKClient:
-    global _jwks_client_cache
-    if _jwks_client_cache is None:
-        _jwks_client_cache = PyJWKClient(settings.JWKS_URL, cache_keys=True)
-    return _jwks_client_cache
-
 
 async def _build_dev_current_user() -> CurrentUser:
     """Return a synthetic CurrentUser for dev mode (auth disabled)."""
@@ -295,10 +284,17 @@ async def _build_dev_current_user() -> CurrentUser:
         iss="dev",
         email=email,
         display_name=None,
+        preferred_username=None,
     )
     return CurrentUser(
         user=user,
-        jwt_claims={"email": email, "display_name": None, "token_iat": None, "token_exp": None},
+        jwt_claims={
+            "email": email,
+            "display_name": None,
+            "preferred_username": None,
+            "token_iat": None,
+            "token_exp": None,
+        },
         permissions=ALL_PERMISSIONS,
     )
 
@@ -311,17 +307,31 @@ async def _build_current_user_from_jwt(payload: dict[str, Any]) -> CurrentUser:
     token_iat = datetime.fromtimestamp(raw_iat, tz=UTC) if raw_iat is not None else None
     raw_exp = payload.get("exp")
     token_exp = datetime.fromtimestamp(raw_exp, tz=UTC) if raw_exp is not None else None
+    sub = payload.get(settings.JWT_SUB_CLAIM)
+    if not isinstance(sub, str) or not sub:
+        raise ValueError(f"Missing or invalid {settings.JWT_SUB_CLAIM} claim")
+    iss = payload.get(settings.JWT_ISS_CLAIM)
+    if not isinstance(iss, str) or not iss:
+        raise ValueError(f"Missing or invalid {settings.JWT_ISS_CLAIM} claim")
+    email = payload.get(settings.JWT_EMAIL_CLAIM)
+    if email is not None and not isinstance(email, str):
+        raise ValueError(f"Invalid {settings.JWT_EMAIL_CLAIM} claim")
+    preferred_username = payload.get(settings.JWT_USERNAME_CLAIM)
+    if preferred_username is not None and not isinstance(preferred_username, str):
+        raise ValueError(f"Invalid {settings.JWT_USERNAME_CLAIM} claim")
     jwt_claims = {
-        "email": payload[settings.JWT_EMAIL_CLAIM],
+        "email": email,
         "display_name": payload.get("name"),
+        "preferred_username": preferred_username,
         "token_iat": token_iat,
         "token_exp": token_exp,
     }
     user = await report_store.get_or_create_user(
-        sub=payload[settings.JWT_SUB_CLAIM],
-        iss=payload[settings.JWT_ISS_CLAIM],
-        email=payload[settings.JWT_EMAIL_CLAIM],
+        sub=sub,
+        iss=iss,
+        email=email,
         display_name=payload.get("name"),
+        preferred_username=preferred_username,
     )
     permissions = await resolve_permissions(payload)
     return CurrentUser(user=user, jwt_claims=jwt_claims, permissions=permissions)
@@ -372,16 +382,7 @@ class _MCPAuthMiddleware:
 
         bearer_token = auth_str[7:].strip()
         try:
-            client = _get_jwks_client()
-            signing_key = await asyncio.to_thread(client.get_signing_key_from_jwt, bearer_token)
-            decode_kwargs: dict[str, Any] = {
-                "algorithms": settings.ALLOWED_JWT_ALGORITHMS,
-            }
-            if settings.JWT_ISSUER:
-                decode_kwargs["issuer"] = settings.JWT_ISSUER
-            if settings.JWT_AUDIENCE:
-                decode_kwargs["audience"] = settings.JWT_AUDIENCE
-            payload = jwt.decode(bearer_token, signing_key.key, **decode_kwargs)
+            payload = await validate_bearer_token(bearer_token)
         except jwt.PyJWTError:
             await self._send_401(scope, receive, send)
             return

@@ -1,7 +1,6 @@
 import { Navigate } from 'react-router-dom';
 import DashboardLayout from 'src/components/DashboardLayout';
 import MainLayout from 'src/components/MainLayout';
-import OidcCallback from 'src/components/OidcCallback';
 import Dashboard from 'src/pages/Dashboard';
 import Reports from 'src/pages/Reports';
 import ReportHistory from 'src/pages/ReportHistory';
@@ -21,12 +20,9 @@ import SkillsetHistory from 'src/pages/SkillsetHistory';
 import SkillHistory from 'src/pages/SkillHistory';
 import Roles from 'src/pages/Roles';
 import RoleHistory from 'src/pages/RoleHistory';
+import LoggedOut from 'src/pages/LoggedOut';
 
 const routes = [
-  {
-    path: '/auth/callback',
-    element: <OidcCallback />,
-  },
   {
     path: 'app',
     element: <DashboardLayout />,
@@ -66,6 +62,7 @@ const routes = [
     element: <MainLayout />,
     children: [
       { path: '404', element: <NotFound /> },
+      { path: 'logged-out', element: <LoggedOut /> },
       { path: '/', element: <Navigate to="/app/dashboard" /> },
       { path: '*', element: <Navigate to="/404" /> },
     ],

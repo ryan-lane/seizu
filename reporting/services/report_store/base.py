@@ -141,8 +141,9 @@ class ReportStore(ABC):
         self,
         sub: str,
         iss: str,
-        email: str,
+        email: str | None = None,
         display_name: str | None = None,
+        preferred_username: str | None = None,
     ) -> User:
         """Get an existing user by (iss, sub), or create one on first login.
 
@@ -156,14 +157,16 @@ class ReportStore(ABC):
     async def update_user_profile(
         self,
         user_id: str,
-        email: str,
+        email: str | None = None,
         display_name: str | None = None,
+        preferred_username: str | None = None,
         token_iat: datetime | None = None,
     ) -> User:
         """Sync mutable profile fields, writing only what has changed.
 
-        - ``email`` is written only when it differs from the stored value.
+        - ``email`` is written only when provided and differs from the stored value.
         - ``display_name`` is written only when provided and differs from stored.
+        - ``preferred_username`` is written only when provided and differs from stored.
         - ``last_login`` is written only when ``token_iat`` is provided and
           newer than the stored value (i.e. a new credential was issued).
 

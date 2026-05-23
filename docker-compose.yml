@@ -156,6 +156,14 @@ services:
       AUTHENTIK_BOOTSTRAP_EMAIL: admin@localhost
       AUTHENTIK_BOOTSTRAP_PASSWORD: devpassword
       AUTHENTIK_ERROR_REPORTING__ENABLED: "false"
+      # Tell Authentik what URL to advertise to browsers in OIDC discovery,
+      # regardless of which Host header the request arrived under. Without
+      # this, Authentik bases endpoint URLs on the request's Host — so the
+      # seizu container (which discovers via http://authentik-server:9000)
+      # would get back docker-internal URLs that the browser can't reach.
+      # IDPs that lack an equivalent setting still work via the fallback
+      # rewrite in reporting/services/oauth_client.py.
+      AUTHENTIK_HOST_BROWSER: http://localhost:9000
     volumes:
       - authentik_media:/data
       - ./.config/dev/authentik/blueprints:/blueprints/custom:ro
@@ -269,11 +277,12 @@ services:
       # OIDC_AUTHORITY in docker dev due to split internal/external hostnames).
       - OIDC_INTERNAL_AUTHORITY=http://authentik-server:9000/application/o/seizu
       - OIDC_CLIENT_ID=seizu
-      - OIDC_REDIRECT_URI=http://localhost:3000/auth/callback
-      # offline_access requests a refresh_token, which oidc-client-ts uses for
-      # silent renewal via direct POST to the token endpoint. Without it, the
-      # client falls back to a hidden iframe against the IDP's authorize
-      # endpoint — which Authentik blocks via X-Frame-Options: deny.
+      # OIDC_REDIRECT_URI intentionally unset: the backend derives the
+      # callback URL from each incoming request's Host header, so the same
+      # build serves users on :3000 (vite dev proxy) and :8080 (FastAPI
+      # serving the prod build) without one redirect URL clobbering the other.
+      # offline_access requests a refresh_token, which the BFF uses for
+      # silent renewal via direct POST to the token endpoint.
       - "OIDC_SCOPE=openid email profile offline_access"
       # Disable HTTPS redirect in development (plain HTTP)
       - "TALISMAN_FORCE_HTTPS=false"
@@ -303,6 +312,10 @@ services:
       - STATIC_FOLDER=/home/seizu/seizu/build
       # Cryptographically random secret used to sign report-query capability tokens.
       - REPORT_QUERY_SIGNING_SECRET
+      # AES-256-GCM key (32 bytes, base64-encoded) for the BFF session cookie.
+      # Required when DEVELOPMENT_ONLY_REQUIRE_AUTH=true. Generate with:
+      #   python -c 'import base64,os;print(base64.b64encode(os.urandom(32)).decode())'
+      - SESSION_TOKEN_ENCRYPTION_KEY
     healthcheck:
       test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8080/healthcheck')"]
       interval: 30s

@@ -2,7 +2,7 @@
 
 import json
 from decimal import Decimal
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 from mcp import types as mcp_types
@@ -946,18 +946,14 @@ async def test_auth_middleware_returns_401_on_bad_jwt_claims():
         patch.object(mcp_module.settings, "MCP_RESOURCE_URL", ""),
         patch.object(mcp_module.settings, "JWKS_URL", "https://idp.example.com/jwks"),
         patch(
-            "reporting.services.mcp_server._get_jwks_client",
-        ) as mock_get_client,
+            "reporting.services.mcp_server.validate_bearer_token",
+            new=AsyncMock(return_value={"sub": "u1"}),
+        ),
         patch(
             "reporting.services.mcp_server._build_current_user_from_jwt",
             side_effect=_bad_user,
         ),
-        patch("reporting.services.mcp_server.jwt.decode", return_value={"sub": "u1"}),
     ):
-        mock_signing_key = MagicMock()
-        mock_client = mock_get_client.return_value
-        mock_client.get_signing_key_from_jwt = lambda _token: mock_signing_key
-
         scope = {
             "type": "http",
             "method": "POST",

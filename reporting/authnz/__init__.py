@@ -54,6 +54,29 @@ async def _get_jwt_payload(token: str) -> dict:
     return jwt.decode(token, signing_key.key, **decode_kwargs)
 
 
+async def validate_bearer_token(token: str) -> dict:
+    """Validate a Bearer token and return its claims.
+
+    Tries local JWT verification first (the common case for OIDC providers
+    that issue JWT access tokens). When that fails and
+    ``OIDC_ENABLE_TOKEN_INTROSPECTION`` is set, falls back to RFC 7662
+    introspection — the path for IDPs (e.g. Google) that issue opaque access
+    tokens. Introspection failures are surfaced as ``jwt.InvalidTokenError``
+    so callers can keep a single ``jwt.PyJWTError`` handler.
+    """
+    try:
+        return await _get_jwt_payload(token)
+    except jwt.PyJWTError:
+        if not settings.OIDC_ENABLE_TOKEN_INTROSPECTION:
+            raise
+        from reporting.services import oauth_client
+
+        try:
+            return await oauth_client.introspect_token(token=token)
+        except oauth_client.OAuthClientError as exc:
+            raise jwt.InvalidTokenError(f"Token introspection failed: {exc}") from exc
+
+
 def get_email() -> str:
     if not settings.DEVELOPMENT_ONLY_REQUIRE_AUTH:
         email = settings.DEVELOPMENT_ONLY_AUTH_USER_EMAIL
@@ -78,20 +101,27 @@ async def get_current_user(
     from reporting.services import report_store
 
     if not settings.DEVELOPMENT_ONLY_REQUIRE_AUTH:
-        email = settings.DEVELOPMENT_ONLY_AUTH_USER_EMAIL
+        dev_email = settings.DEVELOPMENT_ONLY_AUTH_USER_EMAIL
         logger.warning(
             "Authentication is disabled",
-            extra={"type": "AUDIT", "user": email},
+            extra={"type": "AUDIT", "user": dev_email},
         )
         user = await report_store.get_or_create_user(
-            sub=email,
+            sub=dev_email,
             iss="dev",
-            email=email,
+            email=dev_email,
             display_name=None,
+            preferred_username=None,
         )
         return CurrentUser(
             user=user,
-            jwt_claims={"email": email, "display_name": None, "token_iat": None, "token_exp": None},
+            jwt_claims={
+                "email": dev_email,
+                "display_name": None,
+                "preferred_username": None,
+                "token_iat": None,
+                "token_exp": None,
+            },
             permissions=ALL_PERMISSIONS,
         )
 
@@ -104,7 +134,7 @@ async def get_current_user(
 
     token = credentials.credentials
     try:
-        payload = await _get_jwt_payload(token)
+        payload = await validate_bearer_token(token)
     except jwt.PyJWTError as exc:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -116,18 +146,48 @@ async def get_current_user(
     token_iat = datetime.fromtimestamp(raw_iat, tz=UTC) if raw_iat is not None else None
     raw_exp = payload.get("exp")
     token_exp = datetime.fromtimestamp(raw_exp, tz=UTC) if raw_exp is not None else None
+    sub = payload.get(settings.JWT_SUB_CLAIM)
+    if not isinstance(sub, str) or not sub:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=f"Missing or invalid {settings.JWT_SUB_CLAIM} claim",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    iss = payload.get(settings.JWT_ISS_CLAIM)
+    if not isinstance(iss, str) or not iss:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=f"Missing or invalid {settings.JWT_ISS_CLAIM} claim",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    email = payload.get(settings.JWT_EMAIL_CLAIM)
+    if email is not None and not isinstance(email, str):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=f"Invalid {settings.JWT_EMAIL_CLAIM} claim",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    preferred_username = payload.get(settings.JWT_USERNAME_CLAIM)
+    if preferred_username is not None and not isinstance(preferred_username, str):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=f"Invalid {settings.JWT_USERNAME_CLAIM} claim",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
     jwt_claims = {
-        "email": payload[settings.JWT_EMAIL_CLAIM],
+        "email": email,
         "display_name": payload.get("name"),
+        "preferred_username": preferred_username,
         "token_iat": token_iat,
         "token_exp": token_exp,
     }
 
     user = await report_store.get_or_create_user(
-        sub=payload[settings.JWT_SUB_CLAIM],
-        iss=payload[settings.JWT_ISS_CLAIM],
-        email=payload[settings.JWT_EMAIL_CLAIM],
+        sub=sub,
+        iss=iss,
+        email=email,
         display_name=payload.get("name"),
+        preferred_username=preferred_username,
     )
 
     permissions = await resolve_permissions(payload)
@@ -177,6 +237,7 @@ async def sync_user_profile(
         user_id=current.user.user_id,
         email=claims["email"],
         display_name=claims.get("display_name"),
+        preferred_username=claims.get("preferred_username"),
         token_iat=claims.get("token_iat"),
     )
     return CurrentUser(user=updated_user, jwt_claims=claims, permissions=current.permissions)

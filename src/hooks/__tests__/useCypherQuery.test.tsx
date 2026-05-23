@@ -23,7 +23,6 @@ const CYPHER = 'MATCH (n) RETURN n';
 const AUTH_CONFIG_NO_OIDC = {
   auth_required: false,
   oidc: null,
-  userManager: null,
 };
 const CURRENT_USER: CurrentUser = {
   user_id: 'user-1',
@@ -54,9 +53,7 @@ function makeWrapper(
       <AuthConfigContext.Provider
         value={{ ...AUTH_CONFIG_NO_OIDC, auth_required: authRequired }}
       >
-        <AuthContext.Provider
-          value={{ user: null, accessToken, isLoading: false }}
-        >
+        <AuthContext.Provider value={{ accessToken, isLoading: false }}>
           <CurrentUserStateProvider value={currentUserState}>
             {children}
           </CurrentUserStateProvider>
@@ -75,9 +72,7 @@ function StatefulWrapper({ children }: { children: React.ReactNode }) {
     <AuthConfigContext.Provider
       value={{ ...AUTH_CONFIG_NO_OIDC, auth_required: true }}
     >
-      <AuthContext.Provider
-        value={{ user: null, accessToken, isLoading: false }}
-      >
+      <AuthContext.Provider value={{ accessToken, isLoading: false }}>
         <CurrentUserStateProvider
           value={{ currentUser: CURRENT_USER, loading: false }}
         >
@@ -205,7 +200,7 @@ describe('useLazyCypherQuery', () => {
     expect(body.params).toBeUndefined();
   });
 
-  it('re-fires query when accessToken becomes available', () => {
+  it('replays a blocked query when accessToken becomes available', async () => {
     const { result } = renderHook(() => useLazyCypherQuery(CYPHER), {
       wrapper: StatefulWrapper,
     });
@@ -218,10 +213,35 @@ describe('useLazyCypherQuery', () => {
     act(() => {
       _setToken!('newtoken');
     });
+    await waitFor(() => {
+      expect(global.fetch).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  it('replays a blocked query when permissions finish loading', async () => {
+    mockUsePermissionState.mockReturnValue({
+      hasPermission: () => true,
+      loading: true,
+      currentUser: CURRENT_USER,
+    });
+    const { result, rerender } = renderHook(() => useLazyCypherQuery(CYPHER), {
+      wrapper: makeWrapper(false, null),
+    });
     act(() => {
       result.current[0]();
     });
-    expect(global.fetch).toHaveBeenCalledTimes(1);
+    expect(global.fetch).not.toHaveBeenCalled();
+
+    mockUsePermissionState.mockReturnValue({
+      hasPermission: () => true,
+      loading: false,
+      currentUser: CURRENT_USER,
+    });
+    rerender();
+
+    await waitFor(() => {
+      expect(global.fetch).toHaveBeenCalledTimes(1);
+    });
   });
 
   it('omits save_history for ad hoc queries', () => {
@@ -329,6 +349,32 @@ describe('useLazyHistoryQuery', () => {
       result.current[0]('hist-1');
     });
     expect(global.fetch).not.toHaveBeenCalled();
+  });
+
+  it('replays a blocked history query when permissions finish loading', async () => {
+    mockUsePermissionState.mockReturnValue({
+      hasPermission: () => true,
+      loading: true,
+      currentUser: CURRENT_USER,
+    });
+    const { result, rerender } = renderHook(() => useLazyHistoryQuery(), {
+      wrapper: makeWrapper(false, null),
+    });
+    act(() => {
+      result.current[0]('hist-1');
+    });
+    expect(global.fetch).not.toHaveBeenCalled();
+
+    mockUsePermissionState.mockReturnValue({
+      hasPermission: () => true,
+      loading: false,
+      currentUser: CURRENT_USER,
+    });
+    rerender();
+
+    await waitFor(() => {
+      expect(global.fetch).toHaveBeenCalledTimes(1);
+    });
   });
 
   it('does not fetch without query:execute permission', () => {

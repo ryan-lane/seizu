@@ -31,8 +31,12 @@ export default defineConfig({
     host: '0.0.0.0',
     port: 3000,
     proxy: {
-      '/api': 'http://seizu:8080',
-      '/healthcheck': 'http://seizu:8080',
+      // changeOrigin:false preserves the browser's original Host header
+      // (localhost:3000) when proxying to seizu:8080. Required so the
+      // backend's request.url_for() — used to build the OIDC redirect_uri
+      // — emits localhost:3000, not the docker-internal hostname.
+      '/api': { target: 'http://seizu:8080', changeOrigin: false },
+      '/healthcheck': { target: 'http://seizu:8080', changeOrigin: false },
     },
     watch: {
       ignored: [

@@ -8,6 +8,7 @@ import {
 import { MemoryRouter } from 'react-router-dom';
 import { ThemeProvider, createTheme } from '@mui/material/styles';
 import { AuthConfigContext, type AuthConfig } from 'src/authConfig.context';
+import * as authClient from 'src/api/authClient';
 import DashboardNavbar from '../DashboardNavbar';
 
 jest.mock('src/hooks/useCurrentUser', () => ({
@@ -37,7 +38,6 @@ function Wrapper({
             authConfig ?? {
               auth_required: false,
               oidc: null,
-              userManager: null,
             }
           }
         >
@@ -105,28 +105,8 @@ describe('DashboardNavbar', () => {
     expect(screen.queryByText(/@/)).toBeNull();
   });
 
-  it('renders email when user is authenticated', () => {
+  it('renders display name when user is authenticated', () => {
     mockUseCurrentUser.mockReturnValue(CURRENT_USER);
-    render(
-      <Wrapper>
-        <DashboardNavbar {...defaultProps} />
-      </Wrapper>,
-    );
-    expect(screen.getByText('alice@example.com')).toBeInTheDocument();
-  });
-
-  it('falls back to display_name when email is empty', () => {
-    mockUseCurrentUser.mockReturnValue({
-      user_id: 'uid1',
-      sub: 'sub123',
-      iss: 'https://idp.example.com',
-      email: '',
-      display_name: 'Alice Smith',
-      created_at: '2024-01-01T00:00:00+00:00',
-      last_login: '2024-01-01T00:00:00+00:00',
-      archived_at: null,
-      permissions: [],
-    });
     render(
       <Wrapper>
         <DashboardNavbar {...defaultProps} />
@@ -135,13 +115,14 @@ describe('DashboardNavbar', () => {
     expect(screen.getByText('Alice Smith')).toBeInTheDocument();
   });
 
-  it('falls back to user_id when email and display_name are empty', () => {
+  it('falls back to preferred_username when display_name is empty', () => {
     mockUseCurrentUser.mockReturnValue({
       user_id: 'uid1',
       sub: 'sub123',
       iss: 'https://idp.example.com',
       email: '',
       display_name: null,
+      preferred_username: 'asmith',
       created_at: '2024-01-01T00:00:00+00:00',
       last_login: '2024-01-01T00:00:00+00:00',
       archived_at: null,
@@ -152,7 +133,28 @@ describe('DashboardNavbar', () => {
         <DashboardNavbar {...defaultProps} />
       </Wrapper>,
     );
-    expect(screen.getByText('uid1')).toBeInTheDocument();
+    expect(screen.getByText('asmith')).toBeInTheDocument();
+  });
+
+  it('falls back to email when display_name and preferred_username are empty', () => {
+    mockUseCurrentUser.mockReturnValue({
+      user_id: 'uid1',
+      sub: 'sub123',
+      iss: 'https://idp.example.com',
+      email: 'alice@example.com',
+      display_name: null,
+      preferred_username: null,
+      created_at: '2024-01-01T00:00:00+00:00',
+      last_login: '2024-01-01T00:00:00+00:00',
+      archived_at: null,
+      permissions: [],
+    });
+    render(
+      <Wrapper>
+        <DashboardNavbar {...defaultProps} />
+      </Wrapper>,
+    );
+    expect(screen.getByText('alice@example.com')).toBeInTheDocument();
   });
 
   it('renders avatar SVG when user is authenticated', () => {
@@ -176,34 +178,112 @@ describe('DashboardNavbar', () => {
     fireEvent.click(screen.getByRole('button', { name: /user menu/i }));
 
     expect(screen.getByRole('menu')).toBeInTheDocument();
-    expect(screen.getAllByText('alice@example.com').length).toBeGreaterThan(1);
+    expect(screen.getAllByText('Alice Smith').length).toBeGreaterThan(1);
   });
 
-  it('calls OIDC signoutRedirect when Log out is clicked', async () => {
+  it('calls the BFF logout endpoint and navigates to the logged-out page when Log out is clicked', async () => {
     mockUseCurrentUser.mockReturnValue(CURRENT_USER);
-    const signoutRedirect = jest.fn().mockResolvedValue(undefined);
-    const removeUser = jest.fn().mockResolvedValue(undefined);
-    render(
-      <Wrapper
-        authConfig={{
-          auth_required: true,
-          oidc: null,
-          userManager: { signoutRedirect, removeUser } as any,
-        }}
-      >
-        <DashboardNavbar {...defaultProps} />
-      </Wrapper>,
-    );
-
-    fireEvent.click(screen.getByRole('button', { name: /user menu/i }));
-    fireEvent.click(screen.getByRole('menuitem', { name: /log out/i }));
-
-    await waitFor(() => {
-      expect(signoutRedirect).toHaveBeenCalledWith({
-        post_logout_redirect_uri: window.location.origin,
-      });
+    const logoutSpy = jest
+      .spyOn(authClient, 'logout')
+      .mockResolvedValue({ post_logout_url: null });
+    const assignMock = jest.fn();
+    const originalLocation = window.location;
+    Object.defineProperty(window, 'location', {
+      configurable: true,
+      value: { ...originalLocation, assign: assignMock },
     });
-    expect(removeUser).not.toHaveBeenCalled();
+    try {
+      render(
+        <Wrapper authConfig={{ auth_required: true, oidc: null }}>
+          <DashboardNavbar {...defaultProps} />
+        </Wrapper>,
+      );
+
+      fireEvent.click(screen.getByRole('button', { name: /user menu/i }));
+      fireEvent.click(screen.getByRole('menuitem', { name: /log out/i }));
+
+      await waitFor(() => {
+        expect(logoutSpy).toHaveBeenCalled();
+      });
+      await waitFor(() => {
+        expect(assignMock).toHaveBeenCalledWith('/logged-out');
+      });
+    } finally {
+      Object.defineProperty(window, 'location', {
+        configurable: true,
+        value: originalLocation,
+      });
+      logoutSpy.mockRestore();
+    }
+  });
+
+  it('navigates to the IDP post-logout URL when one is returned', async () => {
+    mockUseCurrentUser.mockReturnValue(CURRENT_USER);
+    const logoutSpy = jest
+      .spyOn(authClient, 'logout')
+      .mockResolvedValue({ post_logout_url: 'http://idp/end-session' });
+    const assignMock = jest.fn();
+    const originalLocation = window.location;
+    Object.defineProperty(window, 'location', {
+      configurable: true,
+      value: { ...originalLocation, assign: assignMock },
+    });
+    try {
+      render(
+        <Wrapper authConfig={{ auth_required: true, oidc: null }}>
+          <DashboardNavbar {...defaultProps} />
+        </Wrapper>,
+      );
+
+      fireEvent.click(screen.getByRole('button', { name: /user menu/i }));
+      fireEvent.click(screen.getByRole('menuitem', { name: /log out/i }));
+
+      await waitFor(() => {
+        expect(logoutSpy).toHaveBeenCalled();
+      });
+      await waitFor(() => {
+        expect(assignMock).toHaveBeenCalledWith('http://idp/end-session');
+      });
+    } finally {
+      Object.defineProperty(window, 'location', {
+        configurable: true,
+        value: originalLocation,
+      });
+      logoutSpy.mockRestore();
+    }
+  });
+
+  it('still navigates to the logged-out page when the logout endpoint fails', async () => {
+    mockUseCurrentUser.mockReturnValue(CURRENT_USER);
+    const logoutSpy = jest
+      .spyOn(authClient, 'logout')
+      .mockRejectedValue(new Error('boom'));
+    const assignMock = jest.fn();
+    const originalLocation = window.location;
+    Object.defineProperty(window, 'location', {
+      configurable: true,
+      value: { ...originalLocation, assign: assignMock },
+    });
+    try {
+      render(
+        <Wrapper authConfig={{ auth_required: true, oidc: null }}>
+          <DashboardNavbar {...defaultProps} />
+        </Wrapper>,
+      );
+
+      fireEvent.click(screen.getByRole('button', { name: /user menu/i }));
+      fireEvent.click(screen.getByRole('menuitem', { name: /log out/i }));
+
+      await waitFor(() => {
+        expect(assignMock).toHaveBeenCalledWith('/logged-out');
+      });
+    } finally {
+      Object.defineProperty(window, 'location', {
+        configurable: true,
+        value: originalLocation,
+      });
+      logoutSpy.mockRestore();
+    }
   });
 
   it('renders email when auth is disabled (no display_name)', () => {

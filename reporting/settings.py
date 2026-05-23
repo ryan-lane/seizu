@@ -3,6 +3,25 @@ from importlib import resources
 from reporting.utils.settings import bool_env, int_env, list_env, str_env
 
 
+def _parse_kv_pairs(items: list[str]) -> dict[str, str]:
+    """Parse a list of ``key=value`` strings into a dict.
+
+    Used for env vars that carry a small map as a comma-separated list (e.g.
+    ``OIDC_AUTHORIZE_EXTRA_PARAMS``). Entries without ``=`` or with an empty
+    key are skipped. The value may contain ``=``; only the first is the
+    separator.
+    """
+    result: dict[str, str] = {}
+    for item in items:
+        if "=" not in item:
+            continue
+        key, _, value = item.partition("=")
+        key = key.strip()
+        if key:
+            result[key] = value.strip()
+    return result
+
+
 def _default_static_folder() -> str:
     if resources.files("reporting").joinpath("static_dist", "index.html").is_file():
         return str(resources.files("reporting").joinpath("static_dist"))
@@ -50,8 +69,10 @@ ALLOWED_JWT_ALGORITHMS = list_env("ALLOWED_JWT_ALGORITHMS", ["RS256", "ES256", "
 # Use "Authorization" (default) for standard Bearer token auth (e.g. OIDC PKCE).
 # Use "x-amzn-oidc-data" for backwards compatibility with AWS ALB OIDC headers.
 JWT_HEADER_NAME = str_env("JWT_HEADER_NAME", "Authorization")
-# The JWT claim that contains the user's email address.
+# Optional JWT claim that contains the user's email address.
 JWT_EMAIL_CLAIM = str_env("JWT_EMAIL_CLAIM", "email")
+# Optional JWT claim that contains the user's preferred username.
+JWT_USERNAME_CLAIM = str_env("JWT_USERNAME_CLAIM", "preferred_username")
 # The JWT claim that contains the user's subject identifier.
 # The OIDC standard claim is "sub" and it should not be changed in most cases.
 JWT_SUB_CLAIM = str_env("JWT_SUB_CLAIM", "sub")
@@ -72,13 +93,45 @@ OIDC_AUTHORITY = str_env("OIDC_AUTHORITY", "")
 # with split internal/external hostnames). Defaults to OIDC_AUTHORITY when unset.
 OIDC_INTERNAL_AUTHORITY = str_env("OIDC_INTERNAL_AUTHORITY", "")
 OIDC_CLIENT_ID = str_env("OIDC_CLIENT_ID", "")
+OIDC_CLIENT_SECRET = str_env("OIDC_CLIENT_SECRET", "")
+OIDC_TOKEN_ENDPOINT_AUTH_METHOD = str_env("OIDC_TOKEN_ENDPOINT_AUTH_METHOD", "none")
+OIDC_REVOCATION_ENDPOINT_AUTH_METHOD = str_env(
+    "OIDC_REVOCATION_ENDPOINT_AUTH_METHOD",
+    OIDC_TOKEN_ENDPOINT_AUTH_METHOD,
+)
 OIDC_REDIRECT_URI = str_env("OIDC_REDIRECT_URI", "")
-# Default includes offline_access so the OIDC client gets a refresh_token and
-# can renew silently via direct POST to the token endpoint. Without it,
-# oidc-client-ts falls back to a hidden iframe against the IDP's authorize
-# endpoint, which most IDPs (including Authentik) block via
-# X-Frame-Options: deny.
+# Default includes offline_access so the BFF gets a refresh_token and can
+# renew silently via direct POST to the token endpoint.
 OIDC_SCOPE = str_env("OIDC_SCOPE", "openid email offline_access")
+# Extra query parameters appended to the OIDC authorization request, as a
+# comma-separated list of key=value pairs. Use for provider-specific knobs
+# that the standard scope can't express. The canonical example is Google,
+# which issues a refresh token only when the authorize request carries
+# "access_type=offline" (and "prompt=consent" to re-issue one on repeat
+# logins) rather than honoring the offline_access scope:
+#   OIDC_AUTHORIZE_EXTRA_PARAMS="access_type=offline,prompt=consent"
+OIDC_AUTHORIZE_EXTRA_PARAMS = _parse_kv_pairs(list_env("OIDC_AUTHORIZE_EXTRA_PARAMS", []))
+# Enable RFC 7662 token introspection as a fallback when a Bearer token is
+# not a verifiable JWT. Required for IDPs that issue opaque access tokens
+# (e.g. Google, some Okta/Auth0 configurations without an API audience).
+# Introspection authenticates to the IDP with the configured client
+# credentials, so it generally pairs with a confidential client.
+OIDC_ENABLE_TOKEN_INTROSPECTION = bool_env("OIDC_ENABLE_TOKEN_INTROSPECTION", False)
+# Authlib client-auth method for the introspection endpoint. Defaults to the
+# token-endpoint method (authlib uses that for introspection by default).
+OIDC_INTROSPECTION_ENDPOINT_AUTH_METHOD = str_env(
+    "OIDC_INTROSPECTION_ENDPOINT_AUTH_METHOD",
+    OIDC_TOKEN_ENDPOINT_AUTH_METHOD,
+)
+# How long (seconds) to cache the IDP's OIDC discovery document before
+# re-fetching. Endpoints rarely move, so a long TTL is fine; a non-infinite
+# one means rotated endpoints/JWKS recover without a process restart.
+OIDC_DISCOVERY_CACHE_TTL_SECONDS = int_env("OIDC_DISCOVERY_CACHE_TTL_SECONDS", 3600)
+# Validate the OIDC ID token returned by the BFF code exchange (signature via
+# the discovery JWKS, audience, issuer, and the login nonce). Secure by
+# default; disable only for non-conformant providers whose ID token can't be
+# verified server-side.
+OIDC_VALIDATE_ID_TOKEN = bool_env("OIDC_VALIDATE_ID_TOKEN", True)
 
 # Whether or not to require authentication.
 # This option should only be changed in development.
@@ -136,6 +189,38 @@ QUERY_VALIDATOR_ALLOWED_PROCEDURES = list_env("QUERY_VALIDATOR_ALLOWED_PROCEDURE
 # In development auth-disabled mode, Seizu can fall back to an in-process
 # default so local work still runs.
 REPORT_QUERY_SIGNING_SECRET = str_env("REPORT_QUERY_SIGNING_SECRET", "")
+
+# AES-256-GCM key used to encrypt the IDP refresh token stored in the
+# browser session cookie. Must be exactly 32 bytes after base64 decoding.
+# Generate with: python -c 'import base64,os;print(base64.b64encode(os.urandom(32)).decode())'
+# Rotate if exposed; rotation invalidates all outstanding browser sessions
+# (users will be forced to log in again).
+SESSION_TOKEN_ENCRYPTION_KEY = str_env("SESSION_TOKEN_ENCRYPTION_KEY", "")
+
+# Name of the session cookie that carries the encrypted IDP refresh token.
+SESSION_COOKIE_NAME = str_env("SESSION_COOKIE_NAME", "seizu_session")
+
+# Lifetime of the session cookie, in seconds. The cookie is rolling: each
+# successful /api/v1/auth/refresh re-issues it with this Max-Age reset,
+# capped by the IDP refresh token's own absolute expiry (recorded in the
+# cookie at login). Default: 18 hours.
+SESSION_COOKIE_MAX_AGE_SECONDS = int_env("SESSION_COOKIE_MAX_AGE_SECONDS", 18 * 60 * 60)
+
+# Whether to revoke the OIDC refresh token on logout in addition to clearing
+# the session cookie. Set False for IDPs that don't advertise or support
+# RFC 7009 revocation. Failures are caught and logged; the user's local
+# logout still succeeds.
+OIDC_REVOKE_REFRESH_TOKEN_ON_LOGOUT = bool_env("OIDC_REVOKE_REFRESH_TOKEN_ON_LOGOUT", True)
+
+# Fallback absolute upper bound on the session, in seconds, used when the
+# IDP's token response doesn't advertise ``refresh_expires_in``. Most IDPs
+# do advertise it; Authentik's default refresh-token lifetime is 30 days,
+# which we mirror here. This is the cap on rolling re-issues — the cookie
+# never extends past iat + this many seconds without the IDP confirming.
+OIDC_REFRESH_TOKEN_FALLBACK_TTL_SECONDS = int_env(
+    "OIDC_REFRESH_TOKEN_FALLBACK_TTL_SECONDS",
+    30 * 24 * 60 * 60,
+)
 
 # Whether or not scheduled queries should be enabled.
 ENABLE_SCHEDULED_QUERIES = bool_env("ENABLE_SCHEDULED_QUERIES", True)
