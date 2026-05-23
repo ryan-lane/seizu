@@ -261,6 +261,8 @@ Use `from reporting.services import report_store` — backend is transparent.
 
 **Switching backends:** `make sqlmodel_enable / sqlmodel_disable` then `make down && make up`.
 
+**SQL schema changes:** The SQL backend currently has only small inline compatibility migrations in `reporting/services/report_store/sql.py`. Do not keep adding piecemeal schema migrations there; introduce a real migration framework such as Alembic before the next non-trivial SQL schema change. Existing SQLite dev databases created before nullable user emails still have the old `NOT NULL` constraint because SQLite cannot drop it in-place; recreate the dev DB if testing emailless users with SQLite.
+
 **DynamoDB key design:** `#METADATA`, `#LATEST`, `VERSION#<n>` per report; `SQ#<id>` + `SCHEDULED_QUERY_LIST` per scheduled query; `#DASHBOARD/#POINTER` for the default dashboard.
 
 **Seeding:** Existing reports/queries unchanged unless content differs or `--force`. `cypher` fields resolved against top-level `queries` dict, falling back to literal string. The `Report` TypeScript interface in `src/config.context.ts` must stay in sync with the Pydantic `Report` in `reporting/schema/reporting_config.py`.

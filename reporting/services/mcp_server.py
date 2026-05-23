@@ -307,6 +307,12 @@ async def _build_current_user_from_jwt(payload: dict[str, Any]) -> CurrentUser:
     token_iat = datetime.fromtimestamp(raw_iat, tz=UTC) if raw_iat is not None else None
     raw_exp = payload.get("exp")
     token_exp = datetime.fromtimestamp(raw_exp, tz=UTC) if raw_exp is not None else None
+    sub = payload.get(settings.JWT_SUB_CLAIM)
+    if not isinstance(sub, str) or not sub:
+        raise ValueError(f"Missing or invalid {settings.JWT_SUB_CLAIM} claim")
+    iss = payload.get(settings.JWT_ISS_CLAIM)
+    if not isinstance(iss, str) or not iss:
+        raise ValueError(f"Missing or invalid {settings.JWT_ISS_CLAIM} claim")
     email = payload.get(settings.JWT_EMAIL_CLAIM)
     if email is not None and not isinstance(email, str):
         raise ValueError(f"Invalid {settings.JWT_EMAIL_CLAIM} claim")
@@ -321,8 +327,8 @@ async def _build_current_user_from_jwt(payload: dict[str, Any]) -> CurrentUser:
         "token_exp": token_exp,
     }
     user = await report_store.get_or_create_user(
-        sub=payload[settings.JWT_SUB_CLAIM],
-        iss=payload[settings.JWT_ISS_CLAIM],
+        sub=sub,
+        iss=iss,
         email=email,
         display_name=payload.get("name"),
         preferred_username=preferred_username,

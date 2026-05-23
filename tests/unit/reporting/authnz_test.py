@@ -336,6 +336,62 @@ async def test_get_current_user_allows_missing_email(mocker):
     assert result.user.email is None
 
 
+async def test_get_current_user_rejects_missing_subject_claim(mocker):
+    mocker.patch("reporting.settings.DEVELOPMENT_ONLY_REQUIRE_AUTH", True)
+    mocker.patch("reporting.settings.JWT_AUDIENCE", "")
+    signing_key = _make_mock_signing_key(mocker)
+    mock_client = _make_mock_client(mocker, signing_key)
+    mocker.patch("reporting.authnz._get_jwks_client", return_value=mock_client)
+    get_or_create = mocker.patch("reporting.services.report_store.get_or_create_user", new=AsyncMock())
+
+    from fastapi import HTTPException
+    from fastapi.security import HTTPAuthorizationCredentials
+
+    encoded = jwt.encode(
+        {
+            "iss": "https://idp.example.com",
+            "iat": 1704067200,
+        },
+        base64.b64decode(FAKE_PRIVATE_KEY),
+        algorithm="ES256",
+    )
+    credentials = HTTPAuthorizationCredentials(scheme="Bearer", credentials=encoded)
+
+    with pytest.raises(HTTPException) as exc_info:
+        await get_current_user(credentials=credentials)
+
+    assert exc_info.value.status_code == 401
+    get_or_create.assert_not_called()
+
+
+async def test_get_current_user_rejects_missing_issuer_claim(mocker):
+    mocker.patch("reporting.settings.DEVELOPMENT_ONLY_REQUIRE_AUTH", True)
+    mocker.patch("reporting.settings.JWT_AUDIENCE", "")
+    signing_key = _make_mock_signing_key(mocker)
+    mock_client = _make_mock_client(mocker, signing_key)
+    mocker.patch("reporting.authnz._get_jwks_client", return_value=mock_client)
+    get_or_create = mocker.patch("reporting.services.report_store.get_or_create_user", new=AsyncMock())
+
+    from fastapi import HTTPException
+    from fastapi.security import HTTPAuthorizationCredentials
+
+    encoded = jwt.encode(
+        {
+            "sub": "sub123",
+            "iat": 1704067200,
+        },
+        base64.b64decode(FAKE_PRIVATE_KEY),
+        algorithm="ES256",
+    )
+    credentials = HTTPAuthorizationCredentials(scheme="Bearer", credentials=encoded)
+
+    with pytest.raises(HTTPException) as exc_info:
+        await get_current_user(credentials=credentials)
+
+    assert exc_info.value.status_code == 401
+    get_or_create.assert_not_called()
+
+
 async def test_get_current_user_resolves_permissions_from_role_claim(mocker):
     """Permissions are resolved from the RBAC_ROLE_CLAIM in the JWT payload."""
     mocker.patch("reporting.settings.DEVELOPMENT_ONLY_REQUIRE_AUTH", True)

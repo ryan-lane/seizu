@@ -383,10 +383,16 @@ class SQLModelReportStore(ReportStore):
         try:
             async with _get_engine().begin() as conn:
                 await conn.run_sync(SQLModel.metadata.create_all)
+                # TODO: replace these inline compatibility migrations with a
+                # real migration framework (for example Alembic) before adding
+                # more SQL schema drift here.
                 if conn.dialect.name == "postgresql":
                     await conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS preferred_username VARCHAR"))
                     await conn.execute(text("ALTER TABLE users ALTER COLUMN email DROP NOT NULL"))
                 elif conn.dialect.name == "sqlite":
+                    # SQLite cannot drop NOT NULL in-place. Existing SQLite
+                    # dev DBs created before nullable email still require email;
+                    # new DBs created from the model do not.
                     columns = await conn.execute(text("PRAGMA table_info(users)"))
                     column_names = {row[1] for row in columns}
                     if "preferred_username" not in column_names:
