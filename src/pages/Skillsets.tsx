@@ -9,18 +9,10 @@ import {
   Dialog,
   DialogActions,
   DialogContent,
-  DialogContentText,
   DialogTitle,
-  Divider,
   FormControlLabel,
-  IconButton,
-  ListItemIcon,
-  ListItemText,
-  Menu,
-  MenuItem,
   Switch,
   TextField,
-  Tooltip,
   Typography,
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
@@ -28,10 +20,8 @@ import PsychologyIcon from '@mui/icons-material/Psychology';
 import DeleteIcon from '@mui/icons-material/Delete';
 import EditIcon from '@mui/icons-material/Edit';
 import HistoryIcon from '@mui/icons-material/History';
-import MoreVertIcon from '@mui/icons-material/MoreVert';
 import ToggleOnIcon from '@mui/icons-material/ToggleOn';
 import ToggleOffIcon from '@mui/icons-material/ToggleOff';
-import Error from '@mui/icons-material/Error';
 import {
   useSkillsetsList,
   useSkillsetMutations,
@@ -48,6 +38,10 @@ import ListTable, {
   listTableSecondaryCellSx,
   listTableTruncateSx,
 } from 'src/components/ListTable';
+import ListPageHeader from 'src/components/ListPageHeader';
+import ListViewState from 'src/components/ListViewState';
+import RowMenu, { RowMenuAction } from 'src/components/RowMenu';
+import ConfirmDeleteDialog from 'src/components/ConfirmDeleteDialog';
 import UserDisplay from 'src/components/UserDisplay';
 import { usePermissions } from 'src/hooks/usePermissions';
 import type { BackState } from 'src/navigation';
@@ -190,108 +184,6 @@ function SkillsetDialog({
   );
 }
 
-interface RowMenuProps {
-  item: SkillsetListItem;
-  onEdit: () => void;
-  onSkills: () => void;
-  onHistory: () => void;
-  onDelete: () => void;
-}
-
-function RowMenu({ onEdit, onSkills, onHistory, onDelete }: RowMenuProps) {
-  const [anchor, setAnchor] = useState<null | HTMLElement>(null);
-  const hasPermission = usePermissions();
-  const close = () => setAnchor(null);
-  const canWrite = hasPermission('skillsets:write');
-  const canDelete = hasPermission('skillsets:delete');
-
-  return (
-    <>
-      <Tooltip title="More actions">
-        <IconButton size="small" onClick={(e) => setAnchor(e.currentTarget)}>
-          <MoreVertIcon fontSize="small" />
-        </IconButton>
-      </Tooltip>
-      <Menu
-        anchorEl={anchor}
-        open={!!anchor}
-        onClose={close}
-        anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
-        transformOrigin={{ vertical: 'top', horizontal: 'right' }}
-        slotProps={{ paper: { sx: { minWidth: 180 } } }}
-      >
-        <Tooltip
-          title={canWrite ? '' : 'You do not have permission to edit skillsets'}
-          placement="left"
-        >
-          <span>
-            <MenuItem
-              onClick={() => {
-                onEdit();
-                close();
-              }}
-              disabled={!canWrite}
-            >
-              <ListItemIcon>
-                <EditIcon fontSize="small" />
-              </ListItemIcon>
-              <ListItemText>Edit</ListItemText>
-            </MenuItem>
-          </span>
-        </Tooltip>
-        <MenuItem
-          onClick={() => {
-            onSkills();
-            close();
-          }}
-        >
-          <ListItemIcon>
-            <PsychologyIcon fontSize="small" />
-          </ListItemIcon>
-          <ListItemText>View skills</ListItemText>
-        </MenuItem>
-        <MenuItem
-          onClick={() => {
-            onHistory();
-            close();
-          }}
-        >
-          <ListItemIcon>
-            <HistoryIcon fontSize="small" />
-          </ListItemIcon>
-          <ListItemText>View history</ListItemText>
-        </MenuItem>
-        <Divider />
-        <Tooltip
-          title={
-            canDelete ? '' : 'You do not have permission to delete skillsets'
-          }
-          placement="left"
-        >
-          <span>
-            <MenuItem
-              onClick={() => {
-                onDelete();
-                close();
-              }}
-              disabled={!canDelete}
-              sx={{ color: canDelete ? 'error.main' : undefined }}
-            >
-              <ListItemIcon>
-                <DeleteIcon
-                  fontSize="small"
-                  color={canDelete ? 'error' : 'disabled'}
-                />
-              </ListItemIcon>
-              <ListItemText>Delete</ListItemText>
-            </MenuItem>
-          </span>
-        </Tooltip>
-      </Menu>
-    </>
-  );
-}
-
 function Skillsets() {
   const navigate = useNavigate();
   const { skillsets, loading, error, refresh } = useSkillsetsList();
@@ -304,6 +196,9 @@ function Skillsets() {
     null,
   );
   const [deleting, setDeleting] = useState(false);
+
+  const canWrite = hasPermission('skillsets:write');
+  const canDelete = hasPermission('skillsets:delete');
 
   const handleSave = async (
     req: CreateSkillsetRequest | UpdateSkillsetRequest,
@@ -328,6 +223,49 @@ function Skillsets() {
       setDeleting(false);
     }
   };
+
+  const rowActions = (item: SkillsetListItem): RowMenuAction[] => [
+    {
+      key: 'edit',
+      label: 'Edit',
+      icon: <EditIcon fontSize="small" />,
+      onClick: () => {
+        setEditTarget(item);
+        setDialogOpen(true);
+      },
+      disabled: !canWrite,
+      tooltip: canWrite
+        ? undefined
+        : 'You do not have permission to edit skillsets',
+    },
+    {
+      key: 'skills',
+      label: 'View skills',
+      icon: <PsychologyIcon fontSize="small" />,
+      onClick: () => navigate(`/app/skillsets/${item.skillset_id}/skills`),
+    },
+    {
+      key: 'history',
+      label: 'View history',
+      icon: <HistoryIcon fontSize="small" />,
+      onClick: () =>
+        navigate(`/app/skillsets/${item.skillset_id}/history`, {
+          state: { fromLabel: 'Skillsets' } satisfies BackState,
+        }),
+    },
+    {
+      key: 'delete',
+      label: 'Delete',
+      icon: <DeleteIcon fontSize="small" />,
+      onClick: () => setDeleteTarget(item),
+      disabled: !canDelete,
+      tooltip: canDelete
+        ? undefined
+        : 'You do not have permission to delete skillsets',
+      destructive: true,
+      dividerBefore: true,
+    },
+  ];
 
   const columns: ListTableColumn<SkillsetListItem>[] = [
     {
@@ -416,22 +354,7 @@ function Skillsets() {
       key: 'actions',
       align: 'right',
       cellSx: listTableActionColumnSx,
-      render: (item) => (
-        <RowMenu
-          item={item}
-          onEdit={() => {
-            setEditTarget(item);
-            setDialogOpen(true);
-          }}
-          onSkills={() => navigate(`/app/skillsets/${item.skillset_id}/skills`)}
-          onHistory={() =>
-            navigate(`/app/skillsets/${item.skillset_id}/history`, {
-              state: { fromLabel: 'Skillsets' } satisfies BackState,
-            })
-          }
-          onDelete={() => setDeleteTarget(item)}
-        />
-      ),
+      render: (item) => <RowMenu actions={rowActions(item)} />,
     },
   ];
   const filterGroups: ListTableFilterGroup<SkillsetListItem>[] = [
@@ -459,40 +382,28 @@ function Skillsets() {
   return (
     <>
       <Box sx={pageContentSx}>
-        <Box
-          sx={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            mb: 3,
-          }}
+        <ListPageHeader
+          title="MCP Skillsets"
+          action={
+            canWrite && (
+              <Button
+                variant="contained"
+                startIcon={<AddIcon />}
+                onClick={() => {
+                  setEditTarget(null);
+                  setDialogOpen(true);
+                }}
+              >
+                New skillset
+              </Button>
+            )
+          }
+        />
+        <ListViewState
+          loading={loading}
+          error={error}
+          errorMessage="Failed to load skillsets"
         >
-          <Typography variant="h1">MCP Skillsets</Typography>
-          {hasPermission('skillsets:write') && (
-            <Button
-              variant="contained"
-              startIcon={<AddIcon />}
-              onClick={() => {
-                setEditTarget(null);
-                setDialogOpen(true);
-              }}
-            >
-              New skillset
-            </Button>
-          )}
-        </Box>
-        {loading && (
-          <Box sx={{ display: 'flex', justifyContent: 'center', p: 4 }}>
-            <CircularProgress />
-          </Box>
-        )}
-        {error && (
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-            <Error />
-            <Typography>Failed to load skillsets</Typography>
-          </Box>
-        )}
-        {!loading && !error && (
           <ListTable
             rows={skillsets}
             columns={columns}
@@ -500,7 +411,7 @@ function Skillsets() {
             emptyMessage="No skillsets yet. Create one above."
             filterGroups={filterGroups}
           />
-        )}
+        </ListViewState>
       </Box>
       <SkillsetDialog
         key={editTarget?.skillset_id ?? 'new'}
@@ -509,33 +420,16 @@ function Skillsets() {
         onSave={handleSave}
         initial={editTarget}
       />
-      <Dialog
+      <ConfirmDeleteDialog
         open={!!deleteTarget}
+        title="Delete skillset?"
+        deleting={deleting}
         onClose={() => setDeleteTarget(null)}
-        maxWidth="xs"
-        fullWidth
+        onConfirm={handleDeleteConfirm}
       >
-        <DialogTitle>Delete skillset?</DialogTitle>
-        <DialogContent>
-          <DialogContentText>
-            Permanently delete <strong>{deleteTarget?.name}</strong> and all its
-            skills and versions?
-          </DialogContentText>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setDeleteTarget(null)} disabled={deleting}>
-            Cancel
-          </Button>
-          <Button
-            variant="contained"
-            color="error"
-            onClick={handleDeleteConfirm}
-            disabled={deleting}
-          >
-            {deleting ? <CircularProgress size={20} /> : 'Delete'}
-          </Button>
-        </DialogActions>
-      </Dialog>
+        Permanently delete <strong>{deleteTarget?.name}</strong> and all its
+        skills and versions?
+      </ConfirmDeleteDialog>
     </>
   );
 }

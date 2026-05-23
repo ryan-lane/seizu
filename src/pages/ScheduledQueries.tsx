@@ -9,7 +9,6 @@ import {
   Dialog,
   DialogActions,
   DialogContent,
-  DialogContentText,
   DialogTitle,
   Divider,
   FormControl,
@@ -17,9 +16,6 @@ import {
   FormLabel,
   IconButton,
   InputLabel,
-  ListItemIcon,
-  ListItemText,
-  Menu,
   MenuItem,
   Radio,
   RadioGroup,
@@ -40,12 +36,10 @@ import HelpOutlineIcon from '@mui/icons-material/Help';
 import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircle';
 import FiberManualRecordIcon from '@mui/icons-material/FiberManualRecord';
 import HistoryIcon from '@mui/icons-material/History';
-import MoreVertIcon from '@mui/icons-material/MoreVert';
 import AddCircleOutlineIcon from '@mui/icons-material/AddCircle';
 import RemoveCircleOutlineIcon from '@mui/icons-material/RemoveCircle';
 import ToggleOnIcon from '@mui/icons-material/ToggleOn';
 import ToggleOffIcon from '@mui/icons-material/ToggleOff';
-import Error from '@mui/icons-material/Error';
 import {
   useScheduledQueriesList,
   useScheduledQueriesMutations,
@@ -69,6 +63,10 @@ import ListTable, {
   listTableSecondaryCellSx,
   listTableTruncateSx,
 } from 'src/components/ListTable';
+import ListPageHeader from 'src/components/ListPageHeader';
+import ListViewState from 'src/components/ListViewState';
+import RowMenu, { RowMenuAction } from 'src/components/RowMenu';
+import ConfirmDeleteDialog from 'src/components/ConfirmDeleteDialog';
 import type { BackState } from 'src/navigation';
 import { pageContentSx } from 'src/theme/layout';
 
@@ -759,111 +757,6 @@ function triggerSummary(item: ScheduledQueryItem): string {
 }
 
 // ---------------------------------------------------------------------------
-// Per-row overflow menu
-// ---------------------------------------------------------------------------
-
-interface RowMenuProps {
-  item: ScheduledQueryItem;
-  onEdit: () => void;
-  onHistory: () => void;
-  onDelete: () => void;
-}
-
-function RowMenu({ item: _item, onEdit, onHistory, onDelete }: RowMenuProps) {
-  const [anchor, setAnchor] = useState<null | HTMLElement>(null);
-  const hasPermission = usePermissions();
-  const close = () => setAnchor(null);
-
-  const canWrite = hasPermission('scheduled_queries:write');
-  const canDelete = hasPermission('scheduled_queries:delete');
-
-  return (
-    <>
-      <Tooltip title="More actions">
-        <IconButton size="small" onClick={(e) => setAnchor(e.currentTarget)}>
-          <MoreVertIcon fontSize="small" />
-        </IconButton>
-      </Tooltip>
-
-      <Menu
-        anchorEl={anchor}
-        open={!!anchor}
-        onClose={close}
-        anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
-        transformOrigin={{ vertical: 'top', horizontal: 'right' }}
-        slotProps={{ paper: { sx: { minWidth: 180 } } }}
-      >
-        <Tooltip
-          title={
-            !canWrite
-              ? 'You do not have permission to edit scheduled queries'
-              : ''
-          }
-          placement="left"
-        >
-          <span>
-            <MenuItem
-              onClick={() => {
-                onEdit();
-                close();
-              }}
-              disabled={!canWrite}
-            >
-              <ListItemIcon>
-                <EditIcon fontSize="small" />
-              </ListItemIcon>
-              <ListItemText>Edit</ListItemText>
-            </MenuItem>
-          </span>
-        </Tooltip>
-
-        <MenuItem
-          onClick={() => {
-            onHistory();
-            close();
-          }}
-        >
-          <ListItemIcon>
-            <HistoryIcon fontSize="small" />
-          </ListItemIcon>
-          <ListItemText>View history</ListItemText>
-        </MenuItem>
-
-        <Divider />
-
-        <Tooltip
-          title={
-            !canDelete
-              ? 'You do not have permission to delete scheduled queries'
-              : ''
-          }
-          placement="left"
-        >
-          <span>
-            <MenuItem
-              onClick={() => {
-                onDelete();
-                close();
-              }}
-              disabled={!canDelete}
-              sx={{ color: canDelete ? 'error.main' : undefined }}
-            >
-              <ListItemIcon>
-                <DeleteIcon
-                  fontSize="small"
-                  color={canDelete ? 'error' : 'disabled'}
-                />
-              </ListItemIcon>
-              <ListItemText>Delete</ListItemText>
-            </MenuItem>
-          </span>
-        </Tooltip>
-      </Menu>
-    </>
-  );
-}
-
-// ---------------------------------------------------------------------------
 // Page
 // ---------------------------------------------------------------------------
 
@@ -949,6 +842,45 @@ function ScheduledQueries() {
     } finally {
       setDeleting(false);
     }
+  };
+
+  const rowActions = (item: ScheduledQueryItem): RowMenuAction[] => {
+    const canWrite = hasPermission('scheduled_queries:write');
+    const canDelete = hasPermission('scheduled_queries:delete');
+    return [
+      {
+        key: 'edit',
+        label: 'Edit',
+        icon: <EditIcon fontSize="small" />,
+        onClick: () => openEdit(item),
+        disabled: !canWrite,
+        tooltip: canWrite
+          ? undefined
+          : 'You do not have permission to edit scheduled queries',
+      },
+      {
+        key: 'history',
+        label: 'View history',
+        icon: <HistoryIcon fontSize="small" />,
+        onClick: () =>
+          navigate(
+            `/app/scheduled-queries/${item.scheduled_query_id}/history`,
+            { state: { fromLabel: 'Scheduled Queries' } satisfies BackState },
+          ),
+      },
+      {
+        key: 'delete',
+        label: 'Delete',
+        icon: <DeleteIcon fontSize="small" />,
+        onClick: () => setDeleteTarget(item),
+        disabled: !canDelete,
+        tooltip: canDelete
+          ? undefined
+          : 'You do not have permission to delete scheduled queries',
+        destructive: true,
+        dividerBefore: true,
+      },
+    ];
   };
 
   const columns: ListTableColumn<ScheduledQueryItem>[] = [
@@ -1100,19 +1032,7 @@ function ScheduledQueries() {
       key: 'row_actions',
       align: 'right',
       cellSx: listTableActionColumnSx,
-      render: (item) => (
-        <RowMenu
-          item={item}
-          onEdit={() => openEdit(item)}
-          onHistory={() =>
-            navigate(
-              `/app/scheduled-queries/${item.scheduled_query_id}/history`,
-              { state: { fromLabel: 'Scheduled Queries' } satisfies BackState },
-            )
-          }
-          onDelete={() => setDeleteTarget(item)}
-        />
-      ),
+      render: (item) => <RowMenu actions={rowActions(item)} />,
     },
   ];
   const actionTypes = useMemo(
@@ -1192,40 +1112,26 @@ function ScheduledQueries() {
   return (
     <>
       <Box sx={pageContentSx}>
-        <Box
-          sx={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            mb: 3,
-          }}
+        <ListPageHeader
+          title="Scheduled Queries"
+          action={
+            hasPermission('scheduled_queries:write') && (
+              <Button
+                variant="contained"
+                startIcon={<AddIcon />}
+                onClick={openCreate}
+              >
+                New scheduled query
+              </Button>
+            )
+          }
+        />
+
+        <ListViewState
+          loading={loading}
+          error={error}
+          errorMessage="Failed to load scheduled queries"
         >
-          <Typography variant="h1">Scheduled Queries</Typography>
-          {hasPermission('scheduled_queries:write') && (
-            <Button
-              variant="contained"
-              startIcon={<AddIcon />}
-              onClick={openCreate}
-            >
-              New scheduled query
-            </Button>
-          )}
-        </Box>
-
-        {loading && (
-          <Box sx={{ display: 'flex', justifyContent: 'center', p: 4 }}>
-            <CircularProgress />
-          </Box>
-        )}
-
-        {error && (
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-            <Error />
-            <Typography>Failed to load scheduled queries</Typography>
-          </Box>
-        )}
-
-        {!loading && !error && (
           <ListTable
             rows={scheduledQueries}
             columns={columns}
@@ -1233,7 +1139,7 @@ function ScheduledQueries() {
             emptyMessage="No scheduled queries yet. Create one above."
             filterGroups={filterGroups}
           />
-        )}
+        </ListViewState>
       </Box>
 
       <ScheduledQueryDialog
@@ -1252,34 +1158,16 @@ function ScheduledQueries() {
         data={detailItem}
       />
 
-      {/* Delete confirmation dialog */}
-      <Dialog
+      <ConfirmDeleteDialog
         open={!!deleteTarget}
+        title="Delete scheduled query?"
+        deleting={deleting}
         onClose={() => setDeleteTarget(null)}
-        maxWidth="xs"
-        fullWidth
+        onConfirm={handleDeleteConfirm}
       >
-        <DialogTitle>Delete scheduled query?</DialogTitle>
-        <DialogContent>
-          <DialogContentText>
-            Permanently delete <strong>{deleteTarget?.name}</strong> and all its
-            versions? This cannot be undone.
-          </DialogContentText>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setDeleteTarget(null)} disabled={deleting}>
-            Cancel
-          </Button>
-          <Button
-            variant="contained"
-            color="error"
-            onClick={handleDeleteConfirm}
-            disabled={deleting}
-          >
-            {deleting ? <CircularProgress size={20} /> : 'Delete'}
-          </Button>
-        </DialogActions>
-      </Dialog>
+        Permanently delete <strong>{deleteTarget?.name}</strong> and all its
+        versions? This cannot be undone.
+      </ConfirmDeleteDialog>
     </>
   );
 }

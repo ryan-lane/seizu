@@ -17,9 +17,7 @@ import {
   FormControlLabel,
   IconButton,
   InputLabel,
-  ListItemIcon,
   ListItemText,
-  Menu,
   MenuItem,
   Select,
   Switch,
@@ -29,7 +27,6 @@ import {
   TableHead,
   TableRow,
   TextField,
-  Tooltip,
   Typography,
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
@@ -38,12 +35,11 @@ import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import DeleteIcon from '@mui/icons-material/Delete';
 import EditIcon from '@mui/icons-material/Edit';
 import HistoryIcon from '@mui/icons-material/History';
-import MoreVertIcon from '@mui/icons-material/MoreVert';
+import VisibilityIcon from '@mui/icons-material/Visibility';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import RemoveCircleOutlineIcon from '@mui/icons-material/RemoveCircle';
 import ToggleOnIcon from '@mui/icons-material/ToggleOn';
 import ToggleOffIcon from '@mui/icons-material/ToggleOff';
-import Error from '@mui/icons-material/Error';
 import {
   useSkillsList,
   useSkillMutations,
@@ -65,6 +61,10 @@ import ListTable, {
   listTableSecondaryCellSx,
   listTableTruncateSx,
 } from 'src/components/ListTable';
+import ListPageHeader from 'src/components/ListPageHeader';
+import ListViewState from 'src/components/ListViewState';
+import RowMenu, { RowMenuAction } from 'src/components/RowMenu';
+import ConfirmDeleteDialog from 'src/components/ConfirmDeleteDialog';
 import MarkdownEditor from 'src/components/MarkdownEditor';
 import UserDisplay from 'src/components/UserDisplay';
 import { usePermissions } from 'src/hooks/usePermissions';
@@ -958,6 +958,48 @@ function SkillsetSkills() {
     setMissingToolNames([]);
   };
 
+  const rowActions = (skill: SkillItem): RowMenuAction[] => [
+    {
+      key: 'detail',
+      label: 'View detail',
+      icon: <VisibilityIcon fontSize="small" />,
+      onClick: () => setDetailTarget(skill),
+    },
+    {
+      key: 'render',
+      label: 'Render',
+      icon: <PlayArrowIcon fontSize="small" />,
+      onClick: () => setRenderTarget(skill),
+      disabled: !(hasPermission('skills:render') && skillStatus(skill).enabled),
+    },
+    {
+      key: 'edit',
+      label: 'Edit',
+      icon: <EditIcon fontSize="small" />,
+      onClick: () => handleEditClick(skill),
+      disabled: !hasPermission('skills:write'),
+    },
+    {
+      key: 'history',
+      label: 'View history',
+      icon: <HistoryIcon fontSize="small" />,
+      onClick: () =>
+        navigate(
+          `/app/skillsets/${skillsetId}/skills/${skill.skill_id}/history`,
+          { state: { fromLabel: 'Skills' } satisfies BackState },
+        ),
+    },
+    {
+      key: 'delete',
+      label: 'Delete',
+      icon: <DeleteIcon fontSize="small" />,
+      onClick: () => setDeleteTarget(skill),
+      disabled: !hasPermission('skills:delete'),
+      destructive: true,
+      dividerBefore: true,
+    },
+  ];
+
   const columns: ListTableColumn<SkillItem>[] = [
     {
       key: 'name',
@@ -1045,25 +1087,7 @@ function SkillsetSkills() {
       key: 'actions',
       align: 'right',
       cellSx: listTableActionColumnSx,
-      render: (skill) => (
-        <SkillRowMenu
-          canWrite={hasPermission('skills:write')}
-          canDelete={hasPermission('skills:delete')}
-          canRender={
-            hasPermission('skills:render') && skillStatus(skill).enabled
-          }
-          onDetail={() => setDetailTarget(skill)}
-          onEdit={() => handleEditClick(skill)}
-          onRender={() => setRenderTarget(skill)}
-          onHistory={() =>
-            navigate(
-              `/app/skillsets/${skillsetId}/skills/${skill.skill_id}/history`,
-              { state: { fromLabel: 'Skills' } satisfies BackState },
-            )
-          }
-          onDelete={() => setDeleteTarget(skill)}
-        />
-      ),
+      render: (skill) => <RowMenu actions={rowActions(skill)} />,
     },
   ];
   const filterGroups: ListTableFilterGroup<SkillItem>[] = [
@@ -1098,40 +1122,28 @@ function SkillsetSkills() {
         >
           Back to skillsets
         </Button>
-        <Box
-          sx={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            mb: 3,
-          }}
+        <ListPageHeader
+          title="Skills"
+          action={
+            hasPermission('skills:write') && (
+              <Button
+                variant="contained"
+                startIcon={<AddIcon />}
+                onClick={() => {
+                  setEditTarget(null);
+                  setDialogOpen(true);
+                }}
+              >
+                New skill
+              </Button>
+            )
+          }
+        />
+        <ListViewState
+          loading={loading}
+          error={error}
+          errorMessage="Failed to load skills"
         >
-          <Typography variant="h1">Skills</Typography>
-          {hasPermission('skills:write') && (
-            <Button
-              variant="contained"
-              startIcon={<AddIcon />}
-              onClick={() => {
-                setEditTarget(null);
-                setDialogOpen(true);
-              }}
-            >
-              New skill
-            </Button>
-          )}
-        </Box>
-        {loading && (
-          <Box sx={{ display: 'flex', justifyContent: 'center', p: 4 }}>
-            <CircularProgress />
-          </Box>
-        )}
-        {error && (
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-            <Error />
-            <Typography>Failed to load skills</Typography>
-          </Box>
-        )}
-        {!loading && !error && (
           <ListTable
             rows={skills}
             columns={columns}
@@ -1139,7 +1151,7 @@ function SkillsetSkills() {
             emptyMessage="No skills yet. Create one above."
             filterGroups={filterGroups}
           />
-        )}
+        </ListViewState>
       </Box>
       <SkillDialog
         key={editTarget?.skill_id ?? 'new'}
@@ -1192,43 +1204,26 @@ function SkillsetSkills() {
           </Button>
         </DialogActions>
       </Dialog>
-      <Dialog
+      <ConfirmDeleteDialog
         open={!!deleteTarget}
+        title="Delete skill?"
+        deleting={deleting}
         onClose={() => setDeleteTarget(null)}
-        maxWidth="xs"
-        fullWidth
+        onConfirm={async () => {
+          if (!deleteTarget) return;
+          setDeleting(true);
+          try {
+            await deleteSkill(deleteTarget.skill_id);
+            setDeleteTarget(null);
+            refresh();
+          } finally {
+            setDeleting(false);
+          }
+        }}
       >
-        <DialogTitle>Delete skill?</DialogTitle>
-        <DialogContent>
-          <DialogContentText>
-            Permanently delete <strong>{deleteTarget?.name}</strong> and all its
-            versions?
-          </DialogContentText>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setDeleteTarget(null)} disabled={deleting}>
-            Cancel
-          </Button>
-          <Button
-            variant="contained"
-            color="error"
-            disabled={deleting}
-            onClick={async () => {
-              if (!deleteTarget) return;
-              setDeleting(true);
-              try {
-                await deleteSkill(deleteTarget.skill_id);
-                setDeleteTarget(null);
-                refresh();
-              } finally {
-                setDeleting(false);
-              }
-            }}
-          >
-            {deleting ? <CircularProgress size={20} /> : 'Delete'}
-          </Button>
-        </DialogActions>
-      </Dialog>
+        Permanently delete <strong>{deleteTarget?.name}</strong> and all its
+        versions?
+      </ConfirmDeleteDialog>
       <SkillDetailDialog
         open={!!detailTarget}
         onClose={() => setDetailTarget(null)}
@@ -1239,110 +1234,6 @@ function SkillsetSkills() {
         onClose={() => setRenderTarget(null)}
         onRender={renderSkill}
       />
-    </>
-  );
-}
-
-function SkillRowMenu({
-  canWrite,
-  canDelete,
-  canRender,
-  onDetail,
-  onEdit,
-  onRender,
-  onHistory,
-  onDelete,
-}: {
-  canWrite: boolean;
-  canDelete: boolean;
-  canRender: boolean;
-  onDetail: () => void;
-  onEdit: () => void;
-  onRender: () => void;
-  onHistory: () => void;
-  onDelete: () => void;
-}) {
-  const [anchor, setAnchor] = useState<null | HTMLElement>(null);
-  const close = () => setAnchor(null);
-  return (
-    <>
-      <Tooltip title="More actions">
-        <IconButton size="small" onClick={(e) => setAnchor(e.currentTarget)}>
-          <MoreVertIcon fontSize="small" />
-        </IconButton>
-      </Tooltip>
-      <Menu
-        anchorEl={anchor}
-        open={!!anchor}
-        onClose={close}
-        anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
-        transformOrigin={{ vertical: 'top', horizontal: 'right' }}
-        slotProps={{ paper: { sx: { minWidth: 180 } } }}
-      >
-        <MenuItem
-          onClick={() => {
-            onDetail();
-            close();
-          }}
-        >
-          <ListItemIcon>
-            <HistoryIcon fontSize="small" />
-          </ListItemIcon>
-          <ListItemText>View detail</ListItemText>
-        </MenuItem>
-        <MenuItem
-          onClick={() => {
-            onRender();
-            close();
-          }}
-          disabled={!canRender}
-        >
-          <ListItemIcon>
-            <PlayArrowIcon fontSize="small" />
-          </ListItemIcon>
-          <ListItemText>Render</ListItemText>
-        </MenuItem>
-        <MenuItem
-          onClick={() => {
-            onEdit();
-            close();
-          }}
-          disabled={!canWrite}
-        >
-          <ListItemIcon>
-            <EditIcon fontSize="small" />
-          </ListItemIcon>
-          <ListItemText>Edit</ListItemText>
-        </MenuItem>
-        <MenuItem
-          onClick={() => {
-            onHistory();
-            close();
-          }}
-        >
-          <ListItemIcon>
-            <HistoryIcon fontSize="small" />
-          </ListItemIcon>
-          <ListItemText>View history</ListItemText>
-        </MenuItem>
-        <Divider />
-        <MenuItem
-          onClick={() => {
-            onDelete();
-            close();
-          }}
-          disabled={!canDelete}
-          sx={{ color: canDelete ? 'error.main' : undefined }}
-        >
-          <ListItemIcon>
-            <DeleteIcon
-              fontSize="small"
-              color={canDelete ? 'error' : 'disabled'}
-            />
-          </ListItemIcon>
-          <ListItemText>Delete</ListItemText>
-        </MenuItem>
-      </Menu>
     </>
   );
 }

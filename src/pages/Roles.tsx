@@ -12,16 +12,9 @@ import {
   DialogContent,
   DialogContentText,
   DialogTitle,
-  Divider,
   FormControlLabel,
-  IconButton,
-  ListItemIcon,
-  ListItemText,
-  Menu,
-  MenuItem,
   Paper,
   TextField,
-  Tooltip,
   Typography,
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
@@ -29,10 +22,8 @@ import BadgeIcon from '@mui/icons-material/Badge';
 import DeleteIcon from '@mui/icons-material/Delete';
 import EditIcon from '@mui/icons-material/Edit';
 import HistoryIcon from '@mui/icons-material/History';
-import MoreVertIcon from '@mui/icons-material/MoreVert';
 import PersonOutlineIcon from '@mui/icons-material/Person';
 import VisibilityIcon from '@mui/icons-material/Visibility';
-import Error from '@mui/icons-material/Error';
 import {
   CreateRoleRequest,
   RoleItem,
@@ -52,6 +43,10 @@ import ListTable, {
   listTableSecondaryCellSx,
   listTableTruncateSx,
 } from 'src/components/ListTable';
+import ListPageHeader from 'src/components/ListPageHeader';
+import ListViewState from 'src/components/ListViewState';
+import RowMenu, { RowMenuAction } from 'src/components/RowMenu';
+import ConfirmDeleteDialog from 'src/components/ConfirmDeleteDialog';
 import type { BackState } from 'src/navigation';
 import { pageContentSx } from 'src/theme/layout';
 
@@ -475,139 +470,6 @@ function RoleDialog({
   );
 }
 
-interface RowMenuProps {
-  isBuiltin: boolean;
-  hasPermission: (permission: string) => boolean;
-  onView: () => void;
-  onEdit: () => void;
-  onHistory: () => void;
-  onDelete: () => void;
-}
-
-function RowMenu({
-  isBuiltin,
-  hasPermission,
-  onView,
-  onEdit,
-  onHistory,
-  onDelete,
-}: RowMenuProps) {
-  const [anchor, setAnchor] = useState<null | HTMLElement>(null);
-  const close = () => setAnchor(null);
-
-  const canWrite = hasPermission('roles:write');
-  const canDelete = hasPermission('roles:delete');
-  const editDisabled = isBuiltin || !canWrite;
-  const deleteDisabled = isBuiltin || !canDelete;
-  const historyDisabled = isBuiltin;
-  const editTooltip = isBuiltin
-    ? 'Built-in roles cannot be edited'
-    : !canWrite
-      ? 'You do not have permission to edit roles'
-      : '';
-  const deleteTooltip = isBuiltin
-    ? 'Built-in roles cannot be deleted'
-    : !canDelete
-      ? 'You do not have permission to delete roles'
-      : '';
-  const historyTooltip = isBuiltin
-    ? 'Built-in roles have no version history'
-    : '';
-
-  return (
-    <>
-      <Tooltip title="More actions">
-        <IconButton
-          aria-label="More actions"
-          size="small"
-          onClick={(e) => setAnchor(e.currentTarget)}
-        >
-          <MoreVertIcon fontSize="small" />
-        </IconButton>
-      </Tooltip>
-      <Menu
-        anchorEl={anchor}
-        open={!!anchor}
-        onClose={close}
-        anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
-        transformOrigin={{ vertical: 'top', horizontal: 'right' }}
-        slotProps={{ paper: { sx: { minWidth: 190 } } }}
-      >
-        <MenuItem
-          onClick={() => {
-            onView();
-            close();
-          }}
-        >
-          <ListItemIcon>
-            <VisibilityIcon fontSize="small" />
-          </ListItemIcon>
-          <ListItemText>View detail</ListItemText>
-        </MenuItem>
-        <Tooltip title={editTooltip} placement="left">
-          <span>
-            <MenuItem
-              onClick={() => {
-                onEdit();
-                close();
-              }}
-              disabled={editDisabled}
-            >
-              <ListItemIcon>
-                <EditIcon
-                  fontSize="small"
-                  color={editDisabled ? 'disabled' : 'inherit'}
-                />
-              </ListItemIcon>
-              <ListItemText>Edit</ListItemText>
-            </MenuItem>
-          </span>
-        </Tooltip>
-        <Tooltip title={historyTooltip} placement="left">
-          <span>
-            <MenuItem
-              onClick={() => {
-                onHistory();
-                close();
-              }}
-              disabled={historyDisabled}
-            >
-              <ListItemIcon>
-                <HistoryIcon
-                  fontSize="small"
-                  color={historyDisabled ? 'disabled' : 'inherit'}
-                />
-              </ListItemIcon>
-              <ListItemText>View history</ListItemText>
-            </MenuItem>
-          </span>
-        </Tooltip>
-        <Divider />
-        <Tooltip title={deleteTooltip} placement="left">
-          <span>
-            <MenuItem
-              onClick={() => {
-                onDelete();
-                close();
-              }}
-              disabled={deleteDisabled}
-              sx={{ color: deleteDisabled ? undefined : 'error.main' }}
-            >
-              <ListItemIcon>
-                <DeleteIcon
-                  fontSize="small"
-                  color={deleteDisabled ? 'disabled' : 'error'}
-                />
-              </ListItemIcon>
-              <ListItemText>Delete</ListItemText>
-            </MenuItem>
-          </span>
-        </Tooltip>
-      </Menu>
-    </>
-  );
-}
-
 function Roles() {
   const navigate = useNavigate();
   const { hasPermission, loading: permissionsLoading } = usePermissionState();
@@ -709,6 +571,59 @@ function Roles() {
 
   const isLoading = builtinLoading || loading;
   const loadError = builtinError || error;
+  const rowActions = (item: RoleItem): RowMenuAction[] => {
+    const isBuiltin = isBuiltinRole(item.role_id);
+    const canWrite = hasPermission('roles:write');
+    const canDelete = hasPermission('roles:delete');
+    return [
+      {
+        key: 'view',
+        label: 'View detail',
+        icon: <VisibilityIcon fontSize="small" />,
+        onClick: () => setDetailTarget(item),
+      },
+      {
+        key: 'edit',
+        label: 'Edit',
+        icon: <EditIcon fontSize="small" />,
+        onClick: () => handleEditClick(item),
+        disabled: isBuiltin || !canWrite,
+        tooltip: isBuiltin
+          ? 'Built-in roles cannot be edited'
+          : !canWrite
+            ? 'You do not have permission to edit roles'
+            : undefined,
+      },
+      {
+        key: 'history',
+        label: 'View history',
+        icon: <HistoryIcon fontSize="small" />,
+        onClick: () =>
+          navigate(`/app/roles/${item.role_id}/history`, {
+            state: { fromLabel: 'Roles' } satisfies BackState,
+          }),
+        disabled: isBuiltin,
+        tooltip: isBuiltin
+          ? 'Built-in roles have no version history'
+          : undefined,
+      },
+      {
+        key: 'delete',
+        label: 'Delete',
+        icon: <DeleteIcon fontSize="small" />,
+        onClick: () => setDeleteTarget(item),
+        disabled: isBuiltin || !canDelete,
+        tooltip: isBuiltin
+          ? 'Built-in roles cannot be deleted'
+          : !canDelete
+            ? 'You do not have permission to delete roles'
+            : undefined,
+        destructive: true,
+        dividerBefore: true,
+      },
+    ];
+  };
+
   const columns: ListTableColumn<RoleItem>[] = [
     {
       key: 'name',
@@ -824,23 +739,9 @@ function Roles() {
       key: 'actions',
       align: 'right',
       cellSx: listTableActionColumnSx,
-      render: (item) => {
-        const builtin = isBuiltinRole(item.role_id);
-        return (
-          <RowMenu
-            isBuiltin={builtin}
-            hasPermission={hasPermission}
-            onView={() => setDetailTarget(item)}
-            onEdit={() => handleEditClick(item)}
-            onHistory={() =>
-              navigate(`/app/roles/${item.role_id}/history`, {
-                state: { fromLabel: 'Roles' } satisfies BackState,
-              })
-            }
-            onDelete={() => setDeleteTarget(item)}
-          />
-        );
-      },
+      render: (item) => (
+        <RowMenu actions={rowActions(item)} menuMinWidth={190} />
+      ),
     },
   ];
   const filterGroups: ListTableFilterGroup<RoleItem>[] = [
@@ -868,43 +769,29 @@ function Roles() {
   return (
     <>
       <Box sx={pageContentSx}>
-        <Box
-          sx={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            mb: 3,
-          }}
+        <ListPageHeader
+          title="Roles"
+          action={
+            hasPermission('roles:write') && (
+              <Button
+                variant="contained"
+                startIcon={<AddIcon />}
+                onClick={() => {
+                  setEditTarget(null);
+                  setDialogOpen(true);
+                }}
+              >
+                New role
+              </Button>
+            )
+          }
+        />
+
+        <ListViewState
+          loading={isLoading}
+          error={loadError}
+          errorMessage="Failed to load roles"
         >
-          <Typography variant="h1">Roles</Typography>
-          {hasPermission('roles:write') && (
-            <Button
-              variant="contained"
-              startIcon={<AddIcon />}
-              onClick={() => {
-                setEditTarget(null);
-                setDialogOpen(true);
-              }}
-            >
-              New role
-            </Button>
-          )}
-        </Box>
-
-        {isLoading && (
-          <Box sx={{ display: 'flex', justifyContent: 'center', p: 4 }}>
-            <CircularProgress />
-          </Box>
-        )}
-
-        {loadError && (
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-            <Error />
-            <Typography>Failed to load roles</Typography>
-          </Box>
-        )}
-
-        {!isLoading && !loadError && (
           <ListTable
             rows={allRows}
             columns={columns}
@@ -912,7 +799,7 @@ function Roles() {
             emptyMessage="No roles found."
             filterGroups={filterGroups}
           />
-        )}
+        </ListViewState>
       </Box>
 
       <RoleDialog
@@ -973,33 +860,16 @@ function Roles() {
         </DialogActions>
       </Dialog>
 
-      <Dialog
+      <ConfirmDeleteDialog
         open={!!deleteTarget}
+        title="Delete role?"
+        deleting={deleting}
         onClose={() => setDeleteTarget(null)}
-        maxWidth="xs"
-        fullWidth
+        onConfirm={handleDeleteConfirm}
       >
-        <DialogTitle>Delete role?</DialogTitle>
-        <DialogContent>
-          <DialogContentText>
-            Permanently delete <strong>{deleteTarget?.name}</strong> and all its
-            versions? This cannot be undone.
-          </DialogContentText>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setDeleteTarget(null)} disabled={deleting}>
-            Cancel
-          </Button>
-          <Button
-            variant="contained"
-            color="error"
-            onClick={handleDeleteConfirm}
-            disabled={deleting}
-          >
-            {deleting ? <CircularProgress size={20} /> : 'Delete'}
-          </Button>
-        </DialogActions>
-      </Dialog>
+        Permanently delete <strong>{deleteTarget?.name}</strong> and all its
+        versions? This cannot be undone.
+      </ConfirmDeleteDialog>
     </>
   );
 }

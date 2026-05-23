@@ -9,18 +9,10 @@ import {
   Dialog,
   DialogActions,
   DialogContent,
-  DialogContentText,
   DialogTitle,
-  Divider,
   FormControlLabel,
-  IconButton,
-  ListItemIcon,
-  ListItemText,
-  Menu,
-  MenuItem,
   Switch,
   TextField,
-  Tooltip,
   Typography,
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
@@ -29,11 +21,9 @@ import BadgeIcon from '@mui/icons-material/Badge';
 import DeleteIcon from '@mui/icons-material/Delete';
 import EditIcon from '@mui/icons-material/Edit';
 import HistoryIcon from '@mui/icons-material/History';
-import MoreVertIcon from '@mui/icons-material/MoreVert';
 import PersonOutlineIcon from '@mui/icons-material/Person';
 import ToggleOnIcon from '@mui/icons-material/ToggleOn';
 import ToggleOffIcon from '@mui/icons-material/ToggleOff';
-import Error from '@mui/icons-material/Error';
 import {
   useToolsetsList,
   useToolsetMutations,
@@ -50,6 +40,10 @@ import ListTable, {
   listTableSecondaryCellSx,
   listTableTruncateSx,
 } from 'src/components/ListTable';
+import ListPageHeader from 'src/components/ListPageHeader';
+import ListViewState from 'src/components/ListViewState';
+import RowMenu, { RowMenuAction } from 'src/components/RowMenu';
+import ConfirmDeleteDialog from 'src/components/ConfirmDeleteDialog';
 import UserDisplay from 'src/components/UserDisplay';
 import { usePermissions } from 'src/hooks/usePermissions';
 import type { BackState } from 'src/navigation';
@@ -205,138 +199,6 @@ function ToolsetDialog({ open, onClose, onSave, initial }: ToolsetDialogProps) {
 }
 
 // ---------------------------------------------------------------------------
-// Per-row overflow menu
-// ---------------------------------------------------------------------------
-
-interface RowMenuProps {
-  item: ToolsetListItem;
-  isBuiltin: boolean;
-  onEdit: () => void;
-  onTools: () => void;
-  onHistory: () => void;
-  onDelete: () => void;
-}
-
-function RowMenu({
-  isBuiltin,
-  onEdit,
-  onTools,
-  onHistory,
-  onDelete,
-}: RowMenuProps) {
-  const [anchor, setAnchor] = useState<null | HTMLElement>(null);
-  const hasPermission = usePermissions();
-  const close = () => setAnchor(null);
-
-  const canWrite = hasPermission('toolsets:write');
-  const canDelete = hasPermission('toolsets:delete');
-
-  const editDisabled = isBuiltin || !canWrite;
-  const deleteDisabled = isBuiltin || !canDelete;
-  const editTooltip = isBuiltin
-    ? 'Built-in toolsets cannot be edited'
-    : !canWrite
-      ? 'You do not have permission to edit toolsets'
-      : '';
-  const deleteTooltip = isBuiltin
-    ? 'Built-in toolsets cannot be deleted'
-    : !canDelete
-      ? 'You do not have permission to delete toolsets'
-      : '';
-
-  return (
-    <>
-      <Tooltip title="More actions">
-        <IconButton size="small" onClick={(e) => setAnchor(e.currentTarget)}>
-          <MoreVertIcon fontSize="small" />
-        </IconButton>
-      </Tooltip>
-
-      <Menu
-        anchorEl={anchor}
-        open={!!anchor}
-        onClose={close}
-        anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
-        transformOrigin={{ vertical: 'top', horizontal: 'right' }}
-        slotProps={{ paper: { sx: { minWidth: 180 } } }}
-      >
-        <Tooltip title={editTooltip} placement="left">
-          <span>
-            <MenuItem
-              onClick={() => {
-                onEdit();
-                close();
-              }}
-              disabled={editDisabled}
-            >
-              <ListItemIcon>
-                <EditIcon fontSize="small" />
-              </ListItemIcon>
-              <ListItemText>Edit</ListItemText>
-            </MenuItem>
-          </span>
-        </Tooltip>
-
-        <MenuItem
-          onClick={() => {
-            onTools();
-            close();
-          }}
-        >
-          <ListItemIcon>
-            <BuildIcon fontSize="small" />
-          </ListItemIcon>
-          <ListItemText>View tools</ListItemText>
-        </MenuItem>
-
-        <Tooltip
-          title={isBuiltin ? 'Built-in toolsets have no version history' : ''}
-          placement="left"
-        >
-          <span>
-            <MenuItem
-              onClick={() => {
-                onHistory();
-                close();
-              }}
-              disabled={isBuiltin}
-            >
-              <ListItemIcon>
-                <HistoryIcon fontSize="small" />
-              </ListItemIcon>
-              <ListItemText>View history</ListItemText>
-            </MenuItem>
-          </span>
-        </Tooltip>
-
-        <Divider />
-
-        <Tooltip title={deleteTooltip} placement="left">
-          <span>
-            <MenuItem
-              onClick={() => {
-                onDelete();
-                close();
-              }}
-              disabled={deleteDisabled}
-              sx={{ color: deleteDisabled ? undefined : 'error.main' }}
-            >
-              <ListItemIcon>
-                <DeleteIcon
-                  fontSize="small"
-                  color={deleteDisabled ? 'disabled' : 'error'}
-                />
-              </ListItemIcon>
-              <ListItemText>Delete</ListItemText>
-            </MenuItem>
-          </span>
-        </Tooltip>
-      </Menu>
-    </>
-  );
-}
-
-// ---------------------------------------------------------------------------
 // Page
 // ---------------------------------------------------------------------------
 
@@ -352,6 +214,9 @@ function Toolsets() {
     null,
   );
   const [deleting, setDeleting] = useState(false);
+
+  const canWrite = hasPermission('toolsets:write');
+  const canDelete = hasPermission('toolsets:delete');
 
   const openCreate = () => {
     setEditTarget(null);
@@ -386,6 +251,57 @@ function Toolsets() {
     } finally {
       setDeleting(false);
     }
+  };
+
+  const rowActions = (item: ToolsetListItem): RowMenuAction[] => {
+    const isBuiltin = isBuiltinToolset(item.toolset_id);
+    return [
+      {
+        key: 'edit',
+        label: 'Edit',
+        icon: <EditIcon fontSize="small" />,
+        onClick: () => openEdit(item),
+        disabled: isBuiltin || !canWrite,
+        tooltip: isBuiltin
+          ? 'Built-in toolsets cannot be edited'
+          : !canWrite
+            ? 'You do not have permission to edit toolsets'
+            : undefined,
+      },
+      {
+        key: 'tools',
+        label: 'View tools',
+        icon: <BuildIcon fontSize="small" />,
+        onClick: () => navigate(`/app/toolsets/${item.toolset_id}/tools`),
+      },
+      {
+        key: 'history',
+        label: 'View history',
+        icon: <HistoryIcon fontSize="small" />,
+        onClick: () =>
+          navigate(`/app/toolsets/${item.toolset_id}/history`, {
+            state: { fromLabel: 'Toolsets' } satisfies BackState,
+          }),
+        disabled: isBuiltin,
+        tooltip: isBuiltin
+          ? 'Built-in toolsets have no version history'
+          : undefined,
+      },
+      {
+        key: 'delete',
+        label: 'Delete',
+        icon: <DeleteIcon fontSize="small" />,
+        onClick: () => setDeleteTarget(item),
+        disabled: isBuiltin || !canDelete,
+        tooltip: isBuiltin
+          ? 'Built-in toolsets cannot be deleted'
+          : !canDelete
+            ? 'You do not have permission to delete toolsets'
+            : undefined,
+        destructive: true,
+        dividerBefore: true,
+      },
+    ];
   };
 
   const allRows: ToolsetListItem[] = toolsets;
@@ -497,23 +413,7 @@ function Toolsets() {
       key: 'actions',
       align: 'right',
       cellSx: listTableActionColumnSx,
-      render: (item) => {
-        const isBuiltin = isBuiltinToolset(item.toolset_id);
-        return (
-          <RowMenu
-            item={item}
-            isBuiltin={isBuiltin}
-            onEdit={() => openEdit(item)}
-            onTools={() => navigate(`/app/toolsets/${item.toolset_id}/tools`)}
-            onHistory={() =>
-              navigate(`/app/toolsets/${item.toolset_id}/history`, {
-                state: { fromLabel: 'Toolsets' } satisfies BackState,
-              })
-            }
-            onDelete={() => setDeleteTarget(item)}
-          />
-        );
-      },
+      render: (item) => <RowMenu actions={rowActions(item)} />,
     },
   ];
   const filterGroups: ListTableFilterGroup<ToolsetListItem>[] = [
@@ -560,40 +460,26 @@ function Toolsets() {
   return (
     <>
       <Box sx={pageContentSx}>
-        <Box
-          sx={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            mb: 3,
-          }}
+        <ListPageHeader
+          title="MCP Toolsets"
+          action={
+            canWrite && (
+              <Button
+                variant="contained"
+                startIcon={<AddIcon />}
+                onClick={openCreate}
+              >
+                New toolset
+              </Button>
+            )
+          }
+        />
+
+        <ListViewState
+          loading={loading}
+          error={error}
+          errorMessage="Failed to load toolsets"
         >
-          <Typography variant="h1">MCP Toolsets</Typography>
-          {hasPermission('toolsets:write') && (
-            <Button
-              variant="contained"
-              startIcon={<AddIcon />}
-              onClick={openCreate}
-            >
-              New toolset
-            </Button>
-          )}
-        </Box>
-
-        {loading && (
-          <Box sx={{ display: 'flex', justifyContent: 'center', p: 4 }}>
-            <CircularProgress />
-          </Box>
-        )}
-
-        {error && (
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-            <Error />
-            <Typography>Failed to load toolsets</Typography>
-          </Box>
-        )}
-
-        {!loading && !error && (
           <ListTable
             rows={allRows}
             columns={columns}
@@ -601,7 +487,7 @@ function Toolsets() {
             emptyMessage="No toolsets yet. Create one above."
             filterGroups={filterGroups}
           />
-        )}
+        </ListViewState>
       </Box>
 
       <ToolsetDialog
@@ -612,34 +498,16 @@ function Toolsets() {
         initial={editTarget}
       />
 
-      {/* Delete confirmation dialog */}
-      <Dialog
+      <ConfirmDeleteDialog
         open={!!deleteTarget}
+        title="Delete toolset?"
+        deleting={deleting}
         onClose={() => setDeleteTarget(null)}
-        maxWidth="xs"
-        fullWidth
+        onConfirm={handleDeleteConfirm}
       >
-        <DialogTitle>Delete toolset?</DialogTitle>
-        <DialogContent>
-          <DialogContentText>
-            Permanently delete <strong>{deleteTarget?.name}</strong> and all its
-            tools and versions? This cannot be undone.
-          </DialogContentText>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setDeleteTarget(null)} disabled={deleting}>
-            Cancel
-          </Button>
-          <Button
-            variant="contained"
-            color="error"
-            onClick={handleDeleteConfirm}
-            disabled={deleting}
-          >
-            {deleting ? <CircularProgress size={20} /> : 'Delete'}
-          </Button>
-        </DialogActions>
-      </Dialog>
+        Permanently delete <strong>{deleteTarget?.name}</strong> and all its
+        tools and versions? This cannot be undone.
+      </ConfirmDeleteDialog>
     </>
   );
 }

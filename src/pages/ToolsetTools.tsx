@@ -10,21 +10,16 @@ import {
   Dialog,
   DialogActions,
   DialogContent,
-  DialogContentText,
   DialogTitle,
   Divider,
   FormControl,
   FormControlLabel,
   IconButton,
   InputLabel,
-  ListItemIcon,
-  ListItemText,
-  Menu,
   MenuItem,
   Select,
   Switch,
   TextField,
-  Tooltip,
   Typography,
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
@@ -34,12 +29,11 @@ import BadgeIcon from '@mui/icons-material/Badge';
 import DeleteIcon from '@mui/icons-material/Delete';
 import EditIcon from '@mui/icons-material/Edit';
 import HistoryIcon from '@mui/icons-material/History';
-import MoreVertIcon from '@mui/icons-material/MoreVert';
+import VisibilityIcon from '@mui/icons-material/Visibility';
 import RemoveCircleOutlineIcon from '@mui/icons-material/RemoveCircle';
 import PersonOutlineIcon from '@mui/icons-material/Person';
 import ToggleOnIcon from '@mui/icons-material/ToggleOn';
 import ToggleOffIcon from '@mui/icons-material/ToggleOff';
-import Error from '@mui/icons-material/Error';
 import {
   useToolsList,
   useToolMutations,
@@ -57,6 +51,10 @@ import ListTable, {
   listTableSecondaryCellSx,
   listTableTruncateSx,
 } from 'src/components/ListTable';
+import ListPageHeader from 'src/components/ListPageHeader';
+import ListViewState from 'src/components/ListViewState';
+import RowMenu, { RowMenuAction } from 'src/components/RowMenu';
+import ConfirmDeleteDialog from 'src/components/ConfirmDeleteDialog';
 import ToolDetailDialog, {
   ToolViewData,
 } from 'src/components/ToolDetailDialog';
@@ -92,6 +90,18 @@ function toolStatus(item: ToolItem): { enabled: boolean; label: string } {
   if (item.disabled_reason === 'toolset_disabled')
     return { enabled: false, label: 'Disabled by toolset' };
   return { enabled: false, label: 'Disabled' };
+}
+
+function toolViewData(item: ToolItem): ToolViewData {
+  return {
+    name: item.name,
+    description: item.description,
+    cypher: item.cypher,
+    parameters: item.parameters,
+    enabled: item.enabled,
+    effective_enabled: item.effective_enabled,
+    disabled_reason: item.disabled_reason,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -414,138 +424,6 @@ function ToolDialog({ open, onClose, onSave, initial }: ToolDialogProps) {
 }
 
 // ---------------------------------------------------------------------------
-// Per-row overflow menu
-// ---------------------------------------------------------------------------
-
-interface RowMenuProps {
-  item: ToolItem;
-  isBuiltin: boolean;
-  onEdit: () => void;
-  onDetail: () => void;
-  onHistory: () => void;
-  onDelete: () => void;
-}
-
-function RowMenu({
-  isBuiltin,
-  onEdit,
-  onDetail,
-  onHistory,
-  onDelete,
-}: RowMenuProps) {
-  const [anchor, setAnchor] = useState<null | HTMLElement>(null);
-  const hasPermission = usePermissions();
-  const close = () => setAnchor(null);
-
-  const canWrite = hasPermission('tools:write');
-  const canDelete = hasPermission('tools:delete');
-
-  const editDisabled = isBuiltin || !canWrite;
-  const deleteDisabled = isBuiltin || !canDelete;
-  const editTooltip = isBuiltin
-    ? 'Built-in tools cannot be edited'
-    : !canWrite
-      ? 'You do not have permission to edit tools'
-      : '';
-  const deleteTooltip = isBuiltin
-    ? 'Built-in tools cannot be deleted'
-    : !canDelete
-      ? 'You do not have permission to delete tools'
-      : '';
-
-  return (
-    <>
-      <Tooltip title="More actions">
-        <IconButton size="small" onClick={(e) => setAnchor(e.currentTarget)}>
-          <MoreVertIcon fontSize="small" />
-        </IconButton>
-      </Tooltip>
-
-      <Menu
-        anchorEl={anchor}
-        open={!!anchor}
-        onClose={close}
-        anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
-        transformOrigin={{ vertical: 'top', horizontal: 'right' }}
-        slotProps={{ paper: { sx: { minWidth: 180 } } }}
-      >
-        <MenuItem
-          onClick={() => {
-            onDetail();
-            close();
-          }}
-        >
-          <ListItemIcon>
-            <HistoryIcon fontSize="small" />
-          </ListItemIcon>
-          <ListItemText>View detail</ListItemText>
-        </MenuItem>
-
-        <Tooltip title={editTooltip} placement="left">
-          <span>
-            <MenuItem
-              onClick={() => {
-                onEdit();
-                close();
-              }}
-              disabled={editDisabled}
-            >
-              <ListItemIcon>
-                <EditIcon fontSize="small" />
-              </ListItemIcon>
-              <ListItemText>Edit</ListItemText>
-            </MenuItem>
-          </span>
-        </Tooltip>
-
-        <Tooltip
-          title={isBuiltin ? 'Built-in tools have no version history' : ''}
-          placement="left"
-        >
-          <span>
-            <MenuItem
-              onClick={() => {
-                onHistory();
-                close();
-              }}
-              disabled={isBuiltin}
-            >
-              <ListItemIcon>
-                <HistoryIcon fontSize="small" />
-              </ListItemIcon>
-              <ListItemText>View history</ListItemText>
-            </MenuItem>
-          </span>
-        </Tooltip>
-
-        <Divider />
-
-        <Tooltip title={deleteTooltip} placement="left">
-          <span>
-            <MenuItem
-              onClick={() => {
-                onDelete();
-                close();
-              }}
-              disabled={deleteDisabled}
-              sx={{ color: deleteDisabled ? undefined : 'error.main' }}
-            >
-              <ListItemIcon>
-                <DeleteIcon
-                  fontSize="small"
-                  color={deleteDisabled ? 'disabled' : 'error'}
-                />
-              </ListItemIcon>
-              <ListItemText>Delete</ListItemText>
-            </MenuItem>
-          </span>
-        </Tooltip>
-      </Menu>
-    </>
-  );
-}
-
-// ---------------------------------------------------------------------------
 // Page
 // ---------------------------------------------------------------------------
 
@@ -597,6 +475,60 @@ function ToolsetTools() {
     }
   };
 
+  const canWrite = hasPermission('tools:write');
+  const canDelete = hasPermission('tools:delete');
+
+  const rowActions = (item: ToolItem): RowMenuAction[] => {
+    const itemIsBuiltin = isBuiltinToolset(item.toolset_id);
+    return [
+      {
+        key: 'detail',
+        label: 'View detail',
+        icon: <VisibilityIcon fontSize="small" />,
+        onClick: () => setDetailItem(toolViewData(item)),
+      },
+      {
+        key: 'edit',
+        label: 'Edit',
+        icon: <EditIcon fontSize="small" />,
+        onClick: () => openEdit(item),
+        disabled: itemIsBuiltin || !canWrite,
+        tooltip: itemIsBuiltin
+          ? 'Built-in tools cannot be edited'
+          : !canWrite
+            ? 'You do not have permission to edit tools'
+            : undefined,
+      },
+      {
+        key: 'history',
+        label: 'View history',
+        icon: <HistoryIcon fontSize="small" />,
+        onClick: () =>
+          navigate(`/app/toolsets/${toolsetId}/tools/${item.tool_id}/history`, {
+            state: { fromLabel: 'Tools' } satisfies BackState,
+          }),
+        disabled: itemIsBuiltin,
+        tooltip: itemIsBuiltin
+          ? 'Built-in tools have no version history'
+          : undefined,
+      },
+      {
+        key: 'delete',
+        label: 'Delete',
+        icon: <DeleteIcon fontSize="small" />,
+        onClick: () => setDeleteTarget(item),
+        disabled: itemIsBuiltin || !canDelete,
+        tooltip: itemIsBuiltin
+          ? 'Built-in tools cannot be deleted'
+          : !canDelete
+            ? 'You do not have permission to delete tools'
+            : undefined,
+        destructive: true,
+        dividerBefore: true,
+      },
+    ];
+  };
+
   const displayTools: ToolItem[] = tools;
   const columns: ListTableColumn<ToolItem>[] = [
     {
@@ -614,17 +546,7 @@ function ToolsetTools() {
             },
             listTableTruncateSx,
           ]}
-          onClick={() =>
-            setDetailItem({
-              name: item.name,
-              description: item.description,
-              cypher: item.cypher,
-              parameters: item.parameters,
-              enabled: item.enabled,
-              effective_enabled: item.effective_enabled,
-              disabled_reason: item.disabled_reason,
-            })
-          }
+          onClick={() => setDetailItem(toolViewData(item))}
         >
           {item.name}
         </Typography>
@@ -708,34 +630,7 @@ function ToolsetTools() {
       key: 'actions',
       align: 'right',
       cellSx: listTableActionColumnSx,
-      render: (item) => {
-        const itemIsBuiltin = isBuiltinToolset(item.toolset_id);
-        return (
-          <RowMenu
-            item={item}
-            isBuiltin={itemIsBuiltin}
-            onEdit={() => openEdit(item)}
-            onDetail={() =>
-              setDetailItem({
-                name: item.name,
-                description: item.description,
-                cypher: item.cypher,
-                parameters: item.parameters,
-                enabled: item.enabled,
-                effective_enabled: item.effective_enabled,
-                disabled_reason: item.disabled_reason,
-              })
-            }
-            onHistory={() =>
-              navigate(
-                `/app/toolsets/${toolsetId}/tools/${item.tool_id}/history`,
-                { state: { fromLabel: 'Tools' } satisfies BackState },
-              )
-            }
-            onDelete={() => setDeleteTarget(item)}
-          />
-        );
-      },
+      render: (item) => <RowMenu actions={rowActions(item)} />,
     },
   ];
   const filterGroups: ListTableFilterGroup<ToolItem>[] = [
@@ -792,51 +687,40 @@ function ToolsetTools() {
           </Button>
         </Box>
 
-        <Box
-          sx={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            mb: 3,
-          }}
+        <ListPageHeader
+          title={
+            <Typography variant="h1">
+              Tools
+              {isBuiltin && (
+                <Chip
+                  label="Built-in"
+                  size="small"
+                  variant="outlined"
+                  color="primary"
+                  sx={{ ml: 1, verticalAlign: 'middle' }}
+                />
+              )}
+            </Typography>
+          }
+          action={
+            !isBuiltin &&
+            canWrite && (
+              <Button
+                variant="contained"
+                startIcon={<AddIcon />}
+                onClick={openCreate}
+              >
+                New tool
+              </Button>
+            )
+          }
+        />
+
+        <ListViewState
+          loading={loading}
+          error={error}
+          errorMessage="Failed to load tools"
         >
-          <Typography variant="h1">
-            Tools
-            {isBuiltin && (
-              <Chip
-                label="Built-in"
-                size="small"
-                variant="outlined"
-                color="primary"
-                sx={{ ml: 1, verticalAlign: 'middle' }}
-              />
-            )}
-          </Typography>
-          {!isBuiltin && hasPermission('tools:write') && (
-            <Button
-              variant="contained"
-              startIcon={<AddIcon />}
-              onClick={openCreate}
-            >
-              New tool
-            </Button>
-          )}
-        </Box>
-
-        {loading && (
-          <Box sx={{ display: 'flex', justifyContent: 'center', p: 4 }}>
-            <CircularProgress />
-          </Box>
-        )}
-
-        {error && (
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-            <Error />
-            <Typography>Failed to load tools</Typography>
-          </Box>
-        )}
-
-        {!loading && !error && (
           <ListTable
             rows={displayTools}
             columns={columns}
@@ -844,7 +728,7 @@ function ToolsetTools() {
             emptyMessage="No tools yet. Create one above."
             filterGroups={filterGroups}
           />
-        )}
+        </ListViewState>
       </Box>
 
       {!isBuiltin && (
@@ -863,34 +747,16 @@ function ToolsetTools() {
         data={detailItem}
       />
 
-      {/* Delete confirmation dialog */}
-      <Dialog
+      <ConfirmDeleteDialog
         open={!!deleteTarget}
+        title="Delete tool?"
+        deleting={deleting}
         onClose={() => setDeleteTarget(null)}
-        maxWidth="xs"
-        fullWidth
+        onConfirm={handleDeleteConfirm}
       >
-        <DialogTitle>Delete tool?</DialogTitle>
-        <DialogContent>
-          <DialogContentText>
-            Permanently delete <strong>{deleteTarget?.name}</strong> and all its
-            versions? This cannot be undone.
-          </DialogContentText>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setDeleteTarget(null)} disabled={deleting}>
-            Cancel
-          </Button>
-          <Button
-            variant="contained"
-            color="error"
-            onClick={handleDeleteConfirm}
-            disabled={deleting}
-          >
-            {deleting ? <CircularProgress size={20} /> : 'Delete'}
-          </Button>
-        </DialogActions>
-      </Dialog>
+        Permanently delete <strong>{deleteTarget?.name}</strong> and all its
+        versions? This cannot be undone.
+      </ConfirmDeleteDialog>
     </>
   );
 }

@@ -1,80 +1,54 @@
 # Agent Guidelines
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+Guidance for Claude Code (claude.ai/code) when working in this repository.
 
 ## What is Seizu?
 
 Seizu (星図) is a configuration-driven reporting platform for Neo4j graph data. Two runtimes:
-- **FastAPI web app** (`reporting/`) — serves the React frontend and REST API (ASGI, Gunicorn + UvicornWorker)
-- **Scheduled query worker** (`reporting/scheduled_queries.py`) — runs Cypher queries on a schedule with pluggable action plugins (SQS, Slack, log); reads from the database, not the YAML config
+- **FastAPI web app** (`reporting/`) — serves the React frontend and REST API (ASGI, Gunicorn + UvicornWorker).
+- **Scheduled query worker** (`reporting/scheduled_queries.py`) — runs Cypher on a schedule with pluggable action plugins (SQS, Slack, log); reads from the database, not the YAML config.
 
 ## Running Commands with Docker
 
-Never install bun, node, uv, or Python directly on the host. Always use `docker compose run --rm <service>`.
+Never install bun, node, uv, or Python on the host. Always use `docker compose run --rm <service>`.
 
-### Frontend (`seizu-node`)
-
+**Frontend (`seizu-node`):**
 ```bash
-docker compose run --rm seizu-node bun add <package>          # install
-docker compose run --rm seizu-node bun test --watchAll=false   # all tests
+docker compose run --rm seizu-node bun add <package>
+docker compose run --rm seizu-node bun test --watchAll=false              # all tests
 docker compose run --rm seizu-node bun test src/path/to.test.tsx --watchAll=false
 docker compose run --rm seizu-node bun run type-check
 ```
 
-### Backend (`seizu`)
-
+**Backend (`seizu`):**
 ```bash
 docker compose run --rm --user root seizu uv sync --frozen --all-groups --all-packages --no-install-workspace
 docker compose run --rm seizu uv run --frozen --no-sync pytest tests/unit
-docker compose run --rm seizu uv add <package>
-docker compose run --rm seizu uv add --dev <package>
+docker compose run --rm seizu uv add [--dev] <package>
 ```
+> Always run tests via `uv run --frozen --no-sync` **in the container** so they use the synced Docker env and `uv.lock`. After editing `pyproject.toml`, run `docker compose run --rm seizu uv lock`; commit `pyproject.toml` + `uv.lock` together.
 
-> **Always run tests through `uv run --frozen --no-sync` in the container** so they use the already-synced Docker environment and `uv.lock`.
-> **After editing `pyproject.toml`**, run `docker compose run --rm seizu uv lock`. Commit `pyproject.toml` and `uv.lock` together.
+**Docs (Sphinx):** isolated venv under `docs/.venv`, pinned in `docs/requirements.txt`. Sphinx is **not** in the project `pyproject.toml` — don't add it there. `make docs` runs `docs/build.sh` (bootstraps the venv). To change a docs dep, edit `docs/requirements.txt` and re-run `make docs`.
 
-### Docs (Sphinx)
+**Linting:** run pre-commit **on the host** (the `seizu` container lacks git): `pre-commit run --all-files` or `make lint`.
 
-Docs have their own isolated virtualenv under `docs/.venv` with pinned deps in `docs/requirements.txt`. Sphinx and its extensions are **not** part of the main project's `pyproject.toml` — do not add them there. `docs/build.sh` bootstraps the venv on first run and is invoked by `make docs`.
+**Git:** never push to `master`. Push feature branches and open a PR.
 
-```bash
-make docs   # runs docs/build.sh on the host using docs/.venv
+**Makefile shortcuts:**
 ```
-
-To add or update a docs dependency, edit `docs/requirements.txt` and re-run `make docs` (the venv will pick up the change on next `pip install`).
-
-### Linting
-
-Run pre-commit **on the host** (the `seizu` container lacks git):
-```bash
-pre-commit run --all-files
-make lint   # same thing
-```
-
-### Git Workflow
-
-Do not attempt to push directly to `master`. Push feature branches only and open a pull request for integration.
-
-### Makefile shortcuts
-
-```bash
-make test / make test_unit / make test_frontend
+make test / test_unit / test_frontend
 make lint
-make schema             # regenerate schema/reporting-schema.json and schema/openapi.json
-make generate_openapi   # export schema/openapi.json (no running server needed)
-make generate_client LANG=go  # generate client from schema/openapi.json
+make schema             # regenerate schema/reporting-schema.json + schema/openapi.json
+make generate_openapi   # export schema/openapi.json (no running server)
+make generate_client LANG=go
 make seed_dashboard [ARGS="--force|--dry-run|export"]
-make auth_enable / make auth_disable
-make sqlmodel_enable / make sqlmodel_disable
+make auth_enable / auth_disable
+make sqlmodel_enable / sqlmodel_disable
 ```
 
 ## Adjacent Services Configuration
 
-Config for adjacent dev services lives in `.config/`. Reference that path in `docker-compose.yml`.
-
-`.config/setup.sh` (called by `make up`) copies `.config/dev/` → `.compose/` **only if the destination doesn't exist**. To apply a change to a source file, manually copy it or delete the destination and re-run `make up`. New env vars go in `.env.example`.
-
-**Gunicorn** socket/PID/workdir are set to `/run/seizu` (ephemeral tmpfs) to avoid `EINVAL` errors on macOS Docker bind mounts.
+Config for adjacent dev services lives in `.config/`; reference that path in `docker-compose.yml`. `.config/setup.sh` (called by `make up`) copies `.config/dev/` → `.compose/` **only if the destination doesn't exist** — to apply a source change, copy it manually or delete the destination and re-run `make up`. New env vars go in `.env.example`. Gunicorn socket/PID/workdir are `/run/seizu` (tmpfs) to avoid `EINVAL` on macOS bind mounts.
 
 ## Architecture
 
@@ -82,206 +56,105 @@ Config for adjacent dev services lives in `.config/`. Reference that path in `do
 
 React 19 + TypeScript + Bun + Material-UI + MUI X Charts + `@xyflow/react`.
 
-**Key files:**
-- `src/config.context.ts` — `ConfigContext` from `GET /api/v1/config`; OIDC + stats config; Cypher query resolution is per-report via `Report.queries`
-- `src/authConfig.context.ts` — `AuthConfigContext`; holds `auth_required` and (informational) OIDC config; gates API calls until a token is present
-- `src/auth.context.ts` — `AuthContext`; in-memory `accessToken` only
-- `src/api/authClient.ts` — `beginLogin(returnTo)`, `refreshSession()`, `logout()`; thin wrappers for the BFF auth endpoints, send `X-Seizu-Csrf` on mutating calls
-- `src/components/AuthProvider.tsx` — calls `refreshSession()` on mount; on success stores the access token and schedules proactive refresh ~30s before expiry; on failure captures the current URL and navigates to `/api/v1/auth/login`. Module-level in-flight promise dedupes concurrent refreshes (React StrictMode safety).
-- `src/hooks/useCypherQuery.ts` — wraps `POST /api/v1/query`; skips if `auth_required` and no token; `saveHistory` param forwards `save_history: true` to record in console history
-- `src/hooks/useQueryHistory.ts` — fetches `GET /api/v1/query-history` for the current user; returns `{ loading, error, data, fetchHistory }`
-- `src/hooks/useReportsApi.ts` — `useReportsList()`, `useReport(id)`, `useDashboardReport()`, `useAllReports()`, `useReportVersionsList(id)`, `useReportVersion(id, v)`; `useReportsMutations()` for create/save-version/set-dashboard/delete
-- `src/components/ReportView.tsx` — shared report renderer; resolves panel `cypher` against `report.queries`
-- `src/components/reports/` — panel components (`CypherCount`, `CypherTable`, `CypherBar`, etc.)
-- `src/components/reports/CypherGraph.tsx` — graph panel (`@xyflow/react`); accepts map, path, or any format; Graph/Table/Raw tabs; collapsible detail panel
-- `src/pages/QueryConsole.tsx` — ad-hoc console at `/app/query-console`; Ctrl+Enter runs query
-- `src/components/QueryConsoleSchemaPanel.tsx` — collapsible schema browser; inserts/runs discovery queries on click
+- `src/config.context.ts` — `ConfigContext` from `GET /api/v1/config` (OIDC + stats config); Cypher resolution is per-report via `Report.queries`.
+- `src/authConfig.context.ts` — `AuthConfigContext`; `auth_required` + informational OIDC config; gates API calls until a token exists.
+- `src/auth.context.ts` — `AuthContext`; in-memory `accessToken` only.
+- `src/api/authClient.ts` — `beginLogin(returnTo)`, `refreshSession()`, `logout()`; thin BFF auth wrappers, send `X-Seizu-Csrf` on mutating calls.
+- `src/components/AuthProvider.tsx` — `refreshSession()` on mount; on success stores token + schedules refresh ~30s before expiry; on failure navigates to `/api/v1/auth/login`. Module-level in-flight promise dedupes concurrent refreshes (StrictMode safety).
+- `src/hooks/useCypherQuery.ts` — wraps `POST /api/v1/query`; skips if `auth_required` and no token; `saveHistory` forwards `save_history: true`.
+- `src/hooks/useQueryHistory.ts` — `GET /api/v1/query-history`; returns `{ loading, error, data, fetchHistory }`.
+- `src/hooks/useReportsApi.ts` — `useReportsList/useReport/useDashboardReport/useAllReports/useReportVersionsList/useReportVersion`; `useReportsMutations()` for create/save-version/set-dashboard/delete.
+- `src/components/ReportView.tsx` — shared report renderer; resolves panel `cypher` against `report.queries`.
+- `src/components/reports/` — panel components (`CypherCount`, `CypherTable`, `CypherBar`, …); `CypherGraph.tsx` is the `@xyflow/react` graph panel (map/path/any format; Graph/Table/Raw tabs).
+- `src/pages/QueryConsole.tsx` — ad-hoc console at `/app/query-console` (Ctrl+Enter runs); `QueryConsoleSchemaPanel.tsx` is the collapsible schema browser.
 
 **User identity:**
-- `src/hooks/useCurrentUser.ts` — `useCurrentUser()` → `GET /api/v1/me`
-- `src/hooks/useUser.ts` — `useUser(userId)` → `GET /api/v1/users/<userId>`
-- `src/components/UserAvatar.tsx` — `boring-avatars` pixel avatar; use `<UserAvatar name={...} />`
-- `src/components/UserDisplay.tsx` — resolves `created_by` user_id to `display_name ?? preferred_username ?? email ?? "Unknown user"`; use `<UserDisplay userId={...} />`
-- Durable identity is `(iss, sub)`. Email, display name, and preferred username are optional profile/display metadata, not identity.
-- **Never** display raw user_ids or `sub` values in the UI.
+- `src/hooks/useCurrentUser.ts` → `GET /api/v1/me`; `src/hooks/useUser.ts` → `GET /api/v1/users/<id>`.
+- `src/components/UserAvatar.tsx` — `boring-avatars`; `<UserAvatar name={...} />`.
+- `src/components/UserDisplay.tsx` — resolves user_id to `display_name ?? preferred_username ?? email ?? "Unknown user"`; `<UserDisplay userId={...} />`.
+- Durable identity is `(iss, sub)`; email/display name/username are optional display metadata. **Never** display raw user_ids or `sub` in the UI.
 
 ### Backend (`reporting/`)
 
 FastAPI, Python 3.12, Gunicorn + UvicornWorker (ASGI). All I/O is async (neo4j async driver, aioboto3, async SQLAlchemy).
 
-**Key files:**
-- `reporting/asgi.py` — ASGI entrypoint: `application = create_app()`
-- `reporting/app.py` — `create_app()`; FastAPI with `openapi_url="/api/openapi.json"`, `docs_url="/api/docs"`; registers security headers (`secure`), routers, static files, and SPA fallback via `lifespan`
-- `reporting/settings.py` — all config via env vars (Pydantic)
-- `reporting/routes/` — `APIRouter`s: `config.py`, `me.py`, `query.py`, `reports.py`, `users.py`, `validate.py`, `scheduled_queries.py`, `static.py` (healthcheck only)
-- `reporting/authnz/__init__.py` — `HTTPBearer` + FastAPI `Depends(get_current_user)`; `CurrentUser` dataclass (`user: User`, `jwt_claims: dict`); `sync_user_profile` dependency chains on `get_current_user`; tests override via `app.dependency_overrides[get_current_user]`
-- `reporting/services/` — all async: `reporting_neo4j.py` (async Neo4j driver + distributed locking), `report_store/` (pluggable store), `query_validator.py`
-- `reporting/schema/reporting_config.py` — Pydantic models for the YAML config
-- `reporting/schema/report_config.py` — Pydantic models for DynamoDB items and API schemas
+- `reporting/asgi.py` — `application = create_app()`.
+- `reporting/app.py` — `create_app()`; `openapi_url="/api/openapi.json"`, `docs_url="/api/docs"`; registers `secure` headers, routers, static, SPA fallback via `lifespan`; hosts the MCP/auth/CSRF ASGI middlewares.
+- `reporting/settings.py` — all config via env (Pydantic).
+- `reporting/routes/` — `config.py`, `me.py`, `query.py`, `reports.py`, `users.py`, `validate.py`, `scheduled_queries.py`, `roles.py`, `static.py` (healthcheck only).
+- `reporting/authnz/__init__.py` — `HTTPBearer` + `Depends(get_current_user)`; `CurrentUser` dataclass (`user`, `jwt_claims`, `permissions`); `sync_user_profile` chains on it; tests override `app.dependency_overrides[get_current_user]`.
+- `reporting/services/` — async: `reporting_neo4j.py` (async driver + distributed locking), `report_store/`, `query_validator.py`.
+- `reporting/schema/reporting_config.py` — Pydantic models for the YAML config; `report_config.py` — store items + API schemas.
 
-**Async I/O notes:**
-- Neo4j: `AsyncGraphDatabase.driver()` for app/worker; a separate `GraphDatabase.driver()` is kept only for CyVer validators (run via `asyncio.to_thread`)
-- DynamoDB/SQS: `aioboto3.Session().resource(...)` / `.client(...)` as async context managers
-- PostgreSQL: `create_async_engine(...)` + `AsyncSession` from `sqlalchemy.ext.asyncio`; URL prefix `postgresql+asyncpg://`
+**Async I/O:** Neo4j `AsyncGraphDatabase.driver()` (a sync `GraphDatabase.driver()` is kept only for CyVer validators via `asyncio.to_thread`); DynamoDB/SQS via `aioboto3` async context managers; PostgreSQL via `create_async_engine` + `AsyncSession` (`postgresql+asyncpg://`).
 
-**Query validation** (`reporting/services/query_validator.py`): `async def validate_query()` returns `ValidationResult(errors, warnings)`. Errors block execution; warnings don't.
-1. Syntax + read-only check via `EXPLAIN` (async Neo4j driver)
-2. SSRF / admin / procedure guard (regex + procedure allowlist) — blocks `LOAD CSV`, the `USE` clause, administration/catalog commands (`SHOW`, `TERMINATE`, database/user/role/privilege commands), and `apoc.cypher.*` / `gds.*` / `ai.*` / `genai.*` function namespaces. Every `CALL <procedure>` is checked against an allowlist; only side-effect-free built-in schema procedures (`db.labels`, `db.propertyKeys`, `db.schema.*`, …) are permitted by default. Extend it with `QUERY_VALIDATOR_ALLOWED_PROCEDURES` (exact names or namespace prefixes like `apoc.`/`gds.`); a namespace prefix also drops that namespace's dangerous-function guard.
-3. Schema warnings (CyVer `SchemaValidator` via `asyncio.to_thread` with sync driver)
-4. Property warnings (CyVer `PropertiesValidator` via `asyncio.to_thread` with sync driver)
+**Query validation** (`reporting/services/query_validator.py`): `async def validate_query()` → `ValidationResult(errors, warnings)`. Errors block; warnings don't. Layers:
+1. Syntax + read-only check via `EXPLAIN`.
+2. SSRF/admin/procedure guard (regex + allowlist) — blocks `LOAD CSV`, the `USE` clause, admin/catalog commands (`SHOW`, `TERMINATE`, db/user/role/privilege), and `apoc.cypher.*`/`gds.*`/`ai.*`/`genai.*` function namespaces. Every `CALL <procedure>` is allowlisted (side-effect-free schema procedures by default). Extend via `QUERY_VALIDATOR_ALLOWED_PROCEDURES` (exact names or namespace prefixes like `apoc.`); a namespace prefix also drops that namespace's dangerous-function guard.
+3. CyVer `SchemaValidator` warnings; 4. CyVer `PropertiesValidator` warnings (both via `asyncio.to_thread`).
 
 ### API Endpoints
 
-| Method | Path | Description |
-|--------|------|-------------|
-| GET | `/api/v1/auth/login` | Start a BFF OIDC flow; returns the IDP authorize URL. Sets the short-lived OAuth state cookie. |
-| GET | `/api/v1/auth/callback` | IDP redirect target; exchanges the code, sets the session cookie, 302s to `return_to`. |
-| POST | `/api/v1/auth/refresh` | Mint a fresh access token from the cookie's refresh token; rolls the cookie. Requires `X-Seizu-Csrf`. |
-| POST | `/api/v1/auth/logout` | Clear the session cookie + best-effort RP-initiated logout. Requires `X-Seizu-Csrf`. |
-| GET | `/api/v1/config` | OIDC config, stats config, JSON schema |
-| POST | `/api/v1/query` | Execute validated read-only Cypher; returns `{results, errors, warnings}`; pass `save_history: true` to record in console history |
-| POST | `/api/v1/validate` | Validate Cypher without executing; returns `{errors, warnings}` |
-| GET | `/api/v1/query-history` | Paginated query history for the current user; params `page`, `per_page` (1–100) |
-| GET | `/api/v1/query-history/<id>` | Single query history item by ID (scoped to current user); 404 if not found |
-| GET | `/api/v1/reports` | List reports (metadata only) |
-| POST | `/api/v1/reports` | Create report; 201 |
-| GET | `/api/v1/reports/dashboard` | Latest dashboard report; 404 if none |
-| PUT | `/api/v1/reports/<id>/dashboard` | Set default dashboard |
-| PUT | `/api/v1/reports/<id>/pin` | Pin or unpin report (`{"pinned": bool}`); requires `reports:write` |
-| GET | `/api/v1/reports/<id>` | Latest version of a report |
-| GET | `/api/v1/reports/<id>/versions` | All versions |
-| GET | `/api/v1/reports/<id>/versions/<n>` | Specific version |
-| POST | `/api/v1/reports/<id>/versions` | Save new version; 201 |
-| DELETE | `/api/v1/reports/<id>` | Delete report + all versions |
-| GET | `/api/v1/me` | Current user profile + resolved permissions |
-| GET | `/api/v1/users/<user_id>` | User profile by ID; 404 if not found |
-| GET | `/api/v1/roles/builtin` | Built-in role definitions (Viewer/Editor/Admin) |
-| GET/POST | `/api/v1/roles` | List / create user-defined roles |
-| GET/PUT/DELETE | `/api/v1/roles/<id>` | Get / update / delete user-defined role |
-| GET | `/api/v1/roles/<id>/versions` | Version history for a role |
-| GET | `/api/v1/roles/<id>/versions/<n>` | Specific role version |
-| GET/POST | `/api/v1/scheduled-queries` | List / create |
-| GET/PUT/DELETE | `/api/v1/scheduled-queries/<id>` | Get / update / delete |
-| GET | `/api/v1/scheduled-queries/<id>/versions` | All versions |
-| GET | `/api/v1/scheduled-queries/<id>/versions/<n>` | Specific version |
-| GET/POST | `/api/v1/toolsets` | List / create toolsets |
-| GET/PUT/DELETE | `/api/v1/toolsets/<id>` | Get / update / delete toolset |
-| GET | `/api/v1/toolsets/<id>/versions` | All toolset versions |
-| GET | `/api/v1/toolsets/<id>/versions/<n>` | Specific toolset version |
-| GET/POST | `/api/v1/toolsets/<id>/tools` | List / create tools |
-| GET/PUT/DELETE | `/api/v1/toolsets/<id>/tools/<tool_id>` | Get / update / delete tool |
-| GET | `/api/v1/toolsets/<id>/tools/<tool_id>/versions` | All tool versions |
-| GET | `/api/v1/toolsets/<id>/tools/<tool_id>/versions/<n>` | Specific tool version |
-| GET | `/healthcheck` | Healthcheck |
-| GET | `/api/openapi.json` | OpenAPI 3.x spec |
-| GET | `/api/docs` | Swagger UI |
+The route definitions in `reporting/routes/` are the source of truth. Don't maintain an endpoint list here — read the live spec instead: Swagger UI at `/api/docs`, raw spec at `/api/openapi.json`, or regenerate the checked-in copy with `make generate_openapi` (writes `schema/openapi.json`, no running server needed).
+
+Conventions worth knowing up front: all paths are under `/api/v1/*` (except `/healthcheck`, `/api/openapi.json`, `/api/docs`); versioned entities (reports, roles, scheduled-queries, toolsets, tools) expose `GET .../<id>/versions` and `GET .../<id>/versions/<n>`, and reports additionally accept `POST /api/v1/reports/<id>/versions` to save a new version. The browser-only BFF auth routes live under `/api/v1/auth/*` — see the Authentication section.
 
 ### CLI (`seizu_cli/`)
 
-Typer app calling the REST API. Invoked via `python -m seizu_cli`.
+Typer app calling the REST API; `python -m seizu_cli`. Global options `--api-url`, `--token`, `--credentials-file`, `--config-file`.
 
-**Key files:**
-- `seizu_cli/main.py` — entry point; global options `--api-url`, `--token`, `--credentials-file`, `--config-file`
-- `seizu_cli/config.py` — `SeizuConfig` + `load_config()` reading `~/.config/seizu/seizu.conf`
-- `seizu_cli/client.py` — `SeizuClient`; Bearer auth
-- `seizu_cli/state.py` — module-level state; `get_client()` lazy factory
-- `seizu_cli/commands/` — `reports.py`, `scheduled_queries.py`, `toolsets.py`, `seed.py`, `auth.py`
-- `seizu_cli/auth.py` — OS-native keyring or `--credentials-file` fallback; Device Authorization Grant
+- `main.py` (entry), `config.py` (`SeizuConfig` + `load_config()` reading `~/.config/seizu/seizu.conf`), `client.py` (`SeizuClient`, Bearer auth), `state.py` (`get_client()` lazy factory), `commands/` (`reports`, `scheduled_queries`, `toolsets`, `seed`, `auth`), `auth.py` (keyring or `--credentials-file`; Device Authorization Grant RFC 8628).
+- Conf file (`~/.config/seizu/seizu.conf`): `api_url`, `seed_file`. Resolution: CLI flag → env → conf → default.
+- Auth flow: `seizu login` → device endpoint → browser approval → CLI polls → token in keyring.
 
-**Config file** (`~/.config/seizu/seizu.conf`): `api_url` and `seed_file`. Resolution: CLI flag → env var → conf file → default.
-
-**Auth (Device Authorization Grant, RFC 8628):** `seizu login` → device endpoint → user approves in browser → CLI polls → token stored in keyring.
-
-**Usage (inside `seizu` container):**
-```bash
-uv run --frozen --no-sync python -m seizu_cli --api-url http://seizu:8080 login
-uv run --frozen --no-sync python -m seizu_cli --api-url http://seizu:8080 reports list
-uv run --frozen --no-sync python -m seizu_cli --api-url http://seizu:8080 toolsets list
-uv run --frozen --no-sync python -m seizu_cli --api-url http://seizu:8080 toolsets tools list <toolset_id>
-uv run --frozen --no-sync python -m seizu_cli --api-url http://seizu:8080 toolsets tools call <toolset_id> <tool_id> --arg limit=10
-uv run --frozen --no-sync python -m seizu_cli --api-url http://seizu:8080 seed [--force|--dry-run]
-uv run --frozen --no-sync python -m seizu_cli --api-url http://seizu:8080 export
+Usage inside the `seizu` container — prefix every command with `uv run --frozen --no-sync python -m seizu_cli --api-url http://seizu:8080`:
+```
+login
+reports list
+toolsets list
+toolsets tools list <toolset_id>
+toolsets tools call <toolset_id> <tool_id> --arg limit=10
+seed [--force|--dry-run]
+export
 ```
 Prefer `make seed_dashboard [ARGS="--force|--dry-run|export"]`.
 
 ### MCP Server (`reporting/services/mcp_server.py`)
 
-Seizu exposes an MCP (Model Context Protocol) server at `/api/v1/mcp` when `MCP_ENABLED=true` (default). LLM agents such as Claude can connect and call tools as a standard MCP client.
+Exposed at `/api/v1/mcp` when `MCP_ENABLED=true` (default). LLM agents connect as standard MCP clients.
 
-**Key details:**
-- Transport: StreamableHTTP, wired into FastAPI via `_MCPMiddleware` (pure ASGI middleware in `reporting/app.py`) that intercepts `/api/v1/mcp*` before FastAPI routing; avoids a Starlette 1.0.0 issue where `Mount("/api/v1/mcp")` requires a trailing slash and the SPA catch-all returns 405
-- Auth: `_MCPAuthMiddleware` validates Bearer tokens via the shared `authnz.validate_bearer_token()` (JWKS JWT check, optional RFC 7662 introspection fallback) — the same path the REST API uses; passes through unauthenticated in dev (`DEVELOPMENT_ONLY_REQUIRE_AUTH=false`). It populates two `contextvars.ContextVar`s for the duration of the request: `_mcp_permissions` (the resolved `frozenset[str]` of permissions) and `_mcp_current_user` (a `CurrentUser`). Built-in handlers that need to attribute writes to a user (e.g. `reports__create`) read the latter.
-- Tool names: namespaced as `{group}__{action}` (built-ins) or `{toolset_name}__{tool_name}` (user-defined), both using double underscore
-- Tool listing: `@server.list_tools()` merges `list_builtin_tools(settings.MCP_ENABLED_BUILTINS)` with `report_store.list_enabled_tools()` at request time, filtering built-ins by the caller's resolved permissions
-- Tool execution: `@server.call_tool()` dispatches to `find_builtin(name, settings.MCP_ENABLED_BUILTINS)` first, falling back to user-defined tools executed via `reporting_neo4j.run_query()`. Built-in handlers enforce their own `required_permissions` before running.
+- **Transport:** StreamableHTTP via `_MCPMiddleware` (pure ASGI in `app.py`), intercepting `/api/v1/mcp*` before FastAPI routing (avoids a Starlette 1.0.0 `Mount` trailing-slash issue).
+- **Auth:** `_MCPAuthMiddleware` validates Bearer tokens via shared `authnz.validate_bearer_token()` (JWKS + optional RFC 7662 introspection); passes through unauthenticated in dev (`DEVELOPMENT_ONLY_REQUIRE_AUTH=false`). Sets two `ContextVar`s per request: `_mcp_permissions` (`frozenset[str]`) and `_mcp_current_user` (`CurrentUser`); handlers attributing writes read the latter.
+- **Tool names:** `{group}__{action}` (built-ins) or `{toolset}__{tool}` (user-defined), double underscore.
+- **Listing/dispatch:** `@server.list_tools()` merges `list_builtin_tools(MCP_ENABLED_BUILTINS)` (filtered by caller permissions) with `report_store.list_enabled_tools()`. `@server.call_tool()` tries `find_builtin()` first, else runs user-defined tools via `reporting_neo4j.run_query()`. Built-ins enforce their own `required_permissions`.
+- **Built-ins** live in `reporting/services/mcp_builtins/` (one module per group, registered in `__init__.py`). Each is a `BuiltinTool` dataclass (`base.py`) sharing the REST service layer — no duplicated logic; permissions mirror REST. Groups (all default-on): `graph` (schema, query), `reports`, `scheduled_queries`, `toolsets`, `roles` — full CRUD + version history. To add a group: export `GROUP_DEF: BuiltinGroup` from a new module, append to `_GROUPS` in `__init__.py` and the `settings.MCP_ENABLED_BUILTINS` default.
+- **OAuth metadata:** `GET /api/v1/mcp/.well-known/oauth-authorization-server` (RFC 8414) when `MCP_OAUTH_AUTHORIZATION_ENDPOINT` + `MCP_OAUTH_TOKEN_ENDPOINT` are set (also `MCP_OAUTH_ISSUER`); lets clients like Claude Desktop discover the IDP. `.well-known` passes through unauthenticated.
 
-**Built-in tools** live in `reporting/services/mcp_builtins/` — one module per group, registered in `reporting/services/mcp_builtins/__init__.py`. Each tool is a `BuiltinTool` dataclass (see `base.py`) with `name`, `group`, `description`, `input_schema`, `required_permissions`, and an async `handler(args, current_user)`. Handlers share the same service-layer code (`report_store`, `validate_action_configs`, `validate_query`, etc.) used by the REST routes — no logic is duplicated. Permission requirements mirror the REST endpoints.
+**Toolsets/Tools** are user-managed Cypher-backed tool groupings in the report store with version history; CRUD via REST; Cypher validated (writes blocked) at create/update.
 
-**Built-in groups** (all enabled by default via `MCP_ENABLED_BUILTINS`):
-- `graph` — `graph__schema` (Neo4j schema introspection), `graph__query` (validated read-only Cypher)
-- `reports` — list/get/create/delete/pin/set_dashboard/get_dashboard reports, plus version history operations
-- `scheduled_queries` — full CRUD + version history; create/update reuse `validate_action_configs` and `validate_query`
-- `toolsets` — full CRUD for toolsets and nested tools + version history; create/update tool calls reuse `validate_query`
-- `roles` — list built-in + user-defined roles, CRUD for user-defined roles, version history
-
-To add a new built-in group, drop a new `reporting/services/mcp_builtins/<group>.py` exporting a `GROUP_DEF: BuiltinGroup`, then append it to `_GROUPS` in `reporting/services/mcp_builtins/__init__.py` and the default list in `settings.MCP_ENABLED_BUILTINS`.
-
-**OAuth metadata endpoint:** `GET /api/v1/mcp/.well-known/oauth-authorization-server` (RFC 8414). Enabled when `MCP_OAUTH_AUTHORIZATION_ENDPOINT` and `MCP_OAUTH_TOKEN_ENDPOINT` are set. Allows MCP clients (e.g. Claude Desktop) to discover the OIDC provider and authenticate users without a pre-issued token. The auth middleware passes `.well-known` requests through unauthenticated. Settings: `MCP_OAUTH_ISSUER`, `MCP_OAUTH_AUTHORIZATION_ENDPOINT`, `MCP_OAUTH_TOKEN_ENDPOINT`.
-
-**Toolsets and Tools** are user-managed groupings of Cypher-backed tools, stored in the same report store backend (DynamoDB or SQL) with full version history. CRUD is via the REST API. Cypher is validated at create/update time — write queries are blocked.
-
-**DynamoDB key space:**
-```
-TOOLSET#{id} / #METADATA, VERSION#NNNNNNNNNN
-TOOLSET_LIST / TOOLSET#{id}
-TOOL#{id}    / #METADATA, VERSION#NNNNNNNNNN
-TOOL_LIST#{toolset_id} / TOOL#{id}
-```
-
-**SQL tables:** `toolsets`, `toolset_versions`, `tools`, `tool_versions`
+DynamoDB key space: `TOOLSET#{id}` (`#METADATA`, `VERSION#N`), `TOOLSET_LIST/TOOLSET#{id}`, `TOOL#{id}` (`#METADATA`, `VERSION#N`), `TOOL_LIST#{toolset_id}/TOOL#{id}`. SQL tables: `toolsets`, `toolset_versions`, `tools`, `tool_versions`.
 
 ### Configuration System
 
-Reports and scheduled queries are stored in DynamoDB (default) or PostgreSQL (`sqlmodel` backend). The YAML config (`.config/dev/seizu/reporting-dashboard.yaml`, mounted as `/reporting-dashboard.yaml`) is a seed source.
+Reports + scheduled queries are stored in DynamoDB (default) or PostgreSQL (`sqlmodel`). The YAML config (`.config/dev/seizu/reporting-dashboard.yaml`, mounted as `/reporting-dashboard.yaml`) is a seed source.
 
-**YAML top-level sections:**
-- `queries` — named Cypher strings for `scheduled_queries` references only; not served to frontend
-- `dashboard` — key pointing to the default dashboard report
-- `reports` — report definitions to seed into DynamoDB; each has its own `queries` dict
-- `scheduled_queries` — **list** of recurring query definitions (SQS, Slack, log actions)
-- `toolsets` — dict of toolset definitions (key → `ToolsetDef`); each has a `tools` dict (key → `ToolDef`) with `name`, `description`, `cypher`, `parameters`, `enabled`
+YAML top-level: `queries` (named Cypher for `scheduled_queries` refs only; not served to frontend), `dashboard` (key of default report), `reports` (each with its own `queries` dict), `scheduled_queries` (**list** of SQS/Slack/log defs), `toolsets` (dict → `ToolsetDef`, each with a `tools` dict → `ToolDef`: `name`, `description`, `cypher`, `parameters`, `enabled`).
 
-**Report storage** (`reporting/services/report_store/`):
-- `base.py` — `ReportStore` ABC
-- `dynamodb.py` — single-table design; composite PK/SK; Snowflake IDs; `SNOWFLAKE_MACHINE_ID`
-- `sql.py` — SQLModel/SQLAlchemy; 5 tables; configured via `SQL_DATABASE_URL`
-- `__init__.py` — `get_store()` factory (env `REPORT_STORE_BACKEND`, default `dynamodb`)
+**Report storage** (`reporting/services/report_store/`): `base.py` (`ReportStore` ABC), `dynamodb.py` (single-table, composite PK/SK, Snowflake IDs via `SNOWFLAKE_MACHINE_ID`), `sql.py` (SQLModel/SQLAlchemy, 5 tables, `SQL_DATABASE_URL`), `__init__.py` (`get_store()` factory, env `REPORT_STORE_BACKEND`, default `dynamodb`). Import `from reporting.services import report_store` — backend is transparent. Switch backends: `make sqlmodel_enable/disable` then `make down && make up`.
 
-Use `from reporting.services import report_store` — backend is transparent.
+DynamoDB key design: per report `#METADATA`/`#LATEST`/`VERSION#<n>`; per scheduled query `SQ#<id>` + `SCHEDULED_QUERY_LIST`; default dashboard `#DASHBOARD/#POINTER`.
 
-**Switching backends:** `make sqlmodel_enable / sqlmodel_disable` then `make down && make up`.
+**SQL schema changes:** only small inline compatibility migrations exist in `sql.py` today — introduce a real framework (e.g. Alembic) before the next non-trivial change rather than adding more piecemeal ones. SQLite dev DBs created before nullable user emails keep the old `NOT NULL`; recreate the DB to test emailless users on SQLite.
 
-**SQL schema changes:** The SQL backend currently has only small inline compatibility migrations in `reporting/services/report_store/sql.py`. Do not keep adding piecemeal schema migrations there; introduce a real migration framework such as Alembic before the next non-trivial SQL schema change. Existing SQLite dev databases created before nullable user emails still have the old `NOT NULL` constraint because SQLite cannot drop it in-place; recreate the dev DB if testing emailless users with SQLite.
-
-**DynamoDB key design:** `#METADATA`, `#LATEST`, `VERSION#<n>` per report; `SQ#<id>` + `SCHEDULED_QUERY_LIST` per scheduled query; `#DASHBOARD/#POINTER` for the default dashboard.
-
-**Seeding:** Existing reports/queries unchanged unless content differs or `--force`. `cypher` fields resolved against top-level `queries` dict, falling back to literal string. The `Report` TypeScript interface in `src/config.context.ts` must stay in sync with the Pydantic `Report` in `reporting/schema/reporting_config.py`.
+**Seeding:** existing reports/queries unchanged unless content differs or `--force`. `cypher` fields resolve against the top-level `queries` dict, else literal. Keep the `Report` TS interface in `src/config.context.ts` in sync with the Pydantic `Report` in `reporting/schema/reporting_config.py`.
 
 ### Cartography Data Sync
 
-`nostart` profile. Entrypoint is already `cartography` — do not prefix with it.
-
-```bash
-make sync_cve / sync_aws / sync_github / sync_crowdstrike / sync_k8s
-```
+`nostart` profile; entrypoint is already `cartography` (don't prefix it): `make sync_cve / sync_aws / sync_github / sync_crowdstrike / sync_k8s`.
 
 ### Scheduled Query Action Plugins
 
-Located in `reporting/scheduled_query_modules/`. Implement `ModuleInterface` from `__init__.py`.
-
-Required methods: `action_name()`, `setup()`, `handle_results(scheduled_query_id, action, results)`, `action_config_schema()` → `List[ActionConfigFieldDef]` (types: `string`, `text`, `number`, `boolean`, `string_list`, `select`).
-
-Action schemas served via `GET /api/v1/config` as `scheduled_query_action_schemas`.
+In `reporting/scheduled_query_modules/`; implement `ModuleInterface`. Required: `action_name()`, `setup()`, `handle_results(scheduled_query_id, action, results)`, `action_config_schema()` → `List[ActionConfigFieldDef]` (types: `string`, `text`, `number`, `boolean`, `string_list`, `select`). Schemas served via `GET /api/v1/config` as `scheduled_query_action_schemas`.
 
 ### Docker Services
 
@@ -294,242 +167,93 @@ Action schemas served via `GET /api/v1/config` as `scheduled_query_action_schema
 | `dynamodb` | DynamoDB Local (default backend) |
 | `postgres` | PostgreSQL (`sqlmodel` profile) |
 | `sqs` | ElasticMQ (local SQS) |
-| `authentik-*` | OIDC provider (profile: `auth`) |
-| `cartography` | Graph data sync (profile: `nostart`) |
+| `authentik-*` | OIDC provider (`auth` profile) |
+| `cartography` | Graph data sync (`nostart` profile) |
 
-Dev URLs: frontend `http://localhost:3000`, backend `http://localhost:8080`, Authentik `http://localhost:9000`.
+Dev URLs: frontend `:3000`, backend `:8080`, Authentik `:9000`.
 
-**Dockerfile stages:**
-- `base` — Python + uv + user setup + `pyproject.toml`/`uv.lock` copied in. No deps installed.
-- `dev` — `uv sync --frozen --all-groups --all-packages --no-install-workspace`; used by `docker-compose.yml` (`target: dev`) for everything local.
-- `nodebuilder` — `oven/bun` image that produces the frontend build.
-- `production` — `uv sync --frozen --no-dev --package seizu --no-install-workspace` (prod-only, strict lock) + built frontend. The published image (`publish.yml`) explicitly builds `target: production`, so pytest/pre-commit/etc. never ship.
+**Dockerfile stages:** `base` (Python + uv + `pyproject.toml`/`uv.lock`, no deps) → `dev` (`uv sync --frozen --all-groups --all-packages --no-install-workspace`; used by compose `target: dev`) ; `nodebuilder` (`oven/bun`, builds frontend) ; `production` (`uv sync --frozen --no-dev --package seizu --no-install-workspace` + built frontend; `publish.yml` builds this, so pytest/pre-commit never ship).
 
-**Reset named volumes:**
-```bash
-docker compose down
-docker volume rm seizu_neo4j_data seizu_dynamodb_data
-docker compose up && make seed_dashboard
-```
+**Reset volumes:** `docker compose down && docker volume rm seizu_neo4j_data seizu_dynamodb_data && docker compose up && make seed_dashboard`.
 
 ### Authentication
 
-Two authentication mechanisms resolve to the same `CurrentUser`:
+Two mechanisms resolve to the same `CurrentUser`:
 
-1. **Cookie-based BFF flow** (browser SPA only). The backend owns the OIDC Authorization Code + PKCE exchange. The IDP refresh token lives only in an AES-256-GCM-encrypted, HttpOnly, Secure, SameSite=Strict cookie (`seizu_session`); the access token is held in React state in the browser and never persisted to storage. The SPA gets a fresh access token by POSTing to `/api/v1/auth/refresh`, which the cookie authenticates. Both the session and `seizu_oauth_state` cookies share `SESSION_TOKEN_ENCRYPTION_KEY` but are domain-separated by AES-GCM associated data (`seizu-session-v1` / `seizu-oauth-state-v1`), so one can't be replayed as the other.
-2. **Bearer JWT** (CLI, MCP, programmatic clients). Backend validates the token via `authnz.validate_bearer_token()`: a `PyJWKClient` (PyJWT) JWKS check first, then — when `OIDC_ENABLE_TOKEN_INTROSPECTION` is set and the token isn't a verifiable JWT — an RFC 7662 introspection fallback for IDPs that issue opaque access tokens. Both the REST resource server (`get_current_user`) and the MCP auth middleware share this helper.
+1. **Cookie-based BFF** (browser SPA). Backend owns the OIDC Authorization Code + PKCE exchange. The IDP refresh token lives only in an AES-256-GCM-encrypted, HttpOnly, Secure, SameSite=Strict cookie (`seizu_session`); the access token stays in React state, never persisted. SPA refreshes via `POST /api/v1/auth/refresh` (cookie-authenticated). The session and `seizu_oauth_state` cookies share `SESSION_TOKEN_ENCRYPTION_KEY` but are domain-separated by AES-GCM associated data (`seizu-session-v1` / `seizu-oauth-state-v1`).
+2. **Bearer JWT** (CLI, MCP, programmatic). Validated by `authnz.validate_bearer_token()`: `PyJWKClient` JWKS check first, then RFC 7662 introspection fallback when `OIDC_ENABLE_TOKEN_INTROSPECTION` is set and the token isn't a verifiable JWT (for opaque tokens). Shared by `get_current_user` (REST) and the MCP middleware.
 
-`get_current_user` only consumes the Bearer path; the cookie is consumed solely by the four `/api/v1/auth/*` routes. CSRF protection is enforced by `_CSRFMiddleware` (`reporting/app.py`), which requires `X-Seizu-Csrf: 1` on mutating methods whenever the session cookie is present. Bearer-only requests are exempt by design.
+`get_current_user` consumes only the Bearer path; the cookie is consumed only by the four `/api/v1/auth/*` routes. `_CSRFMiddleware` requires `X-Seizu-Csrf: 1` on mutating methods whenever the session cookie is present; Bearer-only requests are exempt.
 
-**Auth-flow endpoints** (browser-only):
+**Auth-flow endpoints** (browser-only): `login` generates PKCE verifier + state + nonce into a 5-min `seizu_oauth_state` cookie (SameSite=Lax to survive the redirect back), returns the authorize URL (with `nonce` + `OIDC_AUTHORIZE_EXTRA_PARAMS`). `callback` verifies state, exchanges the code, validates the ID token (gated by `OIDC_VALIDATE_ID_TOKEN`), sets the session cookie, 302s to path-only `return_to`. `refresh` rolls Max-Age (capped at the IDP refresh token's absolute expiry); 401 + clears cookie on IDP rejection. `logout` clears the cookie and (gated by `OIDC_REVOKE_REFRESH_TOKEN_ON_LOGOUT`) best-effort-revokes the refresh token.
 
-- `GET  /api/v1/auth/login?return_to=<path>` — generates PKCE verifier + state + OIDC nonce, stashes them in a 5-minute `seizu_oauth_state` cookie (SameSite=Lax — must survive the cross-site redirect *back* from the IDP), returns the IDP authorize URL (with `nonce` and any `OIDC_AUTHORIZE_EXTRA_PARAMS`).
-- `GET  /api/v1/auth/callback?code=...&state=...` — verifies state, exchanges the code at the IDP, validates the ID token (signature/audience/issuer/nonce, gated by `OIDC_VALIDATE_ID_TOKEN`), sets the session cookie, 302s to `return_to` (path-only, open-redirect-guarded).
-- `POST /api/v1/auth/refresh` — exchanges the cookie's refresh token for a new access token; rolls the cookie's Max-Age (capped at the IDP refresh token's absolute expiry recorded at login). Returns 401 + clears cookie when the IDP rejects.
-- `POST /api/v1/auth/logout` — clears the cookie and, gated by `OIDC_REVOKE_REFRESH_TOKEN_ON_LOGOUT`, best-effort-revokes the IDP refresh token via the revocation endpoint.
-
-| Env var | Default | Notes |
-|---------|---------|-------|
-| `JWKS_URL` | `""` | JWKS endpoint |
-| `JWT_EMAIL_CLAIM` | `email` | Optional JWT claim for email/profile display |
-| `JWT_USERNAME_CLAIM` | `preferred_username` | Optional JWT claim for username/profile display |
-| `JWT_ISSUER` | `""` | Optional issuer check |
-| `JWT_AUDIENCE` | `""` | Must match OIDC client ID when using Authentik |
-| `DEVELOPMENT_ONLY_REQUIRE_AUTH` | `true` | Set `false` to bypass auth in dev |
-| `TALISMAN_FORCE_HTTPS` | `true` | Set `false` in dev/behind LB |
-| `OIDC_AUTHORITY` | `""` | OIDC issuer URL (used by backend for discovery and surfaced to the frontend via `/api/v1/config`) |
-| `OIDC_INTERNAL_AUTHORITY` | `""` | Override discovery URL when the server's network view differs from the public authority |
-| `OIDC_CLIENT_ID` | `""` | OIDC client ID; required for the BFF code/refresh exchange |
-| `OIDC_CLIENT_SECRET` | `""` | Optional secret for confidential-client deployments |
-| `OIDC_TOKEN_ENDPOINT_AUTH_METHOD` | `none` | Authlib client auth method for token requests; use `client_secret_basic`/`client_secret_post` for confidential clients |
-| `OIDC_REVOCATION_ENDPOINT_AUTH_METHOD` | `OIDC_TOKEN_ENDPOINT_AUTH_METHOD` | Authlib client auth method for refresh-token revocation |
-| `OIDC_INTROSPECTION_ENDPOINT_AUTH_METHOD` | `OIDC_TOKEN_ENDPOINT_AUTH_METHOD` | Authlib client auth method for RFC 7662 introspection |
-| `OIDC_ENABLE_TOKEN_INTROSPECTION` | `false` | Validate opaque (non-JWT) access tokens via RFC 7662 introspection when JWT validation fails. Needed for IDPs like Google; pairs with a confidential client |
-| `OIDC_DISCOVERY_CACHE_TTL_SECONDS` | `3600` | How long to cache the OIDC discovery document; bounds endpoint/JWKS staleness without a restart |
-| `OIDC_VALIDATE_ID_TOKEN` | `true` | Validate the BFF code-exchange ID token (signature via discovery JWKS, audience, issuer, login nonce). Disable only for non-conformant providers |
-| `OIDC_REDIRECT_URI` | `""` | Optional override for the BFF callback URL; defaults to the backend's own `/api/v1/auth/callback` derived from the request |
-| `OIDC_SCOPE` | `"openid email offline_access"` | `offline_access` is required so the IDP issues a refresh token |
-| `OIDC_AUTHORIZE_EXTRA_PARAMS` | `""` | Comma-separated `key=value` pairs merged into the authorize request. Use for provider knobs the scope can't express, e.g. Google's `access_type=offline,prompt=consent` |
-| `OIDC_REVOKE_REFRESH_TOKEN_ON_LOGOUT` | `true` | Whether `/auth/logout` revokes the IDP refresh token (best-effort; failures logged) |
-| `OIDC_REFRESH_TOKEN_FALLBACK_TTL_SECONDS` | `2592000` (30d) | Absolute session cap used only when the IDP's token response omits `refresh_expires_in`. When the IDP advertises a fresh `refresh_expires_in` on a rotating refresh, the cap rolls forward to match |
-| `SESSION_TOKEN_ENCRYPTION_KEY` | `""` | AES-256-GCM key for the session cookie. 32 random bytes, base64-encoded. Required when auth is enabled. |
-| `SESSION_COOKIE_NAME` | `seizu_session` | Override the cookie name |
-| `SESSION_COOKIE_MAX_AGE_SECONDS` | `64800` (18h) | Rolling cookie lifetime; each successful refresh resets it (capped by the IDP refresh token's absolute expiry) |
+**Env vars** are defined and documented inline in `reporting/settings.py` (each with its default, purpose, and examples) and listed with comments in `.env.example` — that's the source of truth; don't duplicate the list here. The families: `JWKS_URL` / `JWT_*` (token validation), `OIDC_*` (BFF flow, discovery, introspection, scope, revocation), `SESSION_*` (cookie encryption + lifetime; `SESSION_TOKEN_ENCRYPTION_KEY` is required when auth is on), plus `DEVELOPMENT_ONLY_REQUIRE_AUTH` and `TALISMAN_FORCE_HTTPS` (both default-on; set `false` in dev).
 
 ### RBAC
 
-Every authenticated request resolves a role from the JWT, then maps it to a `frozenset[str]` of permission strings. Permissions are enforced at the route level via `require_permission(*perms)` (a FastAPI dependency factory in `reporting/authnz/__init__.py`). The MCP server enforces `tools:call` / `query:execute` via a `contextvars.ContextVar` set in `_MCPAuthMiddleware`.
+Each authenticated request resolves a role from the JWT → `frozenset[str]` permissions, enforced at routes via `require_permission(*perms)` (factory in `reporting/authnz/__init__.py`). MCP enforces `tools:call` / `query:execute` via the `ContextVar` set in `_MCPAuthMiddleware`.
 
-**Built-in roles** (hierarchical — Admin ⊇ Editor ⊇ Viewer) are defined in `reporting/authnz/permissions.py`. No store I/O needed.
+- **Built-in roles** (hierarchical Admin ⊇ Editor ⊇ Viewer) in `reporting/authnz/permissions.py` — no store I/O. **User-defined roles** live in the report store (version history); resolved via one `get_role_by_name`.
+- Key files: `permissions.py` (`Permission` enum, `BUILTIN_ROLES`, `ALL_PERMISSIONS`, `resolve_permissions()`), `authnz/__init__.py` (`CurrentUser.permissions`, `require_permission()`, resolution), `routes/roles.py` (CRUD).
+- Env: `RBAC_ROLE_CLAIM` (default `seizu_role`), `RBAC_DEFAULT_ROLE` (default `seizu-viewer`; `""` denies access).
+- **Dev mode** (`DEVELOPMENT_ONLY_REQUIRE_AUTH=false`): `ALL_PERMISSIONS` on every request — no enforcement.
 
-**User-defined roles** are stored in the report store with version history. Resolution does a single `get_role_by_name` lookup.
-
-| Env var | Default | Notes |
-|---------|---------|-------|
-| `RBAC_ROLE_CLAIM` | `seizu_role` | JWT claim the IDP embeds the role name into |
-| `RBAC_DEFAULT_ROLE` | `seizu-viewer` | Role when JWT has no `RBAC_ROLE_CLAIM`; `""` denies access |
-
-**Key files:**
-- `reporting/authnz/permissions.py` — `Permission` enum, `BUILTIN_ROLES`, `ALL_PERMISSIONS`, `resolve_permissions(jwt_claims)`
-- `reporting/authnz/__init__.py` — `CurrentUser.permissions`, `require_permission()` factory, `get_current_user()` permission resolution
-- `reporting/routes/roles.py` — CRUD for user-defined roles
-
-**Dev mode** (`DEVELOPMENT_ONLY_REQUIRE_AUTH=false`): `ALL_PERMISSIONS` is set on every request — no RBAC enforcement.
-
-**Local Authentik setup:**
-```bash
-make auth_enable && make down && make up   # enable; first run ~2 min
-# visit http://localhost:3000, log in as developer/devpassword
-make auth_disable && make down && make up  # revert
-```
-Setup is fully automated via `.config/dev/authentik/blueprints/seizu.yaml`. Device code flow requires `flow_device_code` set on the **Brand** (not the OAuth2Provider). Registered redirect URIs: `http://localhost:3000/auth/callback` and `http://localhost:8080/auth/callback`. Dev credentials: `akadmin/devpassword`, `developer/devpassword`.
+**Local Authentik:** `make auth_enable && make down && make up` (first run ~2 min; revert with `make auth_disable && make down && make up`). Fully automated via `.config/dev/authentik/blueprints/seizu.yaml`. Device code flow needs `flow_device_code` on the **Brand** (not the OAuth2Provider). Redirect URIs: `http://localhost:{3000,8080}/auth/callback`. Dev creds: `akadmin/devpassword`, `developer/devpassword`.
 
 ### Testing Patterns
 
-- **Backend:** pytest + pytest-mock + pytest-asyncio (`asyncio_mode = auto` in `setup.cfg`) in `tests/unit/reporting/`. All test functions are `async def`. Use `httpx.AsyncClient(transport=ASGITransport(app=create_app()), base_url="http://test")` for route tests. Override auth via `app.dependency_overrides[get_current_user] = lambda: CurrentUser(...)`. Mock async service calls with `AsyncMock`. See `tests/unit/reporting/routes/query_test.py` for the reference pattern.
-- **Frontend:** React Testing Library + Jest (Bun) in `__tests__/` subdirs next to components
+- **Backend:** pytest + pytest-mock + pytest-asyncio (`asyncio_mode = auto`) in `tests/unit/reporting/`; all tests `async def`. Use `httpx.AsyncClient(transport=ASGITransport(app=create_app()), base_url="http://test")` for routes; override auth via `app.dependency_overrides[get_current_user] = lambda: CurrentUser(...)`; mock async calls with `AsyncMock`. Reference: `tests/unit/reporting/routes/query_test.py`.
+- **Frontend:** React Testing Library + Jest (Bun) in `__tests__/` next to components.
 
 ### Query Validator Fuzzing
 
-The query validator (`reporting/services/query_validator.py`) enforces three layers:
-1. **EXPLAIN write check** — `query_type != 'r'` blocks all write/schema queries
-2. **SSRF / admin / procedure guard** — `_scan_for_dangerous_constructs()` scans the original, comment-stripped, and unicode-decoded forms (see below) for `LOAD CSV`, the `USE` clause (`_USE_CLAUSE_RE`), admin/catalog commands (`_ADMIN_COMMAND_RE`), and the `apoc.cypher.*` / `gds.*` / `ai.*` / `genai.*` function namespaces (`_DANGEROUS_FUNCTION_NAMESPACES`). Every `CALL <procedure>` is matched against an allowlist — `_DEFAULT_ALLOWED_PROCEDURES` (side-effect-free schema procedures) plus `QUERY_VALIDATOR_ALLOWED_PROCEDURES`. A configured namespace prefix (e.g. `apoc.`) both widens the allowlist and drops that namespace's dangerous-function guard.
-3. **CyVer warnings** — schema and property checks; never block execution
+Three layers: (1) **EXPLAIN write check** — `query_type != 'r'` blocks writes/schema; (2) **SSRF/admin/procedure guard** — `_scan_for_dangerous_constructs()` scans original, comment-stripped, and unicode-decoded forms for `LOAD CSV` (`_LOAD_CSV_RE`), `USE` (`_USE_CLAUSE_RE`), admin/catalog (`_ADMIN_COMMAND_RE`), and `apoc.cypher.*`/`gds.*`/`ai.*`/`genai.*` (`_DANGEROUS_FUNCTION_NAMESPACES`); every `CALL <procedure>` matched against `_DEFAULT_ALLOWED_PROCEDURES` + `QUERY_VALIDATOR_ALLOWED_PROCEDURES`; (3) **CyVer warnings** — never block.
 
-**Running the validator test suite:**
+Run the suite:
 ```bash
 docker compose run --rm seizu uv run --frozen --no-sync pytest tests/unit/reporting/services/query_validator_test.py -v
 ```
+APOC deep testing (read-classified but can make outbound HTTP): `make apoc_enable && make down && make up` … `make apoc_disable && make down && make up`.
 
-**Enabling APOC for deeper testing** (APOC procedures are read-classified but can make outbound HTTP requests):
-```bash
-make apoc_enable   # sets NEO4J_PLUGINS=["apoc"] in .env
-make down && make up   # Neo4j downloads APOC on first start
-# ... run tests ...
-make apoc_disable && make down && make up   # restore default
-```
+**Attack vectors** (one row per technique tried, blocked or not — write queries, DDL/schema, disallowed procedures, `USE`, admin/catalog, `LOAD CSV` SSRF, APOC/GDS/GenAI functions, unicode/homoglyph, …) are catalogued exhaustively in `tests/data/query-fuzzing.csv` (`Technique, Cypher, Result, Blocked_By, Notes`) with the matching assertions in `query_validator_test.py`. Read those rather than a summary table here, and append a row for every new vector you try.
 
-**Fuzzing log:** `tests/data/query-fuzzing.csv` — columns: `Technique, Cypher, Result, Blocked_By, Notes`. Append a row for every new attack vector you try (blocked or not). Useful for regression tracking and audits.
+**Two-sided comment check:** scan the comment-stripped form to catch `CALL /* x */ apoc.`; scan the original to catch `//` inside string literals (e.g. URLs) where the stripper would hide a following `CALL apoc.`.
 
-**Key attack categories and their current status:**
-
-| Category | Example | Blocked by |
-|---|---|---|
-| Write queries (`CREATE`, `MERGE`, `DELETE`, etc.) | `CREATE (n:Test)` | EXPLAIN write check |
-| DDL / schema (`CREATE INDEX`, `DROP CONSTRAINT`) | `CREATE INDEX FOR (n:Test) ON (n.id)` | EXPLAIN write check (type `s`) |
-| Disallowed procedures (`CALL apoc.*`, `gds.*`, `dbms.*`, custom) | `CALL apoc.load.json('http://...')` | Procedure allowlist |
-| `USE` clause (escape configured graph) | `USE system MATCH (n) RETURN n`, `USE graph.byName($d) …` | `_USE_CLAUSE_RE` |
-| Admin / catalog commands | `SHOW SETTINGS`, `TERMINATE TRANSACTION '…'` | `_ADMIN_COMMAND_RE` |
-| `LOAD CSV` SSRF / comment injection | `LOAD /* bypass */ CSV FROM 'http://169.254.169.254/...'` | `_LOAD_CSV_RE` (original + comment-stripped) |
-| APOC cypher / GDS / GenAI functions (no `CALL`) | `RETURN apoc.cypher.runFirstColumnSingle('…', {})` | `_DANGEROUS_FUNCTION_NAMESPACES` |
-| Unicode/homoglyph bypass | Zero-width spaces in `CALL`, Cyrillic chars | Neo4j rejects unknown identifiers; still checked |
-
-**Two-sided comment check rationale:**
-- Checking the **comment-stripped** query catches `CALL /* x */ apoc.` and `LOAD /* x */ CSV` injection.
-- Checking the **original** query catches cases where `//` appears inside a string literal (e.g. a URL `http://...`). The comment stripper treats `//` as a line comment and removes everything after it on that line, which could hide a `CALL apoc.` or `apoc.cypher.` that follows — so the original must also be checked.
-
-**Adding new test cases:**
-1. Identify the bypass vector and confirm whether Neo4j executes it (check server logs for `ExternalResourceFailed` or write side effects).
-2. Add a row to `tests/data/query-fuzzing.csv`.
-3. Add a unit test to `tests/unit/reporting/services/query_validator_test.py` — mock `_get_async_neo4j_client` and `_get_sync_neo4j_client`, set `execute_query` to return a mock summary with `query_type='r'` and no notifications, then assert `result.has_errors` is `True` for blocked inputs.
-4. If the vector is not blocked, fix `reporting/services/query_validator.py` first, then write the test to prove the fix.
+**Adding cases:** confirm whether Neo4j executes the vector (logs: `ExternalResourceFailed` / write side effects) → add a CSV row → add a unit test (mock `_get_async_neo4j_client`/`_get_sync_neo4j_client`, return summary with `query_type='r'` + no notifications, assert `result.has_errors`) → if not blocked, fix `query_validator.py` first, then prove with the test.
 
 ### Typing
 
-Strict mypy: `check_untyped_defs = true`, `disallow_untyped_defs = true`.
-- All functions must have complete type annotations.
-- Fix type errors rather than suppressing with `# type: ignore`.
-- When touching existing `# type: ignore` comments, fix the underlying issue and remove them.
-- Use `typing.cast` only for known-safe invariants the type system can't express.
+Strict mypy (`check_untyped_defs`, `disallow_untyped_defs`). Annotate all functions; fix type errors instead of `# type: ignore` (and remove existing ones you touch); use `typing.cast` only for known-safe invariants.
 
 ## Branding
 
-Seizu's brand is a deep-space observatory: a dark navy canvas, starlight-blue as the primary accent, and an amber "ember" as the warm accent. The mark is a dashed-orbit ring wrapping a six-node constellation with one amber anchor star; the wordmark is **Manrope ExtraBold (800)** at tight tracking. The tagline is "A star chart for your security graph." When in doubt, stick to these tokens — don't introduce additional brand colors or fonts.
+Deep-space observatory: dark navy canvas, starlight-blue primary accent, amber "ember" warm accent. Mark = dashed-orbit ring around a six-node constellation with one amber anchor star; wordmark = **Manrope ExtraBold (800)** at tight tracking. Tagline: "A star chart for your security graph." Don't introduce other brand colors or fonts.
 
-### Color system
+**Colors:** the hex values live in `src/theme/brand.ts` (`brand` tokens + `chartPalette`/`chartColorsFor`) — that's the source of truth; import from there, don't hardcode or invent shades. Core tokens are Space (dark bg), Starlight (primary accent), Ember (warm accent), Paper (light surface), each with an AAA-contrast `*Dark` variant for light surfaces; the extended constellation accents (Aurora/Pulsar/Flare/Beacon) form the ordered 6-color chart palette consumed by `CypherBar`/`CypherPie`. Extend `brand.ts` rather than adding one-off colors. Starlight opacity rungs `0.04/0.08/0.12/0.25` via `rgba(143,180,255,α)`. (Docs CSS mirrors these as `--brand-*` custom props in `docs/root/_templates/splash.html`.)
 
-| Token | Hex | RGB | Role |
-|---|---|---|---|
-| Space | `#0A0F22` | `rgb(10 15 34)` | Primary background (dark surfaces), body text on light surfaces |
-| Starlight | `#8FB4FF` | `rgb(143 180 255)` | Primary accent on dark. Shift to `#3A5AA5` on light surfaces for AAA contrast. |
-| Ember | `#F5C16C` | `rgb(245 193 108)` | Warm accent on dark. Shift to `#C77B2A` on light surfaces for AAA contrast. |
-| Paper | `#F5F6FB` | `rgb(245 246 251)` | Light surface (docs, README background) |
+**Typography:** Wordmark = Manrope 800 (`letter-spacing: -0.04..-0.05em`, logo only). Display = Instrument Serif 400 (docs splash may use EB Garamond italic). UI/body = Inter (web app) / IBM Plex Sans (docs splash) — don't mix within a surface. Mono = JetBrains Mono. All from Google Fonts; preconnect `fonts.googleapis.com` + `fonts.gstatic.com` before the stylesheet.
 
-Don't invent shades. If you need opacity variants of Starlight, use `rgba(143, 180, 255, <alpha>)` — the splash page uses `0.04 / 0.08 / 0.12 / 0.25` as the common rungs.
+**Logo assets** live in two synced copies: `public/static/images/` (served at `/static/images/`) and top-level `images/` (`docs/root/images` is a symlink; README links `/images/...`). Files: `favicon.svg` (tab/PWA, orbit + amber core), `logo-horizontal-{white,black}.svg` (full lockup dark/light), `logo-mark{,-light}.svg` (mark-only dark/light). `public/favicon.png` is a legacy fallback (regenerating it is a TODO). Mark geometry: `viewBox="0 0 140 140"`, orbit `r=54` at `(70,70)`, ticks at 12/3/6/9, nodes `(40,55)`,`(62,42)`,`(86,52)`,`(100,78)`,`(68,78)`,`(50,98)` with amber anchor at `(62,42)`; sub-24px drops the constellation.
 
-**Extended constellation accents** — for charts and supporting UI. Each has a light tone for dark surfaces and an AAA-contrast dark tone for light surfaces. Defined in `src/theme/brand.ts`; don't add one-off colors for data viz, extend this list instead.
-
-| Name | On dark | On light |
-|---|---|---|
-| Aurora (teal-green) | `#7AD4B3` | `#2E8866` |
-| Pulsar (violet) | `#C9A8FF` | `#7352B8` |
-| Flare (coral) | `#F08B7B` | `#B5463A` |
-| Beacon (cyan) | `#5DD1F0` | `#1F7FA3` |
-
-`chartColorsFor(mode)` exposes an ordered 6-color palette (Starlight → Ember → Aurora → Pulsar → Flare → Beacon) that MUI X Charts cycles through; both `CypherBar` and `CypherPie` consume it. Keep new chart components on this palette rather than bringing in MUI's stock `colorPalettes`.
-
-### Typography
-
-- **Wordmark:** Manrope 800, `letter-spacing: -0.04em` to `-0.05em` (tighter at larger sizes). Only used inside the Seizu logo/lockup.
-- **Display (headings, taglines):** Instrument Serif 400 — for the web app and brand collateral. The docs splash page opts into EB Garamond italic for editorial tone; both are sanctioned.
-- **UI / body:** Inter (web app), IBM Plex Sans (docs splash). Don't mix across a single surface.
-- **Mono (code, tags, mono labels):** JetBrains Mono.
-
-All four fonts are loaded from Google Fonts; the docs splash already preconnects. New pages should preconnect `https://fonts.googleapis.com` + `https://fonts.gstatic.com` before the stylesheet.
-
-### Logo assets
-
-The canonical SVGs live in two places: `public/static/images/` (served by the React app at `/static/images/`) and `images/` (top-level; `docs/root/images` is a symlink, so docs pick these up automatically, and the GitHub README links them via `/images/...`). Keep the two copies in sync when updating the mark.
-
-| File | When to use |
-|---|---|
-| `favicon.svg` (`public/` + `images/`) | Browser tab + PWA icon. Simplified form: orbit ring + amber core on Space fill. |
-| `logo-horizontal-white.svg` | Full lockup on dark surfaces (navbar, dark README, splash). |
-| `logo-horizontal-black.svg` | Full lockup on light surfaces (docs light mode, README light mode). |
-| `logo-mark.svg` | Mark-only on dark surfaces (social avatars, OG cards). |
-| `logo-mark-light.svg` | Mark-only on light surfaces. |
-
-**Favicon fallback:** `public/favicon.png` is kept only as a legacy fallback for browsers without SVG favicon support. Modern paths reference `favicon.svg` first via `<link rel="icon" type="image/svg+xml">`. Regenerating the PNG to match the new mark is a TODO — no tooling is wired into this repo yet.
-
-**Mark geometry (for reference, don't redraw from scratch):** `viewBox="0 0 140 140"`, orbit `r=54` centered at `(70,70)`, crosshair ticks at 12/3/6/9 o'clock, six constellation nodes at `(40,55)`, `(62,42)`, `(86,52)`, `(100,78)`, `(68,78)`, `(50,98)`. The amber anchor is the `(62,42)` node. At sub-24px, drop the constellation and use orbit ring + amber core only.
-
-### Where these tokens show up today
-
-- **Reporting app** — `src/components/Logo.tsx` (horizontal white lockup), `public/favicon.svg`, `public/manifest.json` (`theme_color: #0a0f22`), `index.html` meta. MUI theme and component styles don't inherit these yet; introduce them deliberately when touching theme code.
-- **Docs (Sphinx)** — `docs/conf.py` wires `html_logo`, `html_favicon`, and Shibuya `light_logo`/`dark_logo`. The splash template `docs/root/_templates/splash.html` declares `--brand-space / --brand-starlight / --brand-ember / --brand-paper` custom properties at `:root`; reuse those rather than hardcoding hex in new CSS.
-- **README.md** — references `/images/logo-horizontal-{black,white}.svg` with GitHub's `#gh-{light,dark}-mode-only` fragments.
+**Where tokens live today:** app — `src/components/Logo.tsx`, `public/favicon.svg`, `public/manifest.json` (`theme_color: #0a0f22`), `index.html` (MUI theme doesn't inherit these yet). Docs — `docs/conf.py` (`html_logo`/`html_favicon`/Shibuya logos); `docs/root/_templates/splash.html` defines `--brand-*` custom props (reuse them). README — `/images/logo-horizontal-{black,white}.svg` with `#gh-{light,dark}-mode-only`.
 
 ## Frontend Style Guide
 
-### List Views
+List-view conventions live in shared components — compose these rather than re-implementing the markup. `Toolsets.tsx` is the canonical list page; `ToolDetailDialog.tsx` the canonical detail dialog; `ToolsetHistory.tsx` the canonical version-history page.
 
-- Top bar: `<Typography variant="h1">` left, `<Button variant="contained">` right.
-- Loading: `<CircularProgress />` inline. Error: `<Error />` icon + `<Typography>` in flex row.
-- Table: `<TableContainer component={Paper} variant="outlined">` wrapping `<Table>`.
-- Empty state: `<TableRow>` with `<TableCell colSpan={N}>` + `<Typography color="text.secondary">` — not a separate card.
-- Rows: `<TableRow hover>`. Metadata cells: `sx={{ color: 'text.secondary' }}`. Dates: `new Date(v).toLocaleString()`. Users: `<UserDisplay userId={...} />`.
+- **`src/components/ListTable.tsx`** — the table (search, filters, pagination, column resizing, empty state, truncation). Exports `ListTableColumn`/`ListTableFilterGroup` and cell `sx` helpers (`listTableSecondaryCellSx`, `listTableMonoCellSx`, `listTableActionColumnSx`, `listTableTruncateSx`, …).
+- **`src/components/ListPageHeader.tsx`** — top bar: an h1 `title` (string or node) + optional right-aligned `action` (e.g. a `New …` button).
+- **`src/components/ListViewState.tsx`** — loading/error gate (centered spinner / error-icon row) wrapping the table.
+- **`src/components/RowMenu.tsx`** — per-row three-dot overflow menu. Pass a declarative `RowMenuAction[]` (`label`, `icon`, `onClick`, `disabled`, `tooltip`, `destructive`, `dividerBefore`); it owns the trigger/anchor/min-width, the divider-fenced destructive action in error color, and disabled-item tooltips.
+- **`src/components/ConfirmDeleteDialog.tsx`** — `maxWidth="xs"` delete confirmation (body as children with the `<strong>` name; `deleting` spinner; `error` alert).
+- **`src/components/DetailDialog.tsx`** — read-only detail dialog (title + optional `secondary` version label + close button), with exported `DetailSection` (labeled block) and `DetailCodeBlock` (monospace `action.hover` pre).
 
-**Column name conventions:** Latest Update, Updated By, Created By, Version, Status.
-
-**Per-row actions:** `RowMenu` (three-dot `<IconButton size="small"><MoreVertIcon /></IconButton>` in `<Tooltip title="More actions">`). `anchorOrigin/transformOrigin` bottom/top right. `minWidth: 180`. Destructive actions at bottom behind `<Divider />` with `color: 'error.main'`. Disabled items wrapped in `<Tooltip>` + `<span>`.
-
-**Clickable names:** `sx={{ cursor: 'pointer', '&:hover': { textDecoration: 'underline' } }}` on `<Typography>` (not `<Link>`) when click opens a dialog.
-
-**Detail dialogs (read-only):** Shared component in `src/components/`. Title + optional secondary label + close `<IconButton>`. `<Divider />` below title. `Section` sub-component with `color="text.secondary"` label. Code blocks: `<Box component="pre">` with `bgcolor: 'action.hover'`, `fontFamily: 'monospace'`, `whiteSpace: 'pre-wrap'`, `wordBreak: 'break-word'`.
-
-**Create/delete dialogs:** `maxWidth="sm" fullWidth` (create), `maxWidth="xs" fullWidth` (delete with `<DialogContentText>` + `<strong>` name). `<CircularProgress size={20} />` in submit button while in-flight. Errors in `<Alert severity="error">` at top of `<DialogContent>`.
-
-**Version history pages:** Route `<entity>/:id/history`. Back button `<Button startIcon={<ArrowBackIcon />}>`. Title: `<HistoryIcon color="action" />` + `<Typography variant="h1">Version history – {name}</Typography>`. Columns: Version, Saved, Created By, Comment, actions. Current version: bold + `"current"` in `color="primary"`. Restore: disabled on current with tooltip; `comment: \`Restored from version ${version}\``. Helmet: `History – {name} | Seizu`.
+**Conventions not yet componentized:**
+- **Clickable names:** `sx={{ cursor: 'pointer', '&:hover': { textDecoration: 'underline' } }}` on `<Typography>` (not `<Link>`) when click opens a dialog.
+- **Create dialogs:** `maxWidth="sm" fullWidth`; `<CircularProgress size={20} />` in the submit button while in-flight; errors in `<Alert severity="error">` atop `<DialogContent>`.
+- **Version-history pages:** route `<entity>/:id/history`; back `<Button startIcon={<ArrowBackIcon />}>`; title `<HistoryIcon color="action" />` + `<Typography variant="h1">Version history – {name}</Typography>`; columns Version/Saved/Created By/Comment/actions; current version bold + `"current"` in `color="primary"`; a single `RowMenu` Restore action, disabled on current, `comment: \`Restored from version ${version}\``; Helmet `History – {name} | Seizu`.
+- **Column names + cells:** Latest Update / Updated By / Created By / Version / Status; dates `new Date(v).toLocaleString()`; users `<UserDisplay userId={...} />`.
 
 ## Keeping Supporting Files Up to Date
 
-When changing the codebase, update as needed:
-- **`Makefile`** — new build/test/tool targets
-- **`.github/workflows/`** — CI for new test/lint steps
-- **`Dockerfile` / `docker-compose.yml`** — new services, files, env vars
-- **`.pre-commit-config.yaml`** — linting/formatting changes
-- **`pyproject.toml` + `uv.lock`** — always commit together; run `docker compose run --rm seizu uv lock` after edits
-- **`docs/`** — update for any user-facing changes; grep for removed items
-- **`schema/reporting-schema.json`** — `make schema` after Pydantic schema changes
-- **`.env.example`** — add/remove env vars
-- **`AGENTS.MD`** — update when conventions or tooling change
+When changing the codebase, update as needed: **`Makefile`** (new targets), **`.github/workflows/`** (CI), **`Dockerfile`/`docker-compose.yml`** (services, files, env), **`.pre-commit-config.yaml`** (linting), **`pyproject.toml` + `uv.lock`** (commit together; `uv lock` after edits), **`docs/`** (user-facing changes — grep for removed items), **`schema/reporting-schema.json`** (`make schema` after Pydantic changes), **`.env.example`** (env vars), **`AGENTS.MD`** (conventions/tooling changes).
