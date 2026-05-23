@@ -1,0 +1,248 @@
+# Changelog
+
+All notable changes to Seizu are documented here. The format is based on
+[Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project
+adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [3.0.0] - 2026-05-23
+
+The headline of this release is a security-hardening rewrite of the browser
+authentication flow: OIDC moves from an in-browser library to a
+**backend-for-frontend (BFF)** design where the IDP refresh token never reaches
+JavaScript. This is a **breaking change for any deployment with auth enabled** —
+see [Upgrade notes](#upgrade-notes-300) before deploying.
+
+### ⚠️ Breaking changes
+
+- **Browser auth is now a backend-for-frontend flow** (#147). The OIDC
+  Authorization Code + PKCE exchange happens on the server, not in the browser.
+  The IDP refresh token lives only in an AES-256-GCM-encrypted, HttpOnly,
+  SameSite=Strict cookie; the access token stays in React state and is never
+  persisted. The `oidc-client-ts` browser library has been removed entirely.
+- **IDP redirect URI changed.** The SPA-served `/auth/callback` route is gone;
+  the backend now handles the redirect at **`/api/v1/auth/callback`**. Update
+  the allowed redirect URIs in your identity provider.
+- **`SESSION_TOKEN_ENCRYPTION_KEY` is now required when auth is enabled.**
+  Without it the backend cannot encrypt the session cookie and will fail to
+  start the auth flow.
+- **`OIDC_REDIRECT_URI` is no longer hardcoded** in `docker-compose.yml`. The
+  backend derives the callback from each request's host, fixing the
+  `:3000`-vs-`:8080` dev split.
+
+### Added
+
+- **Encrypted session cookie** carrying `{refresh_token, issued_at,
+  absolute_expiry}`. Rolling refreshes can never extend the cookie past the
+  IDP's absolute expiry — enforced both by browser `Max-Age` and on decrypt as
+  defense-in-depth (#147).
+- **Four BFF auth routes:** `GET /api/v1/auth/login`,
+  `GET /api/v1/auth/callback`, `POST /api/v1/auth/refresh`,
+  `POST /api/v1/auth/logout` (#147).
+- **CSRF protection** via a pure-ASGI middleware that requires `X-Seizu-Csrf` on
+  mutating requests whenever the session cookie is present. Bearer-only clients
+  (CLI, MCP, programmatic) are exempt and cannot downgrade the check (#147).
+- **ID-token validation** on the code exchange — signature (via discovery
+  JWKS), audience, issuer, and login nonce — gated by `OIDC_VALIDATE_ID_TOKEN`
+  (#147).
+- **RFC 7662 token introspection fallback** (`OIDC_ENABLE_TOKEN_INTROSPECTION`)
+  for opaque (non-JWT) access tokens, shared by the REST resource server and the
+  MCP auth middleware (#147).
+- **Refresh-token revocation on logout** (`OIDC_REVOKE_REFRESH_TOKEN_ON_LOGOUT`),
+  best-effort against the IDP's revocation endpoint (#147).
+- **Cross-provider compatibility:** `OIDC_AUTHORIZE_EXTRA_PARAMS` (e.g. Google's
+  `access_type=offline,prompt=consent`) so non-`offline_access` providers still
+  issue refresh tokens (#147).
+- **Shared list-view component library** adopted across all 13 consumers (6 list
+  pages, 7 version-history pages, 2 detail dialogs): `RowMenu`,
+  `ListPageHeader`, `ListViewState`, `ConfirmDeleteDialog`, and `DetailDialog`
+  (+ `DetailSection`/`DetailCodeBlock`), all with tests. Net −1.8k lines of
+  copy-pasted markup (#149).
+
+### Changed
+
+- Replaced the hand-rolled OIDC client with **authlib** (`AsyncOAuth2Client`,
+  `token_endpoint_auth_method="none"` + PKCE) for RFC 6749/7636/OIDC mechanics
+  and IDP-specific quirks (#147).
+- `/auth/refresh` is serialized across browser tabs via the Web Locks API, with
+  a module-level in-flight dedupe (also fixes a React StrictMode double-refresh
+  race against rotating refresh tokens) (#147).
+- AES-GCM associated data domain-separates the session and OAuth-state cookies
+  that share the encryption key; cookies are scoped to `/api/v1/auth` (#147).
+- Split-hostname support: authorize URLs are rewritten to the external origin
+  when discovery uses an internal host (Docker dev), with
+  `AUTHENTIK_HOST_BROWSER` as the cleaner path for Authentik (#147).
+- `AGENTS.MD` compressed ~500→~259 lines, replacing duplicated tables (env vars,
+  endpoints, brand colors, fuzzing) with pointers to their canonical sources
+  (#149).
+
+### Fixed
+
+- Preserve the `Host` header through the Vite dev proxy (`changeOrigin: false`)
+  so the backend derives the correct callback URL in dev (#147).
+- OAuth callback errors are no longer reflected; required identity claims are
+  guarded and optional profile claims used for display (#147).
+- Removed the `NOTICE` reference to Lyft, which never held copyright (#144).
+
+### Configuration
+
+New environment variables (documented in `.env.example` /
+`reporting/settings.py`):
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `SESSION_TOKEN_ENCRYPTION_KEY` | — (**required w/ auth**) | AES-256-GCM key for the session cookie |
+| `SESSION_COOKIE_NAME` | `seizu_session` | Session cookie name |
+| `SESSION_COOKIE_MAX_AGE_SECONDS` | `64800` | Session cookie lifetime |
+| `OIDC_CLIENT_SECRET` | — | For confidential-client IDPs |
+| `OIDC_TOKEN_ENDPOINT_AUTH_METHOD` | `none` | Token endpoint auth method |
+| `OIDC_REVOCATION_ENDPOINT_AUTH_METHOD` | `none` | Revocation endpoint auth method |
+| `OIDC_REVOKE_REFRESH_TOKEN_ON_LOGOUT` | `true` | Revoke refresh token on logout |
+| `OIDC_REFRESH_TOKEN_FALLBACK_TTL_SECONDS` | `2592000` | Fallback when IDP omits `refresh_expires_in` |
+| `OIDC_AUTHORIZE_EXTRA_PARAMS` | — | Extra authorize params (e.g. Google offline) |
+| `OIDC_ENABLE_TOKEN_INTROSPECTION` | `false` | RFC 7662 fallback for opaque tokens |
+| `OIDC_INTROSPECTION_ENDPOINT_AUTH_METHOD` | inherits | Introspection endpoint auth method |
+| `OIDC_DISCOVERY_CACHE_TTL_SECONDS` | `3600` | Bounds discovery/JWKS staleness |
+| `OIDC_VALIDATE_ID_TOKEN` | `true` | Validate ID token on code exchange |
+
+### Upgrade notes {#upgrade-notes-300}
+
+1. **Generate and set `SESSION_TOKEN_ENCRYPTION_KEY`** (required when auth is
+   enabled):
+   ```bash
+   python -c 'import base64,os; print(base64.b64encode(os.urandom(32)).decode())'
+   ```
+2. **Update your IDP's allowed redirect URIs** to
+   `https://<your-host>/api/v1/auth/callback` (the SPA `/auth/callback` is
+   removed).
+3. **Remove any hardcoded `OIDC_REDIRECT_URI`** — the backend now derives it from
+   the request host.
+4. For **non-`offline_access` providers** (e.g. Google), set
+   `OIDC_AUTHORIZE_EXTRA_PARAMS=access_type=offline,prompt=consent`.
+5. For IDPs issuing **opaque access tokens**, set
+   `OIDC_ENABLE_TOKEN_INTROSPECTION=true`.
+6. Existing users holding the old `path=/` session cookie will briefly see two
+   cookies in devtools until they log out and back in; the stale cookie is
+   harmless.
+
+## [2.3.0] - 2026-05-20
+
+Dependency and tooling maintenance release.
+
+### Changed
+
+- Bumped frontend dependencies, patched audit vulnerabilities, and fixed the
+  Docker build (#141).
+- Bumped Python dependencies (python-minor-and-patch group) and docs
+  `myst-parser` (#142).
+- Bumped CI actions, migrated ESLint to v10, and bumped TypeScript to 6 (#140).
+- Bumped `goauthentik/server` 2026.2.2 → 2026.2.3 (#136) and `idna` 3.14 → 3.15
+  (#143).
+
+## [2.2.0] - 2026-05-19
+
+### Changed
+
+- Hardened the Cypher validation fuzzing suite — expanded attack-vector
+  coverage (write/DDL, disallowed procedures, `USE`, admin/catalog,
+  `LOAD CSV` SSRF, APOC/GDS/GenAI functions, unicode/homoglyph) (#126).
+
+## [2.1.0] - 2026-05-14
+
+### Added
+
+- Fuzz coverage for the query validator (#93).
+- OpenSSF Scorecard workflow (#92).
+- Dependabot configuration (#94).
+
+### Changed
+
+- Replaced and expanded documentation screenshots; updated docs for current
+  Seizu workflows (#122, #124).
+- Pinned external CI and Docker dependencies; bumped Python base image
+  3.12 → 3.14 and numerous CI/docs/frontend dependencies (#115, #96, #118, and
+  related Dependabot PRs).
+
+### Fixed
+
+- Surface report-mutation backend errors in the UI (#120).
+- Constrained `urllib3` to a patched version (#119).
+
+## [2.0.0] - 2026-05-12
+
+The foundational Seizu platform release — a ground-up rebuild of the runtime,
+frontend, storage, auth, and integrations.
+
+### Platform & runtime
+
+- Migrated the backend from Flask/gevent through APIFlask to **FastAPI +
+  asyncio** with fully async I/O (#28, #31).
+- Migrated to **Pydantic v2, Python 3.12**, and `myst-parser` (#4).
+- Switched Python tooling to **uv** and packaged Seizu (#90).
+- Added configurable timeouts for all outbound calls and FastAPI requests (#75).
+
+### Frontend
+
+- Migrated the frontend from **JavaScript to TypeScript** (#6), from **yarn to
+  bun** (#5), and from **webpack/CRA to Vite** (#15).
+- Replaced Nivo with **MUI X Charts** and added a graph panel (#21).
+- Editable reports UI with create/edit/delete and **version history** (#19, #20).
+- Report panel editor improvements: per-panel heights via `react-grid-layout`,
+  multi-threshold colors, row reordering, move-panel-between-rows, collapsible
+  rows, optional headers, and type-representative skeletons (#66, #67, #70, #71).
+- WYSIWYG markdown editor for panels and skill templates; markdown rendering via
+  **Markdoc** (#45, #57, #62, #85).
+- Query console with history, dedicated history/schema endpoints, and graph
+  panel UX improvements (#22, #37, #58, #84).
+- Clone reports (#59), report-level private/public access (#60), and pinned
+  reports with sidebar filtering (#40).
+
+### Storage & configuration
+
+- Store report/dashboard configs in the database with a **pluggable backend**
+  (DynamoDB + SQLModel) (#14).
+- Track scheduled query results and moved distributed locking to the report
+  store (#42).
+- Scheduled query management with version history, schema-driven action forms,
+  and a statsd action plugin (#26, #61).
+
+### Auth, RBAC & identity
+
+- Generic **OIDC JWT auth** with an Authentik dev identity provider (#10).
+- **RBAC**: permissions, built-in roles, user-defined roles, and JWT-claim
+  resolution, with permission-gated UI (#38, #39).
+- Persistent user store with JIT provisioning and user identity display (#24).
+- Role management UI and logout menu (#56).
+
+### MCP, CLI & integrations
+
+- **MCP server** with user-defined toolsets and tools, plus built-in tool groups
+  for managing Seizu (#33, #51).
+- User-defined MCP **skills** (#53).
+- **seizu CLI** with auth, OS keyring support, pip packaging, toolset/tool
+  management, and seed/export (#29, #34).
+
+### Security
+
+- Added the `/api/v1/query` endpoint with Cypher validation; pass params through
+  validation and execution and drop cypher-guard (#8, #13).
+- Hardened Cypher validation and Neo4j dev security (#54).
+- Migrated frontend queries to the backend API, removing direct Neo4j auth (#9).
+- CSP nonce support for MUI styles and tightened CSP (#43, #44).
+
+### Branding & docs
+
+- Space-themed brand refresh: logos, design tokens, and chart palette (#48).
+- Space-themed docs splash page; switched Sphinx to the Shibuya theme and
+  isolated docs deps (#46, #47).
+
+## [1.0.0] - 2022-06-08
+
+Initial release of the original reporting tool that Seizu was built from —
+Dockerized build, GitHub Container Registry publishing, and quickstart docs.
+
+[3.0.0]: https://github.com/mappedsky/seizu/compare/v2.3.0...v3.0.0
+[2.3.0]: https://github.com/mappedsky/seizu/compare/v2.2.0...v2.3.0
+[2.2.0]: https://github.com/mappedsky/seizu/compare/v2.1.0...v2.2.0
+[2.1.0]: https://github.com/mappedsky/seizu/compare/v2.0.0...v2.1.0
+[2.0.0]: https://github.com/mappedsky/seizu/compare/v1.0.0...v2.0.0
+[1.0.0]: https://github.com/mappedsky/seizu/releases/tag/v1.0.0
