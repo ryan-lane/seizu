@@ -19,7 +19,6 @@ import logging
 import secrets
 import time
 from typing import Annotated
-from urllib.parse import urlencode
 
 from fastapi import APIRouter, Cookie, HTTPException, Query, Request, Response, status
 from fastapi.responses import JSONResponse, RedirectResponse
@@ -207,7 +206,7 @@ async def auth_callback(
     if error:
         logger.warning("IDP returned error on callback: %s (%s)", error, error_description)
         response = RedirectResponse(
-            url=f"/?{urlencode({'auth_error': error})}",
+            url="/?auth_error=1",
             status_code=status.HTTP_302_FOUND,
         )
         _clear_state_cookie(response)

@@ -146,6 +146,32 @@ async def test_callback_clears_state_cookie_on_error(mocker):
     assert "Max-Age=0" in set_cookie or "expires=" in set_cookie.lower()
 
 
+async def test_callback_idp_error_redirects_to_fixed_error_url(mocker):
+    mocker.patch("reporting.services.oauth_client.get_metadata", AsyncMock(return_value=_mock_metadata()))
+    state_payload = oauth_state_cookie.OAuthStatePayload(
+        state="real-state",
+        verifier="v",
+        return_to="/",
+        exp=int(time.time()) + 60,
+        nonce="nonce-1",
+    )
+    app = create_app()
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        client.cookies.set(oauth_state_cookie.STATE_COOKIE_NAME, oauth_state_cookie.encrypt(state_payload))
+        resp = await client.get(
+            "/api/v1/auth/callback",
+            params={
+                "error": "access_denied",
+                "error_description": "https://evil.example/phish",
+            },
+            follow_redirects=False,
+        )
+
+    assert resp.status_code == 302
+    assert resp.headers["location"] == "/?auth_error=1"
+    assert "evil.example" not in resp.headers["location"]
+
+
 async def test_callback_rejects_state_mismatch(mocker):
     mocker.patch("reporting.services.oauth_client.get_metadata", AsyncMock(return_value=_mock_metadata()))
     state_payload = oauth_state_cookie.OAuthStatePayload(
