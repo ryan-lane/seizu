@@ -23,6 +23,12 @@ def _auth_env(mocker):
     mocker.patch("reporting.settings.OIDC_REVOKE_REFRESH_TOKEN_ON_LOGOUT", True)
     mocker.patch("reporting.settings.SESSION_COOKIE_NAME", "seizu_session")
     mocker.patch("reporting.settings.SESSION_COOKIE_MAX_AGE_SECONDS", 18 * 60 * 60)
+    # ID-token validation reaches out to the IDP JWKS; default it to a no-op
+    # success here. Tests that exercise the failure path re-patch it.
+    mocker.patch(
+        "reporting.services.oauth_client.validate_id_token",
+        AsyncMock(return_value={"sub": "user-1", "nonce": "nonce-1"}),
+    )
     oauth_client.reset_metadata_cache()
     yield
     oauth_client.reset_metadata_cache()
@@ -35,6 +41,7 @@ def _mock_metadata():
         token_endpoint="http://idp.test/token",
         end_session_endpoint="http://idp.test/end-session",
         revocation_endpoint="http://idp.test/revoke",
+        introspection_endpoint="http://idp.test/introspect",
         jwks_uri="http://idp.test/jwks",
     )
 
@@ -62,6 +69,7 @@ async def test_login_returns_authorize_url_and_sets_state_cookie(mocker):
     assert "code_challenge=" in body["authorize_url"]
     assert "code_challenge_method=S256" in body["authorize_url"]
     assert "state=" in body["authorize_url"]
+    assert "nonce=" in body["authorize_url"]
     assert oauth_state_cookie.STATE_COOKIE_NAME in resp.cookies
 
 
@@ -98,6 +106,7 @@ async def test_login_rewrites_internal_authorize_endpoint_to_external(mocker):
         token_endpoint="http://authentik-server:9000/application/o/token/",
         end_session_endpoint="http://authentik-server:9000/application/o/end-session/",
         revocation_endpoint="http://authentik-server:9000/application/o/revoke/",
+        introspection_endpoint="http://authentik-server:9000/application/o/introspect/",
         jwks_uri="http://authentik-server:9000/application/o/seizu/jwks/",
     )
     mocker.patch("reporting.services.oauth_client.get_metadata", AsyncMock(return_value=internal_metadata))
@@ -125,6 +134,7 @@ async def test_callback_clears_state_cookie_on_error(mocker):
         verifier="v",
         return_to="/",
         exp=int(time.time()) + 60,
+        nonce="nonce-1",
     )
     app = create_app()
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
@@ -143,6 +153,7 @@ async def test_callback_rejects_state_mismatch(mocker):
         verifier="v",
         return_to="/",
         exp=int(time.time()) + 60,
+        nonce="nonce-1",
     )
     app = create_app()
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
@@ -163,6 +174,7 @@ async def test_callback_exchanges_code_sets_session_cookie_and_redirects(mocker)
         verifier="verifier-1",
         return_to="/reports/abc",
         exp=int(time.time()) + 60,
+        nonce="nonce-1",
     )
     app = create_app()
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
@@ -180,6 +192,36 @@ async def test_callback_exchanges_code_sets_session_cookie_and_redirects(mocker)
     assert session_payload.id_token == "id-token-1"
 
 
+async def test_callback_rejects_invalid_id_token(mocker):
+    mocker.patch("reporting.services.oauth_client.get_metadata", AsyncMock(return_value=_mock_metadata()))
+    mocker.patch(
+        "reporting.services.oauth_client.exchange_code",
+        AsyncMock(return_value=_mock_token_response(refresh_token="rt-1")),
+    )
+    mocker.patch(
+        "reporting.services.oauth_client.validate_id_token",
+        AsyncMock(side_effect=oauth_client.OAuthClientError("ID token nonce mismatch")),
+    )
+    state = "matching-state"
+    state_payload = oauth_state_cookie.OAuthStatePayload(
+        state=state,
+        verifier="verifier-1",
+        return_to="/reports/abc",
+        exp=int(time.time()) + 60,
+        nonce="nonce-1",
+    )
+    app = create_app()
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        client.cookies.set(oauth_state_cookie.STATE_COOKIE_NAME, oauth_state_cookie.encrypt(state_payload))
+        resp = await client.get(
+            "/api/v1/auth/callback",
+            params={"code": "auth-code", "state": state},
+            follow_redirects=False,
+        )
+    assert resp.status_code == 400
+    assert "seizu_session" not in resp.cookies
+
+
 async def test_callback_rejects_when_idp_returns_no_refresh_token(mocker):
     mocker.patch("reporting.services.oauth_client.get_metadata", AsyncMock(return_value=_mock_metadata()))
     mocker.patch(
@@ -188,7 +230,7 @@ async def test_callback_rejects_when_idp_returns_no_refresh_token(mocker):
     )
     state = "s"
     state_payload = oauth_state_cookie.OAuthStatePayload(
-        state=state, verifier="v", return_to="/", exp=int(time.time()) + 60
+        state=state, verifier="v", return_to="/", exp=int(time.time()) + 60, nonce="nonce-1"
     )
     app = create_app()
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
@@ -226,6 +268,50 @@ async def test_refresh_returns_new_access_token_and_rolls_cookie(mocker):
     new_payload = session_cookie.decrypt(resp.cookies["seizu_session"])
     assert new_payload.refresh_token == "rt-rotated"
     assert new_payload.id_token == "id-token-1"
+
+
+async def test_refresh_extends_abs_exp_when_idp_advertises_fresh_lifetime(mocker):
+    """IDPs that reset refresh-token lifetime on rotation roll the session cap forward."""
+    mocker.patch(
+        "reporting.services.oauth_client.refresh_tokens",
+        AsyncMock(return_value=_mock_token_response(refresh_token="rt-rotated")),
+    )
+    now = int(time.time())
+    near_cap = now + 120  # original absolute cap about to lapse
+    payload = session_cookie.SessionPayload(refresh_token="rt-old", iat=now - 60, abs_exp=near_cap)
+    app = create_app()
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        client.cookies.set("seizu_session", session_cookie.encrypt(payload))
+        resp = await client.post("/api/v1/auth/refresh", headers={"X-Seizu-Csrf": "1"})
+    assert resp.status_code == 200
+    new_payload = session_cookie.decrypt(resp.cookies["seizu_session"])
+    # _mock_token_response advertises refresh_expires_in=30d, so the cap rolls
+    # forward well past the near-lapse original.
+    assert new_payload.abs_exp >= now + 30 * 24 * 60 * 60 - 5
+
+
+async def test_refresh_keeps_abs_exp_when_idp_omits_lifetime(mocker):
+    """Without refresh_expires_in the session keeps its original absolute cap."""
+    token = oauth_client.TokenResponse(
+        access_token="at-new",
+        refresh_token="rt-rotated",
+        expires_in=300,
+        refresh_expires_in=None,
+        id_token="id-token-1",
+        token_type="Bearer",
+        scope="openid email offline_access",
+    )
+    mocker.patch("reporting.services.oauth_client.refresh_tokens", AsyncMock(return_value=token))
+    now = int(time.time())
+    original_cap = now + 7 * 24 * 60 * 60
+    payload = session_cookie.SessionPayload(refresh_token="rt-old", iat=now - 60, abs_exp=original_cap)
+    app = create_app()
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        client.cookies.set("seizu_session", session_cookie.encrypt(payload))
+        resp = await client.post("/api/v1/auth/refresh", headers={"X-Seizu-Csrf": "1"})
+    assert resp.status_code == 200
+    new_payload = session_cookie.decrypt(resp.cookies["seizu_session"])
+    assert new_payload.abs_exp == original_cap
 
 
 async def test_refresh_uses_configured_session_cookie_name(mocker):

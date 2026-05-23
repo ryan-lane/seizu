@@ -149,6 +149,43 @@ describe('AuthProvider', () => {
     expect(beginLoginSpy).not.toHaveBeenCalled();
   });
 
+  it('serializes refresh through the Web Locks API when available', async () => {
+    const requestMock = jest.fn((_name: string, cb: () => Promise<unknown>) =>
+      cb(),
+    );
+    Object.defineProperty(navigator, 'locks', {
+      configurable: true,
+      value: { request: requestMock },
+    });
+    refreshSpy.mockResolvedValue({
+      access_token: 'AT-LOCK',
+      expires_in: 300,
+      token_type: 'Bearer',
+    });
+
+    render(
+      <AuthConfigContext.Provider value={AUTH_CONFIG_REQUIRED}>
+        <AuthProvider>
+          <ChildThatReadsAuth />
+        </AuthProvider>
+      </AuthConfigContext.Provider>,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId('token').textContent).toBe('AT-LOCK');
+    });
+    expect(requestMock).toHaveBeenCalledWith(
+      'seizu-auth-refresh',
+      expect.any(Function),
+    );
+
+    // Restore the absent-by-default state so other tests exercise the fallback.
+    Object.defineProperty(navigator, 'locks', {
+      configurable: true,
+      value: undefined,
+    });
+  });
+
   it('schedules a follow-up refresh ~30s before token expiry', async () => {
     // Don't try to *drive* the follow-up refresh — that requires manually
     // advancing fake timers, which deadlocks @testing-library's waitFor

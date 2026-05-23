@@ -7,7 +7,6 @@ validates the Bearer token using the same JWT logic as the rest of the API.
 The session manager lifespan is managed by the FastAPI app's lifespan context.
 """
 
-import asyncio
 import contextvars
 import json
 import logging
@@ -16,7 +15,6 @@ from typing import Any
 
 import httpx
 import jwt
-from jwt import PyJWKClient
 from mcp.server.fastmcp.server import StreamableHTTPASGIApp
 from mcp.server.lowlevel import Server
 from mcp.server.streamable_http_manager import StreamableHTTPSessionManager
@@ -26,7 +24,7 @@ from starlette.responses import JSONResponse as StarletteJSONResponse
 from starlette.types import ASGIApp, Receive, Scope, Send
 
 from reporting import settings
-from reporting.authnz import CurrentUser
+from reporting.authnz import CurrentUser, validate_bearer_token
 from reporting.routes.query import _serialize_neo4j_value
 from reporting.schema.mcp_config import render_skill_prompt, validate_tool_arguments
 from reporting.services import report_store, reporting_neo4j
@@ -275,15 +273,6 @@ def _build_mcp_server() -> Server:
 # Auth middleware
 # ---------------------------------------------------------------------------
 
-_jwks_client_cache: PyJWKClient | None = None
-
-
-def _get_jwks_client() -> PyJWKClient:
-    global _jwks_client_cache
-    if _jwks_client_cache is None:
-        _jwks_client_cache = PyJWKClient(settings.JWKS_URL, cache_keys=True)
-    return _jwks_client_cache
-
 
 async def _build_dev_current_user() -> CurrentUser:
     """Return a synthetic CurrentUser for dev mode (auth disabled)."""
@@ -372,16 +361,7 @@ class _MCPAuthMiddleware:
 
         bearer_token = auth_str[7:].strip()
         try:
-            client = _get_jwks_client()
-            signing_key = await asyncio.to_thread(client.get_signing_key_from_jwt, bearer_token)
-            decode_kwargs: dict[str, Any] = {
-                "algorithms": settings.ALLOWED_JWT_ALGORITHMS,
-            }
-            if settings.JWT_ISSUER:
-                decode_kwargs["issuer"] = settings.JWT_ISSUER
-            if settings.JWT_AUDIENCE:
-                decode_kwargs["audience"] = settings.JWT_AUDIENCE
-            payload = jwt.decode(bearer_token, signing_key.key, **decode_kwargs)
+            payload = await validate_bearer_token(bearer_token)
         except jwt.PyJWTError:
             await self._send_401(scope, receive, send)
             return

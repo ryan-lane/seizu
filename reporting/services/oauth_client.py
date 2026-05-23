@@ -1,8 +1,9 @@
 """OAuth/OIDC client for the BFF auth flow.
 
 Thin facade over authlib's ``AsyncOAuth2Client`` plus a hand-rolled
-discovery cache. Authlib handles the RFC 6749 / 7636 / RFC 7009 mechanics
-(PKCE, multiple client-auth styles, error parsing per RFC 6749 §5.2).
+discovery cache. Authlib handles the RFC 6749 / 7636 / 7009 / 7662 mechanics
+(PKCE, multiple client-auth styles, token revocation and introspection,
+error parsing per RFC 6749 §5.2).
 We keep two things outside authlib:
 
 - **Discovery fetching** — so we can use ``OIDC_INTERNAL_AUTHORITY`` for
@@ -16,13 +17,17 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import secrets
+import time
 from dataclasses import dataclass
 from typing import Any
 from urllib.parse import urlencode, urlparse
 
 import httpx
+import jwt
 from authlib.common.errors import AuthlibBaseError
 from authlib.integrations.httpx_client import AsyncOAuth2Client
+from jwt import PyJWKClient
 
 from reporting import settings
 
@@ -43,6 +48,7 @@ class OIDCMetadata:
     token_endpoint: str
     end_session_endpoint: str | None
     revocation_endpoint: str | None
+    introspection_endpoint: str | None
     jwks_uri: str | None
 
 
@@ -58,6 +64,7 @@ class TokenResponse:
 
 
 _metadata_cache: OIDCMetadata | None = None
+_metadata_cached_at: float = 0.0
 _metadata_lock = asyncio.Lock()
 
 
@@ -111,14 +118,27 @@ def rewrite_to_external_origin(url: str) -> str:
     return url
 
 
+def _metadata_is_fresh() -> bool:
+    return (
+        _metadata_cache is not None
+        and (time.monotonic() - _metadata_cached_at) < settings.OIDC_DISCOVERY_CACHE_TTL_SECONDS
+    )
+
+
 async def get_metadata() -> OIDCMetadata:
-    """Fetch and cache the IDP's OIDC discovery document."""
-    global _metadata_cache
-    if _metadata_cache is not None:
-        return _metadata_cache
+    """Fetch and cache the IDP's OIDC discovery document.
+
+    The cache expires after ``OIDC_DISCOVERY_CACHE_TTL_SECONDS`` so rotated
+    endpoints or JWKS recover without a process restart.
+    """
+    global _metadata_cache, _metadata_cached_at
+    cached = _metadata_cache
+    if cached is not None and _metadata_is_fresh():
+        return cached
     async with _metadata_lock:
-        if _metadata_cache is not None:
-            return _metadata_cache
+        cached = _metadata_cache
+        if cached is not None and _metadata_is_fresh():
+            return cached
         url = f"{_authority_for_discovery()}/.well-known/openid-configuration"
         try:
             async with httpx.AsyncClient(timeout=_OIDC_DISCOVERY_TIMEOUT) as client:
@@ -135,6 +155,7 @@ async def get_metadata() -> OIDCMetadata:
                 token_endpoint=doc["token_endpoint"],
                 end_session_endpoint=doc.get("end_session_endpoint"),
                 revocation_endpoint=doc.get("revocation_endpoint"),
+                introspection_endpoint=doc.get("introspection_endpoint"),
                 jwks_uri=doc.get("jwks_uri"),
             )
         except KeyError as exc:
@@ -145,13 +166,76 @@ async def get_metadata() -> OIDCMetadata:
                 f"OIDC discovery issuer mismatch: got {metadata.issuer!r}, expected one of {sorted(expected_issuers)!r}"
             )
         _metadata_cache = metadata
+        _metadata_cached_at = time.monotonic()
         return metadata
 
 
 def reset_metadata_cache() -> None:
-    """Clear the cached discovery document (used in tests)."""
-    global _metadata_cache
+    """Clear the cached discovery document and ID-token JWKS client (tests)."""
+    global _metadata_cache, _metadata_cached_at, _idtoken_jwks_client, _idtoken_jwks_uri
     _metadata_cache = None
+    _metadata_cached_at = 0.0
+    _idtoken_jwks_client = None
+    _idtoken_jwks_uri = None
+
+
+_idtoken_jwks_client: PyJWKClient | None = None
+_idtoken_jwks_uri: str | None = None
+
+
+def _get_idtoken_jwks_client(jwks_uri: str) -> PyJWKClient:
+    """Return a cached ``PyJWKClient`` for the discovery ``jwks_uri``.
+
+    Keyed by URI so a rotated discovery document (different ``jwks_uri``)
+    transparently rebuilds the client.
+    """
+    global _idtoken_jwks_client, _idtoken_jwks_uri
+    if _idtoken_jwks_client is None or _idtoken_jwks_uri != jwks_uri:
+        _idtoken_jwks_client = PyJWKClient(jwks_uri, cache_keys=True, timeout=settings.JWKS_FETCH_TIMEOUT)
+        _idtoken_jwks_uri = jwks_uri
+    return _idtoken_jwks_client
+
+
+async def validate_id_token(*, id_token: str, nonce: str | None) -> dict[str, Any]:
+    """Validate the OIDC ID token returned by the code exchange.
+
+    Verifies the signature against the discovery JWKS, the audience
+    (``OIDC_CLIENT_ID``), the issuer (against the configured authorities, the
+    same set used for discovery), and — when a ``nonce`` is supplied — that
+    the token echoes it. Returns the claims, or raises ``OAuthClientError``.
+    """
+    metadata = await get_metadata()
+    if not metadata.jwks_uri:
+        raise OAuthClientError("IDP advertises no jwks_uri; cannot validate ID token")
+    if not settings.OIDC_CLIENT_ID:
+        raise OAuthClientError("OIDC_CLIENT_ID must be configured to validate the ID token")
+
+    client = _get_idtoken_jwks_client(metadata.jwks_uri)
+    try:
+        signing_key = await asyncio.to_thread(client.get_signing_key_from_jwt, id_token)
+        claims = jwt.decode(
+            id_token,
+            signing_key.key,
+            algorithms=settings.ALLOWED_JWT_ALGORITHMS,
+            audience=settings.OIDC_CLIENT_ID,
+            options={"require": ["exp", "iat", "aud"]},
+        )
+    except jwt.PyJWTError as exc:
+        raise OAuthClientError(f"ID token validation failed: {exc}") from exc
+
+    expected_issuers = _expected_issuers()
+    token_issuer = _normalize_issuer(str(claims.get("iss", "")))
+    if expected_issuers and token_issuer not in expected_issuers:
+        raise OAuthClientError(
+            f"ID token issuer mismatch: got {claims.get('iss')!r}, expected one of {sorted(expected_issuers)!r}"
+        )
+
+    if nonce is not None:
+        token_nonce = claims.get("nonce")
+        if not isinstance(token_nonce, str) or not secrets.compare_digest(token_nonce, nonce):
+            raise OAuthClientError("ID token nonce mismatch")
+
+    return claims
 
 
 def _coerce_token(data: Any) -> TokenResponse:
@@ -192,14 +276,27 @@ async def build_authorize_url(
     state: str,
     code_verifier: str,
     redirect_uri: str,
+    nonce: str | None = None,
 ) -> str:
-    """Build a PKCE authorization URL using Authlib's URL constructor."""
+    """Build a PKCE authorization URL using Authlib's URL constructor.
+
+    ``nonce`` is added as the OIDC ``nonce`` parameter when provided; the
+    callback later checks it against the ID token to bind the token response
+    to this login request. ``settings.OIDC_AUTHORIZE_EXTRA_PARAMS`` are merged
+    in as additional query parameters — this is how provider-specific knobs
+    (e.g. Google's ``access_type=offline`` / ``prompt=consent``) reach the
+    authorize request.
+    """
     browser_authorize_endpoint = rewrite_to_external_origin(authorization_endpoint)
+    extra_params = dict(settings.OIDC_AUTHORIZE_EXTRA_PARAMS)
+    if nonce is not None:
+        extra_params["nonce"] = nonce
     async with _build_oauth_client(redirect_uri=redirect_uri) as client:
         authorize_url, _ = client.create_authorization_url(
             browser_authorize_endpoint,
             state=state,
             code_verifier=code_verifier,
+            **extra_params,
         )
     return authorize_url
 
@@ -287,7 +384,7 @@ async def revoke_refresh_token(*, refresh_token: str) -> None:
 
     try:
         async with _build_oauth_client() as client:
-            resp = client.revoke_token(
+            resp = await client.revoke_token(
                 metadata.revocation_endpoint,
                 token=refresh_token,
                 token_type_hint="refresh_token",
@@ -296,3 +393,40 @@ async def revoke_refresh_token(*, refresh_token: str) -> None:
             resp.raise_for_status()
     except (AuthlibBaseError, httpx.HTTPError) as exc:
         logger.warning("refresh-token revocation failed (continuing logout): %s", exc)
+
+
+async def introspect_token(*, token: str) -> dict[str, Any]:
+    """Validate an opaque access token via RFC 7662 introspection.
+
+    Returns the introspection response (a claims dict) when the token is
+    active. Raises ``OAuthClientError`` if the IDP advertises no introspection
+    endpoint, the request fails, or the token is inactive. This is the
+    fallback path for IDPs that issue non-JWT access tokens; callers use it
+    only after JWT validation has failed.
+    """
+    metadata = await get_metadata()
+    if not metadata.introspection_endpoint:
+        raise OAuthClientError("IDP advertises no introspection_endpoint")
+
+    method = settings.OIDC_INTROSPECTION_ENDPOINT_AUTH_METHOD
+    body = ""
+    if method == "none" and settings.OIDC_CLIENT_ID:
+        body = urlencode({"client_id": settings.OIDC_CLIENT_ID})
+
+    try:
+        async with _build_oauth_client() as client:
+            resp = await client.introspect_token(
+                metadata.introspection_endpoint,
+                token=token,
+                token_type_hint="access_token",
+                body=body,
+                auth=client.client_auth(method),
+            )
+            resp.raise_for_status()
+            data = resp.json()
+    except (AuthlibBaseError, httpx.HTTPError) as exc:
+        raise OAuthClientError(f"Token introspection failed: {exc}") from exc
+
+    if not isinstance(data, dict) or not data.get("active"):
+        raise OAuthClientError("Token is inactive or introspection returned no claims")
+    return data

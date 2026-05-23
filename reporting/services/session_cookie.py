@@ -33,6 +33,11 @@ from reporting import settings
 _KEY_BYTES = 32
 _NONCE_BYTES = 12
 _GCM_TAG_BYTES = 16
+# AES-GCM associated data domain-separates this cookie from the OAuth state
+# cookie, which shares the same encryption key. A ciphertext minted for one
+# purpose fails authentication if presented as the other. Bump the version
+# suffix if the payload schema changes incompatibly.
+_AAD = b"seizu-session-v1"
 
 
 class SessionCookieError(ValueError):
@@ -82,7 +87,7 @@ def encrypt(payload: SessionPayload) -> str:
     ).encode("utf-8")
     aesgcm = AESGCM(_get_key())
     nonce = os.urandom(_NONCE_BYTES)
-    ciphertext = aesgcm.encrypt(nonce, plaintext, None)
+    ciphertext = aesgcm.encrypt(nonce, plaintext, _AAD)
     return _b64url_encode(nonce + ciphertext)
 
 
@@ -104,7 +109,7 @@ def decrypt(cookie_value: str, *, now: int | None = None) -> SessionPayload:
     nonce, ciphertext = blob[:_NONCE_BYTES], blob[_NONCE_BYTES:]
     aesgcm = AESGCM(_get_key())
     try:
-        plaintext = aesgcm.decrypt(nonce, ciphertext, None)
+        plaintext = aesgcm.decrypt(nonce, ciphertext, _AAD)
     except InvalidTag as exc:
         raise SessionCookieError("Session cookie integrity check failed") from exc
 

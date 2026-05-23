@@ -54,6 +54,29 @@ async def _get_jwt_payload(token: str) -> dict:
     return jwt.decode(token, signing_key.key, **decode_kwargs)
 
 
+async def validate_bearer_token(token: str) -> dict:
+    """Validate a Bearer token and return its claims.
+
+    Tries local JWT verification first (the common case for OIDC providers
+    that issue JWT access tokens). When that fails and
+    ``OIDC_ENABLE_TOKEN_INTROSPECTION`` is set, falls back to RFC 7662
+    introspection — the path for IDPs (e.g. Google) that issue opaque access
+    tokens. Introspection failures are surfaced as ``jwt.InvalidTokenError``
+    so callers can keep a single ``jwt.PyJWTError`` handler.
+    """
+    try:
+        return await _get_jwt_payload(token)
+    except jwt.PyJWTError:
+        if not settings.OIDC_ENABLE_TOKEN_INTROSPECTION:
+            raise
+        from reporting.services import oauth_client
+
+        try:
+            return await oauth_client.introspect_token(token=token)
+        except oauth_client.OAuthClientError as exc:
+            raise jwt.InvalidTokenError(f"Token introspection failed: {exc}") from exc
+
+
 def get_email() -> str:
     if not settings.DEVELOPMENT_ONLY_REQUIRE_AUTH:
         email = settings.DEVELOPMENT_ONLY_AUTH_USER_EMAIL
@@ -104,7 +127,7 @@ async def get_current_user(
 
     token = credentials.credentials
     try:
-        payload = await _get_jwt_payload(token)
+        payload = await validate_bearer_token(token)
     except jwt.PyJWTError as exc:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,

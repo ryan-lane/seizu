@@ -125,6 +125,73 @@ def test__get_jwks_client_uses_configured_timeout(mocker):
     )
 
 
+async def test_validate_bearer_token_returns_jwt_payload_on_success(mocker):
+    """A verifiable JWT short-circuits — introspection is never consulted."""
+    from reporting.authnz import validate_bearer_token
+
+    mocker.patch("reporting.authnz._get_jwt_payload", new=AsyncMock(return_value={"sub": "s1"}))
+    introspect = mocker.patch("reporting.services.oauth_client.introspect_token", new=AsyncMock())
+
+    payload = await validate_bearer_token("tok")
+
+    assert payload == {"sub": "s1"}
+    introspect.assert_not_called()
+
+
+async def test_validate_bearer_token_reraises_when_introspection_disabled(mocker):
+    """A non-JWT token is rejected outright when introspection is off."""
+    from reporting.authnz import validate_bearer_token
+
+    mocker.patch("reporting.settings.OIDC_ENABLE_TOKEN_INTROSPECTION", False)
+    mocker.patch(
+        "reporting.authnz._get_jwt_payload",
+        new=AsyncMock(side_effect=jwt.DecodeError("not a jwt")),
+    )
+    introspect = mocker.patch("reporting.services.oauth_client.introspect_token", new=AsyncMock())
+
+    with pytest.raises(jwt.PyJWTError):
+        await validate_bearer_token("opaque")
+    introspect.assert_not_called()
+
+
+async def test_validate_bearer_token_falls_back_to_introspection(mocker):
+    """An opaque token is validated via RFC 7662 introspection when enabled."""
+    from reporting.authnz import validate_bearer_token
+
+    mocker.patch("reporting.settings.OIDC_ENABLE_TOKEN_INTROSPECTION", True)
+    mocker.patch(
+        "reporting.authnz._get_jwt_payload",
+        new=AsyncMock(side_effect=jwt.DecodeError("not a jwt")),
+    )
+    mocker.patch(
+        "reporting.services.oauth_client.introspect_token",
+        new=AsyncMock(return_value={"active": True, "sub": "opaque-sub", "email": "u@example.com"}),
+    )
+
+    payload = await validate_bearer_token("opaque")
+
+    assert payload["sub"] == "opaque-sub"
+
+
+async def test_validate_bearer_token_introspection_failure_raises_invalid_token(mocker):
+    """Introspection rejection surfaces as a PyJWTError so callers handle it uniformly."""
+    from reporting.authnz import validate_bearer_token
+    from reporting.services import oauth_client
+
+    mocker.patch("reporting.settings.OIDC_ENABLE_TOKEN_INTROSPECTION", True)
+    mocker.patch(
+        "reporting.authnz._get_jwt_payload",
+        new=AsyncMock(side_effect=jwt.DecodeError("not a jwt")),
+    )
+    mocker.patch(
+        "reporting.services.oauth_client.introspect_token",
+        new=AsyncMock(side_effect=oauth_client.OAuthClientError("token inactive")),
+    )
+
+    with pytest.raises(jwt.PyJWTError):
+        await validate_bearer_token("opaque")
+
+
 async def test_get_current_user_auth_disabled(mocker):
     """In dev mode (auth disabled) a synthetic dev user is returned without a token."""
     mocker.patch("reporting.settings.DEVELOPMENT_ONLY_REQUIRE_AUTH", False)

@@ -165,6 +165,7 @@ async def auth_login(
 
     verifier = _generate_pkce_verifier()
     state = _b64url(secrets.token_bytes(32))
+    nonce = _b64url(secrets.token_bytes(32))
     safe_return_to = _safe_return_to(return_to)
     redirect_uri = _build_callback_url(request)
 
@@ -173,6 +174,7 @@ async def auth_login(
         verifier=verifier,
         return_to=safe_return_to,
         exp=int(time.time()) + oauth_state_cookie.STATE_COOKIE_MAX_AGE_SECONDS,
+        nonce=nonce,
     )
     _set_state_cookie(response, state_payload)
 
@@ -181,6 +183,7 @@ async def auth_login(
         state=state,
         code_verifier=verifier,
         redirect_uri=redirect_uri,
+        nonce=nonce,
     )
     return LoginResponse(authorize_url=authorize_url)
 
@@ -235,6 +238,19 @@ async def auth_callback(
     except oauth_client.OAuthClientError as exc:
         logger.warning("Token exchange failed: %s", exc)
         return _callback_error_response("Token exchange failed")
+
+    # Validate the ID token (signature, audience, issuer, nonce) before trusting
+    # the token response. PKCE already binds the code to this client; the nonce
+    # check additionally binds the ID token to *this* login request.
+    if settings.OIDC_VALIDATE_ID_TOKEN and token_response.id_token:
+        try:
+            await oauth_client.validate_id_token(
+                id_token=token_response.id_token,
+                nonce=state_payload.nonce,
+            )
+        except oauth_client.OAuthClientError as exc:
+            logger.warning("ID token validation failed: %s", exc)
+            return _callback_error_response("Invalid ID token")
 
     if not token_response.refresh_token:
         # offline_access scope wasn't honored, or the IDP refused to issue
@@ -305,10 +321,18 @@ async def auth_refresh(
         return _unauthenticated_response("Session expired", clear_cookie=True)
 
     new_refresh_token = token_response.refresh_token or session_payload.refresh_token
+    # IDPs that rotate refresh tokens (Authentik, Okta, …) typically reset the
+    # token's lifetime on each rotation. When the refresh response advertises a
+    # fresh refresh_expires_in, roll the session's absolute cap forward to match
+    # rather than freezing it at login — but never shorten it below the existing
+    # cap on a transient/smaller value.
+    new_abs_exp = session_payload.abs_exp
+    if token_response.refresh_expires_in:
+        new_abs_exp = max(new_abs_exp, int(time.time()) + token_response.refresh_expires_in)
     new_payload = session_cookie.SessionPayload(
         refresh_token=new_refresh_token,
         iat=session_payload.iat,
-        abs_exp=session_payload.abs_exp,
+        abs_exp=new_abs_exp,
         id_token=token_response.id_token or session_payload.id_token,
     )
     _set_session_cookie(response, new_payload)

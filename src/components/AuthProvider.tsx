@@ -11,12 +11,32 @@ import { AuthConfigContext } from 'src/authConfig.context';
 // effects in dev, which would fire two /auth/refresh calls in parallel — and
 // since Authentik rotates refresh tokens, the second call would race the
 // first and get 401 from a now-rotated cookie. Sharing one in-flight promise
-// across concurrent callers eliminates the race.
+// across concurrent callers eliminates the race *within one tab*.
 let inflightRefresh: Promise<RefreshResponse> | null = null;
+
+// Cross-tab serialization. The per-document promise above can't see other
+// tabs, so two tabs whose proactive-refresh timers fire together would POST
+// the *same* refresh token concurrently. With refresh-token rotation the IDP
+// rotates on the first request and rejects the second as a replay — and
+// reuse-detecting IDPs may revoke the entire token family, logging every tab
+// out. The Web Locks API lets only one tab hold this named lock at a time, so
+// the second tab waits until the first has rolled the session cookie and then
+// refreshes against the new token. Where Web Locks is unavailable (older
+// browsers, insecure contexts, the test env) we degrade to per-tab dedup.
+const REFRESH_LOCK_NAME = 'seizu-auth-refresh';
+
+function withCrossTabLock<T>(fn: () => Promise<T>): Promise<T> {
+  const lockManager: LockManager | undefined =
+    typeof navigator === 'undefined' ? undefined : navigator.locks;
+  if (!lockManager) {
+    return fn();
+  }
+  return lockManager.request(REFRESH_LOCK_NAME, fn) as Promise<T>;
+}
 
 function refreshOnce(): Promise<RefreshResponse> {
   if (!inflightRefresh) {
-    inflightRefresh = refreshSession().finally(() => {
+    inflightRefresh = withCrossTabLock(() => refreshSession()).finally(() => {
       inflightRefresh = null;
     });
   }

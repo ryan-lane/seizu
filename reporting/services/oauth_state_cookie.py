@@ -33,6 +33,11 @@ from reporting import settings
 _NONCE_BYTES = 12
 _GCM_TAG_BYTES = 16
 _KEY_BYTES = 32
+# AES-GCM associated data domain-separates this cookie from the session
+# cookie, which shares the same encryption key. A ciphertext minted for one
+# purpose fails authentication if presented as the other. Bump the version
+# suffix if the payload schema changes incompatibly.
+_AAD = b"seizu-oauth-state-v1"
 
 STATE_COOKIE_NAME = "seizu_oauth_state"
 STATE_COOKIE_MAX_AGE_SECONDS = 5 * 60
@@ -48,6 +53,7 @@ class OAuthStatePayload:
     verifier: str
     return_to: str
     exp: int
+    nonce: str
 
 
 def _get_key() -> bytes:
@@ -79,12 +85,13 @@ def encrypt(payload: OAuthStatePayload) -> str:
             "verifier": payload.verifier,
             "return_to": payload.return_to,
             "exp": payload.exp,
+            "nonce": payload.nonce,
         },
         separators=(",", ":"),
     ).encode("utf-8")
     aesgcm = AESGCM(_get_key())
     nonce = os.urandom(_NONCE_BYTES)
-    ciphertext = aesgcm.encrypt(nonce, plaintext, None)
+    ciphertext = aesgcm.encrypt(nonce, plaintext, _AAD)
     return _b64url_encode(nonce + ciphertext)
 
 
@@ -95,10 +102,10 @@ def decrypt(cookie_value: str, *, now: int | None = None) -> OAuthStatePayload:
         raise OAuthStateCookieError("Malformed state cookie") from exc
     if len(blob) < _NONCE_BYTES + _GCM_TAG_BYTES:
         raise OAuthStateCookieError("State cookie too short")
-    nonce, ciphertext = blob[:_NONCE_BYTES], blob[_NONCE_BYTES:]
+    gcm_nonce, ciphertext = blob[:_NONCE_BYTES], blob[_NONCE_BYTES:]
     aesgcm = AESGCM(_get_key())
     try:
-        plaintext = aesgcm.decrypt(nonce, ciphertext, None)
+        plaintext = aesgcm.decrypt(gcm_nonce, ciphertext, _AAD)
     except InvalidTag as exc:
         raise OAuthStateCookieError("State cookie integrity check failed") from exc
 
@@ -114,10 +121,11 @@ def decrypt(cookie_value: str, *, now: int | None = None) -> OAuthStatePayload:
         verifier = data["verifier"]
         return_to = data["return_to"]
         exp = int(data["exp"])
+        nonce = data["nonce"]
     except (KeyError, TypeError, ValueError) as exc:
         raise OAuthStateCookieError("State cookie payload is missing required fields") from exc
-    if not all(isinstance(v, str) and v for v in (state, verifier)):
-        raise OAuthStateCookieError("State cookie payload has invalid state/verifier")
+    if not all(isinstance(v, str) and v for v in (state, verifier, nonce)):
+        raise OAuthStateCookieError("State cookie payload has invalid state/verifier/nonce")
     if not isinstance(return_to, str):
         raise OAuthStateCookieError("State cookie payload has invalid return_to")
 
@@ -125,7 +133,7 @@ def decrypt(cookie_value: str, *, now: int | None = None) -> OAuthStatePayload:
     if exp <= current:
         raise OAuthStateCookieError("State cookie has expired")
 
-    return OAuthStatePayload(state=state, verifier=verifier, return_to=return_to, exp=exp)
+    return OAuthStatePayload(state=state, verifier=verifier, return_to=return_to, exp=exp, nonce=nonce)
 
 
 def is_safe_return_to(value: str) -> bool:

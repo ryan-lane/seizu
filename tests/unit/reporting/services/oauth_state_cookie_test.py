@@ -26,6 +26,7 @@ def _payload(**overrides):
         "verifier": "verifier-xyz",
         "return_to": "/reports/123",
         "exp": 10**12,
+        "nonce": "nonce-abc",
     }
     base.update(overrides)
     return OAuthStatePayload(**base)
@@ -35,6 +36,16 @@ async def test_encrypt_then_decrypt_roundtrips():
     payload = _payload()
     out = decrypt(encrypt(payload))
     assert out == payload
+    assert out.nonce == "nonce-abc"
+
+
+async def test_state_cookie_cannot_be_decrypted_as_session_cookie():
+    """AAD domain separation: a state cookie fails session-cookie auth even with the shared key."""
+    from reporting.services import session_cookie
+
+    state_cookie = encrypt(_payload())
+    with pytest.raises(session_cookie.SessionCookieError, match="integrity check failed"):
+        session_cookie.decrypt(state_cookie)
 
 
 async def test_decrypt_rejects_tampered_ciphertext():

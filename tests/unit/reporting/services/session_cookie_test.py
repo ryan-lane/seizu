@@ -44,6 +44,15 @@ async def test_encrypt_produces_distinct_ciphertexts_for_same_payload():
     assert encrypt(payload) != encrypt(payload)
 
 
+async def test_session_cookie_cannot_be_decrypted_as_state_cookie():
+    """AAD domain separation: a session cookie fails state-cookie auth even with the shared key."""
+    from reporting.services import oauth_state_cookie
+
+    session = encrypt(_payload())
+    with pytest.raises(oauth_state_cookie.OAuthStateCookieError, match="integrity check failed"):
+        oauth_state_cookie.decrypt(session)
+
+
 async def test_decrypt_rejects_malformed_base64():
     with pytest.raises(SessionCookieError, match="Malformed session cookie"):
         decrypt("not!base64!@#")

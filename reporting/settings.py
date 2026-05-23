@@ -3,6 +3,25 @@ from importlib import resources
 from reporting.utils.settings import bool_env, int_env, list_env, str_env
 
 
+def _parse_kv_pairs(items: list[str]) -> dict[str, str]:
+    """Parse a list of ``key=value`` strings into a dict.
+
+    Used for env vars that carry a small map as a comma-separated list (e.g.
+    ``OIDC_AUTHORIZE_EXTRA_PARAMS``). Entries without ``=`` or with an empty
+    key are skipped. The value may contain ``=``; only the first is the
+    separator.
+    """
+    result: dict[str, str] = {}
+    for item in items:
+        if "=" not in item:
+            continue
+        key, _, value = item.partition("=")
+        key = key.strip()
+        if key:
+            result[key] = value.strip()
+    return result
+
+
 def _default_static_folder() -> str:
     if resources.files("reporting").joinpath("static_dist", "index.html").is_file():
         return str(resources.files("reporting").joinpath("static_dist"))
@@ -82,6 +101,35 @@ OIDC_REDIRECT_URI = str_env("OIDC_REDIRECT_URI", "")
 # Default includes offline_access so the BFF gets a refresh_token and can
 # renew silently via direct POST to the token endpoint.
 OIDC_SCOPE = str_env("OIDC_SCOPE", "openid email offline_access")
+# Extra query parameters appended to the OIDC authorization request, as a
+# comma-separated list of key=value pairs. Use for provider-specific knobs
+# that the standard scope can't express. The canonical example is Google,
+# which issues a refresh token only when the authorize request carries
+# "access_type=offline" (and "prompt=consent" to re-issue one on repeat
+# logins) rather than honoring the offline_access scope:
+#   OIDC_AUTHORIZE_EXTRA_PARAMS="access_type=offline,prompt=consent"
+OIDC_AUTHORIZE_EXTRA_PARAMS = _parse_kv_pairs(list_env("OIDC_AUTHORIZE_EXTRA_PARAMS", []))
+# Enable RFC 7662 token introspection as a fallback when a Bearer token is
+# not a verifiable JWT. Required for IDPs that issue opaque access tokens
+# (e.g. Google, some Okta/Auth0 configurations without an API audience).
+# Introspection authenticates to the IDP with the configured client
+# credentials, so it generally pairs with a confidential client.
+OIDC_ENABLE_TOKEN_INTROSPECTION = bool_env("OIDC_ENABLE_TOKEN_INTROSPECTION", False)
+# Authlib client-auth method for the introspection endpoint. Defaults to the
+# token-endpoint method (authlib uses that for introspection by default).
+OIDC_INTROSPECTION_ENDPOINT_AUTH_METHOD = str_env(
+    "OIDC_INTROSPECTION_ENDPOINT_AUTH_METHOD",
+    OIDC_TOKEN_ENDPOINT_AUTH_METHOD,
+)
+# How long (seconds) to cache the IDP's OIDC discovery document before
+# re-fetching. Endpoints rarely move, so a long TTL is fine; a non-infinite
+# one means rotated endpoints/JWKS recover without a process restart.
+OIDC_DISCOVERY_CACHE_TTL_SECONDS = int_env("OIDC_DISCOVERY_CACHE_TTL_SECONDS", 3600)
+# Validate the OIDC ID token returned by the BFF code exchange (signature via
+# the discovery JWKS, audience, issuer, and the login nonce). Secure by
+# default; disable only for non-conformant providers whose ID token can't be
+# verified server-side.
+OIDC_VALIDATE_ID_TOKEN = bool_env("OIDC_VALIDATE_ID_TOKEN", True)
 
 # Whether or not to require authentication.
 # This option should only be changed in development.

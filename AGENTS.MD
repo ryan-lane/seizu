@@ -209,7 +209,7 @@ Seizu exposes an MCP (Model Context Protocol) server at `/api/v1/mcp` when `MCP_
 
 **Key details:**
 - Transport: StreamableHTTP, wired into FastAPI via `_MCPMiddleware` (pure ASGI middleware in `reporting/app.py`) that intercepts `/api/v1/mcp*` before FastAPI routing; avoids a Starlette 1.0.0 issue where `Mount("/api/v1/mcp")` requires a trailing slash and the SPA catch-all returns 405
-- Auth: `_MCPAuthMiddleware` validates Bearer JWT tokens using the same `PyJWKClient` logic as the REST API; passes through unauthenticated in dev (`DEVELOPMENT_ONLY_REQUIRE_AUTH=false`). It populates two `contextvars.ContextVar`s for the duration of the request: `_mcp_permissions` (the resolved `frozenset[str]` of permissions) and `_mcp_current_user` (a `CurrentUser`). Built-in handlers that need to attribute writes to a user (e.g. `reports__create`) read the latter.
+- Auth: `_MCPAuthMiddleware` validates Bearer tokens via the shared `authnz.validate_bearer_token()` (JWKS JWT check, optional RFC 7662 introspection fallback) — the same path the REST API uses; passes through unauthenticated in dev (`DEVELOPMENT_ONLY_REQUIRE_AUTH=false`). It populates two `contextvars.ContextVar`s for the duration of the request: `_mcp_permissions` (the resolved `frozenset[str]` of permissions) and `_mcp_current_user` (a `CurrentUser`). Built-in handlers that need to attribute writes to a user (e.g. `reports__create`) read the latter.
 - Tool names: namespaced as `{group}__{action}` (built-ins) or `{toolset_name}__{tool_name}` (user-defined), both using double underscore
 - Tool listing: `@server.list_tools()` merges `list_builtin_tools(settings.MCP_ENABLED_BUILTINS)` with `report_store.list_enabled_tools()` at request time, filtering built-ins by the caller's resolved permissions
 - Tool execution: `@server.call_tool()` dispatches to `find_builtin(name, settings.MCP_ENABLED_BUILTINS)` first, falling back to user-defined tools executed via `reporting_neo4j.run_query()`. Built-in handlers enforce their own `required_permissions` before running.
@@ -313,15 +313,15 @@ docker compose up && make seed_dashboard
 
 Two authentication mechanisms resolve to the same `CurrentUser`:
 
-1. **Cookie-based BFF flow** (browser SPA only). The backend owns the OIDC Authorization Code + PKCE exchange. The IDP refresh token lives only in an AES-256-GCM-encrypted, HttpOnly, Secure, SameSite=Strict cookie (`seizu_session`); the access token is held in React state in the browser and never persisted to storage. The SPA gets a fresh access token by POSTing to `/api/v1/auth/refresh`, which the cookie authenticates.
-2. **Bearer JWT** (CLI, MCP, programmatic clients). Unchanged. Backend validates the JWT via `PyJWKClient` (PyJWT) against the configured OIDC JWKS endpoint.
+1. **Cookie-based BFF flow** (browser SPA only). The backend owns the OIDC Authorization Code + PKCE exchange. The IDP refresh token lives only in an AES-256-GCM-encrypted, HttpOnly, Secure, SameSite=Strict cookie (`seizu_session`); the access token is held in React state in the browser and never persisted to storage. The SPA gets a fresh access token by POSTing to `/api/v1/auth/refresh`, which the cookie authenticates. Both the session and `seizu_oauth_state` cookies share `SESSION_TOKEN_ENCRYPTION_KEY` but are domain-separated by AES-GCM associated data (`seizu-session-v1` / `seizu-oauth-state-v1`), so one can't be replayed as the other.
+2. **Bearer JWT** (CLI, MCP, programmatic clients). Backend validates the token via `authnz.validate_bearer_token()`: a `PyJWKClient` (PyJWT) JWKS check first, then — when `OIDC_ENABLE_TOKEN_INTROSPECTION` is set and the token isn't a verifiable JWT — an RFC 7662 introspection fallback for IDPs that issue opaque access tokens. Both the REST resource server (`get_current_user`) and the MCP auth middleware share this helper.
 
 `get_current_user` only consumes the Bearer path; the cookie is consumed solely by the four `/api/v1/auth/*` routes. CSRF protection is enforced by `_CSRFMiddleware` (`reporting/app.py`), which requires `X-Seizu-Csrf: 1` on mutating methods whenever the session cookie is present. Bearer-only requests are exempt by design.
 
 **Auth-flow endpoints** (browser-only):
 
-- `GET  /api/v1/auth/login?return_to=<path>` — generates PKCE verifier + state, stashes them in a 5-minute `seizu_oauth_state` cookie (SameSite=Lax — must survive the cross-site redirect *back* from the IDP), returns the IDP authorize URL.
-- `GET  /api/v1/auth/callback?code=...&state=...` — verifies state, exchanges the code at the IDP, sets the session cookie, 302s to `return_to` (path-only, open-redirect-guarded).
+- `GET  /api/v1/auth/login?return_to=<path>` — generates PKCE verifier + state + OIDC nonce, stashes them in a 5-minute `seizu_oauth_state` cookie (SameSite=Lax — must survive the cross-site redirect *back* from the IDP), returns the IDP authorize URL (with `nonce` and any `OIDC_AUTHORIZE_EXTRA_PARAMS`).
+- `GET  /api/v1/auth/callback?code=...&state=...` — verifies state, exchanges the code at the IDP, validates the ID token (signature/audience/issuer/nonce, gated by `OIDC_VALIDATE_ID_TOKEN`), sets the session cookie, 302s to `return_to` (path-only, open-redirect-guarded).
 - `POST /api/v1/auth/refresh` — exchanges the cookie's refresh token for a new access token; rolls the cookie's Max-Age (capped at the IDP refresh token's absolute expiry recorded at login). Returns 401 + clears cookie when the IDP rejects.
 - `POST /api/v1/auth/logout` — clears the cookie and, gated by `OIDC_REVOKE_REFRESH_TOKEN_ON_LOGOUT`, best-effort-revokes the IDP refresh token via the revocation endpoint.
 
@@ -339,10 +339,15 @@ Two authentication mechanisms resolve to the same `CurrentUser`:
 | `OIDC_CLIENT_SECRET` | `""` | Optional secret for confidential-client deployments |
 | `OIDC_TOKEN_ENDPOINT_AUTH_METHOD` | `none` | Authlib client auth method for token requests; use `client_secret_basic`/`client_secret_post` for confidential clients |
 | `OIDC_REVOCATION_ENDPOINT_AUTH_METHOD` | `OIDC_TOKEN_ENDPOINT_AUTH_METHOD` | Authlib client auth method for refresh-token revocation |
+| `OIDC_INTROSPECTION_ENDPOINT_AUTH_METHOD` | `OIDC_TOKEN_ENDPOINT_AUTH_METHOD` | Authlib client auth method for RFC 7662 introspection |
+| `OIDC_ENABLE_TOKEN_INTROSPECTION` | `false` | Validate opaque (non-JWT) access tokens via RFC 7662 introspection when JWT validation fails. Needed for IDPs like Google; pairs with a confidential client |
+| `OIDC_DISCOVERY_CACHE_TTL_SECONDS` | `3600` | How long to cache the OIDC discovery document; bounds endpoint/JWKS staleness without a restart |
+| `OIDC_VALIDATE_ID_TOKEN` | `true` | Validate the BFF code-exchange ID token (signature via discovery JWKS, audience, issuer, login nonce). Disable only for non-conformant providers |
 | `OIDC_REDIRECT_URI` | `""` | Optional override for the BFF callback URL; defaults to the backend's own `/api/v1/auth/callback` derived from the request |
 | `OIDC_SCOPE` | `"openid email offline_access"` | `offline_access` is required so the IDP issues a refresh token |
+| `OIDC_AUTHORIZE_EXTRA_PARAMS` | `""` | Comma-separated `key=value` pairs merged into the authorize request. Use for provider knobs the scope can't express, e.g. Google's `access_type=offline,prompt=consent` |
 | `OIDC_REVOKE_REFRESH_TOKEN_ON_LOGOUT` | `true` | Whether `/auth/logout` revokes the IDP refresh token (best-effort; failures logged) |
-| `OIDC_REFRESH_TOKEN_FALLBACK_TTL_SECONDS` | `2592000` (30d) | Absolute session cap used only when the IDP's token response omits `refresh_expires_in` |
+| `OIDC_REFRESH_TOKEN_FALLBACK_TTL_SECONDS` | `2592000` (30d) | Absolute session cap used only when the IDP's token response omits `refresh_expires_in`. When the IDP advertises a fresh `refresh_expires_in` on a rotating refresh, the cap rolls forward to match |
 | `SESSION_TOKEN_ENCRYPTION_KEY` | `""` | AES-256-GCM key for the session cookie. 32 random bytes, base64-encoded. Required when auth is enabled. |
 | `SESSION_COOKIE_NAME` | `seizu_session` | Override the cookie name |
 | `SESSION_COOKIE_MAX_AGE_SECONDS` | `64800` (18h) | Rolling cookie lifetime; each successful refresh resets it (capped by the IDP refresh token's absolute expiry) |
