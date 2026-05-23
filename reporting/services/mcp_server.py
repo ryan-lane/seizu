@@ -284,10 +284,17 @@ async def _build_dev_current_user() -> CurrentUser:
         iss="dev",
         email=email,
         display_name=None,
+        preferred_username=None,
     )
     return CurrentUser(
         user=user,
-        jwt_claims={"email": email, "display_name": None, "token_iat": None, "token_exp": None},
+        jwt_claims={
+            "email": email,
+            "display_name": None,
+            "preferred_username": None,
+            "token_iat": None,
+            "token_exp": None,
+        },
         permissions=ALL_PERMISSIONS,
     )
 
@@ -300,17 +307,25 @@ async def _build_current_user_from_jwt(payload: dict[str, Any]) -> CurrentUser:
     token_iat = datetime.fromtimestamp(raw_iat, tz=UTC) if raw_iat is not None else None
     raw_exp = payload.get("exp")
     token_exp = datetime.fromtimestamp(raw_exp, tz=UTC) if raw_exp is not None else None
+    email = payload.get(settings.JWT_EMAIL_CLAIM)
+    if email is not None and not isinstance(email, str):
+        raise ValueError(f"Invalid {settings.JWT_EMAIL_CLAIM} claim")
+    preferred_username = payload.get(settings.JWT_USERNAME_CLAIM)
+    if preferred_username is not None and not isinstance(preferred_username, str):
+        raise ValueError(f"Invalid {settings.JWT_USERNAME_CLAIM} claim")
     jwt_claims = {
-        "email": payload[settings.JWT_EMAIL_CLAIM],
+        "email": email,
         "display_name": payload.get("name"),
+        "preferred_username": preferred_username,
         "token_iat": token_iat,
         "token_exp": token_exp,
     }
     user = await report_store.get_or_create_user(
         sub=payload[settings.JWT_SUB_CLAIM],
         iss=payload[settings.JWT_ISS_CLAIM],
-        email=payload[settings.JWT_EMAIL_CLAIM],
+        email=email,
         display_name=payload.get("name"),
+        preferred_username=preferred_username,
     )
     permissions = await resolve_permissions(payload)
     return CurrentUser(user=user, jwt_claims=jwt_claims, permissions=permissions)

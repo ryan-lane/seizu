@@ -393,7 +393,7 @@ async def test_introspect_token_rejects_wrong_audience(mocker):
         await oauth_client.introspect_token(token="opaque-at")
 
 
-async def test_introspect_token_rejects_missing_identity_claim(mocker):
+async def test_introspect_token_allows_missing_optional_profile_claims(mocker):
     mocker.patch(
         "reporting.services.oauth_client.get_metadata",
         mocker.AsyncMock(return_value=_introspection_metadata()),
@@ -426,8 +426,10 @@ async def test_introspect_token_rejects_missing_identity_claim(mocker):
 
     mocker.patch("reporting.services.oauth_client._build_oauth_client", return_value=FakeOAuthClient())
 
-    with pytest.raises(oauth_client.OAuthClientError, match="email"):
-        await oauth_client.introspect_token(token="opaque-at")
+    claims = await oauth_client.introspect_token(token="opaque-at")
+
+    assert claims["sub"] == "user-1"
+    assert claims["iss"] == "http://localhost:9000/application/o/seizu"
 
 
 async def test_introspect_token_raises_when_inactive(mocker):

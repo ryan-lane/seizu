@@ -20,6 +20,7 @@ import { logout } from 'src/api/authClient';
 import { AuthConfigContext } from 'src/authConfig.context';
 import { useCurrentUser } from 'src/hooks/useCurrentUser';
 import { DASHBOARD_SIDEBAR_WIDTH_VAR } from 'src/components/dashboardLayoutConstants';
+import { getUserAvatarSeed, getUserDisplayName } from 'src/utils/userDisplay';
 import Hidden from './Hidden';
 import UserAvatar from './UserAvatar';
 
@@ -57,9 +58,8 @@ function DashboardNavbar({
     window.location.assign(postLogoutUrl ?? '/logged-out');
   };
 
-  const userName = currentUser
-    ? currentUser.email || currentUser.display_name || currentUser.user_id
-    : '';
+  const userName = getUserDisplayName(currentUser);
+  const userAvatarSeed = getUserAvatarSeed(currentUser);
 
   const retVal = (
     <AppBar
@@ -111,7 +111,7 @@ function DashboardNavbar({
                 size="small"
                 onClick={(event) => setUserMenuAnchor(event.currentTarget)}
               >
-                <UserAvatar name={userName} />
+                <UserAvatar name={userAvatarSeed} />
               </IconButton>
             </Tooltip>
             <Menu

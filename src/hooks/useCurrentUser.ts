@@ -13,8 +13,9 @@ export interface CurrentUser {
   user_id: string;
   sub: string;
   iss: string;
-  email: string;
+  email: string | null;
   display_name: string | null;
+  preferred_username?: string | null;
   created_at: string;
   last_login: string;
   archived_at: string | null;

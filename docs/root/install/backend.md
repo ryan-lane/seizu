@@ -98,7 +98,8 @@ seizu validates JWTs using `PyJWKClient` against any standard OIDC JWKS endpoint
 
 * ``JWKS_URL``: JWKS JSON endpoint used to validate JWTs (e.g. ``https://idp.example.com/application/o/seizu/jwks/``); default: ``""``
 * ``JWT_HEADER_NAME``: request header carrying the token; default: ``Authorization``
-* ``JWT_EMAIL_CLAIM``: JWT claim for the user's email address; default: ``email``
+* ``JWT_EMAIL_CLAIM``: optional JWT claim for the user's email address; default: ``email``
+* ``JWT_USERNAME_CLAIM``: optional JWT claim for the user's preferred username; default: ``preferred_username``
 * ``JWT_ISSUER``: optional issuer to validate in the JWT; default: ``""`` (skips issuer validation)
 * ``JWT_AUDIENCE``: optional audience to validate; must match the OIDC client ID when using providers (like Authentik) that always set ``aud``; default: ``""``
 * ``ALLOWED_JWT_ALGORITHMS``: comma-separated list of allowed JWT signing algorithms; default: ``RS256,ES256,ES512``
@@ -107,14 +108,14 @@ seizu validates JWTs using `PyJWKClient` against any standard OIDC JWKS endpoint
 * ``OIDC_REDIRECT_URI``: OIDC callback URL; passed to the frontend via ``GET /api/v1/config`` but **not used by the frontend** — the browser derives the redirect URI from ``window.location.origin`` so the PKCE callback always returns to the same origin that initiated the flow; default: ``""``
 * ``OIDC_SCOPE``: OIDC scope; ``offline_access`` is required so the IDP issues a refresh token for the BFF flow; default: ``openid email offline_access``
 * ``OIDC_AUTHORIZE_EXTRA_PARAMS``: comma-separated ``key=value`` pairs merged into the authorize request, for provider knobs the scope can't express. Google, for example, only issues a refresh token with ``access_type=offline,prompt=consent`` instead of the ``offline_access`` scope; default: ``""``
-* ``OIDC_ENABLE_TOKEN_INTROSPECTION``: validate opaque (non-JWT) access tokens via RFC 7662 introspection when local JWT validation fails. Required for IDPs (such as Google) that issue opaque access tokens; pairs with a confidential client; default: ``False``
+* ``OIDC_ENABLE_TOKEN_INTROSPECTION``: validate opaque (non-JWT) access tokens via RFC 7662 introspection when local JWT validation fails. Required for IDPs (such as Google) that issue opaque access tokens; pairs with a confidential client. The introspection response must include ``active: true``, the configured subject claim, and either an ``aud`` value or ``client_id`` matching Seizu's configured audience/client. If the response omits the issuer claim, Seizu uses the configured provider issuer from discovery. Email and preferred username are optional profile data; default: ``False``
 * ``OIDC_INTROSPECTION_ENDPOINT_AUTH_METHOD``: Authlib client-auth method for the introspection endpoint; default: the value of ``OIDC_TOKEN_ENDPOINT_AUTH_METHOD``
 * ``OIDC_DISCOVERY_CACHE_TTL_SECONDS``: how long to cache the OIDC discovery document before re-fetching, bounding endpoint/JWKS staleness without a restart; default: ``3600``
 * ``OIDC_VALIDATE_ID_TOKEN``: validate the ID token from the BFF code exchange (signature via the discovery JWKS, audience, issuer, and the login nonce). Secure by default; disable only for non-conformant providers; default: ``True``
 * ``DEVELOPMENT_ONLY_REQUIRE_AUTH``: whether or not to require authentication. This option should only be changed in development; default: ``True``
 * ``DEVELOPMENT_ONLY_AUTH_USER_EMAIL``: the email address of the fake user when authentication is disabled. This option should only be changed in development; default: ``testuser``
 
-For browser sessions, Seizu stores the IDP refresh token and the ID token in an encrypted, HttpOnly session cookie. The ID token is kept so logout can send it back to the provider as ``id_token_hint`` for RP-initiated logout. Configure the OIDC provider to issue compact Seizu-specific ID tokens: include standard identity claims and one Seizu role claim, but avoid all-groups, nested-groups, permissions arrays, or large profile/custom claims. Large ID tokens can exceed browser or proxy cookie limits and cause login, refresh, or logout failures. As a practical target, keep Seizu ID tokens below roughly 2 KB, especially when the provider issues long refresh tokens.
+For browser sessions, Seizu stores the IDP refresh token and the ID token in an encrypted, HttpOnly session cookie. The ID token is kept so logout can send it back to the provider as ``id_token_hint`` for RP-initiated logout. Configure the OIDC provider to issue compact Seizu-specific ID tokens: include standard identity claims, optional display profile claims, and one Seizu role claim, but avoid all-groups, nested-groups, permissions arrays, or large profile/custom claims. Large ID tokens can exceed browser or proxy cookie limits and cause login, refresh, or logout failures. As a practical target, keep Seizu ID tokens below roughly 2 KB, especially when the provider issues long refresh tokens.
 
 #### Security / cookie settings
 

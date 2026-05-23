@@ -151,27 +151,31 @@ async def get_dashboard_report() -> ReportVersion | None:
 async def get_or_create_user(
     sub: str,
     iss: str,
-    email: str,
+    email: str | None = None,
     display_name: str | None = None,
+    preferred_username: str | None = None,
 ) -> User:
     return await get_store().get_or_create_user(
         sub=sub,
         iss=iss,
         email=email,
         display_name=display_name,
+        preferred_username=preferred_username,
     )
 
 
 async def update_user_profile(
     user_id: str,
-    email: str,
+    email: str | None = None,
     display_name: str | None = None,
+    preferred_username: str | None = None,
     token_iat: datetime | None = None,
 ) -> User:
     return await get_store().update_user_profile(
         user_id=user_id,
         email=email,
         display_name=display_name,
+        preferred_username=preferred_username,
         token_iat=token_iat,
     )
 

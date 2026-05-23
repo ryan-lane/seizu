@@ -221,6 +221,7 @@ async def test_get_current_user_auth_disabled(mocker):
         iss="dev",
         email="devuser@example.com",
         display_name=None,
+        preferred_username=None,
     )
 
 
@@ -252,6 +253,7 @@ async def test_get_current_user_extracts_sub_and_iss(mocker):
         iss="https://idp.example.com",
         email="alice@example.com",
         display_name="Alice",
+        preferred_username="alice",
         created_at="2024-01-01T00:00:00+00:00",
         last_login="2024-01-01T00:00:00+00:00",
     )
@@ -266,6 +268,7 @@ async def test_get_current_user_extracts_sub_and_iss(mocker):
             "sub": "sub123",
             "iss": "https://idp.example.com",
             "name": "Alice",
+            "preferred_username": "alice",
             "iat": 1704067200,
         },
         base64.b64decode(FAKE_PRIVATE_KEY),
@@ -278,8 +281,59 @@ async def test_get_current_user_extracts_sub_and_iss(mocker):
         iss="https://idp.example.com",
         email="alice@example.com",
         display_name="Alice",
+        preferred_username="alice",
     )
     assert result.user.user_id == "uid1"
+
+
+async def test_get_current_user_allows_missing_email(mocker):
+    """Email is optional profile data; durable identity is still iss + sub."""
+    mocker.patch("reporting.settings.DEVELOPMENT_ONLY_REQUIRE_AUTH", True)
+    mocker.patch("reporting.settings.JWT_AUDIENCE", "")
+    signing_key = _make_mock_signing_key(mocker)
+    mock_client = _make_mock_client(mocker, signing_key)
+    mocker.patch("reporting.authnz._get_jwks_client", return_value=mock_client)
+
+    from fastapi.security import HTTPAuthorizationCredentials
+
+    from reporting.schema.report_config import User
+
+    fake_user = User(
+        user_id="uid1",
+        sub="sub123",
+        iss="https://idp.example.com",
+        email=None,
+        display_name=None,
+        preferred_username="alice",
+        created_at="2024-01-01T00:00:00+00:00",
+        last_login="2024-01-01T00:00:00+00:00",
+    )
+    mock_get_or_create = mocker.patch(
+        "reporting.services.report_store.get_or_create_user",
+        new=AsyncMock(return_value=fake_user),
+    )
+
+    encoded = jwt.encode(
+        {
+            "sub": "sub123",
+            "iss": "https://idp.example.com",
+            "preferred_username": "alice",
+            "iat": 1704067200,
+        },
+        base64.b64decode(FAKE_PRIVATE_KEY),
+        algorithm="ES256",
+    )
+    credentials = HTTPAuthorizationCredentials(scheme="Bearer", credentials=encoded)
+    result = await get_current_user(credentials=credentials)
+
+    mock_get_or_create.assert_called_once_with(
+        sub="sub123",
+        iss="https://idp.example.com",
+        email=None,
+        display_name=None,
+        preferred_username="alice",
+    )
+    assert result.user.email is None
 
 
 async def test_get_current_user_resolves_permissions_from_role_claim(mocker):

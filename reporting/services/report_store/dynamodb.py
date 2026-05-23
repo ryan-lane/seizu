@@ -413,8 +413,9 @@ def _user_from_item(item: dict) -> User:
         user_id=item["user_id"],
         sub=item["sub"],
         iss=item["iss"],
-        email=item["email"],
+        email=item.get("email"),
         display_name=item.get("display_name"),
+        preferred_username=item.get("preferred_username"),
         created_at=item["created_at"],
         last_login=item.get("last_login", item.get("last_seen_at", "")),
         archived_at=item.get("archived_at"),
@@ -471,32 +472,47 @@ def _transact_put_sync(table: Any, *items: dict[str, Any]) -> None:
 def _update_user_profile_internal(
     table: Any,
     user_id: str,
-    email: str,
+    email: str | None,
     display_name: str | None,
+    preferred_username: str | None,
     token_iat: datetime | None,
 ) -> User:
     """Apply an email/display_name update and conditionally advance last_login."""
-    update_exp = "SET email = :e"
-    exp_values: dict = {":e": email}
+    update_parts: list[str] = []
+    exp_values: dict = {}
+    if email is not None:
+        update_parts.append("email = :e")
+        exp_values[":e"] = email
     if display_name is not None:
-        update_exp += ", display_name = :d"
+        update_parts.append("display_name = :d")
         exp_values[":d"] = display_name
+    if preferred_username is not None:
+        update_parts.append("preferred_username = :u")
+        exp_values[":u"] = preferred_username
     if token_iat is not None:
         iat_str = token_iat.isoformat()
+        update_parts.append("last_login = :t")
+        exp_values[":t"] = iat_str
         try:
             resp = table.update_item(
                 Key={"PK": _user_pk(user_id), "SK": _SK_METADATA},
-                UpdateExpression=update_exp + ", last_login = :t",
+                UpdateExpression="SET " + ", ".join(update_parts),
                 ConditionExpression="last_login < :t",
-                ExpressionAttributeValues={**exp_values, ":t": iat_str},
+                ExpressionAttributeValues=exp_values,
                 ReturnValues="ALL_NEW",
             )
             return _user_from_item(resp["Attributes"])
         except table.meta.client.exceptions.ConditionalCheckFailedException:
-            pass  # Token not newer — update email only
+            update_parts = [part for part in update_parts if part != "last_login = :t"]
+            exp_values.pop(":t", None)
+            if not update_parts:
+                profile_resp = table.get_item(
+                    Key={"PK": _user_pk(user_id), "SK": _SK_METADATA},
+                )
+                return _user_from_item(profile_resp["Item"])
     resp = table.update_item(
         Key={"PK": _user_pk(user_id), "SK": _SK_METADATA},
-        UpdateExpression=update_exp,
+        UpdateExpression="SET " + ", ".join(update_parts),
         ExpressionAttributeValues=exp_values,
         ReturnValues="ALL_NEW",
     )
@@ -1201,8 +1217,9 @@ class DynamoDBReportStore(ReportStore):
         self,
         sub: str,
         iss: str,
-        email: str,
+        email: str | None = None,
         display_name: str | None = None,
+        preferred_username: str | None = None,
     ) -> User:
         """Get an existing user by (iss, sub), or create one on first login."""
 
@@ -1233,6 +1250,7 @@ class DynamoDBReportStore(ReportStore):
                     "iss": iss,
                     "email": email,
                     "display_name": display_name,
+                    "preferred_username": preferred_username,
                     "created_at": now,
                     "last_login": now,
                     "archived_at": None,
@@ -1266,6 +1284,7 @@ class DynamoDBReportStore(ReportStore):
                 iss=iss,
                 email=email,
                 display_name=display_name,
+                preferred_username=preferred_username,
                 created_at=now,
                 last_login=now,
                 archived_at=None,
@@ -1276,8 +1295,9 @@ class DynamoDBReportStore(ReportStore):
     async def update_user_profile(
         self,
         user_id: str,
-        email: str,
+        email: str | None = None,
         display_name: str | None = None,
+        preferred_username: str | None = None,
         token_iat: datetime | None = None,
     ) -> User:
         """Sync mutable profile fields, writing only what has changed."""
@@ -1292,18 +1312,20 @@ class DynamoDBReportStore(ReportStore):
                 raise ValueError(f"User {user_id!r} not found")
             stored_user = _user_from_item(item)
 
-            email_changed = stored_user.email != email
+            email_changed = email is not None and stored_user.email != email
             name_changed = display_name is not None and stored_user.display_name != display_name
+            username_changed = preferred_username is not None and stored_user.preferred_username != preferred_username
             iat_newer = token_iat is not None and token_iat > datetime.fromisoformat(stored_user.last_login)
 
-            if not (email_changed or name_changed or iat_newer):
+            if not (email_changed or name_changed or username_changed or iat_newer):
                 return stored_user
 
             return _update_user_profile_internal(
                 table,
                 user_id,
-                email,
+                email if email_changed else None,
                 display_name if name_changed else None,
+                preferred_username if username_changed else None,
                 token_iat if iat_newer else None,
             )
 

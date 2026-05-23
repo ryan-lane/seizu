@@ -139,8 +139,9 @@ class User(BaseModel):
     user_id: str
     sub: str
     iss: str
-    email: str
+    email: str | None = None
     display_name: str | None = None
+    preferred_username: str | None = None
     created_at: str
     last_login: str
     archived_at: str | None = None

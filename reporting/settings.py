@@ -69,8 +69,10 @@ ALLOWED_JWT_ALGORITHMS = list_env("ALLOWED_JWT_ALGORITHMS", ["RS256", "ES256", "
 # Use "Authorization" (default) for standard Bearer token auth (e.g. OIDC PKCE).
 # Use "x-amzn-oidc-data" for backwards compatibility with AWS ALB OIDC headers.
 JWT_HEADER_NAME = str_env("JWT_HEADER_NAME", "Authorization")
-# The JWT claim that contains the user's email address.
+# Optional JWT claim that contains the user's email address.
 JWT_EMAIL_CLAIM = str_env("JWT_EMAIL_CLAIM", "email")
+# Optional JWT claim that contains the user's preferred username.
+JWT_USERNAME_CLAIM = str_env("JWT_USERNAME_CLAIM", "preferred_username")
 # The JWT claim that contains the user's subject identifier.
 # The OIDC standard claim is "sub" and it should not be changed in most cases.
 JWT_SUB_CLAIM = str_env("JWT_SUB_CLAIM", "sub")

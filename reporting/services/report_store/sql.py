@@ -3,7 +3,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 from snowflake import SnowflakeGenerator
-from sqlalchemy import JSON, Column, UniqueConstraint, and_, null, update
+from sqlalchemy import JSON, Column, UniqueConstraint, and_, null, text, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, create_async_engine
 from sqlmodel import Field, SQLModel, col, select
@@ -81,8 +81,9 @@ class UserRecord(SQLModel, table=True):  # type: ignore
     user_id: str = Field(primary_key=True)
     sub: str
     iss: str
-    email: str
+    email: str | None = None
     display_name: str | None = None
+    preferred_username: str | None = None
     created_at: str
     last_login: str
     archived_at: str | None = None
@@ -344,6 +345,7 @@ def _user_from_record(record: UserRecord) -> User:
         iss=record.iss,
         email=record.email,
         display_name=record.display_name,
+        preferred_username=record.preferred_username,
         created_at=record.created_at,
         last_login=record.last_login,
         archived_at=record.archived_at,
@@ -381,6 +383,14 @@ class SQLModelReportStore(ReportStore):
         try:
             async with _get_engine().begin() as conn:
                 await conn.run_sync(SQLModel.metadata.create_all)
+                if conn.dialect.name == "postgresql":
+                    await conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS preferred_username VARCHAR"))
+                    await conn.execute(text("ALTER TABLE users ALTER COLUMN email DROP NOT NULL"))
+                elif conn.dialect.name == "sqlite":
+                    columns = await conn.execute(text("PRAGMA table_info(users)"))
+                    column_names = {row[1] for row in columns}
+                    if "preferred_username" not in column_names:
+                        await conn.execute(text("ALTER TABLE users ADD COLUMN preferred_username VARCHAR"))
             logger.info("SQL report store tables initialised")
         except IntegrityError:
             logger.info("SQL report store tables already exist")
@@ -946,8 +956,9 @@ class SQLModelReportStore(ReportStore):
         self,
         sub: str,
         iss: str,
-        email: str,
+        email: str | None = None,
         display_name: str | None = None,
+        preferred_username: str | None = None,
     ) -> User:
         now = datetime.now(tz=UTC).isoformat()
         async with AsyncSession(_get_engine()) as session:
@@ -962,6 +973,7 @@ class SQLModelReportStore(ReportStore):
                     iss=iss,
                     email=email,
                     display_name=display_name,
+                    preferred_username=preferred_username,
                     created_at=now,
                     last_login=now,
                     archived_at=None,
@@ -981,8 +993,9 @@ class SQLModelReportStore(ReportStore):
     async def update_user_profile(
         self,
         user_id: str,
-        email: str,
+        email: str | None = None,
         display_name: str | None = None,
+        preferred_username: str | None = None,
         token_iat: datetime | None = None,
     ) -> User:
         async with AsyncSession(_get_engine()) as session:
@@ -990,11 +1003,14 @@ class SQLModelReportStore(ReportStore):
             if not record:
                 raise ValueError(f"User {user_id!r} not found")
             changed = False
-            if record.email != email:
+            if email is not None and record.email != email:
                 record.email = email
                 changed = True
             if display_name is not None and record.display_name != display_name:
                 record.display_name = display_name
+                changed = True
+            if preferred_username is not None and record.preferred_username != preferred_username:
+                record.preferred_username = preferred_username
                 changed = True
             if token_iat is not None:
                 stored = datetime.fromisoformat(record.last_login)

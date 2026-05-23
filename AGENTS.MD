@@ -101,7 +101,8 @@ React 19 + TypeScript + Bun + Material-UI + MUI X Charts + `@xyflow/react`.
 - `src/hooks/useCurrentUser.ts` — `useCurrentUser()` → `GET /api/v1/me`
 - `src/hooks/useUser.ts` — `useUser(userId)` → `GET /api/v1/users/<userId>`
 - `src/components/UserAvatar.tsx` — `boring-avatars` pixel avatar; use `<UserAvatar name={...} />`
-- `src/components/UserDisplay.tsx` — resolves `created_by` user_id to `display_name ?? email`; use `<UserDisplay userId={...} />`
+- `src/components/UserDisplay.tsx` — resolves `created_by` user_id to `display_name ?? preferred_username ?? email ?? "Unknown user"`; use `<UserDisplay userId={...} />`
+- Durable identity is `(iss, sub)`. Email, display name, and preferred username are optional profile/display metadata, not identity.
 - **Never** display raw user_ids or `sub` values in the UI.
 
 ### Backend (`reporting/`)
@@ -328,7 +329,8 @@ Two authentication mechanisms resolve to the same `CurrentUser`:
 | Env var | Default | Notes |
 |---------|---------|-------|
 | `JWKS_URL` | `""` | JWKS endpoint |
-| `JWT_EMAIL_CLAIM` | `email` | JWT claim for email |
+| `JWT_EMAIL_CLAIM` | `email` | Optional JWT claim for email/profile display |
+| `JWT_USERNAME_CLAIM` | `preferred_username` | Optional JWT claim for username/profile display |
 | `JWT_ISSUER` | `""` | Optional issuer check |
 | `JWT_AUDIENCE` | `""` | Must match OIDC client ID when using Authentik |
 | `DEVELOPMENT_ONLY_REQUIRE_AUTH` | `true` | Set `false` to bypass auth in dev |

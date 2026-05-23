@@ -260,11 +260,13 @@ def _validate_introspection_claims(data: dict[str, Any], metadata: OIDCMetadata)
     still needs to ensure the token is intended for this client/API and carries
     the identity claims the rest of the auth stack requires.
     """
-    expected_issuer_claim = settings.JWT_ISS_CLAIM
-    if expected_issuer_claim not in data:
-        data[expected_issuer_claim] = data.get("iss", metadata.issuer)
+    normalized = dict(data)
 
-    issuer = data.get(expected_issuer_claim) or data.get("iss")
+    expected_issuer_claim = settings.JWT_ISS_CLAIM
+    if expected_issuer_claim not in normalized:
+        normalized[expected_issuer_claim] = normalized.get("iss", metadata.issuer)
+
+    issuer = normalized.get(expected_issuer_claim) or normalized.get("iss")
     if not isinstance(issuer, str) or not issuer:
         raise OAuthClientError(f"Introspection response missing required claim: {expected_issuer_claim}")
     expected_issuers = _expected_issuers()
@@ -272,17 +274,20 @@ def _validate_introspection_claims(data: dict[str, Any], metadata: OIDCMetadata)
         raise OAuthClientError(f"Token issuer mismatch: got {issuer!r}, expected one of {sorted(expected_issuers)!r}")
 
     expected_audiences = {value for value in (settings.JWT_AUDIENCE, settings.OIDC_CLIENT_ID) if value}
-    audiences = set(_claim_list(data.get("aud")))
-    client_id = data.get("client_id")
+    audiences = set(_claim_list(normalized.get("aud")))
+    client_id = normalized.get("client_id")
     if expected_audiences and not audiences.intersection(expected_audiences) and client_id not in expected_audiences:
         raise OAuthClientError("Token introspection response is not intended for this client")
 
-    for claim_name in (settings.JWT_SUB_CLAIM, settings.JWT_EMAIL_CLAIM):
-        claim_value = data.get(claim_name)
-        if not isinstance(claim_value, str) or not claim_value:
-            raise OAuthClientError(f"Introspection response missing required claim: {claim_name}")
+    subject = normalized.get(settings.JWT_SUB_CLAIM)
+    if not isinstance(subject, str) or not subject:
+        raise OAuthClientError(f"Introspection response missing required claim: {settings.JWT_SUB_CLAIM}")
+    for claim_name in (settings.JWT_EMAIL_CLAIM, settings.JWT_USERNAME_CLAIM):
+        claim_value = normalized.get(claim_name)
+        if claim_value is not None and not isinstance(claim_value, str):
+            raise OAuthClientError(f"Introspection response has invalid claim: {claim_name}")
 
-    return data
+    return normalized
 
 
 def _coerce_token(data: Any) -> TokenResponse:
