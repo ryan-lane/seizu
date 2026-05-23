@@ -317,7 +317,13 @@ async def test_introspect_token_returns_claims_when_active(mocker):
             return None
 
         def json(self):
-            return {"active": True, "sub": "user-1", "email": "u@example.com"}
+            return {
+                "active": True,
+                "sub": "user-1",
+                "email": "u@example.com",
+                "iss": "http://localhost:9000/application/o/seizu",
+                "client_id": "seizu",
+            }
 
     class FakeOAuthClient:
         async def __aenter__(self):
@@ -347,6 +353,81 @@ async def test_introspect_token_returns_claims_when_active(mocker):
             ("client_auth", "none"),
         )
     ]
+
+
+async def test_introspect_token_rejects_wrong_audience(mocker):
+    mocker.patch(
+        "reporting.services.oauth_client.get_metadata",
+        mocker.AsyncMock(return_value=_introspection_metadata()),
+    )
+
+    class FakeResponse:
+        def raise_for_status(self) -> None:
+            return None
+
+        def json(self):
+            return {
+                "active": True,
+                "sub": "user-1",
+                "email": "u@example.com",
+                "iss": "http://localhost:9000/application/o/seizu",
+                "client_id": "other-client",
+            }
+
+    class FakeOAuthClient:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return None
+
+        def client_auth(self, method):
+            return None
+
+        async def introspect_token(self, url, token, token_type_hint, body, auth):
+            return FakeResponse()
+
+    mocker.patch("reporting.services.oauth_client._build_oauth_client", return_value=FakeOAuthClient())
+
+    with pytest.raises(oauth_client.OAuthClientError, match="not intended for this client"):
+        await oauth_client.introspect_token(token="opaque-at")
+
+
+async def test_introspect_token_rejects_missing_identity_claim(mocker):
+    mocker.patch(
+        "reporting.services.oauth_client.get_metadata",
+        mocker.AsyncMock(return_value=_introspection_metadata()),
+    )
+
+    class FakeResponse:
+        def raise_for_status(self) -> None:
+            return None
+
+        def json(self):
+            return {
+                "active": True,
+                "sub": "user-1",
+                "iss": "http://localhost:9000/application/o/seizu",
+                "client_id": "seizu",
+            }
+
+    class FakeOAuthClient:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return None
+
+        def client_auth(self, method):
+            return None
+
+        async def introspect_token(self, url, token, token_type_hint, body, auth):
+            return FakeResponse()
+
+    mocker.patch("reporting.services.oauth_client._build_oauth_client", return_value=FakeOAuthClient())
+
+    with pytest.raises(oauth_client.OAuthClientError, match="email"):
+        await oauth_client.introspect_token(token="opaque-at")
 
 
 async def test_introspect_token_raises_when_inactive(mocker):
@@ -516,6 +597,7 @@ async def test_validate_id_token_rejects_nonce_mismatch(mocker):
         exp=now + 3600,
         iat=now,
         nonce="real-nonce",
+        sub="user-1",
     )
 
     with pytest.raises(oauth_client.OAuthClientError, match="nonce mismatch"):
@@ -535,6 +617,7 @@ async def test_validate_id_token_rejects_issuer_mismatch(mocker):
         exp=now + 3600,
         iat=now,
         nonce="n",
+        sub="user-1",
     )
 
     with pytest.raises(oauth_client.OAuthClientError, match="issuer mismatch"):
@@ -554,9 +637,50 @@ async def test_validate_id_token_rejects_bad_audience(mocker):
         exp=now + 3600,
         iat=now,
         nonce="n",
+        sub="user-1",
     )
 
     with pytest.raises(oauth_client.OAuthClientError, match="validation failed"):
+        await oauth_client.validate_id_token(id_token=token, nonce="n")
+
+
+async def test_validate_id_token_requires_subject(mocker):
+    mocker.patch(
+        "reporting.services.oauth_client.get_metadata",
+        mocker.AsyncMock(return_value=_introspection_metadata()),
+    )
+    _patch_idtoken_jwks(mocker)
+    now = int(time.time())
+    token = _sign_id_token(
+        iss="http://localhost:9000/application/o/seizu",
+        aud="seizu",
+        exp=now + 3600,
+        iat=now,
+        nonce="n",
+    )
+
+    with pytest.raises(oauth_client.OAuthClientError, match="validation failed"):
+        await oauth_client.validate_id_token(id_token=token, nonce="n")
+
+
+async def test_validate_id_token_rejects_bad_authorized_party(mocker):
+    mocker.patch(
+        "reporting.services.oauth_client.get_metadata",
+        mocker.AsyncMock(return_value=_introspection_metadata()),
+    )
+    _patch_idtoken_jwks(mocker)
+    now = int(time.time())
+    token = _sign_id_token(
+        iss="http://localhost:9000/application/o/seizu",
+        aud=["seizu", "other-api"],
+        azp="other-client",
+        exp=now + 3600,
+        iat=now,
+        nonce="n",
+        sub="user-1",
+    )
+
+    with pytest.raises(oauth_client.OAuthClientError, match="authorized party"):
         await oauth_client.validate_id_token(id_token=token, nonce="n")
 
 

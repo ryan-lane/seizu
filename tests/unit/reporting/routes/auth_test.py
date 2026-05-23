@@ -222,6 +222,34 @@ async def test_callback_rejects_invalid_id_token(mocker):
     assert "seizu_session" not in resp.cookies
 
 
+async def test_callback_rejects_missing_id_token_when_validation_enabled(mocker):
+    mocker.patch("reporting.services.oauth_client.get_metadata", AsyncMock(return_value=_mock_metadata()))
+    validate = mocker.patch("reporting.services.oauth_client.validate_id_token", AsyncMock())
+    mocker.patch(
+        "reporting.services.oauth_client.exchange_code",
+        AsyncMock(return_value=_mock_token_response(refresh_token="rt-1", id_token=None)),
+    )
+    state = "matching-state"
+    state_payload = oauth_state_cookie.OAuthStatePayload(
+        state=state,
+        verifier="verifier-1",
+        return_to="/reports/abc",
+        exp=int(time.time()) + 60,
+        nonce="nonce-1",
+    )
+    app = create_app()
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        client.cookies.set(oauth_state_cookie.STATE_COOKIE_NAME, oauth_state_cookie.encrypt(state_payload))
+        resp = await client.get(
+            "/api/v1/auth/callback",
+            params={"code": "auth-code", "state": state},
+            follow_redirects=False,
+        )
+    assert resp.status_code == 400
+    assert "seizu_session" not in resp.cookies
+    validate.assert_not_called()
+
+
 async def test_callback_rejects_when_idp_returns_no_refresh_token(mocker):
     mocker.patch("reporting.services.oauth_client.get_metadata", AsyncMock(return_value=_mock_metadata()))
     mocker.patch(

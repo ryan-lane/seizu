@@ -218,7 +218,7 @@ async def validate_id_token(*, id_token: str, nonce: str | None) -> dict[str, An
             signing_key.key,
             algorithms=settings.ALLOWED_JWT_ALGORITHMS,
             audience=settings.OIDC_CLIENT_ID,
-            options={"require": ["exp", "iat", "aud"]},
+            options={"require": ["exp", "iat", "aud", "iss", "sub"]},
         )
     except jwt.PyJWTError as exc:
         raise OAuthClientError(f"ID token validation failed: {exc}") from exc
@@ -230,12 +230,59 @@ async def validate_id_token(*, id_token: str, nonce: str | None) -> dict[str, An
             f"ID token issuer mismatch: got {claims.get('iss')!r}, expected one of {sorted(expected_issuers)!r}"
         )
 
+    azp = claims.get("azp")
+    if azp is not None and azp != settings.OIDC_CLIENT_ID:
+        raise OAuthClientError("ID token authorized party mismatch")
+    aud = claims.get("aud")
+    if isinstance(aud, list) and len(aud) > 1 and azp != settings.OIDC_CLIENT_ID:
+        raise OAuthClientError("ID token with multiple audiences must identify this client as azp")
+
     if nonce is not None:
         token_nonce = claims.get("nonce")
         if not isinstance(token_nonce, str) or not secrets.compare_digest(token_nonce, nonce):
             raise OAuthClientError("ID token nonce mismatch")
 
     return claims
+
+
+def _claim_list(value: Any) -> list[str]:
+    if isinstance(value, str):
+        return [value]
+    if isinstance(value, list) and all(isinstance(item, str) for item in value):
+        return value
+    return []
+
+
+def _validate_introspection_claims(data: dict[str, Any], metadata: OIDCMetadata) -> dict[str, Any]:
+    """Validate and normalize an RFC 7662 introspection response.
+
+    Introspection proves the token is active at the configured IDP, but Seizu
+    still needs to ensure the token is intended for this client/API and carries
+    the identity claims the rest of the auth stack requires.
+    """
+    expected_issuer_claim = settings.JWT_ISS_CLAIM
+    if expected_issuer_claim not in data:
+        data[expected_issuer_claim] = data.get("iss", metadata.issuer)
+
+    issuer = data.get(expected_issuer_claim) or data.get("iss")
+    if not isinstance(issuer, str) or not issuer:
+        raise OAuthClientError(f"Introspection response missing required claim: {expected_issuer_claim}")
+    expected_issuers = _expected_issuers()
+    if expected_issuers and _normalize_issuer(issuer) not in expected_issuers:
+        raise OAuthClientError(f"Token issuer mismatch: got {issuer!r}, expected one of {sorted(expected_issuers)!r}")
+
+    expected_audiences = {value for value in (settings.JWT_AUDIENCE, settings.OIDC_CLIENT_ID) if value}
+    audiences = set(_claim_list(data.get("aud")))
+    client_id = data.get("client_id")
+    if expected_audiences and not audiences.intersection(expected_audiences) and client_id not in expected_audiences:
+        raise OAuthClientError("Token introspection response is not intended for this client")
+
+    for claim_name in (settings.JWT_SUB_CLAIM, settings.JWT_EMAIL_CLAIM):
+        claim_value = data.get(claim_name)
+        if not isinstance(claim_value, str) or not claim_value:
+            raise OAuthClientError(f"Introspection response missing required claim: {claim_name}")
+
+    return data
 
 
 def _coerce_token(data: Any) -> TokenResponse:
@@ -429,4 +476,4 @@ async def introspect_token(*, token: str) -> dict[str, Any]:
 
     if not isinstance(data, dict) or not data.get("active"):
         raise OAuthClientError("Token is inactive or introspection returned no claims")
-    return data
+    return _validate_introspection_claims(data, metadata)

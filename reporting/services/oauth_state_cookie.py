@@ -2,7 +2,7 @@
 
 When the browser hits ``GET /api/v1/auth/login``, the backend generates a
 PKCE verifier + challenge and a random OAuth ``state`` value, then sets this
-cookie containing ``{state, verifier, return_to, exp}``. The cookie travels
+cookie containing ``{state, verifier, return_to, exp, nonce}``. The cookie travels
 with the user through the IDP and back to ``/api/v1/auth/callback``, where
 the backend verifies ``state`` matches the callback's query parameter and
 uses ``verifier`` to complete the PKCE exchange.

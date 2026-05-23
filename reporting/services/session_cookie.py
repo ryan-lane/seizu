@@ -6,10 +6,12 @@ After AES-GCM decryption, the payload is a JSON object with four fields:
 - ``rt``       — the opaque IDP refresh token
 - ``id_token`` — the ID token from login, used only as an RP logout hint
 - ``iat``      — unix timestamp the session was first established
-- ``abs_exp``  — unix timestamp upper bound; rolling refreshes never extend
-                 the cookie past this point. Set at login time to the IDP
-                 refresh token's own ``refresh_expires_in`` (or, if the IDP
-                 doesn't advertise one, ``iat`` + 30 days).
+- ``abs_exp``  — unix timestamp upper bound for the current refresh token
+                 lifetime. Set at login time to the IDP refresh token's own
+                 ``refresh_expires_in`` (or, if the IDP doesn't advertise one,
+                 ``iat`` + 30 days). When the IDP rotates the refresh token and
+                 advertises a fresh lifetime, the auth route rolls this value
+                 forward to match the new token.
 
 Wire format: ``base64url(nonce || ciphertext_and_tag)`` where the plaintext
 is the JSON-encoded payload above. AES-GCM provides authenticated encryption,

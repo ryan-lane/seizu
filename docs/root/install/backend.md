@@ -114,6 +114,8 @@ seizu validates JWTs using `PyJWKClient` against any standard OIDC JWKS endpoint
 * ``DEVELOPMENT_ONLY_REQUIRE_AUTH``: whether or not to require authentication. This option should only be changed in development; default: ``True``
 * ``DEVELOPMENT_ONLY_AUTH_USER_EMAIL``: the email address of the fake user when authentication is disabled. This option should only be changed in development; default: ``testuser``
 
+For browser sessions, Seizu stores the IDP refresh token and the ID token in an encrypted, HttpOnly session cookie. The ID token is kept so logout can send it back to the provider as ``id_token_hint`` for RP-initiated logout. Configure the OIDC provider to issue compact Seizu-specific ID tokens: include standard identity claims and one Seizu role claim, but avoid all-groups, nested-groups, permissions arrays, or large profile/custom claims. Large ID tokens can exceed browser or proxy cookie limits and cause login, refresh, or logout failures. As a practical target, keep Seizu ID tokens below roughly 2 KB, especially when the provider issues long refresh tokens.
+
 #### Security / cookie settings
 
 * ``TALISMAN_FORCE_HTTPS``: redirect HTTP requests to HTTPS and enable HSTS. Set to ``False`` when running behind an SSL-terminating load balancer or in local development; default: ``True``
@@ -136,6 +138,8 @@ Seizu reads the user's role from a single JWT claim set by the OIDC provider. Co
 
 * ``RBAC_ROLE_CLAIM``: JWT claim name that holds the user's Seizu role; default: ``seizu_role``
 * ``RBAC_DEFAULT_ROLE``: Role assigned when the JWT has no ``RBAC_ROLE_CLAIM``. Set to ``""`` to deny access to users without an explicit role claim. Valid values: ``"seizu-viewer"``, ``"seizu-editor"``, ``"seizu-admin"``, or any user-defined role name; default: ``"seizu-viewer"``
+
+Prefer mapping provider groups to a single Seizu role claim instead of sending full group membership to Seizu. This keeps tokens small, avoids exposing unrelated group names to Seizu, and makes user-defined role resolution independent of provider-specific group naming.
 
 If a user needs ad-hoc Cypher access, create a narrow custom role that includes `query:execute` and assign it only to trusted operators. Keep general report consumers on `seizu-viewer` so they can use signed report panels without console access.
 

@@ -242,7 +242,10 @@ async def auth_callback(
     # Validate the ID token (signature, audience, issuer, nonce) before trusting
     # the token response. PKCE already binds the code to this client; the nonce
     # check additionally binds the ID token to *this* login request.
-    if settings.OIDC_VALIDATE_ID_TOKEN and token_response.id_token:
+    if settings.OIDC_VALIDATE_ID_TOKEN:
+        if not token_response.id_token:
+            logger.warning("IDP token response did not include an ID token")
+            return _callback_error_response("Missing ID token")
         try:
             await oauth_client.validate_id_token(
                 id_token=token_response.id_token,
