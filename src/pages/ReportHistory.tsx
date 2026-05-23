@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import {
   useParams,
   useNavigate,
@@ -6,26 +5,11 @@ import {
   Link as RouterLink,
 } from 'react-router-dom';
 import { Helmet } from 'react-helmet';
-import {
-  Box,
-  Button,
-  CircularProgress,
-  Divider,
-  IconButton,
-  Link,
-  ListItemIcon,
-  ListItemText,
-  Menu,
-  MenuItem,
-  Tooltip,
-  Typography,
-} from '@mui/material';
+import { Box, Button, Link, Typography } from '@mui/material';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import HistoryIcon from '@mui/icons-material/History';
-import MoreVertIcon from '@mui/icons-material/MoreVert';
 import RestoreIcon from '@mui/icons-material/Restore';
 import VisibilityIcon from '@mui/icons-material/Visibility';
-import Error from '@mui/icons-material/Error';
 
 import {
   ReportVersion,
@@ -38,6 +22,8 @@ import ListTable, {
   listTableActionColumnSx,
   listTableSecondaryCellSx,
 } from 'src/components/ListTable';
+import ListViewState from 'src/components/ListViewState';
+import RowMenu, { RowMenuAction } from 'src/components/RowMenu';
 import UserDisplay from 'src/components/UserDisplay';
 import { usePermissions } from 'src/hooks/usePermissions';
 import type { BackState } from 'src/navigation';
@@ -48,93 +34,6 @@ const authorColumnSx = { ...listTableSecondaryCellSx, width: 150 };
 const commentColumnSx = { ...listTableSecondaryCellSx, width: '34%' };
 
 // ---------------------------------------------------------------------------
-// Per-row overflow menu
-// ---------------------------------------------------------------------------
-
-interface RowMenuProps {
-  version: ReportVersion;
-  isCurrent: boolean;
-  onView: () => void;
-  onRestore: () => void;
-}
-
-function RowMenu({
-  version: _version,
-  isCurrent,
-  onView,
-  onRestore,
-}: RowMenuProps) {
-  const [anchor, setAnchor] = useState<null | HTMLElement>(null);
-  const hasPermission = usePermissions();
-  const close = () => setAnchor(null);
-
-  const canWrite = hasPermission('reports:write');
-  const restoreDisabled = isCurrent || !canWrite;
-  const restoreTooltip = isCurrent
-    ? 'This is already the current version'
-    : !canWrite
-      ? 'You do not have permission to restore report versions'
-      : '';
-
-  return (
-    <>
-      <Tooltip title="More actions">
-        <IconButton
-          aria-label="More actions"
-          size="small"
-          onClick={(e) => setAnchor(e.currentTarget)}
-        >
-          <MoreVertIcon fontSize="small" />
-        </IconButton>
-      </Tooltip>
-
-      <Menu
-        anchorEl={anchor}
-        open={!!anchor}
-        onClose={close}
-        anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
-        transformOrigin={{ vertical: 'top', horizontal: 'right' }}
-        slotProps={{ paper: { sx: { minWidth: 180 } } }}
-      >
-        <MenuItem
-          onClick={() => {
-            onView();
-            close();
-          }}
-        >
-          <ListItemIcon>
-            <VisibilityIcon fontSize="small" />
-          </ListItemIcon>
-          <ListItemText>View</ListItemText>
-        </MenuItem>
-
-        <Divider />
-
-        <Tooltip title={restoreTooltip} placement="left">
-          <span>
-            <MenuItem
-              onClick={() => {
-                onRestore();
-                close();
-              }}
-              disabled={restoreDisabled}
-            >
-              <ListItemIcon>
-                <RestoreIcon
-                  fontSize="small"
-                  color={restoreDisabled ? 'disabled' : 'inherit'}
-                />
-              </ListItemIcon>
-              <ListItemText>Restore</ListItemText>
-            </MenuItem>
-          </span>
-        </Tooltip>
-      </Menu>
-    </>
-  );
-}
-
-// ---------------------------------------------------------------------------
 // Page
 // ---------------------------------------------------------------------------
 
@@ -142,6 +41,7 @@ function ReportHistory() {
   const { id } = useParams();
   const navigate = useNavigate();
   const location = useLocation();
+  const hasPermission = usePermissions();
   const { fromLabel, originReturnTo } = (location.state ?? {}) as BackState;
 
   const { versions, loading, error } = useReportVersionsList(id);
@@ -156,6 +56,36 @@ function ReportHistory() {
     returnTo: `/app/reports/${id}/history`,
     originReturnTo: historyBackTarget,
   } satisfies BackState;
+
+  const rowActions = (version: ReportVersion): RowMenuAction[] => {
+    const isCurrent = version.version === latestVersion;
+    const canWrite = hasPermission('reports:write');
+    return [
+      {
+        key: 'view',
+        label: 'View',
+        icon: <VisibilityIcon fontSize="small" />,
+        onClick: () =>
+          navigate(`/app/reports/${id}/versions/${version.version}`, {
+            state: versionBackState,
+          }),
+      },
+      {
+        key: 'restore',
+        label: 'Restore',
+        icon: <RestoreIcon fontSize="small" />,
+        onClick: () => handleRestore(version),
+        disabled: isCurrent || !canWrite,
+        tooltip: isCurrent
+          ? 'This is already the current version'
+          : !canWrite
+            ? 'You do not have permission to restore report versions'
+            : undefined,
+        dividerBefore: true,
+      },
+    ];
+  };
+
   const columns: ListTableColumn<ReportVersion>[] = [
     {
       key: 'version',
@@ -215,18 +145,7 @@ function ReportHistory() {
       key: 'actions',
       align: 'right',
       cellSx: listTableActionColumnSx,
-      render: (version) => (
-        <RowMenu
-          version={version}
-          isCurrent={version.version === latestVersion}
-          onView={() =>
-            navigate(`/app/reports/${id}/versions/${version.version}`, {
-              state: versionBackState,
-            })
-          }
-          onRestore={() => handleRestore(version)}
-        />
-      ),
+      render: (version) => <RowMenu actions={rowActions(version)} />,
     },
   ];
 
@@ -267,20 +186,11 @@ function ReportHistory() {
           </Typography>
         </Box>
 
-        {loading && (
-          <Box sx={{ display: 'flex', justifyContent: 'center', p: 4 }}>
-            <CircularProgress />
-          </Box>
-        )}
-
-        {error && (
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-            <Error />
-            <Typography>Failed to load version history</Typography>
-          </Box>
-        )}
-
-        {!loading && !error && (
+        <ListViewState
+          loading={loading}
+          error={error}
+          errorMessage="Failed to load version history"
+        >
           <ListTable
             rows={sorted}
             columns={columns}
@@ -288,7 +198,7 @@ function ReportHistory() {
             emptyMessage="No versions found."
             pagination={false}
           />
-        )}
+        </ListViewState>
       </Box>
     </>
   );

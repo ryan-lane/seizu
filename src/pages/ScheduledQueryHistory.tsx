@@ -1,23 +1,10 @@
 import { useState } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { Helmet } from 'react-helmet';
-import {
-  Box,
-  Button,
-  CircularProgress,
-  IconButton,
-  ListItemIcon,
-  ListItemText,
-  Menu,
-  MenuItem,
-  Tooltip,
-  Typography,
-} from '@mui/material';
+import { Box, Button, Typography } from '@mui/material';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import HistoryIcon from '@mui/icons-material/History';
-import MoreVertIcon from '@mui/icons-material/MoreVert';
 import RestoreIcon from '@mui/icons-material/Restore';
-import Error from '@mui/icons-material/Error';
 
 import {
   ScheduledQueryVersion,
@@ -29,6 +16,8 @@ import ListTable, {
   listTableActionColumnSx,
   listTableSecondaryCellSx,
 } from 'src/components/ListTable';
+import ListViewState from 'src/components/ListViewState';
+import RowMenu, { RowMenuAction } from 'src/components/RowMenu';
 import UserDisplay from 'src/components/UserDisplay';
 import ScheduledQueryDetailDialog, {
   ScheduledQueryViewData,
@@ -42,73 +31,6 @@ const authorColumnSx = { ...listTableSecondaryCellSx, width: 150 };
 const commentColumnSx = { ...listTableSecondaryCellSx, width: '28%' };
 
 // ---------------------------------------------------------------------------
-// Per-row overflow menu
-// ---------------------------------------------------------------------------
-
-interface RowMenuProps {
-  version: ScheduledQueryVersion;
-  isCurrent: boolean;
-  onRestore: () => void;
-}
-
-function RowMenu({ version: _version, isCurrent, onRestore }: RowMenuProps) {
-  const [anchor, setAnchor] = useState<null | HTMLElement>(null);
-  const hasPermission = usePermissions();
-  const close = () => setAnchor(null);
-
-  const canWrite = hasPermission('scheduled_queries:write');
-  const restoreDisabled = isCurrent || !canWrite;
-  const restoreTooltip = isCurrent
-    ? 'This is already the current version'
-    : !canWrite
-      ? 'You do not have permission to restore scheduled query versions'
-      : '';
-
-  return (
-    <>
-      <Tooltip title="More actions">
-        <IconButton
-          aria-label="More actions"
-          size="small"
-          onClick={(e) => setAnchor(e.currentTarget)}
-        >
-          <MoreVertIcon fontSize="small" />
-        </IconButton>
-      </Tooltip>
-
-      <Menu
-        anchorEl={anchor}
-        open={!!anchor}
-        onClose={close}
-        anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
-        transformOrigin={{ vertical: 'top', horizontal: 'right' }}
-        slotProps={{ paper: { sx: { minWidth: 180 } } }}
-      >
-        <Tooltip title={restoreTooltip} placement="left">
-          <span>
-            <MenuItem
-              onClick={() => {
-                onRestore();
-                close();
-              }}
-              disabled={restoreDisabled}
-            >
-              <ListItemIcon>
-                <RestoreIcon
-                  fontSize="small"
-                  color={restoreDisabled ? 'disabled' : 'inherit'}
-                />
-              </ListItemIcon>
-              <ListItemText>Restore</ListItemText>
-            </MenuItem>
-          </span>
-        </Tooltip>
-      </Menu>
-    </>
-  );
-}
-
-// ---------------------------------------------------------------------------
 // Page
 // ---------------------------------------------------------------------------
 
@@ -116,6 +38,7 @@ function ScheduledQueryHistory() {
   const { id } = useParams();
   const navigate = useNavigate();
   const location = useLocation();
+  const hasPermission = usePermissions();
   const { fromLabel } = (location.state ?? {}) as BackState;
 
   const { versions, loading, error } = useScheduledQueryVersionsList(
@@ -129,6 +52,26 @@ function ScheduledQueryHistory() {
   const sorted = [...versions].sort((a, b) => b.version - a.version);
   const latestVersion = sorted[0]?.version;
   const queryName = sorted[0]?.name;
+
+  const rowActions = (version: ScheduledQueryVersion): RowMenuAction[] => {
+    const isCurrent = version.version === latestVersion;
+    const canWrite = hasPermission('scheduled_queries:write');
+    return [
+      {
+        key: 'restore',
+        label: 'Restore',
+        icon: <RestoreIcon fontSize="small" />,
+        onClick: () => handleRestore(version),
+        disabled: isCurrent || !canWrite,
+        tooltip: isCurrent
+          ? 'This is already the current version'
+          : !canWrite
+            ? 'You do not have permission to restore scheduled query versions'
+            : undefined,
+      },
+    ];
+  };
+
   const columns: ListTableColumn<ScheduledQueryVersion>[] = [
     {
       key: 'version',
@@ -199,13 +142,7 @@ function ScheduledQueryHistory() {
       key: 'actions',
       align: 'right',
       cellSx: listTableActionColumnSx,
-      render: (version) => (
-        <RowMenu
-          version={version}
-          isCurrent={version.version === latestVersion}
-          onRestore={() => handleRestore(version)}
-        />
-      ),
+      render: (version) => <RowMenu actions={rowActions(version)} />,
     },
   ];
 
@@ -251,20 +188,11 @@ function ScheduledQueryHistory() {
           </Typography>
         </Box>
 
-        {loading && (
-          <Box sx={{ display: 'flex', justifyContent: 'center', p: 4 }}>
-            <CircularProgress />
-          </Box>
-        )}
-
-        {error && (
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-            <Error />
-            <Typography>Failed to load version history</Typography>
-          </Box>
-        )}
-
-        {!loading && !error && (
+        <ListViewState
+          loading={loading}
+          error={error}
+          errorMessage="Failed to load version history"
+        >
           <ListTable
             rows={sorted}
             columns={columns}
@@ -272,7 +200,7 @@ function ScheduledQueryHistory() {
             emptyMessage="No versions found."
             pagination={false}
           />
-        )}
+        </ListViewState>
       </Box>
 
       <ScheduledQueryDetailDialog

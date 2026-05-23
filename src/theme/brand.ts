@@ -1,10 +1,12 @@
-// Seizu brand tokens. Source of truth: AGENTS.MD > Branding.
+// Seizu brand tokens — the source of truth for brand color hex values.
+// (AGENTS.MD > Branding describes the brand narrative and points here for
+// the values; the design file "Seizu Brand.html" is the upstream reference.)
 //
-// Core tokens (Space/Starlight/Ember/Paper) mirror the design file
-// (Seizu Brand.html). Each accent is defined as a pair: a light tone
-// for dark surfaces and an AAA-contrast dark tone for light surfaces.
-// The chart palettes below build on these pairs — use them instead of
-// introducing new one-off colors for data visualization.
+// Core tokens (Space/Starlight/Ember/Paper) mirror the design file. Each
+// accent is defined as a pair: a light tone for dark surfaces and an
+// AAA-contrast dark tone for light surfaces. The chart palettes below build
+// on these pairs — use them instead of introducing new one-off colors for
+// data visualization.
 
 export const brand = {
   // Core surfaces

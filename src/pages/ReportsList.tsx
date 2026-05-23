@@ -15,13 +15,7 @@ import {
   DialogContent,
   DialogContentText,
   DialogTitle,
-  Divider,
-  IconButton,
   Link,
-  ListItemIcon,
-  ListItemText,
-  Menu,
-  MenuItem,
   TextField,
   Tooltip,
   Typography,
@@ -38,10 +32,8 @@ import LockIcon from '@mui/icons-material/Lock';
 import PinIcon from '@mui/icons-material/PushPin';
 import PushPinIcon from '@mui/icons-material/PushPin';
 import PushPinOutlinedIcon from '@mui/icons-material/PushPinOutlined';
-import MoreVertIcon from '@mui/icons-material/MoreVert';
 import PublicIcon from '@mui/icons-material/Public';
 import DraftsIcon from '@mui/icons-material/Drafts';
-import ErrorIcon from '@mui/icons-material/Error';
 
 import {
   ReportListItem,
@@ -57,239 +49,13 @@ import ListTable, {
   listTablePrimaryCellSx,
   listTableSecondaryCellSx,
 } from 'src/components/ListTable';
+import ListPageHeader from 'src/components/ListPageHeader';
+import ListViewState from 'src/components/ListViewState';
+import RowMenu, { RowMenuAction } from 'src/components/RowMenu';
+import ConfirmDeleteDialog from 'src/components/ConfirmDeleteDialog';
 import UserDisplay from 'src/components/UserDisplay';
 import type { BackState } from 'src/navigation';
 import { pageContentSx } from 'src/theme/layout';
-
-// ---------------------------------------------------------------------------
-// Per-row overflow menu
-// ---------------------------------------------------------------------------
-
-interface RowMenuProps {
-  report: ReportListItem;
-  isDashboard: boolean;
-  onSetDashboard: () => void;
-  onPin: () => void;
-  onEdit: () => void;
-  onHistory: () => void;
-  onClone: () => void;
-  onToggleAccess: () => void;
-  onDelete: () => void;
-  isOwner: boolean;
-  hasPermission: (permission: string) => boolean;
-}
-
-function RowMenu({
-  report,
-  isDashboard,
-  onSetDashboard,
-  onPin,
-  onEdit,
-  onHistory,
-  onClone,
-  onToggleAccess,
-  onDelete,
-  isOwner,
-  hasPermission,
-}: RowMenuProps) {
-  const [anchor, setAnchor] = useState<null | HTMLElement>(null);
-
-  const canWrite = hasPermission('reports:write');
-  const canDelete = hasPermission('reports:delete');
-  const canSetDashboard = hasPermission('reports:set_dashboard');
-  const canUpdateAccess = canWrite && isOwner;
-
-  const close = () => setAnchor(null);
-
-  return (
-    <>
-      <Tooltip title="More actions">
-        <IconButton size="small" onClick={(e) => setAnchor(e.currentTarget)}>
-          <MoreVertIcon fontSize="small" />
-        </IconButton>
-      </Tooltip>
-
-      <Menu
-        anchorEl={anchor}
-        open={!!anchor}
-        onClose={close}
-        anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
-        transformOrigin={{ vertical: 'top', horizontal: 'right' }}
-        slotProps={{ paper: { sx: { minWidth: 200 } } }}
-      >
-        <Tooltip
-          title={!canWrite ? 'You do not have permission to edit reports' : ''}
-          placement="left"
-        >
-          <span>
-            <MenuItem
-              onClick={() => {
-                onEdit();
-                close();
-              }}
-              disabled={!canWrite}
-            >
-              <ListItemIcon>
-                <EditIcon fontSize="small" />
-              </ListItemIcon>
-              <ListItemText>Edit</ListItemText>
-            </MenuItem>
-          </span>
-        </Tooltip>
-
-        <MenuItem
-          onClick={() => {
-            onHistory();
-            close();
-          }}
-        >
-          <ListItemIcon>
-            <HistoryIcon fontSize="small" />
-          </ListItemIcon>
-          <ListItemText>View history</ListItemText>
-        </MenuItem>
-
-        <Tooltip
-          title={!canWrite ? 'You do not have permission to clone reports' : ''}
-          placement="left"
-        >
-          <span>
-            <MenuItem
-              onClick={() => {
-                onClone();
-                close();
-              }}
-              disabled={!canWrite}
-            >
-              <ListItemIcon>
-                <ContentCopyIcon fontSize="small" />
-              </ListItemIcon>
-              <ListItemText>Clone</ListItemText>
-            </MenuItem>
-          </span>
-        </Tooltip>
-
-        <Tooltip
-          title={
-            !canSetDashboard
-              ? 'You do not have permission to set the dashboard'
-              : ''
-          }
-          placement="left"
-        >
-          <span>
-            <MenuItem
-              onClick={() => {
-                onSetDashboard();
-                close();
-              }}
-              disabled={
-                isDashboard ||
-                !canSetDashboard ||
-                report.access.scope !== 'public'
-              }
-            >
-              <ListItemIcon>
-                {isDashboard ? (
-                  <DashboardIcon fontSize="small" color="primary" />
-                ) : (
-                  <DashboardOutlinedIcon fontSize="small" />
-                )}
-              </ListItemIcon>
-              <ListItemText>
-                {isDashboard ? 'Current dashboard' : 'Set as dashboard'}
-              </ListItemText>
-            </MenuItem>
-          </span>
-        </Tooltip>
-
-        <Tooltip
-          title={
-            !canUpdateAccess
-              ? 'Only the report owner can publish or unpublish'
-              : ''
-          }
-          placement="left"
-        >
-          <span>
-            <MenuItem
-              onClick={() => {
-                onToggleAccess();
-                close();
-              }}
-              disabled={!canUpdateAccess}
-            >
-              <ListItemIcon>
-                {report.access.scope === 'public' ? (
-                  <LockIcon fontSize="small" />
-                ) : (
-                  <PublicIcon fontSize="small" />
-                )}
-              </ListItemIcon>
-              <ListItemText>
-                {report.access.scope === 'public' ? 'Unpublish' : 'Publish'}
-              </ListItemText>
-            </MenuItem>
-          </span>
-        </Tooltip>
-
-        <Tooltip
-          title={!canWrite ? 'You do not have permission to pin reports' : ''}
-          placement="left"
-        >
-          <span>
-            <MenuItem
-              onClick={() => {
-                onPin();
-                close();
-              }}
-              disabled={!canWrite}
-            >
-              <ListItemIcon>
-                {report.pinned ? (
-                  <PushPinIcon fontSize="small" color="primary" />
-                ) : (
-                  <PushPinOutlinedIcon fontSize="small" />
-                )}
-              </ListItemIcon>
-              <ListItemText>
-                {report.pinned ? 'Unpin from sidebar' : 'Pin to sidebar'}
-              </ListItemText>
-            </MenuItem>
-          </span>
-        </Tooltip>
-
-        <Divider />
-
-        <Tooltip
-          title={
-            !canDelete ? 'You do not have permission to delete reports' : ''
-          }
-          placement="left"
-        >
-          <span>
-            <MenuItem
-              onClick={() => {
-                onDelete();
-                close();
-              }}
-              disabled={!canDelete}
-              sx={{ color: canDelete ? 'error.main' : undefined }}
-            >
-              <ListItemIcon>
-                <DeleteIcon
-                  fontSize="small"
-                  color={canDelete ? 'error' : 'disabled'}
-                />
-              </ListItemIcon>
-              <ListItemText>Delete</ListItemText>
-            </MenuItem>
-          </span>
-        </Tooltip>
-      </Menu>
-    </>
-  );
-}
 
 // ---------------------------------------------------------------------------
 // Page
@@ -439,6 +205,104 @@ function ReportsList() {
     }
   };
 
+  const rowActions = (report: ReportListItem): RowMenuAction[] => {
+    const isDashboard = report.report_id === dashboardReportId;
+    const isOwner = currentUser?.user_id === report.created_by;
+    const canWrite = hasPermission('reports:write');
+    const canDelete = hasPermission('reports:delete');
+    const canSetDashboard = hasPermission('reports:set_dashboard');
+    const canUpdateAccess = canWrite && isOwner;
+    const isPublic = report.access.scope === 'public';
+    return [
+      {
+        key: 'edit',
+        label: 'Edit',
+        icon: <EditIcon fontSize="small" />,
+        onClick: () => navigate(`/app/reports/${report.report_id}?edit=true`),
+        disabled: !canWrite,
+        tooltip: canWrite
+          ? undefined
+          : 'You do not have permission to edit reports',
+      },
+      {
+        key: 'history',
+        label: 'View history',
+        icon: <HistoryIcon fontSize="small" />,
+        onClick: () =>
+          navigate(`/app/reports/${report.report_id}/history`, {
+            state: { fromLabel: 'Reports' } satisfies BackState,
+          }),
+      },
+      {
+        key: 'clone',
+        label: 'Clone',
+        icon: <ContentCopyIcon fontSize="small" />,
+        onClick: () => handleCloneOpen(report),
+        disabled: !canWrite,
+        tooltip: canWrite
+          ? undefined
+          : 'You do not have permission to clone reports',
+      },
+      {
+        key: 'dashboard',
+        label: isDashboard ? 'Current dashboard' : 'Set as dashboard',
+        icon: isDashboard ? (
+          <DashboardIcon fontSize="small" color="primary" />
+        ) : (
+          <DashboardOutlinedIcon fontSize="small" />
+        ),
+        onClick: () => handleSetDashboard(report.report_id),
+        disabled: isDashboard || !canSetDashboard || !isPublic,
+        tooltip: canSetDashboard
+          ? undefined
+          : 'You do not have permission to set the dashboard',
+      },
+      {
+        key: 'access',
+        label: isPublic ? 'Unpublish' : 'Publish',
+        icon: isPublic ? (
+          <LockIcon fontSize="small" />
+        ) : (
+          <PublicIcon fontSize="small" />
+        ),
+        onClick: () => handleToggleAccess(report),
+        disabled: !canUpdateAccess,
+        tooltip: canUpdateAccess
+          ? undefined
+          : 'Only the report owner can publish or unpublish',
+      },
+      {
+        key: 'pin',
+        label: report.pinned ? 'Unpin from sidebar' : 'Pin to sidebar',
+        icon: report.pinned ? (
+          <PushPinIcon fontSize="small" color="primary" />
+        ) : (
+          <PushPinOutlinedIcon fontSize="small" />
+        ),
+        onClick: () => handlePin(report.report_id, !report.pinned),
+        disabled: !canWrite,
+        tooltip: canWrite
+          ? undefined
+          : 'You do not have permission to pin reports',
+      },
+      {
+        key: 'delete',
+        label: 'Delete',
+        icon: <DeleteIcon fontSize="small" />,
+        onClick: () => {
+          setDeleteTarget(report);
+          setDeleteError(null);
+        },
+        disabled: !canDelete,
+        tooltip: canDelete
+          ? undefined
+          : 'You do not have permission to delete reports',
+        destructive: true,
+        dividerBefore: true,
+      },
+    ];
+  };
+
   const columns: ListTableColumn<ReportListItem>[] = [
     {
       key: 'name',
@@ -560,34 +424,9 @@ function ReportsList() {
       key: 'actions',
       align: 'right',
       cellSx: listTableActionColumnSx,
-      render: (report) => {
-        const isDashboard = report.report_id === dashboardReportId;
-        const isOwner = currentUser?.user_id === report.created_by;
-        return (
-          <RowMenu
-            report={report}
-            isDashboard={isDashboard}
-            onSetDashboard={() => handleSetDashboard(report.report_id)}
-            onPin={() => handlePin(report.report_id, !report.pinned)}
-            onEdit={() =>
-              navigate(`/app/reports/${report.report_id}?edit=true`)
-            }
-            onHistory={() =>
-              navigate(`/app/reports/${report.report_id}/history`, {
-                state: { fromLabel: 'Reports' } satisfies BackState,
-              })
-            }
-            onClone={() => handleCloneOpen(report)}
-            onToggleAccess={() => handleToggleAccess(report)}
-            onDelete={() => {
-              setDeleteTarget(report);
-              setDeleteError(null);
-            }}
-            isOwner={isOwner}
-            hasPermission={hasPermission}
-          />
-        );
-      },
+      render: (report) => (
+        <RowMenu actions={rowActions(report)} menuMinWidth={200} />
+      ),
     },
   ];
   const filterGroups: ListTableFilterGroup<ReportListItem>[] = useMemo(
@@ -646,40 +485,27 @@ function ReportsList() {
         <title>Reports | Seizu</title>
       </Helmet>
       <Box sx={pageContentSx}>
-        <Box
-          sx={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            mb: 3,
-          }}
+        <ListPageHeader
+          title="Reports"
+          action={
+            !permissionsLoading &&
+            hasPermission('reports:write') && (
+              <Button
+                variant="contained"
+                startIcon={<Add />}
+                onClick={() => setCreateOpen(true)}
+              >
+                New report
+              </Button>
+            )
+          }
+        />
+
+        <ListViewState
+          loading={loading}
+          error={error}
+          errorMessage="Failed to load reports"
         >
-          <Typography variant="h1">Reports</Typography>
-          {!permissionsLoading && hasPermission('reports:write') && (
-            <Button
-              variant="contained"
-              startIcon={<Add />}
-              onClick={() => setCreateOpen(true)}
-            >
-              New report
-            </Button>
-          )}
-        </Box>
-
-        {loading && (
-          <Box sx={{ display: 'flex', justifyContent: 'center', p: 4 }}>
-            <CircularProgress />
-          </Box>
-        )}
-
-        {error && (
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-            <ErrorIcon />
-            <Typography>Failed to load reports</Typography>
-          </Box>
-        )}
-
-        {!loading && !error && (
           <ListTable
             rows={reports}
             columns={columns}
@@ -687,7 +513,7 @@ function ReportsList() {
             emptyMessage="No reports yet. Create one above."
             filterGroups={filterGroups}
           />
-        )}
+        </ListViewState>
       </Box>
 
       {/* Create dialog */}
@@ -773,38 +599,17 @@ function ReportsList() {
       </Dialog>
 
       {/* Delete confirmation dialog */}
-      <Dialog
+      <ConfirmDeleteDialog
         open={!!deleteTarget}
+        title="Delete report?"
+        deleting={deleting}
+        error={deleteError}
         onClose={() => setDeleteTarget(null)}
-        maxWidth="xs"
-        fullWidth
+        onConfirm={handleDeleteConfirm}
       >
-        <DialogTitle>Delete report?</DialogTitle>
-        <DialogContent>
-          {deleteError && (
-            <Box sx={{ mb: 2 }}>
-              <Typography color="error">{deleteError}</Typography>
-            </Box>
-          )}
-          <DialogContentText>
-            Permanently delete <strong>{deleteTarget?.name}</strong> and all its
-            versions? This cannot be undone.
-          </DialogContentText>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setDeleteTarget(null)} disabled={deleting}>
-            Cancel
-          </Button>
-          <Button
-            variant="contained"
-            color="error"
-            onClick={handleDeleteConfirm}
-            disabled={deleting}
-          >
-            {deleting ? <CircularProgress size={20} /> : 'Delete'}
-          </Button>
-        </DialogActions>
-      </Dialog>
+        Permanently delete <strong>{deleteTarget?.name}</strong> and all its
+        versions? This cannot be undone.
+      </ConfirmDeleteDialog>
 
       <Dialog
         open={!!actionError}

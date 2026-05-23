@@ -4,16 +4,10 @@ import {
   Button,
   ButtonBase,
   Chip,
-  CircularProgress,
   Dialog,
   DialogActions,
   DialogContent,
   DialogTitle,
-  IconButton,
-  ListItemIcon,
-  ListItemText,
-  Menu,
-  MenuItem,
   Paper,
   Table,
   TableBody,
@@ -21,12 +15,10 @@ import {
   TableContainer,
   TableHead,
   TableRow,
-  Tooltip,
   Typography,
 } from '@mui/material';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import HistoryIcon from '@mui/icons-material/History';
-import MoreVertIcon from '@mui/icons-material/MoreVert';
 import RestoreIcon from '@mui/icons-material/Restore';
 import { useNavigate, useLocation, useParams } from 'react-router-dom';
 import { Helmet } from 'react-helmet';
@@ -41,6 +33,8 @@ import ListTable, {
   listTableActionColumnSx,
   listTableSecondaryCellSx,
 } from 'src/components/ListTable';
+import ListViewState from 'src/components/ListViewState';
+import RowMenu, { RowMenuAction } from 'src/components/RowMenu';
 import UserDisplay from 'src/components/UserDisplay';
 import { usePermissions } from 'src/hooks/usePermissions';
 import type { BackState } from 'src/navigation';
@@ -49,66 +43,6 @@ import { pageContentSx } from 'src/theme/layout';
 const savedColumnSx = { ...listTableSecondaryCellSx, width: 180 };
 const authorColumnSx = { ...listTableSecondaryCellSx, width: 150 };
 const commentColumnSx = { ...listTableSecondaryCellSx, width: '28%' };
-
-interface RowMenuProps {
-  isCurrent: boolean;
-  onRestore: () => void;
-}
-
-function RowMenu({ isCurrent, onRestore }: RowMenuProps) {
-  const [anchor, setAnchor] = useState<null | HTMLElement>(null);
-  const hasPermission = usePermissions();
-  const canWrite = hasPermission('skills:write');
-  const restoreDisabled = isCurrent || !canWrite;
-  const restoreTooltip = isCurrent
-    ? 'This is already the current version'
-    : !canWrite
-      ? 'You do not have permission to restore skill versions'
-      : '';
-  const close = () => setAnchor(null);
-
-  return (
-    <>
-      <Tooltip title="More actions">
-        <IconButton
-          aria-label="More actions"
-          size="small"
-          onClick={(e) => setAnchor(e.currentTarget)}
-        >
-          <MoreVertIcon fontSize="small" />
-        </IconButton>
-      </Tooltip>
-      <Menu
-        anchorEl={anchor}
-        open={!!anchor}
-        onClose={close}
-        anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
-        transformOrigin={{ vertical: 'top', horizontal: 'right' }}
-        slotProps={{ paper: { sx: { minWidth: 180 } } }}
-      >
-        <Tooltip title={restoreTooltip} placement="left">
-          <span>
-            <MenuItem
-              onClick={() => {
-                onRestore();
-                close();
-              }}
-              disabled={restoreDisabled}
-            >
-              <ListItemIcon>
-                <RestoreIcon
-                  fontSize="small"
-                  color={restoreDisabled ? 'disabled' : 'inherit'}
-                />
-              </ListItemIcon>
-              <ListItemText>Restore</ListItemText>
-            </MenuItem>
-          </span>
-        </Tooltip>
-      </Menu>
-    </>
-  );
-}
 
 function SkillVersionDetailDialog({
   version,
@@ -297,6 +231,7 @@ function SkillHistory() {
   );
   const { updateSkill } = useSkillMutations(skillsetId ?? '');
   const { tools: catalog } = useToolCatalog();
+  const hasPermission = usePermissions();
   const [detailVersion, setDetailVersion] = useState<SkillVersion | null>(null);
   const [missingToolsTarget, setMissingToolsTarget] =
     useState<SkillVersion | null>(null);
@@ -305,6 +240,26 @@ function SkillHistory() {
   const sorted = [...versions].sort((a, b) => b.version - a.version);
   const latestVersion = sorted[0]?.version;
   const name = sorted[0]?.name;
+
+  const rowActions = (version: SkillVersion): RowMenuAction[] => {
+    const isCurrent = version.version === latestVersion;
+    const canWrite = hasPermission('skills:write');
+    return [
+      {
+        key: 'restore',
+        label: 'Restore',
+        icon: <RestoreIcon fontSize="small" />,
+        onClick: () => handleRestoreClick(version),
+        disabled: isCurrent || !canWrite,
+        tooltip: isCurrent
+          ? 'This is already the current version'
+          : !canWrite
+            ? 'You do not have permission to restore skill versions'
+            : undefined,
+      },
+    ];
+  };
+
   const columns: ListTableColumn<SkillVersion>[] = [
     {
       key: 'version',
@@ -369,12 +324,7 @@ function SkillHistory() {
       key: 'actions',
       align: 'right',
       cellSx: listTableActionColumnSx,
-      render: (version) => (
-        <RowMenu
-          isCurrent={version.version === latestVersion}
-          onRestore={() => handleRestoreClick(version)}
-        />
-      ),
+      render: (version) => <RowMenu actions={rowActions(version)} />,
     },
   ];
 
@@ -444,10 +394,12 @@ function SkillHistory() {
           Version history{name ? ` - ${name}` : ''}
         </Typography>
       </Box>
-      {loading && <CircularProgress />}
-      {error && <Typography color="error">Failed to load history</Typography>}
       {restoreError && <Typography color="error">{restoreError}</Typography>}
-      {!loading && !error && (
+      <ListViewState
+        loading={loading}
+        error={error}
+        errorMessage="Failed to load history"
+      >
         <ListTable
           rows={sorted}
           columns={columns}
@@ -455,7 +407,7 @@ function SkillHistory() {
           emptyMessage="No versions found."
           pagination={false}
         />
-      )}
+      </ListViewState>
       <SkillVersionDetailDialog
         version={detailVersion}
         onClose={() => setDetailVersion(null)}
