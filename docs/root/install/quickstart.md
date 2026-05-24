@@ -73,11 +73,22 @@ make sync_cve
 
 ## Loading GitHub data
 
-To sync GitHub organization and repository data into the graph, add a [GitHub Personal Access Token](https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/managing-your-personal-access-tokens) to `.env`. The token needs `read:org` and `repo` scopes (or `public_repo` for public repositories only):
+To sync GitHub organization and repository data into the graph, add a [GitHub Personal Access Token](https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/managing-your-personal-access-tokens) to `.env`:
 
 ```
 CARTOGRAPHY_GITHUB_TOKEN=<your_github_pat>
 ```
+
+Use a **classic** PAT so that all data is syncable — fine-grained tokens cannot read GitHub Packages. For a complete sync, grant these scopes:
+
+- `repo` (or `public_repo` for public repositories only) — repository files, commit history, dependency manifests, collaborators, and branch protection rules
+- `read:org` — organization membership and team data
+- `read:user` — user profile information
+- `user:email` — user email addresses
+- `security_events` _(optional)_ — Dependabot alerts for private repositories
+- `read:packages` _(optional)_ — GitHub Container Registry packages, image manifests, layers, tags, and SLSA attestations
+
+For the full set of supported permissions — including fine-grained token and GitHub App alternatives — see Cartography's [GitHub module configuration docs](https://cartography-cncf.github.io/cartography/modules/github/config.html).
 
 Then run:
 
