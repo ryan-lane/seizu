@@ -54,18 +54,25 @@ const routes = [
       },
       { path: 'roles', element: <Roles /> },
       { path: 'roles/:roleId/history', element: <RoleHistory /> },
-      { path: '*', element: <Navigate to="/404" /> },
+      // Unknown /app/* paths render the 404 page inside the standard
+      // dashboard chrome (navbar + sidebar) so it matches the rest of the app.
+      { path: '*', element: <NotFound /> },
     ],
   },
   {
     path: '/',
     element: <MainLayout />,
     children: [
-      { path: '404', element: <NotFound /> },
       { path: 'logged-out', element: <LoggedOut /> },
       { path: '/', element: <Navigate to="/app/dashboard" /> },
-      { path: '*', element: <Navigate to="/404" /> },
     ],
+  },
+  // Any other unmatched top-level path also lands on the dashboard-framed 404,
+  // preserving the requested URL rather than redirecting to a bespoke route.
+  {
+    path: '*',
+    element: <DashboardLayout />,
+    children: [{ path: '*', element: <NotFound /> }],
   },
 ];
 
