@@ -12,12 +12,10 @@ cd seizu
 Start the stack:
 
 ```bash
-export NEO4J_PASSWORD=<some_value>
 make up
-make logs seizu-node
 ```
 
-Once fully started, the UI will be accessible at: http://localhost:3000
+`make up` streams logs to your terminal. Once fully started, the UI will be accessible at: http://localhost:3000
 
 The backend API (and MCP server) is accessible at: http://localhost:8080
 
@@ -67,15 +65,47 @@ make seed_dashboard
 
 ## Loading CVE data
 
-The quickstart configuration provided by the docker-compose is based around the NIST CVE data, which can be easily loaded via a make target:
+The quickstart configuration is based around the NIST CVE data. Load the full CVE database:
 
 ```bash
 make sync_cve
 ```
 
+To also load enriched CVE metadata from the NIST NVD API, set a free [NVD API key](https://nvd.nist.gov/developers/request-an-api-key) in `.env` first (the key is optional but avoids rate limiting):
+
+```
+NIST_NVD_TOKEN=<your_nvd_api_key>
+```
+
+Then run:
+
+```bash
+make sync_cve_metadata
+```
+
+## Loading GitHub data
+
+To sync GitHub organization and repository data into the graph, add a [GitHub Personal Access Token](https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/managing-your-personal-access-tokens) to `.env`. The token needs `read:org` and `repo` scopes (or `public_repo` for public repositories only):
+
+```
+CARTOGRAPHY_GITHUB_TOKEN=<your_github_pat>
+```
+
+Then run:
+
+```bash
+make sync_github
+```
+
 ## Testing authentication
 
-The stack includes an embedded [Authentik](https://goauthentik.io/) OIDC provider. To enable it:
+The stack includes an embedded [Authentik](https://goauthentik.io/) OIDC provider. To enable it, use `auth_enable_bootstrap`, which generates `SESSION_TOKEN_ENCRYPTION_KEY` and `REPORT_QUERY_SIGNING_SECRET` into your `.env` file (skipping either if already set) and then enables auth:
+
+```bash
+make auth_enable_bootstrap && make down && make up
+```
+
+If you have already run `auth_enable_bootstrap` before and just want to re-enable auth without regenerating secrets:
 
 ```bash
 make auth_enable && make down && make up
