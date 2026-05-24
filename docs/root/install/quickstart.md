@@ -73,13 +73,7 @@ make sync_cve
 
 ## Loading GitHub data
 
-To sync GitHub organization and repository data into the graph, add a [GitHub Personal Access Token](https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/managing-your-personal-access-tokens) to `.env`:
-
-```
-CARTOGRAPHY_GITHUB_TOKEN=<your_github_pat>
-```
-
-Use a **classic** PAT so that all data is syncable — fine-grained tokens cannot read GitHub Packages. For a complete sync, grant these scopes:
+To sync GitHub organization and repository data into the graph, create a [GitHub Personal Access Token](https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/managing-your-personal-access-tokens). Use a **classic** PAT so that all data is syncable — fine-grained tokens cannot read GitHub Packages. For a complete sync, grant these scopes:
 
 - `repo` (or `public_repo` for public repositories only) — repository files, commit history, dependency manifests, collaborators, and branch protection rules
 - `read:org` — organization membership and team data
@@ -89,6 +83,18 @@ Use a **classic** PAT so that all data is syncable — fine-grained tokens canno
 - `read:packages` _(optional)_ — GitHub Container Registry packages, image manifests, layers, tags, and SLSA attestations
 
 For the full set of supported permissions — including fine-grained token and GitHub App alternatives — see Cartography's [GitHub module configuration docs](https://cartography-cncf.github.io/cartography/modules/github/config.html).
+
+Cartography reads its GitHub configuration as a **base64-encoded JSON object**, not a bare token, so `CARTOGRAPHY_GITHUB_TOKEN` must hold that encoded value. Build it from your token and organization name (replace both placeholders):
+
+```bash
+printf '%s' '{"organization":[{"token":"<your_github_pat>","url":"https://api.github.com/graphql","name":"<your_org_name>"}]}' | base64 | tr -d '\n'
+```
+
+Put the resulting string in `.env`:
+
+```
+CARTOGRAPHY_GITHUB_TOKEN=<base64_value_from_above>
+```
 
 Then run:
 
