@@ -10,11 +10,19 @@ import AuthProvider, {
 const AUTH_CONFIG_REQUIRED = {
   auth_required: true,
   oidc: null,
+  loaded: true,
 };
 
 const AUTH_CONFIG_DISABLED = {
   auth_required: false,
   oidc: null,
+  loaded: true,
+};
+
+const AUTH_CONFIG_LOADING = {
+  auth_required: true,
+  oidc: null,
+  loaded: false,
 };
 
 function ChildThatReadsAuth(): ReactElement {
@@ -104,6 +112,23 @@ describe('AuthProvider', () => {
     });
     expect(screen.getByTestId('token').textContent).toBe('NO_TOKEN');
     expect(refreshSpy).not.toHaveBeenCalled();
+  });
+
+  it('does not touch the auth endpoints until config has loaded', async () => {
+    render(
+      <AuthConfigContext.Provider value={AUTH_CONFIG_LOADING}>
+        <AuthProvider>
+          <ChildThatReadsAuth />
+        </AuthProvider>
+      </AuthConfigContext.Provider>,
+    );
+
+    // Children stay hidden (still loading) and no BFF call has fired — acting
+    // on the optimistic auth_required:true default would hit /auth/refresh and
+    // /auth/login on a server that may have auth disabled.
+    expect(screen.queryByTestId('token')).toBeNull();
+    expect(refreshSpy).not.toHaveBeenCalled();
+    expect(beginLoginSpy).not.toHaveBeenCalled();
   });
 
   it('redirects to the IDP authorize URL when refresh fails', async () => {

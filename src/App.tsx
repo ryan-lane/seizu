@@ -24,6 +24,7 @@ function App() {
   const [authConfig, setAuthConfig] = useState<AuthConfig>({
     auth_required: true,
     oidc: null,
+    loaded: false,
   });
 
   useEffect(() => {
@@ -33,10 +34,13 @@ function App() {
         setAuthConfig({
           auth_required: data.auth_required,
           oidc: data.oidc ?? null,
+          loaded: true,
         });
       })
       .catch(() => {
-        // Keep default (auth_required: true) on error — safe fallback.
+        // Keep auth_required:true on error — safe fallback — but mark loaded
+        // so AuthProvider stops waiting and runs its (safe-fallback) flow.
+        setAuthConfig((prev) => ({ ...prev, loaded: true }));
       });
   }, []);
 

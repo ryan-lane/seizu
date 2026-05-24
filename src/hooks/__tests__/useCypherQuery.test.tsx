@@ -23,6 +23,7 @@ const CYPHER = 'MATCH (n) RETURN n';
 const AUTH_CONFIG_NO_OIDC = {
   auth_required: false,
   oidc: null,
+  loaded: true,
 };
 const CURRENT_USER: CurrentUser = {
   user_id: 'user-1',

@@ -31,7 +31,7 @@ function renderLayout() {
     <MemoryRouter initialEntries={['/app/dashboard']}>
       <ThemeProvider theme={theme}>
         <AuthConfigContext.Provider
-          value={{ auth_required: false, oidc: null }}
+          value={{ auth_required: false, oidc: null, loaded: true }}
         >
           <Routes>
             <Route element={<DashboardLayout />} path="/app">
