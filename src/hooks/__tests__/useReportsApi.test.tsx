@@ -861,6 +861,41 @@ describe('useDashboardReport', () => {
     expect(mockFetch).toHaveBeenCalledTimes(1);
   });
 
+  it('setDashboardReport busts the cache so the next mount re-fetches', async () => {
+    const v2 = {
+      ...REPORT_VERSION,
+      config: { ...REPORT_CONFIG, name: 'New Dashboard' },
+    };
+    mockFetch
+      .mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(REPORT_VERSION),
+      })
+      .mockResolvedValueOnce({ ok: true }) // PUT .../dashboard
+      .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(v2) });
+
+    const { result: first, unmount } = renderHook(() => useDashboardReport(), {
+      wrapper: makeWrapper(false, null),
+    });
+    await waitFor(() => expect(first.current.loading).toBe(false));
+    expect(first.current.report).toEqual(REPORT_CONFIG);
+    unmount();
+
+    const { result: mutations } = renderHook(() => useReportsMutations(), {
+      wrapper: makeWrapper(false, null),
+    });
+    await act(async () => {
+      await mutations.current.setDashboardReport('r2');
+    });
+
+    const { result: second } = renderHook(() => useDashboardReport(), {
+      wrapper: makeWrapper(false, null),
+    });
+    await waitFor(() => expect(second.current.loading).toBe(false));
+    expect(second.current.report).toEqual(v2.config);
+    expect(mockFetch).toHaveBeenCalledTimes(3);
+  });
+
   it('refresh() busts the cache and re-fetches', async () => {
     const v2 = {
       ...REPORT_VERSION,

@@ -477,6 +477,9 @@ export function useReportsMutations(): {
         headers: getApiHeaders(accessToken),
       });
       if (!res.ok) throw new Error(`Failed to set dashboard: ${res.status}`);
+      // Bust the module-level cache so the next visit to the dashboard
+      // re-fetches the newly-selected report instead of serving the old one.
+      dashboardCacheEntry = null;
     },
     [accessToken],
   );
