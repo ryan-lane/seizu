@@ -59,11 +59,19 @@ interface AuthProviderProps {
 }
 
 function AuthProvider({ children }: AuthProviderProps) {
-  const { auth_required } = useContext(AuthConfigContext);
+  const { auth_required, loaded } = useContext(AuthConfigContext);
   const [accessToken, setAccessToken] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(auth_required);
 
   useEffect(() => {
+    // Hold until the real config arrives. The auth_required:true default is
+    // optimistic; bootstrapping a login flow against it would fire
+    // /auth/refresh (401) and /auth/login (503) on a server with auth
+    // disabled, before GET /api/v1/config reports auth_required:false.
+    if (!loaded) {
+      return;
+    }
+
     if (!auth_required) {
       setIsLoading(false);
       return;
@@ -115,7 +123,7 @@ function AuthProvider({ children }: AuthProviderProps) {
       cancelled = true;
       if (refreshTimer !== null) clearTimeout(refreshTimer);
     };
-  }, [auth_required]);
+  }, [auth_required, loaded]);
 
   return (
     <AuthContext.Provider value={{ accessToken, isLoading }}>

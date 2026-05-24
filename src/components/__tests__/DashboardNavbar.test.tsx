@@ -38,6 +38,7 @@ function Wrapper({
             authConfig ?? {
               auth_required: false,
               oidc: null,
+              loaded: true,
             }
           }
         >
@@ -194,7 +195,7 @@ describe('DashboardNavbar', () => {
     });
     try {
       render(
-        <Wrapper authConfig={{ auth_required: true, oidc: null }}>
+        <Wrapper authConfig={{ auth_required: true, oidc: null, loaded: true }}>
           <DashboardNavbar {...defaultProps} />
         </Wrapper>,
       );
@@ -230,7 +231,7 @@ describe('DashboardNavbar', () => {
     });
     try {
       render(
-        <Wrapper authConfig={{ auth_required: true, oidc: null }}>
+        <Wrapper authConfig={{ auth_required: true, oidc: null, loaded: true }}>
           <DashboardNavbar {...defaultProps} />
         </Wrapper>,
       );
@@ -266,7 +267,7 @@ describe('DashboardNavbar', () => {
     });
     try {
       render(
-        <Wrapper authConfig={{ auth_required: true, oidc: null }}>
+        <Wrapper authConfig={{ auth_required: true, oidc: null, loaded: true }}>
           <DashboardNavbar {...defaultProps} />
         </Wrapper>,
       );

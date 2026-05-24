@@ -153,6 +153,15 @@ auth_enable:
 	@perl -pi -e 's/DEVELOPMENT_ONLY_REQUIRE_AUTH=false/DEVELOPMENT_ONLY_REQUIRE_AUTH=true/' .env
 	@echo "Auth enabled in .env. Run 'make down && make up' to apply."
 
+.PHONY: auth_enable_bootstrap
+auth_enable_bootstrap:
+	@grep -q '^SESSION_TOKEN_ENCRYPTION_KEY=.\+' .env 2>/dev/null \
+		|| echo "SESSION_TOKEN_ENCRYPTION_KEY=$$(openssl rand -base64 32)" >> .env
+	@grep -q '^REPORT_QUERY_SIGNING_SECRET=.\+' .env 2>/dev/null \
+		|| echo "REPORT_QUERY_SIGNING_SECRET=$$(openssl rand -hex 64)" >> .env
+	@$(MAKE) auth_enable
+	@echo "Secrets written to .env. Run 'make down && make up' to apply."
+
 .PHONY: auth_disable
 auth_disable:
 	@perl -pi -e 's/DEVELOPMENT_ONLY_REQUIRE_AUTH=true/DEVELOPMENT_ONLY_REQUIRE_AUTH=false/' .env

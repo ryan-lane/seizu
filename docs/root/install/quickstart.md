@@ -12,12 +12,10 @@ cd seizu
 Start the stack:
 
 ```bash
-export NEO4J_PASSWORD=<some_value>
 make up
-make logs seizu-node
 ```
 
-Once fully started, the UI will be accessible at: http://localhost:3000
+`make up` streams logs to your terminal. Once fully started, the UI will be accessible at: http://localhost:3000
 
 The backend API (and MCP server) is accessible at: http://localhost:8080
 
@@ -67,15 +65,67 @@ make seed_dashboard
 
 ## Loading CVE data
 
-The quickstart configuration provided by the docker-compose is based around the NIST CVE data, which can be easily loaded via a make target:
+The quickstart configuration is based around the NIST CVE data. Load the full CVE database:
 
 ```bash
 make sync_cve
 ```
 
+## Loading GitHub data
+
+To sync GitHub organization and repository data into the graph, create a [GitHub Personal Access Token](https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/managing-your-personal-access-tokens). Use a **classic** PAT so that all data is syncable — fine-grained tokens cannot read GitHub Packages. For a complete sync, grant these scopes:
+
+- `repo` (or `public_repo` for public repositories only) — repository files, commit history, dependency manifests, collaborators, and branch protection rules
+- `read:org` — organization membership and team data
+- `read:user` — user profile information
+- `user:email` — user email addresses
+- `security_events` _(optional)_ — Dependabot alerts for private repositories
+- `read:packages` _(optional)_ — GitHub Container Registry packages, image manifests, layers, tags, and SLSA attestations
+
+For the full set of supported permissions — including fine-grained token and GitHub App alternatives — see Cartography's [GitHub module configuration docs](https://cartography-cncf.github.io/cartography/modules/github/config.html).
+
+Cartography reads its GitHub configuration as a **base64-encoded JSON object**, not a bare token, so `CARTOGRAPHY_GITHUB_TOKEN` must hold that encoded value. Build it from your token and organization name (replace both placeholders):
+
+```bash
+printf '%s' '{"organization":[{"token":"<your_github_pat>","url":"https://api.github.com/graphql","name":"<your_org_name>"}]}' | base64 | tr -d '\n'
+```
+
+Put the resulting string in `.env`:
+
+```
+CARTOGRAPHY_GITHUB_TOKEN=<base64_value_from_above>
+```
+
+Then run:
+
+```bash
+make sync_github
+```
+
+## Enriching CVE metadata
+
+Other modules — GitHub, for example — create references to CVEs in the graph without the full CVE details. `sync_cve_metadata` enriches those referenced CVEs with data from the NIST NVD database, so run it **after** the module that introduced the references:
+
+```bash
+make sync_github          # creates CVE references
+make sync_cve_metadata    # enriches them
+```
+
+Setting a free [NVD API key](https://nvd.nist.gov/developers/request-an-api-key) in `.env` is optional but strongly recommended — it makes the sync considerably faster. With a key, the module fetches the individual referenced CVEs; without one, it falls back to pulling an entire year of CVE data at a time.
+
+```
+NIST_NVD_TOKEN=<your_nvd_api_key>
+```
+
 ## Testing authentication
 
-The stack includes an embedded [Authentik](https://goauthentik.io/) OIDC provider. To enable it:
+The stack includes an embedded [Authentik](https://goauthentik.io/) OIDC provider. To enable it, use `auth_enable_bootstrap`, which generates `SESSION_TOKEN_ENCRYPTION_KEY` and `REPORT_QUERY_SIGNING_SECRET` into your `.env` file (skipping either if already set) and then enables auth:
+
+```bash
+make auth_enable_bootstrap && make down && make up
+```
+
+If you have already run `auth_enable_bootstrap` before and just want to re-enable auth without regenerating secrets:
 
 ```bash
 make auth_enable && make down && make up

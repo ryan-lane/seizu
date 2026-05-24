@@ -6,6 +6,7 @@ import { useGraphSchema } from 'src/hooks/useGraphSchema';
 const AUTH_CONFIG_NO_OIDC = {
   auth_required: false,
   oidc: null,
+  loaded: true,
 };
 
 function makeWrapper(authRequired: boolean, accessToken: string | null) {
