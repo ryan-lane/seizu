@@ -71,18 +71,6 @@ The quickstart configuration is based around the NIST CVE data. Load the full CV
 make sync_cve
 ```
 
-To also load enriched CVE metadata from the NIST NVD API, set a free [NVD API key](https://nvd.nist.gov/developers/request-an-api-key) in `.env` first (the key is optional but avoids rate limiting):
-
-```
-NIST_NVD_TOKEN=<your_nvd_api_key>
-```
-
-Then run:
-
-```bash
-make sync_cve_metadata
-```
-
 ## Loading GitHub data
 
 To sync GitHub organization and repository data into the graph, add a [GitHub Personal Access Token](https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/managing-your-personal-access-tokens) to `.env`. The token needs `read:org` and `repo` scopes (or `public_repo` for public repositories only):
@@ -95,6 +83,21 @@ Then run:
 
 ```bash
 make sync_github
+```
+
+## Enriching CVE metadata
+
+Other modules — GitHub, for example — create references to CVEs in the graph without the full CVE details. `sync_cve_metadata` enriches those referenced CVEs with data from the NIST NVD database, so run it **after** the module that introduced the references:
+
+```bash
+make sync_github          # creates CVE references
+make sync_cve_metadata    # enriches them
+```
+
+Setting a free [NVD API key](https://nvd.nist.gov/developers/request-an-api-key) in `.env` is optional but strongly recommended — it makes the sync considerably faster. With a key, the module fetches the individual referenced CVEs; without one, it falls back to pulling an entire year of CVE data at a time.
+
+```
+NIST_NVD_TOKEN=<your_nvd_api_key>
 ```
 
 ## Testing authentication
