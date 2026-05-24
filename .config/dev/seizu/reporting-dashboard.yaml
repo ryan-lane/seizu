@@ -269,19 +269,22 @@ reports:
     queries:
       cves: |-
         MATCH (c:CVE)
-        WHERE c.base_severity =~ ($base_severity)
+        WITH c, toUpper(coalesce(c.base_severity, c.severity)) AS severity
+        WHERE severity =~ ($base_severity)
         RETURN DISTINCT {
-          id: c.id,
-          base_severity: c.base_severity,
-          description: c.description_en,
-          published_date: c.published_date
+          id: coalesce(c.cve_id, c.id),
+          base_severity: severity,
+          description: coalesce(c.description, c.description_en, c.advisory_summary, c.advisory_description),
+          published_date: coalesce(c.published_date, c.advisory_published_at)
         } AS details
-        ORDER BY details.severity DESC
+        ORDER BY details.base_severity DESC
     inputs:
       - input_id: cve_base_severity
         cypher: |-
           MATCH (c:CVE)
-          RETURN DISTINCT c.base_severity AS value
+          WITH toUpper(coalesce(c.base_severity, c.severity)) AS value
+          WHERE value IS NOT NULL
+          RETURN DISTINCT value
         label: Base Severity
         type: autocomplete
         size: 2
@@ -304,62 +307,77 @@ reports:
     queries:
       cves-total: |-
         MATCH (c:CVE)
-        RETURN count(c.id) AS total
+        RETURN count(DISTINCT coalesce(c.cve_id, c.id)) AS total
       cves-severity-fraction: |-
         MATCH (c:CVE)
-        WITH COUNT(DISTINCT c.id) AS denominator
+        WITH count(DISTINCT coalesce(c.cve_id, c.id)) AS denominator
         MATCH (c:CVE)
-        WHERE c.base_severity = $base_severity
-        RETURN count(DISTINCT c.id) AS numerator, denominator
+        WHERE toUpper(coalesce(c.base_severity, c.severity)) = $base_severity
+        RETURN count(DISTINCT coalesce(c.cve_id, c.id)) AS numerator, denominator
       cves-severity-fraction-details: |-
         MATCH (c:CVE)
-        WHERE c.base_severity = $base_severity
+        WHERE toUpper(coalesce(c.base_severity, c.severity)) = $base_severity
         RETURN c AS details
       cves-severity-count: |-
         MATCH (c:CVE)
-        WHERE c.base_severity = $base_severity
-        RETURN count(DISTINCT c.id) AS total
+        WHERE toUpper(coalesce(c.base_severity, c.severity)) = $base_severity
+        RETURN count(DISTINCT coalesce(c.cve_id, c.id)) AS total
       cves-by-severity: |-
         MATCH (c:CVE)
-        WHERE c.base_severity IS NOT NULL
-        WITH c.base_severity AS severity, count(c.id) AS total
+        WITH toUpper(coalesce(c.base_severity, c.severity)) AS severity, coalesce(c.cve_id, c.id) AS cve
+        WHERE severity IS NOT NULL
+        WITH severity, count(DISTINCT cve) AS total
         RETURN {id: severity, value: total} AS details
       cves-graph: |-
         MATCH (c:CVE)
-        WHERE c.base_severity IS NOT NULL
-        WITH c LIMIT 50
+        WITH toUpper(coalesce(c.base_severity, c.severity)) AS severity, coalesce(c.cve_id, c.id) AS cve
+        WHERE severity IS NOT NULL
+        WITH severity, cve LIMIT 50
         WITH
-          collect(distinct {id: c.base_severity, label: c.base_severity, group: 'severity'}) AS severity_nodes,
-          collect({id: c.id, label: c.id, group: c.base_severity}) AS cve_nodes,
-          collect({source: c.id, target: c.base_severity}) AS links
+          collect(distinct {id: severity, label: severity, group: 'severity'}) AS severity_nodes,
+          collect(distinct {id: cve, label: cve, group: severity}) AS cve_nodes,
+          collect(distinct {source: cve, target: severity}) AS links
         RETURN {nodes: severity_nodes + cve_nodes, links: links}
       cves-id-search: |-
         MATCH (c:CVE)
-        WHERE c.id CONTAINS $search
-        RETURN c.id AS id,
-               c.base_severity AS base_severity,
-               c.base_score AS base_score,
-               c.description_en AS description
-        ORDER BY datetime(c.published_date) DESC
+        WITH coalesce(c.cve_id, c.id) AS id,
+             toUpper(coalesce(c.base_severity, c.severity)) AS base_severity,
+             coalesce(c.base_score, c.cvss_v4_score, c.cvss_v3_score) AS base_score,
+             coalesce(c.description, c.description_en, c.advisory_summary, c.advisory_description) AS description,
+             coalesce(c.published_date, c.advisory_published_at) AS published_date
+        WHERE id CONTAINS $search
+        WITH id,
+             head(collect(base_severity)) AS base_severity,
+             max(base_score) AS base_score,
+             head(collect(description)) AS description,
+             max(published_date) AS published_date
+        RETURN id, base_severity, base_score, description
+        ORDER BY datetime(published_date) DESC
         LIMIT 25
       cves-by-severity-list: |-
         MATCH (c:CVE)
-        WHERE c.base_severity = $base_severity
-        RETURN c.id AS id,
-               c.base_severity AS base_severity,
-               c.base_score AS base_score,
-               c.description_en AS description
-        ORDER BY c.base_score DESC
+        WHERE toUpper(coalesce(c.base_severity, c.severity)) = $base_severity
+        WITH coalesce(c.cve_id, c.id) AS id,
+             toUpper(coalesce(c.base_severity, c.severity)) AS base_severity,
+             coalesce(c.base_score, c.cvss_v4_score, c.cvss_v3_score) AS base_score,
+             coalesce(c.description, c.description_en, c.advisory_summary, c.advisory_description) AS description
+        WITH id,
+             head(collect(base_severity)) AS base_severity,
+             max(base_score) AS base_score,
+             head(collect(description)) AS description
+        RETURN id, base_severity, base_score, description
+        ORDER BY base_score DESC
         LIMIT 25
       cve-single: |-
         MATCH (c:CVE)
-        WHERE c.base_severity IS NOT NULL
-        RETURN c.id AS id,
-               c.base_severity AS severity,
-               c.base_score AS score,
-               c.description_en AS description,
-               c.published_date AS published_date
-        ORDER BY c.base_score DESC
+        WITH coalesce(c.cve_id, c.id) AS id,
+             toUpper(coalesce(c.base_severity, c.severity)) AS severity,
+             coalesce(c.base_score, c.cvss_v4_score, c.cvss_v3_score) AS score,
+             coalesce(c.description, c.description_en, c.advisory_summary, c.advisory_description) AS description,
+             coalesce(c.published_date, c.advisory_published_at) AS published_date
+        WHERE severity IS NOT NULL
+        RETURN id, severity, score, description, published_date
+        ORDER BY score DESC
         LIMIT 1
     inputs:
       - input_id: panel_examples_search
@@ -372,7 +390,9 @@ reports:
       - input_id: panel_examples_severity
         cypher: |-
           MATCH (c:CVE)
-          RETURN DISTINCT c.base_severity AS value
+          WITH toUpper(coalesce(c.base_severity, c.severity)) AS value
+          WHERE value IS NOT NULL
+          RETURN DISTINCT value
         label: Base Severity
         type: autocomplete
         size: 3
@@ -973,12 +993,15 @@ toolsets:
           Return full details for a single CVE by its ID (e.g. CVE-2024-12345).
           Returns id, base_severity, base_score, description, and published_date.
         cypher: |-
-          MATCH (c:CVE {id: $cve_id})
-          RETURN c.id AS id,
-                 c.base_severity AS base_severity,
-                 c.base_score AS base_score,
-                 c.description_en AS description,
-                 c.published_date AS published_date
+          MATCH (c:CVE)
+          WHERE c.id = $cve_id OR c.cve_id = $cve_id
+          RETURN coalesce(c.cve_id, c.id) AS id,
+                 toUpper(coalesce(c.base_severity, c.severity)) AS base_severity,
+                 coalesce(c.base_score, c.cvss_v4_score, c.cvss_v3_score) AS base_score,
+                 coalesce(c.description, c.description_en, c.advisory_summary, c.advisory_description) AS description,
+                 coalesce(c.published_date, c.advisory_published_at) AS published_date
+          ORDER BY base_score DESC
+          LIMIT 1
         parameters:
           - name: cve_id
             type: string
@@ -992,13 +1015,19 @@ toolsets:
           ordered by base score descending. Returns up to `limit` results.
         cypher: |-
           MATCH (c:CVE)
-          WHERE c.base_severity = $severity
-          RETURN c.id AS id,
-                 c.base_severity AS base_severity,
-                 c.base_score AS base_score,
-                 c.description_en AS description,
-                 c.published_date AS published_date
-          ORDER BY c.base_score DESC
+          WHERE toUpper(coalesce(c.base_severity, c.severity)) = toUpper($severity)
+          WITH coalesce(c.cve_id, c.id) AS id,
+               toUpper(coalesce(c.base_severity, c.severity)) AS base_severity,
+               coalesce(c.base_score, c.cvss_v4_score, c.cvss_v3_score) AS base_score,
+               coalesce(c.description, c.description_en, c.advisory_summary, c.advisory_description) AS description,
+               coalesce(c.published_date, c.advisory_published_at) AS published_date
+          WITH id,
+               head(collect(base_severity)) AS base_severity,
+               max(base_score) AS base_score,
+               head(collect(description)) AS description,
+               max(published_date) AS published_date
+          RETURN id, base_severity, base_score, description, published_date
+          ORDER BY base_score DESC
           LIMIT $limit
         parameters:
           - name: severity
@@ -1018,8 +1047,9 @@ toolsets:
           Useful for a quick risk overview.
         cypher: |-
           MATCH (c:CVE)
-          WHERE c.base_severity IS NOT NULL
-          RETURN c.base_severity AS severity, count(c.id) AS total
+          WITH toUpper(coalesce(c.base_severity, c.severity)) AS severity, coalesce(c.cve_id, c.id) AS cve
+          WHERE severity IS NOT NULL
+          RETURN severity, count(DISTINCT cve) AS total
           ORDER BY total DESC
         enabled: true
       get_recent_cves:
@@ -1030,14 +1060,23 @@ toolsets:
           date descending.
         cypher: |-
           MATCH (c:CVE)
-          WHERE datetime(c.published_date) > datetime() - duration({hours: $hours})
-            AND ($severity = '' OR c.base_severity = $severity)
-          RETURN c.id AS id,
-                 c.base_severity AS base_severity,
-                 c.base_score AS base_score,
-                 c.description_en AS description,
-                 c.published_date AS published_date
-          ORDER BY c.published_date DESC
+          WITH c,
+               toUpper(coalesce(c.base_severity, c.severity)) AS base_severity,
+               coalesce(c.published_date, c.advisory_published_at) AS published_date
+          WHERE datetime(published_date) > datetime() - duration({hours: $hours})
+            AND ($severity = '' OR base_severity = toUpper($severity))
+          WITH coalesce(c.cve_id, c.id) AS id,
+               base_severity,
+               coalesce(c.base_score, c.cvss_v4_score, c.cvss_v3_score) AS base_score,
+               coalesce(c.description, c.description_en, c.advisory_summary, c.advisory_description) AS description,
+               published_date
+          WITH id,
+               head(collect(base_severity)) AS base_severity,
+               max(base_score) AS base_score,
+               head(collect(description)) AS description,
+               max(published_date) AS published_date
+          RETURN id, base_severity, base_score, description, published_date
+          ORDER BY published_date DESC
           LIMIT $limit
         parameters:
           - name: hours
@@ -1629,12 +1668,18 @@ skillsets:
 scheduled_queries:
   - name: Recently published HIGH/CRITICAL CVEs
     cypher: |-
-      MATCH (s:SyncMetadata)
+      OPTIONAL MATCH (s:SyncMetadata)
       WHERE s.grouptype = "CVE" AND s.syncedtype IN $syncedtype
-      WITH datetime({epochSeconds: s.lastupdated}) - duration({hours: 24}) AS feedupdatetime
+      WITH max(CASE WHEN s.lastupdated IS NOT NULL THEN datetime({epochSeconds: s.lastupdated}) END) AS last_cve_sync
+      WITH coalesce(last_cve_sync, datetime()) - duration({hours: 24}) AS feedupdatetime
       MATCH (c:CVE)
-      WHERE (datetime(c.published_date)) > feedupdatetime AND c.base_severity IN $base_severity
-      RETURN {id: c.id, base_severity: c.base_severity, base_score: c.base_score, description: c.description} AS details
+      WITH feedupdatetime, c,
+           toUpper(coalesce(c.base_severity, c.severity)) AS base_severity,
+           coalesce(c.published_date, c.advisory_published_at) AS published_date
+      WHERE published_date IS NOT NULL
+        AND datetime(published_date) > feedupdatetime
+        AND base_severity IN $base_severity
+      RETURN {id: coalesce(c.cve_id, c.id), base_severity: base_severity, base_score: coalesce(c.base_score, c.cvss_v4_score, c.cvss_v3_score), description: coalesce(c.description, c.description_en, c.advisory_summary, c.advisory_description)} AS details
     params:
       - name: syncedtype
         value:
@@ -1660,8 +1705,9 @@ scheduled_queries:
   - name: CVE counts by severity
     cypher: |-
       MATCH (c:CVE)
-      WHERE c.base_severity IS NOT NULL
-      WITH c.base_severity AS severity, count(c.id) AS total
+      WITH toUpper(coalesce(c.base_severity, c.severity)) AS severity, coalesce(c.cve_id, c.id) AS cve
+      WHERE severity IS NOT NULL
+      WITH severity, count(DISTINCT cve) AS total
       RETURN {severity: severity, total: total} AS details
     frequency: 60
     enabled: true
