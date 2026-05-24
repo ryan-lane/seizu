@@ -1,5 +1,6 @@
 import { Helmet } from 'react-helmet';
-import { Box, Container, Typography } from '@mui/material';
+import { Link as RouterLink } from 'react-router-dom';
+import { Box, Button, Container, Typography } from '@mui/material';
 
 function NotFound() {
   return (
@@ -9,37 +10,47 @@ function NotFound() {
       </Helmet>
       <Box
         sx={{
-          backgroundColor: 'background.default',
+          alignItems: 'center',
           display: 'flex',
           flexDirection: 'column',
           height: '100%',
           justifyContent: 'center',
+          p: 3,
         }}
       >
-        <Container maxWidth="md">
-          <Typography
-            align="center"
-            color="textPrimary"
-            variant="h1"
-            sx={{ mt: 4 }}
+        <Container maxWidth="sm" sx={{ textAlign: 'center' }}>
+          <Box
+            component="img"
+            alt=""
+            src="/static/images/astronaut.png"
+            sx={(theme) => ({
+              width: { xs: 240, sm: 300 },
+              maxWidth: '100%',
+              height: 'auto',
+              mb: 2,
+              // The sketch is dark ink on a transparent background — invert it
+              // on dark surfaces so it reads as a light drawing on the deep
+              // navy canvas instead of a bright blob.
+              ...(theme.palette.mode === 'dark' && { filter: 'invert(1)' }),
+            })}
+          />
+          <Typography color="text.primary" variant="h1" sx={{ mb: 1 }}>
+            404
+          </Typography>
+          <Typography color="text.primary" variant="h4" sx={{ mb: 2 }}>
+            Lost in space
+          </Typography>
+          <Typography color="text.secondary" variant="body1" sx={{ mb: 4 }}>
+            We couldn&apos;t find that page. It may have moved, or the link may
+            be incomplete.
+          </Typography>
+          <Button
+            component={RouterLink}
+            to="/app/dashboard"
+            variant="contained"
           >
-            404: I think you are lost.
-          </Typography>
-          <Typography align="center" color="textPrimary" variant="subtitle2">
-            Please use the navigation to find your way.
-          </Typography>
-          <Box sx={{ textAlign: 'center' }}>
-            <img
-              alt="Under development"
-              src="/static/images/404.svg"
-              style={{
-                marginTop: 50,
-                display: 'inline-block',
-                maxWidth: '100%',
-                width: 560,
-              }}
-            />
-          </Box>
+            Back to dashboard
+          </Button>
         </Container>
       </Box>
     </>
