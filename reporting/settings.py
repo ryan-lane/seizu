@@ -281,6 +281,21 @@ REPORT_STORE_BACKEND = str_env("REPORT_STORE_BACKEND", "dynamodb")
 # Example: sqlite:///./seizu.db
 SQL_DATABASE_URL = str_env("SQL_DATABASE_URL", "")
 
+# Dedicated DynamoDB table used by LangGraph to persist chat checkpoints.
+CHAT_CHECKPOINT_TABLE_NAME = str_env("CHAT_CHECKPOINT_TABLE_NAME", "seizu-chat-checkpoints")
+# When true, create the LangGraph checkpoint table at startup if missing.
+CHAT_CHECKPOINT_CREATE_TABLE = bool_env("CHAT_CHECKPOINT_CREATE_TABLE", False)
+# Optional checkpoint TTL in seconds. Empty/0 disables automatic expiry.
+CHAT_CHECKPOINT_TTL_SECONDS = int_env("CHAT_CHECKPOINT_TTL_SECONDS", 0)
+# Compress serialized checkpoint payloads before storing them.
+CHAT_CHECKPOINT_ENABLE_COMPRESSION = bool_env("CHAT_CHECKPOINT_ENABLE_COMPRESSION", True)
+# S3 bucket used by langgraph-checkpoint-aws for payloads larger than 350KB.
+CHAT_CHECKPOINT_S3_BUCKET = str_env("CHAT_CHECKPOINT_S3_BUCKET", "")
+# Optional S3 endpoint override, e.g. http://minio:9000 for local development.
+CHAT_CHECKPOINT_S3_ENDPOINT_URL = str_env("CHAT_CHECKPOINT_S3_ENDPOINT_URL", "")
+# Optional S3 object prefix for checkpoint offload isolation.
+CHAT_CHECKPOINT_S3_KEY_PREFIX = str_env("CHAT_CHECKPOINT_S3_KEY_PREFIX", "seizu/langgraph")
+
 # The JWT claim that contains the user's Seizu role name.
 # Configure your OIDC provider to embed the role (e.g. "seizu-admin") directly
 # as a claim in the token. Common claim names: "seizu_role", "role".

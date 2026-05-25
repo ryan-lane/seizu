@@ -73,6 +73,15 @@ describe('DashboardSidebar', () => {
     );
   });
 
+  it('shows Chat when chat:use is present', () => {
+    renderSidebar(['chat:use']);
+
+    expect(screen.getByRole('link', { name: 'Chat' })).toHaveAttribute(
+      'href',
+      '/app/chat',
+    );
+  });
+
   it('renders the full logo in the expanded sidebar', () => {
     mockUsePermissions.mockReturnValue(() => false);
 

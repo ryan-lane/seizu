@@ -5,6 +5,7 @@ import Dashboard from '@mui/icons-material/Dashboard';
 import Insights from '@mui/icons-material/Insights';
 import Article from '@mui/icons-material/Article';
 import Terminal from '@mui/icons-material/Terminal';
+import Chat from '@mui/icons-material/Chat';
 import Schedule from '@mui/icons-material/Schedule';
 import Extension from '@mui/icons-material/Extension';
 import Psychology from '@mui/icons-material/Psychology';
@@ -65,6 +66,15 @@ function DashboardSidebar({
             href: '/app/query-console',
             icon: Terminal,
             title: 'Query Console',
+          },
+        ]
+      : []),
+    ...(hasPermission('chat:use')
+      ? [
+          {
+            href: '/app/chat',
+            icon: Chat,
+            title: 'Chat',
           },
         ]
       : []),

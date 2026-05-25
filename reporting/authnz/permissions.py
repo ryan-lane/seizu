@@ -21,6 +21,9 @@ class Permission(StrEnum):
     QUERY_VALIDATE = "query:validate"
     QUERY_HISTORY_READ = "query_history:read"
 
+    # Chat
+    CHAT_USE = "chat:use"
+
     # Toolsets
     TOOLSETS_READ = "toolsets:read"
     TOOLSETS_WRITE = "toolsets:write"
@@ -71,6 +74,7 @@ VIEWER_PERMISSIONS: frozenset[Permission] = frozenset(
         Permission.SKILLS_READ,
         Permission.SKILLS_RENDER,
         Permission.SCHEDULED_QUERIES_READ,
+        Permission.CHAT_USE,
         Permission.USERS_READ,
         Permission.ROLES_READ,
     }
