@@ -75,7 +75,8 @@ async def test_chat_stream_success(mocker):
     assert "data: [DONE]" in body
 
     graph_input, config, version, stream_mode = fake_graph.calls[0]
-    assert config == {"configurable": {"thread_id": "thread-1"}}
+    assert config["configurable"]["thread_id"] == "user:test-user-id:thread:thread-1"
+    assert config["configurable"]["current_user"].user.user_id == "test-user-id"
     assert version == "v2"
     assert stream_mode == "custom"
     assert graph_input["messages"][0].content == "Hi"

@@ -32,9 +32,8 @@ async def stream_chat(
     current: CurrentUser = Depends(require_permission(Permission.CHAT_USE)),
 ) -> StreamingResponse:
     """Stream a chat response as an AI SDK UI Message Stream."""
-    del current
     return StreamingResponse(
-        _stream_chat_response(body),
+        _stream_chat_response(body, current),
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache",
@@ -45,7 +44,7 @@ async def stream_chat(
     )
 
 
-async def _stream_chat_response(body: ChatStreamRequest) -> AsyncIterator[str]:
+async def _stream_chat_response(body: ChatStreamRequest, current: CurrentUser) -> AsyncIterator[str]:
     message_id = f"msg_{uuid.uuid4().hex}"
     text_id = f"text_{uuid.uuid4().hex}"
 
@@ -55,7 +54,12 @@ async def _stream_chat_response(body: ChatStreamRequest) -> AsyncIterator[str]:
     try:
         graph = get_chat_graph()
         graph_input: ChatState = {"messages": [HumanMessage(content=body.message)]}
-        config = {"configurable": {"thread_id": body.thread_id}}
+        config = {
+            "configurable": {
+                "current_user": current,
+                "thread_id": f"user:{current.user.user_id}:thread:{body.thread_id}",
+            }
+        }
         async for event in graph.astream_events(
             graph_input,
             config,

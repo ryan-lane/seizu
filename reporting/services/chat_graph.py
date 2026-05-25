@@ -1,10 +1,12 @@
 import asyncio
+import json
 from functools import lru_cache
 from typing import Annotated, Any, Protocol
 
 import botocore.config
 from botocore.exceptions import ClientError
 from langchain_core.messages import AIMessage, HumanMessage
+from langchain_core.runnables import RunnableConfig
 from langgraph.config import get_stream_writer
 from langgraph.graph import END, START, StateGraph
 from langgraph.graph.message import add_messages
@@ -12,6 +14,9 @@ from langgraph_checkpoint_aws import DynamoDBSaver
 from typing_extensions import TypedDict
 
 from reporting import settings
+from reporting.authnz import CurrentUser
+from reporting.authnz.permissions import Permission
+from reporting.services import mcp_runtime
 
 
 class ChatState(TypedDict):
@@ -29,9 +34,10 @@ class ChatGraph(Protocol):
     ) -> Any: ...
 
 
-async def mock_agent_node(state: ChatState) -> ChatState:
+async def mock_agent_node(state: ChatState, config: RunnableConfig) -> ChatState:
     last_user_message = _last_user_text(state["messages"])
-    response = f"I received your message: {last_user_message}"
+    current_user = _current_user_from_config(config)
+    response = await _build_response(last_user_message, current_user)
     writer = get_stream_writer()
 
     for chunk in _chunk_text(response):
@@ -39,6 +45,108 @@ async def mock_agent_node(state: ChatState) -> ChatState:
         await asyncio.sleep(0.03)
 
     return {"messages": [AIMessage(content=response)]}
+
+
+async def _build_response(message: str, current_user: CurrentUser | None) -> str:
+    stripped = message.strip()
+    if stripped == "/tools":
+        return await _list_tools_response(current_user)
+    if stripped.startswith("/tool "):
+        return await _call_tool_response(stripped, current_user)
+    if stripped == "/skills":
+        return await _list_skills_response(current_user)
+    if stripped.startswith("/skill "):
+        return await _render_skill_response(stripped, current_user)
+    return f"I received your message: {message}"
+
+
+async def _list_tools_response(current_user: CurrentUser | None) -> str:
+    tools = await mcp_runtime.list_tools_for_user(
+        current_user,
+        gate_permission=Permission.CHAT_TOOLS_CALL,
+        chat_safe_only=True,
+    )
+    if not tools:
+        return "No MCP tools are available to this chat session."
+    lines = [f"- {tool.name}: {tool.description or 'No description'}" for tool in tools[:30]]
+    if len(tools) > 30:
+        lines.append(f"- ...and {len(tools) - 30} more")
+    return "Available MCP tools:\n" + "\n".join(lines)
+
+
+async def _call_tool_response(command: str, current_user: CurrentUser | None) -> str:
+    parsed = _parse_named_json_command(command, "/tool")
+    if isinstance(parsed, str):
+        return parsed
+    name, arguments = parsed
+    result = await mcp_runtime.call_tool_for_user(
+        current_user,
+        name,
+        arguments,
+        gate_permission=Permission.CHAT_TOOLS_CALL,
+        chat_safe_only=True,
+    )
+    return _text_content_response(result)
+
+
+async def _list_skills_response(current_user: CurrentUser | None) -> str:
+    prompts = await mcp_runtime.list_prompts_for_user(
+        current_user,
+        gate_permission=Permission.CHAT_SKILLS_CALL,
+    )
+    if not prompts:
+        return "No MCP skills are available to this chat session."
+    lines = [f"- {prompt.name}: {prompt.description or 'No description'}" for prompt in prompts[:30]]
+    if len(prompts) > 30:
+        lines.append(f"- ...and {len(prompts) - 30} more")
+    return "Available MCP skills:\n" + "\n".join(lines)
+
+
+async def _render_skill_response(command: str, current_user: CurrentUser | None) -> str:
+    parsed = _parse_named_json_command(command, "/skill")
+    if isinstance(parsed, str):
+        return parsed
+    name, arguments = parsed
+    string_arguments = {key: str(value) for key, value in arguments.items()}
+    result = await mcp_runtime.get_prompt_for_user(
+        current_user,
+        name,
+        string_arguments,
+        gate_permission=Permission.CHAT_SKILLS_CALL,
+    )
+    return "\n\n".join(text for message in result.messages if (text := _content_text(message.content)))
+
+
+def _parse_named_json_command(command: str, prefix: str) -> tuple[str, dict[str, Any]] | str:
+    parts = command.split(maxsplit=2)
+    if len(parts) < 2 or parts[0] != prefix:
+        return f"Expected `{prefix} <name> {{...json args...}}`."
+    if len(parts) == 2:
+        return parts[1], {}
+    try:
+        parsed = json.loads(parts[2])
+    except json.JSONDecodeError:
+        return "Arguments must be a JSON object."
+    if not isinstance(parsed, dict):
+        return "Arguments must be a JSON object."
+    return parts[1], parsed
+
+
+def _text_content_response(content: list[Any]) -> str:
+    return "\n\n".join(item.text for item in content if hasattr(item, "text"))
+
+
+def _content_text(content: Any) -> str | None:
+    text = getattr(content, "text", None)
+    return text if isinstance(text, str) else None
+
+
+def _current_user_from_config(config: RunnableConfig) -> CurrentUser | None:
+    configurable = config.get("configurable")
+    if not isinstance(configurable, dict):
+        return None
+    current_user = configurable.get("current_user")
+    return current_user if isinstance(current_user, CurrentUser) else None
 
 
 def _last_user_text(messages: list[Any]) -> str:
