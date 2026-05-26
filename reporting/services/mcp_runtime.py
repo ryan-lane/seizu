@@ -145,6 +145,8 @@ async def call_tool_for_user(
     gate_permission: Permission | None = None,
     permissions: frozenset[str] | None = None,
     chat_safe_only: bool = False,
+    result_max_rows: int | None = None,
+    result_max_bytes: int | None = None,
 ) -> list[TextContent]:
     args = arguments or {}
     perms = _permissions(current_user, permissions)
@@ -160,7 +162,11 @@ async def call_tool_for_user(
             return text_response({"error": f"Permission denied: {', '.join(missing)}"})
         try:
             result = await builtin.handler(args, current_user)
-            return text_response(result)
+            return _bounded_text_response(
+                result,
+                max_rows=result_max_rows,
+                max_bytes=result_max_bytes,
+            )
         except Exception:
             logger.exception("Failed to execute built-in MCP tool %s", name)
             return text_response({"error": f"Failed to execute tool '{name}'"})
@@ -182,7 +188,11 @@ async def call_tool_for_user(
 
         results = await reporting_neo4j.run_query(target_tool.cypher, parameters=params_with_defaults)
         serialized = [{key: _serialize_neo4j_value(value) for key, value in record.items()} for record in results]
-        return text_response(serialized)
+        return _bounded_text_response(
+            serialized,
+            max_rows=result_max_rows,
+            max_bytes=result_max_bytes,
+        )
     except Exception:
         logger.exception("Failed to execute MCP tool %s", name)
         return text_response({"error": f"Failed to execute tool '{name}'"})
@@ -286,3 +296,30 @@ def _permission_denied_prompt(permission: str) -> GetPromptResult:
             )
         ],
     )
+
+
+def _bounded_text_response(
+    payload: Any,
+    *,
+    max_rows: int | None,
+    max_bytes: int | None,
+) -> list[TextContent]:
+    bounded = payload
+    if max_rows is not None and max_rows > 0 and isinstance(payload, list) and len(payload) > max_rows:
+        bounded = {
+            "results": payload[:max_rows],
+            "truncated": True,
+            "truncated_reason": "row_limit",
+            "max_rows": max_rows,
+        }
+
+    text = json.dumps(bounded, indent=2, default=str)
+    if max_bytes is not None and max_bytes > 0 and len(text.encode("utf-8")) > max_bytes:
+        bounded = {
+            "error": "Tool result exceeded chat size limit",
+            "truncated": True,
+            "truncated_reason": "byte_limit",
+            "max_bytes": max_bytes,
+        }
+        text = json.dumps(bounded, indent=2, default=str)
+    return [TextContent(type="text", text=text)]

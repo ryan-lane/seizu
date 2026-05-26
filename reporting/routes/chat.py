@@ -8,6 +8,7 @@ from fastapi import APIRouter, Depends, Query
 from fastapi.responses import StreamingResponse
 from langchain_core.messages import AIMessage, HumanMessage
 
+from reporting import settings
 from reporting.authnz import CurrentUser, require_permission
 from reporting.authnz.permissions import Permission
 from reporting.schema.chat import ChatHistoryMessage, ChatHistoryResponse, ChatStreamRequest
@@ -107,6 +108,7 @@ def _sse_data(payload: dict[str, Any]) -> str:
 @router.get("/api/v1/chat/history", response_model=ChatHistoryResponse)
 async def chat_history(
     thread_id: str = Query(min_length=1, max_length=200),
+    limit: int = Query(default=settings.CHAT_HISTORY_LIMIT, ge=1, le=500),
     current: CurrentUser = Depends(require_permission(Permission.CHAT_USE)),
 ) -> ChatHistoryResponse:
     """Return the persisted messages for the caller's chat thread.
@@ -114,11 +116,13 @@ async def chat_history(
     Lets the SPA rehydrate a conversation after a reload, since the client-side
     message state is otherwise lost.
     """
-    messages = await load_thread_messages(current, thread_id)
-    return ChatHistoryResponse(messages=[m for m in map(_to_history_message, messages) if m is not None])
+    messages = await load_thread_messages(current, thread_id, limit=limit)
+    return ChatHistoryResponse(
+        messages=[message for index, item in enumerate(messages) if (message := _to_history_message(item, index))]
+    )
 
 
-def _to_history_message(message: Any) -> ChatHistoryMessage | None:
+def _to_history_message(message: Any, index: int) -> ChatHistoryMessage | None:
     if isinstance(message, HumanMessage):
         role: str = "user"
     elif isinstance(message, AIMessage):
@@ -129,7 +133,8 @@ def _to_history_message(message: Any) -> ChatHistoryMessage | None:
     text = _message_text(message.content)
     if not text:
         return None
-    return ChatHistoryMessage(id=str(message.id) if message.id else uuid.uuid4().hex, role=role, text=text)
+    message_id = str(message.id) if message.id else f"{role}-{index}"
+    return ChatHistoryMessage(id=message_id, role=role, text=text)
 
 
 def _message_text(content: Any) -> str:

@@ -126,6 +126,54 @@ async def test_chat_tool_call_uses_mcp_acl_and_executes_user_defined_tool(mocker
     assert json.loads(result[0].text) == [{"name": "node-1"}]
 
 
+async def test_chat_tool_call_applies_row_limit(mocker):
+    mocker.patch("reporting.services.mcp_runtime.report_store.get_enabled_tool", return_value=_tool())
+    mocker.patch(
+        "reporting.services.mcp_runtime.reporting_neo4j.run_query",
+        return_value=[{"name": "node-1"}, {"name": "node-2"}],
+    )
+    current = _user(frozenset({Permission.CHAT_TOOLS_CALL.value, Permission.TOOLS_CALL.value}))
+
+    result = await mcp_runtime.call_tool_for_user(
+        current,
+        "security__lookup",
+        {},
+        gate_permission=Permission.CHAT_TOOLS_CALL,
+        result_max_rows=1,
+    )
+
+    assert json.loads(result[0].text) == {
+        "results": [{"name": "node-1"}],
+        "truncated": True,
+        "truncated_reason": "row_limit",
+        "max_rows": 1,
+    }
+
+
+async def test_chat_tool_call_applies_byte_limit(mocker):
+    mocker.patch("reporting.services.mcp_runtime.report_store.get_enabled_tool", return_value=_tool())
+    mocker.patch(
+        "reporting.services.mcp_runtime.reporting_neo4j.run_query",
+        return_value=[{"name": "x" * 100}],
+    )
+    current = _user(frozenset({Permission.CHAT_TOOLS_CALL.value, Permission.TOOLS_CALL.value}))
+
+    result = await mcp_runtime.call_tool_for_user(
+        current,
+        "security__lookup",
+        {},
+        gate_permission=Permission.CHAT_TOOLS_CALL,
+        result_max_bytes=20,
+    )
+
+    assert json.loads(result[0].text) == {
+        "error": "Tool result exceeded chat size limit",
+        "truncated": True,
+        "truncated_reason": "byte_limit",
+        "max_bytes": 20,
+    }
+
+
 async def test_chat_safe_tool_listing_hides_mutating_builtins(mocker):
     mocker.patch("reporting.services.mcp_runtime.report_store.list_enabled_tools", return_value=[])
     current = _user(

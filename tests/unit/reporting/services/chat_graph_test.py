@@ -1,4 +1,5 @@
 from langchain_core.messages import AIMessage, HumanMessage
+from langchain_core.messages.modifier import RemoveMessage
 from mcp.types import GetPromptResult, Prompt, PromptMessage, TextContent, Tool
 
 from reporting.authnz import CurrentUser
@@ -64,6 +65,8 @@ async def test_chat_graph_calls_mcp_tool_with_chat_gate(mocker):
         {"limit": 3},
         gate_permission=Permission.CHAT_TOOLS_CALL,
         chat_safe_only=True,
+        result_max_rows=100,
+        result_max_bytes=200000,
     )
     assert response == '{"ok": true}'
 
@@ -139,6 +142,39 @@ async def test_load_thread_messages_drops_ephemeral(mocker):
 
     mocker.patch("reporting.services.chat_graph.get_chat_graph", return_value=_Graph())
 
-    messages = await chat_graph.load_thread_messages(_user(), "thread-1")
+    messages = await chat_graph.load_thread_messages(_user(), "thread-1", limit=10)
 
     assert [m.content for m in messages] == ["Hi", "Hello"]
+
+
+async def test_load_thread_messages_limits_returned_messages(mocker):
+    persisted = [
+        HumanMessage(content="one"),
+        AIMessage(content="two"),
+        HumanMessage(content="three"),
+    ]
+
+    class _Graph:
+        async def aget_state(self, config):
+            return type("State", (), {"values": {"messages": persisted}})()
+
+    mocker.patch("reporting.services.chat_graph.get_chat_graph", return_value=_Graph())
+
+    messages = await chat_graph.load_thread_messages(_user(), "thread-1", limit=2)
+
+    assert [m.content for m in messages] == ["two", "three"]
+
+
+def test_trim_messages_removes_oldest_messages(mocker):
+    mocker.patch("reporting.settings.CHAT_MAX_PERSISTED_MESSAGES", 2)
+    existing = [
+        HumanMessage(content="one", id="one"),
+        AIMessage(content="two", id="two"),
+    ]
+    new_message = AIMessage(content="three", id="three")
+
+    removals = chat_graph._trim_messages(existing, new_message)
+
+    assert len(removals) == 1
+    assert isinstance(removals[0], RemoveMessage)
+    assert removals[0].id == "one"

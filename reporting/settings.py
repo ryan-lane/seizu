@@ -300,6 +300,16 @@ CHAT_CHECKPOINT_S3_BUCKET = str_env("CHAT_CHECKPOINT_S3_BUCKET", "")
 CHAT_CHECKPOINT_S3_ENDPOINT_URL = str_env("CHAT_CHECKPOINT_S3_ENDPOINT_URL", "")
 # Optional S3 object prefix for checkpoint offload isolation.
 CHAT_CHECKPOINT_S3_KEY_PREFIX = str_env("CHAT_CHECKPOINT_S3_KEY_PREFIX", "seizu/langgraph")
+# Maximum persisted LangGraph messages per chat thread. Older turns are removed
+# from checkpoint state after each non-ephemeral turn.
+CHAT_MAX_PERSISTED_MESSAGES = int_env("CHAT_MAX_PERSISTED_MESSAGES", 200)
+# Default number of messages returned by GET /api/v1/chat/history.
+CHAT_HISTORY_LIMIT = int_env("CHAT_HISTORY_LIMIT", 100)
+# Maximum rows returned to chat from a single MCP tool call. Normal MCP calls are
+# unaffected; this caps model/UI context growth on the chat path.
+CHAT_TOOL_RESULT_MAX_ROWS = int_env("CHAT_TOOL_RESULT_MAX_ROWS", 100)
+# Maximum serialized bytes returned to chat from a single MCP tool call.
+CHAT_TOOL_RESULT_MAX_BYTES = int_env("CHAT_TOOL_RESULT_MAX_BYTES", 200_000)
 
 # The JWT claim that contains the user's Seizu role name.
 # Configure your OIDC provider to embed the role (e.g. "seizu-admin") directly

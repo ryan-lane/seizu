@@ -18,6 +18,7 @@ import {
 import {
   FeaturesContext,
   DEFAULT_FEATURES,
+  BACKEND_DEFAULT_FEATURES,
   type Features,
 } from 'src/features.context';
 import { CurrentUserProvider } from 'src/hooks/useCurrentUser';
@@ -47,7 +48,10 @@ function App() {
             oidc: data.oidc ?? null,
             loaded: true,
           });
-          setFeatures({ ...DEFAULT_FEATURES, ...(data.features ?? {}) });
+          setFeatures({
+            ...BACKEND_DEFAULT_FEATURES,
+            ...(data.features ?? {}),
+          });
         },
       )
       .catch(() => {

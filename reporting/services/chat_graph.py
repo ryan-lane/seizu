@@ -1,11 +1,11 @@
 import asyncio
-import json
+import uuid
 from functools import lru_cache
 from typing import Annotated, Any, Protocol
 
 import botocore.config
 from botocore.exceptions import ClientError
-from langchain_core.messages import AIMessage, HumanMessage
+from langchain_core.messages import AIMessage, HumanMessage, RemoveMessage
 from langchain_core.runnables import RunnableConfig
 from langgraph.config import get_stream_writer
 from langgraph.graph import END, START, StateGraph
@@ -17,12 +17,8 @@ from reporting import settings
 from reporting.authnz import CurrentUser
 from reporting.authnz.permissions import Permission
 from reporting.services import mcp_runtime
+from reporting.services.chat_commands import SlashCommand, SlashCommandError, parse_slash_command
 from reporting.services.chat_messages import MessageTag, drop_tagged, tag_message
-
-# Console commands whose results are streamed to the UI but never persisted to
-# the thread (see classify_input / the chat route's ephemeral short-circuit).
-_EPHEMERAL_COMMANDS: frozenset[str] = frozenset({"/tools", "/skills"})
-_EPHEMERAL_COMMAND_PREFIXES: tuple[str, ...] = ("/tool ", "/skill ")
 
 
 class ChatState(TypedDict):
@@ -50,7 +46,7 @@ def namespaced_thread_id(current_user: CurrentUser, thread_id: str) -> str:
     return f"user:{current_user.user.user_id}:thread:{thread_id}"
 
 
-async def load_thread_messages(current_user: CurrentUser, thread_id: str) -> list[Any]:
+async def load_thread_messages(current_user: CurrentUser, thread_id: str, *, limit: int) -> list[Any]:
     """Return the persisted LangChain messages for a user's chat thread.
 
     Ephemeral-tagged messages are filtered out here so they never reach the
@@ -62,19 +58,25 @@ async def load_thread_messages(current_user: CurrentUser, thread_id: str) -> lis
     state = await graph.aget_state(config)
     values = getattr(state, "values", None) or {}
     messages = values.get("messages", [])
-    return drop_tagged(messages, MessageTag.EPHEMERAL) if isinstance(messages, list) else []
+    if not isinstance(messages, list):
+        return []
+    filtered = drop_tagged(messages, MessageTag.EPHEMERAL)
+    return filtered[-limit:] if limit > 0 else []
 
 
 def is_ephemeral_command(text: str) -> bool:
     """True for console commands handled out-of-band (streamed, not persisted)."""
-    stripped = text.strip()
-    return stripped in _EPHEMERAL_COMMANDS or stripped.startswith(_EPHEMERAL_COMMAND_PREFIXES)
+    try:
+        return parse_slash_command(text) is not None
+    except SlashCommandError:
+        command = text.strip().split(maxsplit=1)[0]
+        return command in {"/tools", "/tool", "/skills", "/skill"}
 
 
 def classify_input(text: str) -> HumanMessage:
     """Build the user message for a turn, tagging it ephemeral when it is a
     console command whose turn should be streamed but never persisted."""
-    message = HumanMessage(content=text)
+    message = HumanMessage(content=text, id=f"msg_{uuid.uuid4().hex}")
     if is_ephemeral_command(text):
         tag_message(message, MessageTag.EPHEMERAL)
     return message
@@ -84,25 +86,31 @@ async def mock_agent_node(state: ChatState, config: RunnableConfig) -> ChatState
     last_user_message = _last_user_text(state["messages"])
     current_user = _current_user_from_config(config)
     response = await build_agent_response(last_user_message, current_user)
+    ai_message = AIMessage(content=response, id=f"msg_{uuid.uuid4().hex}")
     writer = get_stream_writer()
 
     for chunk in _chunk_text(response):
         writer({"kind": "token", "content": chunk})
         await asyncio.sleep(0.03)
 
-    return {"messages": [AIMessage(content=response)]}
+    return {"messages": [*_trim_messages(state["messages"], ai_message), ai_message]}
 
 
 async def build_agent_response(message: str, current_user: CurrentUser | None) -> str:
-    stripped = message.strip()
-    if stripped == "/tools":
+    try:
+        command = parse_slash_command(message)
+    except SlashCommandError as exc:
+        return str(exc)
+    if command is None:
+        return f"I received your message: {message}"
+    if command.command == "tools":
         return await _list_tools_response(current_user)
-    if stripped.startswith("/tool "):
-        return await _call_tool_response(stripped, current_user)
-    if stripped == "/skills":
+    if command.command == "tool":
+        return await _call_tool_response(command, current_user)
+    if command.command == "skills":
         return await _list_skills_response(current_user)
-    if stripped.startswith("/skill "):
-        return await _render_skill_response(stripped, current_user)
+    if command.command == "skill":
+        return await _render_skill_response(command, current_user)
     return f"I received your message: {message}"
 
 
@@ -120,17 +128,17 @@ async def _list_tools_response(current_user: CurrentUser | None) -> str:
     return "Available MCP tools:\n" + "\n".join(lines)
 
 
-async def _call_tool_response(command: str, current_user: CurrentUser | None) -> str:
-    parsed = _parse_named_json_command(command, "/tool")
-    if isinstance(parsed, str):
-        return parsed
-    name, arguments = parsed
+async def _call_tool_response(command: SlashCommand, current_user: CurrentUser | None) -> str:
+    if not command.name:
+        return "Expected `/tool <name> {...json args...}`."
     result = await mcp_runtime.call_tool_for_user(
         current_user,
-        name,
-        arguments,
+        command.name,
+        command.arguments,
         gate_permission=Permission.CHAT_TOOLS_CALL,
         chat_safe_only=True,
+        result_max_rows=settings.CHAT_TOOL_RESULT_MAX_ROWS,
+        result_max_bytes=settings.CHAT_TOOL_RESULT_MAX_BYTES,
     )
     return _text_content_response(result)
 
@@ -148,34 +156,17 @@ async def _list_skills_response(current_user: CurrentUser | None) -> str:
     return "Available MCP skills:\n" + "\n".join(lines)
 
 
-async def _render_skill_response(command: str, current_user: CurrentUser | None) -> str:
-    parsed = _parse_named_json_command(command, "/skill")
-    if isinstance(parsed, str):
-        return parsed
-    name, arguments = parsed
-    string_arguments = {key: str(value) for key, value in arguments.items()}
+async def _render_skill_response(command: SlashCommand, current_user: CurrentUser | None) -> str:
+    if not command.name:
+        return "Expected `/skill <name> {...json args...}`."
+    string_arguments = {key: str(value) for key, value in command.arguments.items()}
     result = await mcp_runtime.get_prompt_for_user(
         current_user,
-        name,
+        command.name,
         string_arguments,
         gate_permission=Permission.CHAT_SKILLS_CALL,
     )
     return "\n\n".join(text for message in result.messages if (text := _content_text(message.content)))
-
-
-def _parse_named_json_command(command: str, prefix: str) -> tuple[str, dict[str, Any]] | str:
-    parts = command.split(maxsplit=2)
-    if len(parts) < 2 or parts[0] != prefix:
-        return f"Expected `{prefix} <name> {{...json args...}}`."
-    if len(parts) == 2:
-        return parts[1], {}
-    try:
-        parsed = json.loads(parts[2])
-    except json.JSONDecodeError:
-        return "Arguments must be a JSON object."
-    if not isinstance(parsed, dict):
-        return "Arguments must be a JSON object."
-    return parts[1], parsed
 
 
 def _text_content_response(content: list[Any]) -> str:
@@ -202,6 +193,22 @@ def _last_user_text(messages: list[Any]) -> str:
         if isinstance(message, dict) and message.get("role") == "user":
             return str(message.get("content", ""))
     return ""
+
+
+def _trim_messages(existing_messages: list[Any], new_message: AIMessage) -> list[RemoveMessage]:
+    max_messages = settings.CHAT_MAX_PERSISTED_MESSAGES
+    if max_messages <= 0:
+        return []
+    combined = [*existing_messages, new_message]
+    remove_count = len(combined) - max_messages
+    if remove_count <= 0:
+        return []
+    removals: list[RemoveMessage] = []
+    for message in combined[:remove_count]:
+        message_id = getattr(message, "id", None)
+        if isinstance(message_id, str) and message_id:
+            removals.append(RemoveMessage(id=message_id))
+    return removals
 
 
 def _chunk_text(text: str, chunk_size: int = 8) -> list[str]:

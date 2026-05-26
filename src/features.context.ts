@@ -7,9 +7,13 @@ export interface Features {
   chat: boolean;
 }
 
-// Optimistic defaults (match the backend defaults) so the UI shows features
-// until the config endpoint resolves — mirrors AuthConfig's safe-default style.
+// Disabled defaults prevent feature UI from flashing before GET /api/v1/config
+// resolves. App.tsx applies BACKEND_DEFAULT_FEATURES after the config response.
 export const DEFAULT_FEATURES: Features = {
+  chat: false,
+};
+
+export const BACKEND_DEFAULT_FEATURES: Features = {
   chat: true,
 };
 
