@@ -255,7 +255,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     should_init = settings.DYNAMODB_CREATE_TABLE or (settings.REPORT_STORE_BACKEND == "sqlmodel")
     if should_init:
         await report_store.initialize()
-    await initialize_chat_checkpoints()
+    if settings.CHAT_ENABLED:
+        await initialize_chat_checkpoints()
     mcp_session_manager = getattr(app.state, "mcp_session_manager", None)
     if mcp_session_manager is not None:
         async with mcp_session_manager.run():
@@ -300,7 +301,6 @@ def create_app() -> FastAPI:
     # API routers
     for router_module in [
         auth_routes,
-        chat_routes,
         config_routes,
         graph_routes,
         me_routes,
@@ -316,6 +316,9 @@ def create_app() -> FastAPI:
         static_routes,
     ]:
         app.include_router(router_module.router)
+
+    if settings.CHAT_ENABLED:
+        app.include_router(chat_routes.router)
 
     # MCP server — wired in as a pure ASGI middleware so it intercepts
     # /api/v1/mcp* before FastAPI's router.  This avoids a Starlette 1.0.0

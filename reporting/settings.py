@@ -281,6 +281,11 @@ REPORT_STORE_BACKEND = str_env("REPORT_STORE_BACKEND", "dynamodb")
 # Example: sqlite:///./seizu.db
 SQL_DATABASE_URL = str_env("SQL_DATABASE_URL", "")
 
+# Master switch for the chat assistant. When false the chat routes are not
+# registered, checkpoint storage is not initialized, and the frontend hides the
+# Chat UI (surfaced via GET /api/v1/config -> features.chat).
+CHAT_ENABLED = bool_env("CHAT_ENABLED", True)
+
 # Dedicated DynamoDB table used by LangGraph to persist chat checkpoints.
 CHAT_CHECKPOINT_TABLE_NAME = str_env("CHAT_CHECKPOINT_TABLE_NAME", "seizu-chat-checkpoints")
 # When true, create the LangGraph checkpoint table at startup if missing.

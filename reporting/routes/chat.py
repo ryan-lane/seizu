@@ -4,14 +4,22 @@ import uuid
 from collections.abc import AsyncIterator
 from typing import Any
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from fastapi.responses import StreamingResponse
-from langchain_core.messages import HumanMessage
+from langchain_core.messages import AIMessage, HumanMessage
 
 from reporting.authnz import CurrentUser, require_permission
 from reporting.authnz.permissions import Permission
-from reporting.schema.chat import ChatStreamRequest
-from reporting.services.chat_graph import ChatState, get_chat_graph
+from reporting.schema.chat import ChatHistoryMessage, ChatHistoryResponse, ChatStreamRequest
+from reporting.services.chat_graph import (
+    ChatState,
+    build_agent_response,
+    classify_input,
+    get_chat_graph,
+    load_thread_messages,
+    namespaced_thread_id,
+)
+from reporting.services.chat_messages import MessageTag, has_tag
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -52,23 +60,9 @@ async def _stream_chat_response(body: ChatStreamRequest, current: CurrentUser) -
     yield _sse_data({"type": "text-start", "id": text_id})
 
     try:
-        graph = get_chat_graph()
-        graph_input: ChatState = {"messages": [HumanMessage(content=body.message)]}
-        config = {
-            "configurable": {
-                "current_user": current,
-                "thread_id": f"user:{current.user.user_id}:thread:{body.thread_id}",
-            }
-        }
-        async for event in graph.astream_events(
-            graph_input,
-            config,
-            version="v2",
-            stream_mode="custom",
-        ):
-            token = _token_from_event(event)
-            if token:
-                yield _sse_data({"type": "text-delta", "id": text_id, "delta": token})
+        async for delta in _token_source(body, current):
+            if delta:
+                yield _sse_data({"type": "text-delta", "id": text_id, "delta": delta})
     except Exception:
         logger.exception("Chat stream failed")
         yield _sse_data({"type": "text-end", "id": text_id})
@@ -82,22 +76,72 @@ async def _stream_chat_response(body: ChatStreamRequest, current: CurrentUser) -
     yield "data: [DONE]\n\n"
 
 
-def _token_from_event(event: dict[str, Any]) -> str | None:
-    if event.get("event") != "on_chain_stream":
-        return None
-    if event.get("parent_ids"):
-        return None
-    data = event.get("data")
-    if not isinstance(data, dict):
-        return None
-    chunk = data.get("chunk")
-    if not isinstance(chunk, dict):
-        return None
-    if chunk.get("kind") != "token":
-        return None
-    content = chunk.get("content")
-    return content if isinstance(content, str) else None
+async def _token_source(body: ChatStreamRequest, current: CurrentUser) -> AsyncIterator[str]:
+    human = classify_input(body.message)
+    if has_tag(human, MessageTag.EPHEMERAL):
+        # Console command: stream the result but never run the checkpointed
+        # graph, so neither the command nor its output enters the thread and
+        # can replay into future LLM context.
+        yield await build_agent_response(body.message, current)
+        return
+
+    graph = get_chat_graph()
+    graph_input: ChatState = {"messages": [human]}
+    config = {
+        "configurable": {
+            "current_user": current,
+            "thread_id": namespaced_thread_id(current, body.thread_id),
+        }
+    }
+    async for chunk in graph.astream(graph_input, config, stream_mode="custom"):
+        if isinstance(chunk, dict) and chunk.get("kind") == "token":
+            delta = chunk.get("content")
+            if isinstance(delta, str):
+                yield delta
 
 
 def _sse_data(payload: dict[str, Any]) -> str:
     return f"data: {json.dumps(payload, separators=(',', ':'))}\n\n"
+
+
+@router.get("/api/v1/chat/history", response_model=ChatHistoryResponse)
+async def chat_history(
+    thread_id: str = Query(min_length=1, max_length=200),
+    current: CurrentUser = Depends(require_permission(Permission.CHAT_USE)),
+) -> ChatHistoryResponse:
+    """Return the persisted messages for the caller's chat thread.
+
+    Lets the SPA rehydrate a conversation after a reload, since the client-side
+    message state is otherwise lost.
+    """
+    messages = await load_thread_messages(current, thread_id)
+    return ChatHistoryResponse(messages=[m for m in map(_to_history_message, messages) if m is not None])
+
+
+def _to_history_message(message: Any) -> ChatHistoryMessage | None:
+    if isinstance(message, HumanMessage):
+        role: str = "user"
+    elif isinstance(message, AIMessage):
+        role = "assistant"
+    else:
+        # Skip system/tool messages — the UI only renders the user/assistant turns.
+        return None
+    text = _message_text(message.content)
+    if not text:
+        return None
+    return ChatHistoryMessage(id=str(message.id) if message.id else uuid.uuid4().hex, role=role, text=text)
+
+
+def _message_text(content: Any) -> str:
+    """Flatten LangChain message content (str or content blocks) to plain text."""
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        parts: list[str] = []
+        for item in content:
+            if isinstance(item, str):
+                parts.append(item)
+            elif isinstance(item, dict) and isinstance(item.get("text"), str):
+                parts.append(item["text"])
+        return "".join(parts)
+    return ""

@@ -17,6 +17,12 @@ from reporting import settings
 from reporting.authnz import CurrentUser
 from reporting.authnz.permissions import Permission
 from reporting.services import mcp_runtime
+from reporting.services.chat_messages import MessageTag, drop_tagged, tag_message
+
+# Console commands whose results are streamed to the UI but never persisted to
+# the thread (see classify_input / the chat route's ephemeral short-circuit).
+_EPHEMERAL_COMMANDS: frozenset[str] = frozenset({"/tools", "/skills"})
+_EPHEMERAL_COMMAND_PREFIXES: tuple[str, ...] = ("/tool ", "/skill ")
 
 
 class ChatState(TypedDict):
@@ -24,20 +30,60 @@ class ChatState(TypedDict):
 
 
 class ChatGraph(Protocol):
-    def astream_events(
+    def astream(
         self,
         input: ChatState,
         config: dict[str, Any],
         *,
-        version: str,
         stream_mode: str,
     ) -> Any: ...
+
+    def aget_state(self, config: dict[str, Any]) -> Any: ...
+
+
+def namespaced_thread_id(current_user: CurrentUser, thread_id: str) -> str:
+    """Scope a client-supplied thread id to the authenticated user.
+
+    The user id prefix is server-derived, so a client cannot reach another
+    user's thread by guessing the thread id.
+    """
+    return f"user:{current_user.user.user_id}:thread:{thread_id}"
+
+
+async def load_thread_messages(current_user: CurrentUser, thread_id: str) -> list[Any]:
+    """Return the persisted LangChain messages for a user's chat thread.
+
+    Ephemeral-tagged messages are filtered out here so they never reach the
+    history API or (in future) the LLM context, even if some code path persists
+    one — the tag is the single enforcement point.
+    """
+    graph = get_chat_graph()
+    config = {"configurable": {"thread_id": namespaced_thread_id(current_user, thread_id)}}
+    state = await graph.aget_state(config)
+    values = getattr(state, "values", None) or {}
+    messages = values.get("messages", [])
+    return drop_tagged(messages, MessageTag.EPHEMERAL) if isinstance(messages, list) else []
+
+
+def is_ephemeral_command(text: str) -> bool:
+    """True for console commands handled out-of-band (streamed, not persisted)."""
+    stripped = text.strip()
+    return stripped in _EPHEMERAL_COMMANDS or stripped.startswith(_EPHEMERAL_COMMAND_PREFIXES)
+
+
+def classify_input(text: str) -> HumanMessage:
+    """Build the user message for a turn, tagging it ephemeral when it is a
+    console command whose turn should be streamed but never persisted."""
+    message = HumanMessage(content=text)
+    if is_ephemeral_command(text):
+        tag_message(message, MessageTag.EPHEMERAL)
+    return message
 
 
 async def mock_agent_node(state: ChatState, config: RunnableConfig) -> ChatState:
     last_user_message = _last_user_text(state["messages"])
     current_user = _current_user_from_config(config)
-    response = await _build_response(last_user_message, current_user)
+    response = await build_agent_response(last_user_message, current_user)
     writer = get_stream_writer()
 
     for chunk in _chunk_text(response):
@@ -47,7 +93,7 @@ async def mock_agent_node(state: ChatState, config: RunnableConfig) -> ChatState
     return {"messages": [AIMessage(content=response)]}
 
 
-async def _build_response(message: str, current_user: CurrentUser | None) -> str:
+async def build_agent_response(message: str, current_user: CurrentUser | None) -> str:
     stripped = message.strip()
     if stripped == "/tools":
         return await _list_tools_response(current_user)
@@ -162,16 +208,24 @@ def _chunk_text(text: str, chunk_size: int = 8) -> list[str]:
     return [text[index : index + chunk_size] for index in range(0, len(text), chunk_size)]
 
 
-@lru_cache(maxsize=1)
-def get_chat_graph() -> ChatGraph:
+def build_chat_graph(checkpointer: Any) -> ChatGraph:
     graph = StateGraph(ChatState)
     graph.add_node("mock_agent", mock_agent_node)
     graph.add_edge(START, "mock_agent")
     graph.add_edge("mock_agent", END)
-    return graph.compile(checkpointer=_build_checkpointer())
+    return graph.compile(checkpointer=checkpointer)
+
+
+@lru_cache(maxsize=1)
+def get_chat_graph() -> ChatGraph:
+    return build_chat_graph(_build_checkpointer())
 
 
 def _build_checkpointer() -> DynamoDBSaver:
+    # DynamoDBSaver is boto3-based (no async DynamoDB saver ships in
+    # langgraph-checkpoint-aws), but its async methods wrap the sync calls in
+    # run_in_executor, so checkpoint I/O is offloaded to a threadpool and does
+    # not block the event loop — keep using it under the async graph.
     ttl_seconds = settings.CHAT_CHECKPOINT_TTL_SECONDS or None
     s3_offload_config = None
     if settings.CHAT_CHECKPOINT_S3_BUCKET:
@@ -241,8 +295,13 @@ def _initialize_chat_checkpoints_sync() -> None:
 
 
 def _aws_config() -> botocore.config.Config:
-    return botocore.config.Config(
-        connect_timeout=settings.AWS_CONNECT_TIMEOUT,
-        read_timeout=settings.AWS_READ_TIMEOUT,
-        s3={"addressing_style": "path"},
-    )
+    config_kwargs: dict[str, Any] = {
+        "connect_timeout": settings.AWS_CONNECT_TIMEOUT,
+        "read_timeout": settings.AWS_READ_TIMEOUT,
+    }
+    # Path-style addressing is required for S3-compatible endpoints like MinIO
+    # in development; against real AWS S3 leave the default (virtual-hosted),
+    # which is the recommended/forward-compatible style.
+    if settings.CHAT_CHECKPOINT_S3_ENDPOINT_URL:
+        config_kwargs["s3"] = {"addressing_style": "path"}
+    return botocore.config.Config(**config_kwargs)

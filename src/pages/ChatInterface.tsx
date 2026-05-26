@@ -25,10 +25,14 @@ import Person from '@mui/icons-material/Person';
 import { AuthContext } from 'src/auth.context';
 import { AuthConfigContext } from 'src/authConfig.context';
 import { usePermissionState } from 'src/hooks/usePermissions';
+import { useChatHistory } from 'src/hooks/useChatHistory';
+import { useFeature } from 'src/features.context';
 import { pageContentSx } from 'src/theme/layout';
 
 const CHAT_THREAD_STORAGE_KEY = 'seizu:chat:thread-id';
 
+// Persist the thread id so a reload resumes the same server-side conversation;
+// the client message list is rehydrated from the server on mount (see below).
 function getInitialThreadId(): string {
   if (typeof window === 'undefined') return crypto.randomUUID();
   const existing = window.localStorage.getItem(CHAT_THREAD_STORAGE_KEY);
@@ -57,8 +61,12 @@ export default function ChatInterface() {
   const { accessToken } = useContext(AuthContext);
   const { auth_required } = useContext(AuthConfigContext);
   const { hasPermission, loading: permissionsLoading } = usePermissionState();
+  const chatEnabled = useFeature('chat');
+  const fetchHistory = useChatHistory();
   const [input, setInput] = useState('');
   const [threadId] = useState(getInitialThreadId);
+  const [historyLoading, setHistoryLoading] = useState(true);
+  const hydratedRef = useRef(false);
   const scrollRef = useRef<HTMLDivElement | null>(null);
 
   const transport = useMemo(
@@ -79,14 +87,49 @@ export default function ChatInterface() {
     [accessToken, threadId],
   );
 
-  const { messages, sendMessage, status, stop, error } = useChat<UIMessage>({
-    id: threadId,
-    transport,
-  });
+  const { messages, sendMessage, setMessages, status, stop, error } =
+    useChat<UIMessage>({
+      id: threadId,
+      transport,
+    });
 
   const busy = status === 'submitted' || status === 'streaming';
   const disabled = permissionsLoading || !hasPermission('chat:use');
   const waitingForToken = auth_required && !accessToken;
+
+  // Rehydrate the conversation from the server once, after auth/permissions
+  // resolve. Only fill in if the client list is still empty so we never clobber
+  // a message the user sent before history arrived.
+  useEffect(() => {
+    if (
+      !chatEnabled ||
+      permissionsLoading ||
+      waitingForToken ||
+      !hasPermission('chat:use')
+    )
+      return;
+    if (hydratedRef.current) return;
+    hydratedRef.current = true;
+    let cancelled = false;
+    void fetchHistory(threadId).then((history) => {
+      if (cancelled) return;
+      if (history.length > 0) {
+        setMessages((current) => (current.length > 0 ? current : history));
+      }
+      setHistoryLoading(false);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    chatEnabled,
+    threadId,
+    fetchHistory,
+    setMessages,
+    permissionsLoading,
+    waitingForToken,
+    hasPermission,
+  ]);
 
   useEffect(() => {
     scrollRef.current?.scrollIntoView({ block: 'end' });
@@ -99,6 +142,14 @@ export default function ChatInterface() {
     setInput('');
     void sendMessage({ text: trimmed });
   };
+
+  if (!chatEnabled) {
+    return (
+      <Box sx={pageContentSx}>
+        <Typography>Chat is not enabled.</Typography>
+      </Box>
+    );
+  }
 
   if (permissionsLoading || waitingForToken) {
     return (
@@ -153,7 +204,18 @@ export default function ChatInterface() {
             py: 2,
           }}
         >
-          {messages.length === 0 ? (
+          {historyLoading && messages.length === 0 ? (
+            <Box
+              sx={{
+                alignItems: 'center',
+                display: 'flex',
+                height: '100%',
+                justifyContent: 'center',
+              }}
+            >
+              <CircularProgress />
+            </Box>
+          ) : messages.length === 0 ? (
             <Box
               sx={{
                 alignItems: 'center',

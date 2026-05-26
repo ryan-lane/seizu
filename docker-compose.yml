@@ -329,6 +329,9 @@ services:
       - DYNAMODB_ENDPOINT_URL=http://dynamodb:8000
       - DYNAMODB_REGION=us-east-1
       - DYNAMODB_CREATE_TABLE=true
+      # Chat assistant — set CHAT_ENABLED=false in .env to disable the feature
+      # (routes + checkpoint init + UI). Defaults to true when unset.
+      - CHAT_ENABLED
       - CHAT_CHECKPOINT_TABLE_NAME=seizu-chat-checkpoints
       - CHAT_CHECKPOINT_CREATE_TABLE=true
       - CHAT_CHECKPOINT_TTL_SECONDS=2592000

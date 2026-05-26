@@ -14,6 +14,7 @@ import NavItem, { NavItemData } from 'src/components/NavItem';
 import Hidden from 'src/components/Hidden';
 import { useReportsList } from 'src/hooks/useReportsApi';
 import { usePermissions } from 'src/hooks/usePermissions';
+import { useFeature } from 'src/features.context';
 import {
   DASHBOARD_SIDEBAR_EXPANDED_WIDTH,
   DASHBOARD_SIDEBAR_WIDTH_VAR,
@@ -33,6 +34,7 @@ function DashboardSidebar({
   const theme = useTheme();
   const { reports } = useReportsList();
   const hasPermission = usePermissions();
+  const chatEnabled = useFeature('chat');
   const logoSrc = collapsed
     ? theme.palette.mode === 'dark'
       ? '/static/images/logo-mark.svg'
@@ -69,7 +71,7 @@ function DashboardSidebar({
           },
         ]
       : []),
-    ...(hasPermission('chat:use')
+    ...(chatEnabled && hasPermission('chat:use')
       ? [
           {
             href: '/app/chat',

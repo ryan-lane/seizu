@@ -22,23 +22,30 @@ _PARAM_TYPE_MAP: dict[str, str] = {
     "boolean": "boolean",
 }
 
-_MUTATING_PERMISSIONS: frozenset[str] = frozenset(
+# Non-mutating permissions: reads/inspection, skill rendering (returns text),
+# and tool calls (user-defined tools run Cypher that is validated read-only at
+# create/update time — strictly more constrained than the arbitrary read
+# queries QUERY_EXECUTE already allows). A built-in is exposed to chat only
+# when *every* permission it requires is in this set, so a newly added tool
+# guarded by a write/delete (or any unrecognised) permission is excluded from
+# chat by default. This is fail-closed: forgetting to classify a new mutating
+# tool hides it from chat rather than silently exposing it, which a denylist
+# would.
+_CHAT_SAFE_PERMISSIONS: frozenset[str] = frozenset(
     {
-        Permission.REPORTS_WRITE.value,
-        Permission.REPORTS_DELETE.value,
-        Permission.REPORTS_SET_DASHBOARD.value,
-        Permission.TOOLSETS_WRITE.value,
-        Permission.TOOLSETS_DELETE.value,
-        Permission.TOOLS_WRITE.value,
-        Permission.TOOLS_DELETE.value,
-        Permission.SKILLSETS_WRITE.value,
-        Permission.SKILLSETS_DELETE.value,
-        Permission.SKILLS_WRITE.value,
-        Permission.SKILLS_DELETE.value,
-        Permission.SCHEDULED_QUERIES_WRITE.value,
-        Permission.SCHEDULED_QUERIES_DELETE.value,
-        Permission.ROLES_WRITE.value,
-        Permission.ROLES_DELETE.value,
+        Permission.REPORTS_READ.value,
+        Permission.QUERY_EXECUTE.value,
+        Permission.QUERY_VALIDATE.value,
+        Permission.QUERY_HISTORY_READ.value,
+        Permission.TOOLSETS_READ.value,
+        Permission.TOOLS_READ.value,
+        Permission.TOOLS_CALL.value,
+        Permission.SKILLSETS_READ.value,
+        Permission.SKILLS_READ.value,
+        Permission.SKILLS_RENDER.value,
+        Permission.SCHEDULED_QUERIES_READ.value,
+        Permission.USERS_READ.value,
+        Permission.ROLES_READ.value,
     }
 )
 
@@ -79,8 +86,8 @@ def parse_user_defined_name(name: str) -> tuple[str, str] | None:
     return parts[0], parts[1]
 
 
-def _chat_safe_builtin_permissions(required_permissions: list[str]) -> bool:
-    return not (_MUTATING_PERMISSIONS & set(required_permissions))
+def _is_chat_safe_builtin(required_permissions: list[str]) -> bool:
+    return bool(required_permissions) and set(required_permissions) <= _CHAT_SAFE_PERMISSIONS
 
 
 def _permissions(current_user: CurrentUser | None, permissions: frozenset[str] | None) -> frozenset[str]:
@@ -102,7 +109,7 @@ async def list_tools_for_user(
 
     tools: list[Tool] = []
     for builtin in list_builtin_tools():
-        if chat_safe_only and not _chat_safe_builtin_permissions(builtin.required_permissions):
+        if chat_safe_only and not _is_chat_safe_builtin(builtin.required_permissions):
             continue
         if missing_permissions(builtin.required_permissions, perms):
             continue
@@ -146,7 +153,7 @@ async def call_tool_for_user(
 
     builtin = find_builtin(name)
     if builtin is not None:
-        if chat_safe_only and not _chat_safe_builtin_permissions(builtin.required_permissions):
+        if chat_safe_only and not _is_chat_safe_builtin(builtin.required_permissions):
             return text_response({"error": f"Tool '{name}' is not available to chat"})
         missing = missing_permissions(builtin.required_permissions, perms)
         if missing:
