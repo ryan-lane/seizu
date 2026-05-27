@@ -22,13 +22,24 @@ def test_parse_named_json_command_with_unquoted_json():
     assert command.arguments == {"limit": 3}
 
 
-def test_parse_named_json_command_with_quoted_json():
-    command = parse_slash_command('/skill security__summarize \'{"topic": "alerts"}\'')
+def test_parse_named_json_command_with_compact_json():
+    # Compact JSON (no space after the colon) is the default json.dumps output
+    # and must parse identically to the spaced form. Regression guard.
+    command = parse_slash_command('/tool security__lookup {"limit":3}')
+
+    assert command is not None
+    assert command.command == "tool"
+    assert command.name == "security__lookup"
+    assert command.arguments == {"limit": 3}
+
+
+def test_parse_named_json_preserves_spaces_inside_json():
+    command = parse_slash_command('/skill security__summarize {"topic": "two words"}')
 
     assert command is not None
     assert command.command == "skill"
     assert command.name == "security__summarize"
-    assert command.arguments == {"topic": "alerts"}
+    assert command.arguments == {"topic": "two words"}
 
 
 def test_parse_rejects_bad_json():

@@ -1,7 +1,6 @@
 """Slash command parsing for the chat assistant."""
 
 import json
-import shlex
 from typing import Any, Literal
 
 from pydantic import BaseModel, Field
@@ -46,24 +45,19 @@ def parse_slash_command(text: str) -> SlashCommand | None:
 
 
 def _split_command(text: str) -> tuple[str, str | None, str]:
-    try:
-        tokens = shlex.split(text, posix=True)
-    except ValueError as exc:
-        raise SlashCommandError(str(exc)) from exc
+    """Split into (command, name, raw JSON remainder).
 
-    if not tokens:
-        return "", None, ""
-    if len(tokens) <= 2:
-        return tokens[0], tokens[1] if len(tokens) == 2 else None, ""
-
-    # Prefer shell-style parsing when the JSON object was quoted as one token.
-    if len(tokens) == 3:
-        return tokens[0], tokens[1], tokens[2]
-
-    # Preserve support for the friendlier unquoted form:
-    # /tool name {"limit": 3}
+    Everything after ``<command> <name>`` is the raw argument blob, parsed
+    as-is. We deliberately don't shell-tokenize: JSON quotes are data, not
+    shell quoting, so tokenizing mangles compact objects like ``{"limit":3}``
+    (the quotes get stripped, producing invalid JSON). ``str.split`` keeps the
+    remainder intact, so compact and spaced JSON parse identically.
+    """
     parts = text.split(maxsplit=2)
-    return parts[0], parts[1] if len(parts) > 1 else None, parts[2] if len(parts) > 2 else ""
+    command_token = parts[0]
+    name = parts[1] if len(parts) > 1 else None
+    json_text = parts[2] if len(parts) > 2 else ""
+    return command_token, name, json_text
 
 
 def _parse_arguments(json_text: str) -> dict[str, Any]:

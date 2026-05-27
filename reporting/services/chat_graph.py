@@ -18,7 +18,7 @@ from reporting.authnz import CurrentUser
 from reporting.authnz.permissions import Permission
 from reporting.services import mcp_runtime
 from reporting.services.chat_commands import SlashCommand, SlashCommandError, parse_slash_command
-from reporting.services.chat_messages import MessageTag, drop_tagged, tag_message
+from reporting.services.chat_messages import MessageTag, drop_tagged
 
 
 class ChatState(TypedDict):
@@ -64,24 +64,6 @@ async def load_thread_messages(current_user: CurrentUser, thread_id: str, *, lim
     return filtered[-limit:] if limit > 0 else []
 
 
-def is_ephemeral_command(text: str) -> bool:
-    """True for console commands handled out-of-band (streamed, not persisted)."""
-    try:
-        return parse_slash_command(text) is not None
-    except SlashCommandError:
-        command = text.strip().split(maxsplit=1)[0]
-        return command in {"/tools", "/tool", "/skills", "/skill"}
-
-
-def classify_input(text: str) -> HumanMessage:
-    """Build the user message for a turn, tagging it ephemeral when it is a
-    console command whose turn should be streamed but never persisted."""
-    message = HumanMessage(content=text, id=f"msg_{uuid.uuid4().hex}")
-    if is_ephemeral_command(text):
-        tag_message(message, MessageTag.EPHEMERAL)
-    return message
-
-
 async def mock_agent_node(state: ChatState, config: RunnableConfig) -> ChatState:
     last_user_message = _last_user_text(state["messages"])
     current_user = _current_user_from_config(config)
@@ -97,21 +79,29 @@ async def mock_agent_node(state: ChatState, config: RunnableConfig) -> ChatState
 
 
 async def build_agent_response(message: str, current_user: CurrentUser | None) -> str:
+    """Render the assistant reply for a raw message (parses, then dispatches).
+
+    Used by the graph node for ordinary turns; the route parses once itself and
+    calls respond_to_command directly for the ephemeral command path.
+    """
     try:
         command = parse_slash_command(message)
     except SlashCommandError as exc:
         return str(exc)
     if command is None:
         return f"I received your message: {message}"
+    return await respond_to_command(command, current_user)
+
+
+async def respond_to_command(command: SlashCommand, current_user: CurrentUser | None) -> str:
+    """Dispatch an already-parsed console command to its MCP-backed handler."""
     if command.command == "tools":
         return await _list_tools_response(current_user)
     if command.command == "tool":
         return await _call_tool_response(command, current_user)
     if command.command == "skills":
         return await _list_skills_response(current_user)
-    if command.command == "skill":
-        return await _render_skill_response(command, current_user)
-    return f"I received your message: {message}"
+    return await _render_skill_response(command, current_user)
 
 
 async def _list_tools_response(current_user: CurrentUser | None) -> str:
@@ -203,6 +193,12 @@ def _trim_messages(existing_messages: list[Any], new_message: AIMessage) -> list
     remove_count = len(combined) - max_messages
     if remove_count <= 0:
         return []
+    # Keep the retained window starting at a user turn: dropping an odd number
+    # of messages can leave a leading assistant message orphaned from its
+    # prompt, so shed it too. Never touches the just-produced message (the last
+    # element), so we always retain at least the current turn.
+    while remove_count < len(combined) - 1 and isinstance(combined[remove_count], AIMessage):
+        remove_count += 1
     removals: list[RemoveMessage] = []
     for message in combined[:remove_count]:
         message_id = getattr(message, "id", None)

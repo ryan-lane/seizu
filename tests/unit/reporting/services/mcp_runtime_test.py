@@ -174,6 +174,29 @@ async def test_chat_tool_call_applies_byte_limit(mocker):
     }
 
 
+async def test_chat_tool_call_byte_limit_sheds_rows(mocker):
+    rows = [{"v": "x" * 50} for _ in range(12)]
+    mocker.patch("reporting.services.mcp_runtime.report_store.get_enabled_tool", return_value=_tool())
+    mocker.patch("reporting.services.mcp_runtime.reporting_neo4j.run_query", return_value=rows)
+    current = _user(frozenset({Permission.CHAT_TOOLS_CALL.value, Permission.TOOLS_CALL.value}))
+
+    result = await mcp_runtime.call_tool_for_user(
+        current,
+        "security__lookup",
+        {},
+        gate_permission=Permission.CHAT_TOOLS_CALL,
+        result_max_bytes=500,
+    )
+
+    data = json.loads(result[0].text)
+    # Graceful: keep as many whole rows as fit rather than discarding everything.
+    assert data["truncated_reason"] == "byte_limit"
+    assert data["total_rows"] == 12
+    assert 1 <= len(data["results"]) < 12
+    assert data["returned"] == len(data["results"])
+    assert len(result[0].text.encode("utf-8")) <= 500
+
+
 async def test_chat_safe_tool_listing_hides_mutating_builtins(mocker):
     mocker.patch("reporting.services.mcp_runtime.report_store.list_enabled_tools", return_value=[])
     current = _user(

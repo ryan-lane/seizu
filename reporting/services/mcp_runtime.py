@@ -304,22 +304,73 @@ def _bounded_text_response(
     max_rows: int | None,
     max_bytes: int | None,
 ) -> list[TextContent]:
-    bounded = payload
-    if max_rows is not None and max_rows > 0 and isinstance(payload, list) and len(payload) > max_rows:
-        bounded = {
-            "results": payload[:max_rows],
-            "truncated": True,
-            "truncated_reason": "row_limit",
-            "max_rows": max_rows,
-        }
+    """Serialize a tool result for chat, bounding by rows then bytes.
+
+    Over the row cap, keep the first ``max_rows`` rows. Over the byte cap, shed
+    whole rows from the end until the JSON fits, so the caller still gets as
+    many complete rows as possible (with a truncation marker) instead of
+    nothing — only falling back to an error marker when not even one row fits
+    (a single oversized row, or a non-list payload that can't be row-shed).
+    """
+    rows = payload if isinstance(payload, list) else None
+    capped: list[Any] | None
+    if rows is not None and max_rows is not None and max_rows > 0 and len(rows) > max_rows:
+        capped = rows[:max_rows]
+        bounded: Any = _row_limit_payload(capped, max_rows=max_rows)
+    else:
+        capped = rows
+        bounded = payload
 
     text = json.dumps(bounded, indent=2, default=str)
-    if max_bytes is not None and max_bytes > 0 and len(text.encode("utf-8")) > max_bytes:
-        bounded = {
-            "error": "Tool result exceeded chat size limit",
-            "truncated": True,
-            "truncated_reason": "byte_limit",
-            "max_bytes": max_bytes,
-        }
-        text = json.dumps(bounded, indent=2, default=str)
-    return [TextContent(type="text", text=text)]
+    if max_bytes is None or max_bytes <= 0 or len(text.encode("utf-8")) <= max_bytes:
+        return [TextContent(type="text", text=text)]
+
+    # Over the byte budget: shed whole rows if the payload is a list.
+    if capped is None:
+        return _emit(_byte_limit_error(max_bytes))
+    total = len(rows) if rows is not None else len(capped)
+    keep = _rows_within_byte_budget(capped, total=total, max_bytes=max_bytes)
+    if keep <= 0:
+        return _emit(_byte_limit_error(max_bytes))
+    return _emit(_byte_limit_payload(capped[:keep], total=total, returned=keep, max_bytes=max_bytes))
+
+
+def _row_limit_payload(rows: list[Any], *, max_rows: int) -> dict[str, Any]:
+    return {"results": rows, "truncated": True, "truncated_reason": "row_limit", "max_rows": max_rows}
+
+
+def _byte_limit_payload(rows: list[Any], *, total: int, returned: int, max_bytes: int) -> dict[str, Any]:
+    return {
+        "results": rows,
+        "truncated": True,
+        "truncated_reason": "byte_limit",
+        "returned": returned,
+        "total_rows": total,
+        "max_bytes": max_bytes,
+    }
+
+
+def _byte_limit_error(max_bytes: int) -> dict[str, Any]:
+    return {
+        "error": "Tool result exceeded chat size limit",
+        "truncated": True,
+        "truncated_reason": "byte_limit",
+        "max_bytes": max_bytes,
+    }
+
+
+def _rows_within_byte_budget(rows: list[Any], *, total: int, max_bytes: int) -> int:
+    """Largest k such that the byte-limit payload for rows[:k] fits max_bytes."""
+    lo, hi, best = 0, len(rows), 0
+    while lo <= hi:
+        mid = (lo + hi) // 2
+        candidate = _byte_limit_payload(rows[:mid], total=total, returned=mid, max_bytes=max_bytes)
+        if len(json.dumps(candidate, indent=2, default=str).encode("utf-8")) <= max_bytes:
+            best, lo = mid, mid + 1
+        else:
+            hi = mid - 1
+    return best
+
+
+def _emit(payload: Any) -> list[TextContent]:
+    return [TextContent(type="text", text=json.dumps(payload, indent=2, default=str))]

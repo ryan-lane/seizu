@@ -6,7 +6,7 @@ from reporting.authnz import CurrentUser
 from reporting.authnz.permissions import Permission
 from reporting.schema.report_config import User
 from reporting.services import chat_graph
-from reporting.services.chat_messages import MessageTag, has_tag
+from reporting.services.chat_messages import MessageTag
 
 _NOW = "2024-01-01T00:00:00+00:00"
 
@@ -110,23 +110,6 @@ async def test_chat_graph_renders_mcp_skill_with_chat_gate(mocker):
     assert response == "Summarize alerts."
 
 
-def test_is_ephemeral_command_matches_console_commands():
-    assert chat_graph.is_ephemeral_command("/tools")
-    assert chat_graph.is_ephemeral_command("  /skills  ")
-    assert chat_graph.is_ephemeral_command('/tool security__lookup {"limit": 3}')
-    assert chat_graph.is_ephemeral_command("/skill security__summarize")
-    assert not chat_graph.is_ephemeral_command("what tools do I have?")
-    assert not chat_graph.is_ephemeral_command("/toolsmith")
-
-
-def test_classify_input_tags_only_commands():
-    command = chat_graph.classify_input("/tools")
-    assert has_tag(command, MessageTag.EPHEMERAL)
-
-    normal = chat_graph.classify_input("hello")
-    assert not has_tag(normal, MessageTag.EPHEMERAL)
-
-
 async def test_load_thread_messages_drops_ephemeral(mocker):
     ephemeral = HumanMessage(content="/tools")
     ephemeral.additional_kwargs["seizu_tags"] = [MessageTag.EPHEMERAL.value]
@@ -165,16 +148,33 @@ async def test_load_thread_messages_limits_returned_messages(mocker):
     assert [m.content for m in messages] == ["two", "three"]
 
 
-def test_trim_messages_removes_oldest_messages(mocker):
+def test_trim_messages_removes_oldest_turn(mocker):
     mocker.patch("reporting.settings.CHAT_MAX_PERSISTED_MESSAGES", 2)
     existing = [
-        HumanMessage(content="one", id="one"),
-        AIMessage(content="two", id="two"),
+        HumanMessage(content="q1", id="h1"),
+        AIMessage(content="a1", id="a1"),
+        HumanMessage(content="q2", id="h2"),
     ]
-    new_message = AIMessage(content="three", id="three")
+    new_message = AIMessage(content="a2", id="a2")
 
+    # combined = [h1, a1, h2, a2]; cap 2 drops the oldest user/assistant turn.
     removals = chat_graph._trim_messages(existing, new_message)
 
-    assert len(removals) == 1
-    assert isinstance(removals[0], RemoveMessage)
-    assert removals[0].id == "one"
+    assert all(isinstance(r, RemoveMessage) for r in removals)
+    assert [r.id for r in removals] == ["h1", "a1"]
+
+
+def test_trim_messages_keeps_window_starting_at_user_turn(mocker):
+    mocker.patch("reporting.settings.CHAT_MAX_PERSISTED_MESSAGES", 3)
+    existing = [
+        HumanMessage(content="q1", id="h1"),
+        AIMessage(content="a1", id="a1"),
+        HumanMessage(content="q2", id="h2"),
+    ]
+    new_message = AIMessage(content="a2", id="a2")
+
+    # combined = [h1, a1, h2, a2]; cap 3 would drop only h1, orphaning a1 — so
+    # a1 is shed too and the retained window starts at the user turn h2.
+    removals = chat_graph._trim_messages(existing, new_message)
+
+    assert [r.id for r in removals] == ["h1", "a1"]

@@ -12,15 +12,14 @@ from reporting import settings
 from reporting.authnz import CurrentUser, require_permission
 from reporting.authnz.permissions import Permission
 from reporting.schema.chat import ChatHistoryMessage, ChatHistoryResponse, ChatStreamRequest
+from reporting.services.chat_commands import SlashCommandError, parse_slash_command
 from reporting.services.chat_graph import (
     ChatState,
-    build_agent_response,
-    classify_input,
     get_chat_graph,
     load_thread_messages,
     namespaced_thread_id,
+    respond_to_command,
 )
-from reporting.services.chat_messages import MessageTag, has_tag
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -78,16 +77,20 @@ async def _stream_chat_response(body: ChatStreamRequest, current: CurrentUser) -
 
 
 async def _token_source(body: ChatStreamRequest, current: CurrentUser) -> AsyncIterator[str]:
-    human = classify_input(body.message)
-    if has_tag(human, MessageTag.EPHEMERAL):
-        # Console command: stream the result but never run the checkpointed
-        # graph, so neither the command nor its output enters the thread and
-        # can replay into future LLM context.
-        yield await build_agent_response(body.message, current)
+    # Parse once: a recognized console command (or a malformed one) is handled
+    # inline and streamed to the UI, but never runs the checkpointed graph, so
+    # neither the command nor its output enters the thread or future LLM context.
+    try:
+        command = parse_slash_command(body.message)
+    except SlashCommandError as exc:
+        yield str(exc)
+        return
+    if command is not None:
+        yield await respond_to_command(command, current)
         return
 
     graph = get_chat_graph()
-    graph_input: ChatState = {"messages": [human]}
+    graph_input: ChatState = {"messages": [HumanMessage(content=body.message, id=f"msg_{uuid.uuid4().hex}")]}
     config = {
         "configurable": {
             "current_user": current,
