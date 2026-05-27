@@ -19,6 +19,7 @@ from starlette.types import Receive, Scope, Send
 
 from reporting import settings
 from reporting.routes import auth as auth_routes
+from reporting.routes import chat as chat_routes
 from reporting.routes import config as config_routes
 from reporting.routes import graph as graph_routes
 from reporting.routes import me as me_routes
@@ -33,6 +34,7 @@ from reporting.routes import toolsets as toolsets_routes
 from reporting.routes import users as users_routes
 from reporting.routes import validate as validate_routes
 from reporting.services import report_store
+from reporting.services.chat_graph import initialize_chat_checkpoints
 
 _CSP_NONCE_PLACEHOLDER = "{{ csp_nonce() }}"
 
@@ -253,6 +255,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     should_init = settings.DYNAMODB_CREATE_TABLE or (settings.REPORT_STORE_BACKEND == "sqlmodel")
     if should_init:
         await report_store.initialize()
+    if settings.CHAT_ENABLED:
+        await initialize_chat_checkpoints()
     mcp_session_manager = getattr(app.state, "mcp_session_manager", None)
     if mcp_session_manager is not None:
         async with mcp_session_manager.run():
@@ -312,6 +316,9 @@ def create_app() -> FastAPI:
         static_routes,
     ]:
         app.include_router(router_module.router)
+
+    if settings.CHAT_ENABLED:
+        app.include_router(chat_routes.router)
 
     # MCP server — wired in as a pure ASGI middleware so it intercepts
     # /api/v1/mcp* before FastAPI's router.  This avoids a Starlette 1.0.0

@@ -36,6 +36,8 @@ dependencies = [
     "sqlmodel>=0.0.38",
     "typer>=0.25.0",
     "uvicorn>=0.46.0",
+    "langgraph>=1.2.1",
+    "langgraph-checkpoint-aws>=1.0.7",
 ]
 
 [project.scripts]

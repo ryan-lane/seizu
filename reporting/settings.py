@@ -281,6 +281,36 @@ REPORT_STORE_BACKEND = str_env("REPORT_STORE_BACKEND", "dynamodb")
 # Example: sqlite:///./seizu.db
 SQL_DATABASE_URL = str_env("SQL_DATABASE_URL", "")
 
+# Master switch for the chat assistant. When false the chat routes are not
+# registered, checkpoint storage is not initialized, and the frontend hides the
+# Chat UI (surfaced via GET /api/v1/config -> features.chat).
+CHAT_ENABLED = bool_env("CHAT_ENABLED", True)
+
+# Dedicated DynamoDB table used by LangGraph to persist chat checkpoints.
+CHAT_CHECKPOINT_TABLE_NAME = str_env("CHAT_CHECKPOINT_TABLE_NAME", "seizu-chat-checkpoints")
+# When true, create the LangGraph checkpoint table at startup if missing.
+CHAT_CHECKPOINT_CREATE_TABLE = bool_env("CHAT_CHECKPOINT_CREATE_TABLE", False)
+# Optional checkpoint TTL in seconds. Empty/0 disables automatic expiry.
+CHAT_CHECKPOINT_TTL_SECONDS = int_env("CHAT_CHECKPOINT_TTL_SECONDS", 0)
+# Compress serialized checkpoint payloads before storing them.
+CHAT_CHECKPOINT_ENABLE_COMPRESSION = bool_env("CHAT_CHECKPOINT_ENABLE_COMPRESSION", True)
+# S3 bucket used by langgraph-checkpoint-aws for payloads larger than 350KB.
+CHAT_CHECKPOINT_S3_BUCKET = str_env("CHAT_CHECKPOINT_S3_BUCKET", "")
+# Optional S3 endpoint override, e.g. http://minio:9000 for local development.
+CHAT_CHECKPOINT_S3_ENDPOINT_URL = str_env("CHAT_CHECKPOINT_S3_ENDPOINT_URL", "")
+# Optional S3 object prefix for checkpoint offload isolation.
+CHAT_CHECKPOINT_S3_KEY_PREFIX = str_env("CHAT_CHECKPOINT_S3_KEY_PREFIX", "seizu/langgraph")
+# Maximum persisted LangGraph messages per chat thread. Older turns are removed
+# from checkpoint state after each non-ephemeral turn.
+CHAT_MAX_PERSISTED_MESSAGES = int_env("CHAT_MAX_PERSISTED_MESSAGES", 200)
+# Default number of messages returned by GET /api/v1/chat/history.
+CHAT_HISTORY_LIMIT = int_env("CHAT_HISTORY_LIMIT", 100)
+# Maximum rows returned to chat from a single MCP tool call. Normal MCP calls are
+# unaffected; this caps model/UI context growth on the chat path.
+CHAT_TOOL_RESULT_MAX_ROWS = int_env("CHAT_TOOL_RESULT_MAX_ROWS", 100)
+# Maximum serialized bytes returned to chat from a single MCP tool call.
+CHAT_TOOL_RESULT_MAX_BYTES = int_env("CHAT_TOOL_RESULT_MAX_BYTES", 200_000)
+
 # The JWT claim that contains the user's Seizu role name.
 # Configure your OIDC provider to embed the role (e.g. "seizu-admin") directly
 # as a claim in the token. Common claim names: "seizu_role", "role".
