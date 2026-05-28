@@ -1,6 +1,5 @@
 import asyncio
 import json
-import time
 import uuid
 from collections.abc import AsyncIterator, Callable
 from dataclasses import dataclass
@@ -29,7 +28,7 @@ from typing_extensions import TypedDict
 from reporting import settings
 from reporting.authnz import CurrentUser
 from reporting.authnz.permissions import Permission
-from reporting.services import capability_revision, mcp_runtime
+from reporting.services import mcp_runtime
 from reporting.services.chat_messages import MessageTag, drop_tagged, has_tag, message_text, tag_message
 from reporting.services.mcp_runtime import ChatBlockReason
 
@@ -133,16 +132,6 @@ class SeizuChatDeepSeekMixin:
 
 _VALID_CHAT_PROVIDERS = frozenset({"mock", "openai", "anthropic", "gemini", "deepseek"})
 
-# Revision-keyed cache for skill / tool listings the chat agent shows the LLM.
-# A cache hit requires both ``stored_revision == capability_revision.get_revision()``
-# (so an admin's create/update/delete in this worker is reflected immediately)
-# AND ``time - fetched_at < _CAPABILITY_CACHE_TTL_SECONDS`` (a safety net that
-# bounds cross-worker staleness — each gunicorn worker has its own counter, so
-# a write in worker A is not seen by worker B until B's TTL expires).
-_CAPABILITY_CACHE_TTL_SECONDS = 30.0
-_capability_cache_lock = asyncio.Lock()
-_capability_cache: dict[str, tuple[int, float, list[Any]]] = {}
-
 
 def namespaced_thread_id(current_user: CurrentUser, thread_id: str) -> str:
     """Scope a client-supplied thread id to the authenticated user.
@@ -197,15 +186,23 @@ async def chat_agent_node(state: ChatState, config: RunnableConfig) -> ChatState
     model = get_chat_model()
     writer = get_stream_writer()
     base_system_prompt = build_system_prompt(provider, current_user)
-    capability_context = await build_capability_context(current_user)
+
+    # One listing per turn — every consumer below (capability context, skill
+    # specs, tool specs) works off this snapshot. No cross-turn cache: each
+    # turn sees the live store, and a single ``list_enabled_*`` call covers
+    # every read the turn needs.
+    skills = await _list_chat_prompts(current_user)
+    tools: list[Tool] = []
+    expose_tools = not settings.CHAT_LLM_PROGRESSIVE_DISCLOSURE
+    if expose_tools:
+        tools = await _list_chat_tools(current_user)
+
+    capability_context = build_capability_context(skills, tools if expose_tools else None)
     if capability_context:
         base_system_prompt = f"{base_system_prompt}\n\n{capability_context}"
 
-    skill_specs = await _skill_tool_specs(current_user)
-    tool_specs: list[ChatToolSpec] = []
-    expose_tools = not settings.CHAT_LLM_PROGRESSIVE_DISCLOSURE
-    if expose_tools:
-        tool_specs = await _mcp_tool_specs(current_user)
+    skill_specs = _skill_tool_specs(skills)
+    tool_specs: list[ChatToolSpec] = _mcp_tool_specs(tools) if expose_tools else []
 
     action_count = 0
     action_summaries: list[str] = []
@@ -294,7 +291,8 @@ async def chat_agent_node(state: ChatState, config: RunnableConfig) -> ChatState
             break
         if any(result.request.spec.kind == "skill" for result in results) and not expose_tools:
             expose_tools = True
-            tool_specs = await _mcp_tool_specs(current_user)
+            tools = await _list_chat_tools(current_user)
+            tool_specs = _mcp_tool_specs(tools)
 
     if not response and action_summaries and not response_is_broken:
         synthesis_system_prompt = _combined_system_prompt(
@@ -528,8 +526,7 @@ def _hostname(url: str) -> str:
         return ""
 
 
-async def _skill_tool_specs(current_user: CurrentUser | None) -> list[ChatToolSpec]:
-    prompts = await _list_prompts(current_user)
+def _skill_tool_specs(skills: list[Prompt]) -> list[ChatToolSpec]:
     return [
         ChatToolSpec(
             name=prompt.name,
@@ -537,12 +534,11 @@ async def _skill_tool_specs(current_user: CurrentUser | None) -> list[ChatToolSp
             description=prompt.description or f"{prompt.name} skill",
             input_schema=_prompt_input_schema(prompt),
         )
-        for prompt in prompts
+        for prompt in skills
     ]
 
 
-async def _mcp_tool_specs(current_user: CurrentUser | None) -> list[ChatToolSpec]:
-    tools = await _list_tools(current_user)
+def _mcp_tool_specs(tools: list[Tool]) -> list[ChatToolSpec]:
     return [
         ChatToolSpec(
             name=tool.name,
@@ -554,56 +550,19 @@ async def _mcp_tool_specs(current_user: CurrentUser | None) -> list[ChatToolSpec
     ]
 
 
-async def _list_tools(current_user: CurrentUser | None) -> list[Tool]:
-    return await _cached_listing(
-        _cache_key(current_user, "tools"),
-        lambda: mcp_runtime.list_tools_for_user(
-            current_user,
-            gate_permission=Permission.CHAT_TOOLS_CALL,
-            chat_safe_only=True,
-        ),
+async def _list_chat_tools(current_user: CurrentUser | None) -> list[Tool]:
+    return await mcp_runtime.list_tools_for_user(
+        current_user,
+        gate_permission=Permission.CHAT_TOOLS_CALL,
+        chat_safe_only=True,
     )
 
 
-async def _list_prompts(current_user: CurrentUser | None) -> list[Prompt]:
-    return await _cached_listing(
-        _cache_key(current_user, "prompts"),
-        lambda: mcp_runtime.list_prompts_for_user(
-            current_user,
-            gate_permission=Permission.CHAT_SKILLS_CALL,
-        ),
+async def _list_chat_prompts(current_user: CurrentUser | None) -> list[Prompt]:
+    return await mcp_runtime.list_prompts_for_user(
+        current_user,
+        gate_permission=Permission.CHAT_SKILLS_CALL,
     )
-
-
-def _cache_key(current_user: CurrentUser | None, namespace: str) -> str:
-    perms = sorted(current_user.permissions) if current_user is not None else []
-    return f"{namespace}|" + ",".join(perms)
-
-
-async def _cached_listing(key: str, loader: Callable[[], Any]) -> list[Any]:
-    current_revision = capability_revision.get_revision()
-    cached = _capability_cache.get(key)
-    now = time.monotonic()
-    if cached is not None:
-        stored_revision, fetched_at, value = cached
-        if stored_revision == current_revision and now - fetched_at < _CAPABILITY_CACHE_TTL_SECONDS:
-            return value
-    async with _capability_cache_lock:
-        # Re-check under lock — another coroutine may have populated the entry.
-        current_revision = capability_revision.get_revision()
-        cached = _capability_cache.get(key)
-        if cached is not None:
-            stored_revision, fetched_at, value = cached
-            if stored_revision == current_revision and time.monotonic() - fetched_at < _CAPABILITY_CACHE_TTL_SECONDS:
-                return value
-        value = await loader()
-        _capability_cache[key] = (current_revision, time.monotonic(), value)
-        return value
-
-
-def _invalidate_capability_cache() -> None:
-    """Clear the in-process capability listing cache (test helper)."""
-    _capability_cache.clear()
 
 
 def _prompt_input_schema(prompt: Prompt) -> dict[str, Any]:
@@ -908,11 +867,17 @@ def _json_dump(value: Any) -> str:
     return json.dumps(value, separators=(",", ":"), default=str)
 
 
-async def build_capability_context(current_user: CurrentUser | None) -> str:
-    skills = await _list_prompts(current_user)
-    if settings.CHAT_LLM_PROGRESSIVE_DISCLOSURE:
+def build_capability_context(skills: list[Prompt], tools: list[Tool] | None) -> str:
+    """Build the capability section of the system prompt from already-listed data.
+
+    The caller fetches the listings once per chat turn and threads them through
+    here — keeps the hot path to a single store roundtrip per listing instead
+    of re-listing once per consumer (capability context, skill specs, tool
+    specs). Pass ``tools=None`` to render the progressive-disclosure variant
+    (skills only).
+    """
+    if tools is None:
         return _progressive_capability_context(skills)
-    tools = await _list_tools(current_user)
     return _full_capability_context(skills, tools)
 
 

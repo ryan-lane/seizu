@@ -22,7 +22,6 @@ from reporting.schema.report_config import (
     ScheduledQueryVersion,
     User,
 )
-from reporting.services import capability_revision
 from reporting.services.report_store.base import ReportStore
 
 logger = logging.getLogger(__name__)
@@ -287,15 +286,13 @@ async def create_toolset(
     enabled: bool,
     created_by: str,
 ) -> ToolsetListItem:
-    item = await get_store().create_toolset(
+    return await get_store().create_toolset(
         toolset_id=toolset_id,
         name=name,
         description=description,
         enabled=enabled,
         created_by=created_by,
     )
-    capability_revision.bump_revision()
-    return item
 
 
 async def update_toolset(
@@ -306,7 +303,7 @@ async def update_toolset(
     updated_by: str,
     comment: str | None = None,
 ) -> ToolsetListItem | None:
-    item = await get_store().update_toolset(
+    return await get_store().update_toolset(
         toolset_id=toolset_id,
         name=name,
         description=description,
@@ -314,16 +311,10 @@ async def update_toolset(
         updated_by=updated_by,
         comment=comment,
     )
-    if item is not None:
-        capability_revision.bump_revision()
-    return item
 
 
 async def delete_toolset(toolset_id: str) -> bool:
-    ok = await get_store().delete_toolset(toolset_id)
-    if ok:
-        capability_revision.bump_revision()
-    return ok
+    return await get_store().delete_toolset(toolset_id)
 
 
 async def list_toolset_versions(toolset_id: str) -> list[ToolsetVersion]:
@@ -357,7 +348,7 @@ async def create_tool(
     enabled: bool,
     created_by: str,
 ) -> ToolItem | None:
-    item = await get_store().create_tool(
+    return await get_store().create_tool(
         toolset_id=toolset_id,
         tool_id=tool_id,
         name=name,
@@ -367,9 +358,6 @@ async def create_tool(
         enabled=enabled,
         created_by=created_by,
     )
-    if item is not None:
-        capability_revision.bump_revision()
-    return item
 
 
 async def update_tool(
@@ -382,7 +370,7 @@ async def update_tool(
     updated_by: str,
     comment: str | None = None,
 ) -> ToolItem | None:
-    item = await get_store().update_tool(
+    return await get_store().update_tool(
         tool_id=tool_id,
         name=name,
         description=description,
@@ -392,16 +380,10 @@ async def update_tool(
         updated_by=updated_by,
         comment=comment,
     )
-    if item is not None:
-        capability_revision.bump_revision()
-    return item
 
 
 async def delete_tool(tool_id: str) -> bool:
-    ok = await get_store().delete_tool(tool_id)
-    if ok:
-        capability_revision.bump_revision()
-    return ok
+    return await get_store().delete_tool(tool_id)
 
 
 async def list_tool_versions(tool_id: str) -> list[ToolVersion]:
@@ -440,15 +422,13 @@ async def create_skillset(
     enabled: bool,
     created_by: str,
 ) -> SkillsetListItem:
-    item = await get_store().create_skillset(
+    return await get_store().create_skillset(
         skillset_id=skillset_id,
         name=name,
         description=description,
         enabled=enabled,
         created_by=created_by,
     )
-    capability_revision.bump_revision()
-    return item
 
 
 async def update_skillset(
@@ -459,7 +439,7 @@ async def update_skillset(
     updated_by: str,
     comment: str | None = None,
 ) -> SkillsetListItem | None:
-    item = await get_store().update_skillset(
+    return await get_store().update_skillset(
         skillset_id=skillset_id,
         name=name,
         description=description,
@@ -467,16 +447,10 @@ async def update_skillset(
         updated_by=updated_by,
         comment=comment,
     )
-    if item is not None:
-        capability_revision.bump_revision()
-    return item
 
 
 async def delete_skillset(skillset_id: str) -> bool:
-    ok = await get_store().delete_skillset(skillset_id)
-    if ok:
-        capability_revision.bump_revision()
-    return ok
+    return await get_store().delete_skillset(skillset_id)
 
 
 async def list_skillset_versions(skillset_id: str) -> list[SkillsetVersion]:
@@ -507,7 +481,7 @@ async def create_skill(
     enabled: bool,
     created_by: str,
 ) -> SkillItem | None:
-    item = await get_store().create_skill(
+    return await get_store().create_skill(
         skillset_id=skillset_id,
         skill_id=skill_id,
         name=name,
@@ -519,9 +493,6 @@ async def create_skill(
         enabled=enabled,
         created_by=created_by,
     )
-    if item is not None:
-        capability_revision.bump_revision()
-    return item
 
 
 async def update_skill(
@@ -536,7 +507,7 @@ async def update_skill(
     updated_by: str,
     comment: str | None = None,
 ) -> SkillItem | None:
-    item = await get_store().update_skill(
+    return await get_store().update_skill(
         skill_id=skill_id,
         name=name,
         description=description,
@@ -548,16 +519,10 @@ async def update_skill(
         updated_by=updated_by,
         comment=comment,
     )
-    if item is not None:
-        capability_revision.bump_revision()
-    return item
 
 
 async def delete_skill(skill_id: str) -> bool:
-    ok = await get_store().delete_skill(skill_id)
-    if ok:
-        capability_revision.bump_revision()
-    return ok
+    return await get_store().delete_skill(skill_id)
 
 
 async def list_skill_versions(skill_id: str) -> list[SkillVersion]:

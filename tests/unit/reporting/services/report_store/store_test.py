@@ -4,7 +4,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from reporting.services import capability_revision, report_store
+from reporting.services import report_store
 from reporting.services.report_store.dynamodb import DynamoDBReportStore
 from reporting.services.report_store.sql import SQLModelReportStore
 
@@ -440,66 +440,3 @@ async def test_facade_delegates_remaining_methods(mock_store):
     mock_store.list_role_versions.assert_awaited_once_with("r1")
     await report_store.get_role_version("r1", 1)
     mock_store.get_role_version.assert_awaited_once_with("r1", 1)
-
-
-# ---------------------------------------------------------------------------
-# Capability revision bumps
-#
-# The chat agent caches skill/tool listings keyed on the capability revision —
-# mutating skills, tools, skillsets, or toolsets must bump the revision so the
-# next chat turn picks up the new state without waiting for the TTL fallback.
-# ---------------------------------------------------------------------------
-
-
-async def test_create_toolset_bumps_capability_revision(mock_store):
-    mock_store.create_toolset.return_value = MagicMock()
-    before = capability_revision.get_revision()
-
-    await report_store.create_toolset("ts1", "n", "d", True, "u1")
-
-    assert capability_revision.get_revision() == before + 1
-
-
-async def test_update_toolset_bumps_only_on_success(mock_store):
-    mock_store.update_toolset.return_value = None
-    before = capability_revision.get_revision()
-    await report_store.update_toolset("ts1", "n", "d", True, "u1")
-    assert capability_revision.get_revision() == before
-
-    mock_store.update_toolset.return_value = MagicMock()
-    await report_store.update_toolset("ts1", "n", "d", True, "u1")
-    assert capability_revision.get_revision() == before + 1
-
-
-async def test_delete_toolset_bumps_only_when_something_was_deleted(mock_store):
-    mock_store.delete_toolset.return_value = False
-    before = capability_revision.get_revision()
-    await report_store.delete_toolset("ts1")
-    assert capability_revision.get_revision() == before
-
-    mock_store.delete_toolset.return_value = True
-    await report_store.delete_toolset("ts1")
-    assert capability_revision.get_revision() == before + 1
-
-
-async def test_skill_lifecycle_bumps_capability_revision(mock_store):
-    mock_store.create_skill.return_value = MagicMock()
-    mock_store.update_skill.return_value = MagicMock()
-    mock_store.delete_skill.return_value = True
-    before = capability_revision.get_revision()
-
-    await report_store.create_skill("ss1", "sk1", "n", "d", "t", [], [], [], True, "u1")
-    await report_store.update_skill("sk1", "n2", "d2", "t2", [], [], [], False, "u2")
-    await report_store.delete_skill("sk1")
-
-    assert capability_revision.get_revision() == before + 3
-
-
-async def test_create_report_does_not_bump_capability_revision(mock_store):
-    """Non-capability mutations (e.g. reports) must not invalidate the chat cache."""
-    mock_store.create_report.return_value = MagicMock()
-    before = capability_revision.get_revision()
-
-    await report_store.create_report(name="r", created_by="u1")
-
-    assert capability_revision.get_revision() == before

@@ -1,6 +1,5 @@
 import asyncio
 
-import pytest
 from langchain_core.messages import AIMessage, AIMessageChunk, HumanMessage, SystemMessage, ToolMessage
 from langchain_core.messages.modifier import RemoveMessage
 from mcp.types import Prompt, PromptArgument, Tool
@@ -8,24 +7,11 @@ from mcp.types import Prompt, PromptArgument, Tool
 from reporting.authnz import CurrentUser
 from reporting.authnz.permissions import Permission
 from reporting.schema.report_config import User
-from reporting.services import capability_revision, chat_graph
+from reporting.services import chat_graph
 from reporting.services.chat_messages import MessageTag, has_tag
 from reporting.services.mcp_runtime import ChatActionOutcome, ChatBlockReason
 
 _NOW = "2024-01-01T00:00:00+00:00"
-
-
-@pytest.fixture(autouse=True)
-def _clear_capability_cache():
-    """Wipe the in-process skill/tool listing cache between tests.
-
-    The cache is keyed by ``(permissions, capability_revision)`` — without
-    clearing, mock invocations from a previous test would be served from the
-    cache and the current test's mocks would never be called.
-    """
-    chat_graph._invalidate_capability_cache()
-    yield
-    chat_graph._invalidate_capability_cache()
 
 
 def _user() -> CurrentUser:
@@ -879,90 +865,40 @@ async def test_chat_graph_from_scratch_keeps_good_context_and_drops_broken_outpu
     ]
 
 
-async def test_capability_context_progressive_disclosure_lists_only_skills(mocker):
-    mocker.patch("reporting.settings.CHAT_LLM_PROGRESSIVE_DISCLOSURE", True)
-    list_prompts = mocker.patch(
-        "reporting.services.chat_graph.mcp_runtime.list_prompts_for_user",
-        return_value=[
-            Prompt(
-                name="investigation__triage",
-                description="Triage a graph investigation",
-                arguments=[PromptArgument(name="asset", required=True)],
-            )
-        ],
-    )
-    list_tools = mocker.patch("reporting.services.chat_graph.mcp_runtime.list_tools_for_user")
+def test_build_capability_context_progressive_disclosure_lists_only_skills():
+    skills = [
+        Prompt(
+            name="investigation__triage",
+            description="Triage a graph investigation",
+            arguments=[PromptArgument(name="asset", required=True)],
+        )
+    ]
 
-    context = await chat_graph.build_capability_context(_user())
+    # tools=None → progressive variant (skills only).
+    context = chat_graph.build_capability_context(skills, None)
 
     assert "progressive disclosure is enabled" in context
     assert "Available skills:" in context
     assert "investigation__triage" in context
     assert "structured skill tools" in context
     assert "Available tools:" not in context
-    list_prompts.assert_awaited_once()
-    list_tools.assert_not_called()
 
 
-async def test_capability_context_serves_cached_listing_within_revision(mocker):
-    """Within the same capability revision, the cache short-circuits the store."""
-    mocker.patch("reporting.settings.CHAT_LLM_PROGRESSIVE_DISCLOSURE", True)
-    list_prompts = mocker.patch(
-        "reporting.services.chat_graph.mcp_runtime.list_prompts_for_user",
-        return_value=[Prompt(name="first__skill", description="First", arguments=[])],
-    )
+def test_build_capability_context_full_disclosure_lists_skills_and_tools():
+    skills = [Prompt(name="investigation__triage", description="Triage a graph investigation", arguments=[])]
+    tools = [
+        Tool(
+            name="graph__query",
+            description="Run a read-only Cypher query",
+            inputSchema={
+                "type": "object",
+                "properties": {"cypher": {"type": "string"}},
+                "required": ["cypher"],
+            },
+        )
+    ]
 
-    first = await chat_graph.build_capability_context(_user())
-    second = await chat_graph.build_capability_context(_user())
-
-    assert "first__skill" in first
-    assert "first__skill" in second
-    assert list_prompts.await_count == 1
-
-
-async def test_capability_context_invalidates_on_revision_bump(mocker):
-    """A capability-revision bump invalidates the cache immediately."""
-    mocker.patch("reporting.settings.CHAT_LLM_PROGRESSIVE_DISCLOSURE", True)
-    list_prompts = mocker.patch(
-        "reporting.services.chat_graph.mcp_runtime.list_prompts_for_user",
-        side_effect=[
-            [Prompt(name="first__skill", description="First", arguments=[])],
-            [Prompt(name="second__skill", description="Second", arguments=[])],
-        ],
-    )
-
-    first = await chat_graph.build_capability_context(_user())
-    capability_revision.bump_revision()
-    second = await chat_graph.build_capability_context(_user())
-
-    assert "first__skill" in first
-    assert "second__skill" in second
-    assert list_prompts.await_count == 2
-
-
-async def test_capability_context_full_disclosure_lists_skills_and_tools(mocker):
-    mocker.patch("reporting.settings.CHAT_LLM_PROGRESSIVE_DISCLOSURE", False)
-    mocker.patch(
-        "reporting.services.chat_graph.mcp_runtime.list_prompts_for_user",
-        return_value=[Prompt(name="investigation__triage", description="Triage a graph investigation", arguments=[])],
-    )
-    list_tools = mocker.patch(
-        "reporting.services.chat_graph.mcp_runtime.list_tools_for_user",
-        return_value=[
-            Tool(
-                name="graph__query",
-                description="Run a read-only Cypher query",
-                inputSchema={
-                    "type": "object",
-                    "properties": {"cypher": {"type": "string"}},
-                    "required": ["cypher"],
-                },
-            )
-        ],
-    )
-    current = _user()
-
-    context = await chat_graph.build_capability_context(current)
+    context = chat_graph.build_capability_context(skills, tools)
 
     assert "progressive disclosure is disabled" in context
     assert "Available skills:" in context
@@ -971,11 +907,42 @@ async def test_capability_context_full_disclosure_lists_skills_and_tools(mocker)
     assert "graph__query" in context
     assert "cypher (required)" in context
     assert "structured tool calls" in context
-    list_tools.assert_awaited_once_with(
-        current,
-        gate_permission=Permission.CHAT_TOOLS_CALL,
-        chat_safe_only=True,
+
+
+async def test_chat_agent_lists_skills_and_tools_once_per_turn(mocker):
+    """One ``list_prompts_for_user`` + one ``list_tools_for_user`` per chat turn.
+
+    Regression guard for the per-turn dedupe: before this, ``build_capability_context``
+    and ``_skill_tool_specs``/``_mcp_tool_specs`` each called the listing
+    functions, so a non-progressive turn fanned out to 4 store reads.
+    """
+    from langgraph.checkpoint.memory import MemorySaver
+
+    fake_model = _ToolCallingFakeModel([AIMessage(content="Final answer.")])
+    mocker.patch("reporting.settings.CHAT_LLM_PROVIDER", "openai")
+    mocker.patch("reporting.settings.CHAT_LLM_PROGRESSIVE_DISCLOSURE", False)
+    mocker.patch("reporting.services.chat_graph.get_chat_model", return_value=fake_model)
+    list_prompts = mocker.patch(
+        "reporting.services.chat_graph.mcp_runtime.list_prompts_for_user",
+        return_value=[],
     )
+    list_tools = mocker.patch(
+        "reporting.services.chat_graph.mcp_runtime.list_tools_for_user",
+        return_value=[],
+    )
+    graph = chat_graph.build_chat_graph(MemorySaver())
+
+    [
+        chunk
+        async for chunk in graph.astream(
+            {"messages": [HumanMessage(content="hi")]},
+            {"configurable": {"thread_id": "thread-once", "current_user": _user()}},
+            stream_mode="custom",
+        )
+    ]
+
+    assert list_prompts.await_count == 1
+    assert list_tools.await_count == 1
 
 
 async def test_load_thread_messages_drops_ephemeral(mocker):
