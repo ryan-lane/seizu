@@ -1,6 +1,5 @@
 import asyncio
 
-import pytest
 from langchain_core.messages import AIMessage, AIMessageChunk, HumanMessage, SystemMessage, ToolMessage
 from langchain_core.messages.modifier import RemoveMessage
 from mcp.types import GetPromptResult, Prompt, PromptArgument, PromptMessage, TextContent, Tool
@@ -12,20 +11,6 @@ from reporting.services import chat_graph
 from reporting.services.chat_messages import MessageTag, has_tag
 
 _NOW = "2024-01-01T00:00:00+00:00"
-
-
-@pytest.fixture(autouse=True)
-def _clear_capability_cache():
-    """Wipe the in-process skill/tool listing cache between tests.
-
-    The cache is keyed by the user's permission set, and ``_user()`` always
-    returns the same permissions — without clearing, mock invocations made by a
-    previous test would be served from the cache and would not call the mock
-    the *current* test patched.
-    """
-    chat_graph._invalidate_capability_cache()
-    yield
-    chat_graph._invalidate_capability_cache()
 
 
 def _user() -> CurrentUser:
@@ -128,12 +113,11 @@ def test_deepseek_reasoning_content_is_round_tripped_in_tool_call_payload():
     assert payload["messages"][1]["reasoning_content"] == "reasoned before tool"
 
 
-async def test_chat_graph_streams_text_deltas_as_they_arrive(mocker):
-    """LLM text deltas must hit the writer as they arrive, not after merge.
+async def test_chat_graph_streams_final_no_tool_text_deltas_as_they_arrive(mocker):
+    """Final no-tool LLM text deltas hit the writer as they arrive.
 
-    Regression guard for the buffer-then-fake-stream behaviour we removed:
-    each model chunk's text becomes its own stream entry, no fixed-size
-    re-chunking pass at the end.
+    Tool-enabled turns are buffered until we know whether the model requested
+    tools, but final answer turns can stream live.
     """
     from langgraph.checkpoint.memory import MemorySaver
 
@@ -160,6 +144,44 @@ async def test_chat_graph_streams_text_deltas_as_they_arrive(mocker):
 
     deltas = [chunk["content"] for chunk in chunks]
     assert deltas == ["alpha ", "beta ", "gamma"]
+
+
+async def test_chat_graph_buffers_tool_enabled_text_until_final_response(mocker):
+    from langgraph.checkpoint.memory import MemorySaver
+
+    fake_model = _ToolCallingFakeModel(
+        [
+            AIMessage(content="Inspecting now", tool_calls=[_tool_call("security__one", {"org": "mappedsky"})]),
+            AIMessage(content="Final answer."),
+        ]
+    )
+    mocker.patch("reporting.settings.CHAT_LLM_PROVIDER", "openai")
+    mocker.patch("reporting.settings.CHAT_LLM_PROGRESSIVE_DISCLOSURE", False)
+    mocker.patch("reporting.services.chat_graph.get_chat_model", return_value=fake_model)
+    mocker.patch("reporting.services.chat_graph.mcp_runtime.list_prompts_for_user", return_value=[])
+    mocker.patch(
+        "reporting.services.chat_graph.mcp_runtime.list_tools_for_user",
+        return_value=[Tool(name="security__one", description="One", inputSchema={"type": "object"})],
+    )
+    mocker.patch(
+        "reporting.services.chat_graph.mcp_runtime.call_tool_for_user",
+        return_value=[TextContent(type="text", text='{"ok": true}')],
+    )
+    graph = chat_graph.build_chat_graph(MemorySaver())
+
+    chunks = [
+        chunk
+        async for chunk in graph.astream(
+            {"messages": [HumanMessage(content="Run the overview")]},
+            {"configurable": {"thread_id": "thread-buffer-tool-text", "current_user": _user()}},
+            stream_mode="custom",
+        )
+    ]
+
+    streamed = "".join(chunk["content"] for chunk in chunks)
+    assert "Inspecting now" not in streamed
+    assert "Running tool `security__one`..." in streamed
+    assert "Final answer." in streamed
 
 
 async def test_chat_graph_streams_real_llm_with_seizu_prompt(mocker):
@@ -572,6 +594,89 @@ async def test_chat_graph_empty_response_fallback_preserves_last_action_result(m
     assert fake_model.calls == 3
 
 
+async def test_chat_graph_reports_unavailable_tool_call_and_persists_notice(mocker):
+    from langgraph.checkpoint.memory import MemorySaver
+
+    fake_model = _ToolCallingFakeModel(
+        [
+            AIMessage(
+                content="",
+                tool_calls=[_tool_call("toolsets__update_tool", {"toolset_id": "github_security"}, "call_1")],
+            )
+        ]
+    )
+    mocker.patch("reporting.settings.CHAT_LLM_PROVIDER", "openai")
+    mocker.patch("reporting.settings.CHAT_LLM_PROGRESSIVE_DISCLOSURE", False)
+    mocker.patch("reporting.services.chat_graph.get_chat_model", return_value=fake_model)
+    mocker.patch("reporting.services.chat_graph.mcp_runtime.list_prompts_for_user", return_value=[])
+    mocker.patch(
+        "reporting.services.chat_graph.mcp_runtime.list_tools_for_user",
+        return_value=[Tool(name="toolsets__list", description="List toolsets", inputSchema={"type": "object"})],
+    )
+    call_tool = mocker.patch("reporting.services.chat_graph.mcp_runtime.call_tool_for_user")
+    graph = chat_graph.build_chat_graph(MemorySaver())
+    config = {"configurable": {"thread_id": "thread-unavailable-tool", "current_user": _user()}}
+
+    chunks = [
+        chunk
+        async for chunk in graph.astream(
+            {"messages": [HumanMessage(content="Update these tools")]},
+            config,
+            stream_mode="custom",
+        )
+    ]
+
+    streamed = "".join(chunk["content"] for chunk in chunks)
+    assert "Seizu blocked the requested action" in streamed
+    assert "toolsets__update_tool" in streamed
+    assert "No blocked action was executed." in streamed
+    call_tool.assert_not_called()
+    state = await graph.aget_state(config)
+    persisted = state.values["messages"][-1]
+    assert "Seizu blocked the requested action" in persisted.content
+    assert not has_tag(persisted, MessageTag.BROKEN)
+
+
+async def test_chat_graph_reports_permission_denied_tool_result_and_persists_notice(mocker):
+    from langgraph.checkpoint.memory import MemorySaver
+
+    fake_model = _ToolCallingFakeModel(
+        [AIMessage(content="", tool_calls=[_tool_call("security__one", {"org": "mappedsky"}, "call_1")])]
+    )
+    mocker.patch("reporting.settings.CHAT_LLM_PROVIDER", "openai")
+    mocker.patch("reporting.settings.CHAT_LLM_PROGRESSIVE_DISCLOSURE", False)
+    mocker.patch("reporting.services.chat_graph.get_chat_model", return_value=fake_model)
+    mocker.patch("reporting.services.chat_graph.mcp_runtime.list_prompts_for_user", return_value=[])
+    mocker.patch(
+        "reporting.services.chat_graph.mcp_runtime.list_tools_for_user",
+        return_value=[Tool(name="security__one", description="One", inputSchema={"type": "object"})],
+    )
+    mocker.patch(
+        "reporting.services.chat_graph.mcp_runtime.call_tool_for_user",
+        return_value=[TextContent(type="text", text='{"error": "Permission denied: tools:call"}')],
+    )
+    graph = chat_graph.build_chat_graph(MemorySaver())
+    config = {"configurable": {"thread_id": "thread-permission-denied-tool", "current_user": _user()}}
+
+    chunks = [
+        chunk
+        async for chunk in graph.astream(
+            {"messages": [HumanMessage(content="Run the overview")]},
+            config,
+            stream_mode="custom",
+        )
+    ]
+
+    streamed = "".join(chunk["content"] for chunk in chunks)
+    assert "Running tool `security__one`..." in streamed
+    assert "Seizu blocked the requested action" in streamed
+    assert "Permission denied: tools:call" in streamed
+    state = await graph.aget_state(config)
+    persisted = state.values["messages"][-1]
+    assert "Permission denied: tools:call" in persisted.content
+    assert not has_tag(persisted, MessageTag.BROKEN)
+
+
 async def test_chat_graph_does_not_persist_internal_command_attempt(mocker):
     from langgraph.checkpoint.memory import MemorySaver
 
@@ -640,6 +745,24 @@ def test_llm_context_messages_applies_message_and_character_limits(mocker):
     context = chat_graph._llm_context_messages(messages)
 
     assert [message.content for message in context] == ["67890", "abcde"]
+
+
+def test_trim_inner_loop_messages_counts_reasoning_content_and_tool_calls():
+    messages = [
+        HumanMessage(content="q"),
+        AIMessage(
+            content="",
+            additional_kwargs={"reasoning_content": "x" * 80},
+            tool_calls=[_tool_call("security__one", {"org": "mappedsky"}, "call_1")],
+        ),
+        ToolMessage(content="{}.", tool_call_id="call_1", name="security__one"),
+        AIMessage(content="recent", tool_calls=[_tool_call("security__two", {}, "call_2")]),
+        ToolMessage(content="fresh result", tool_call_id="call_2", name="security__two"),
+    ]
+
+    retained = chat_graph._trim_inner_loop_messages(messages, max_chars=140)
+
+    assert retained == [messages[0], messages[3], messages[4]]
 
 
 def test_llm_context_messages_drops_broken_ai_output_but_keeps_good_context():
@@ -727,6 +850,24 @@ async def test_capability_context_progressive_disclosure_lists_only_skills(mocke
     assert "Available tools:" not in context
     list_prompts.assert_awaited_once()
     list_tools.assert_not_called()
+
+
+async def test_capability_context_does_not_cache_stale_skill_list(mocker):
+    mocker.patch("reporting.settings.CHAT_LLM_PROGRESSIVE_DISCLOSURE", True)
+    list_prompts = mocker.patch(
+        "reporting.services.chat_graph.mcp_runtime.list_prompts_for_user",
+        side_effect=[
+            [Prompt(name="first__skill", description="First", arguments=[])],
+            [Prompt(name="second__skill", description="Second", arguments=[])],
+        ],
+    )
+
+    first = await chat_graph.build_capability_context(_user())
+    second = await chat_graph.build_capability_context(_user())
+
+    assert "first__skill" in first
+    assert "second__skill" in second
+    assert list_prompts.await_count == 2
 
 
 async def test_capability_context_full_disclosure_lists_skills_and_tools(mocker):

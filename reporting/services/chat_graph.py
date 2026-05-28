@@ -1,6 +1,5 @@
 import asyncio
 import json
-import time
 import uuid
 from collections.abc import AsyncIterator, Callable
 from dataclasses import dataclass
@@ -131,15 +130,6 @@ class SeizuChatDeepSeekMixin:
 
 _VALID_CHAT_PROVIDERS = frozenset({"mock", "openai", "anthropic", "gemini", "deepseek"})
 
-# Per-process TTL cache for the *global* skill / tool listings the chat agent
-# advertises to the LLM. The MCP runtime call hits the report store on every
-# message — listing 50 skills and 50 tools is two store round-trips on the hot
-# path. Permissions still filter the result per-user; only the upstream listing
-# is shared, so a permission change is reflected within the TTL window.
-_CAPABILITY_CACHE_TTL_SECONDS = 60.0
-_capability_cache_lock = asyncio.Lock()
-_capability_cache: dict[str, tuple[float, list[Any]]] = {}
-
 
 def namespaced_thread_id(current_user: CurrentUser, thread_id: str) -> str:
     """Scope a client-supplied thread id to the authenticated user.
@@ -220,11 +210,23 @@ async def chat_agent_node(state: ChatState, config: RunnableConfig) -> ChatState
     while action_count < settings.CHAT_LLM_MAX_AUTO_ACTIONS:
         turn_system_prompt = _combined_system_prompt(base_system_prompt, pending_system_addendum)
         pending_system_addendum = ""
+        available_specs = [*skill_specs, *tool_specs]
         ai_message, streamed_in_turn = await _run_llm_tool_turn(
-            model, turn_system_prompt, messages, [*skill_specs, *tool_specs], config, writer
+            model,
+            turn_system_prompt,
+            messages,
+            available_specs,
+            config,
+            writer if not available_specs else None,
         )
         streamed_response += streamed_in_turn
-        requested = _tool_call_requests(ai_message, [*skill_specs, *tool_specs])
+        unavailable = _unavailable_tool_call_results(ai_message, available_specs)
+        if unavailable:
+            action_summaries.append(_tool_call_user_summary(unavailable))
+            response = _blocked_tool_call_response(unavailable)
+            break
+
+        requested = _tool_call_requests(ai_message, available_specs)
         if not requested:
             response = message_text(ai_message.content)
             if response:
@@ -258,6 +260,7 @@ async def chat_agent_node(state: ChatState, config: RunnableConfig) -> ChatState
         writer({"kind": "token", "content": _tool_call_start_status(batch)})
         results = await _run_tool_call_batch(batch, current_user)
         action_summaries.append(_tool_call_user_summary(results))
+        blocked_results = _blocked_tool_call_results(results)
         messages = [
             *messages,
             ai_message,
@@ -272,6 +275,9 @@ async def chat_agent_node(state: ChatState, config: RunnableConfig) -> ChatState
             ],
         ]
         messages = _trim_inner_loop_messages(messages, max_chars=settings.CHAT_LLM_CONTEXT_MAX_CHARS)
+        if blocked_results:
+            response = _blocked_tool_call_response(blocked_results)
+            break
         if any(result.request.spec.kind == "skill" for result in results) and not expose_tools:
             expose_tools = True
             tool_specs = await _mcp_tool_specs(current_user)
@@ -368,7 +374,7 @@ def _trim_inner_loop_messages(messages: list[BaseMessage], *, max_chars: int) ->
     """
     if max_chars <= 0 or len(messages) <= 4:
         return messages
-    total = sum(len(message_text(getattr(m, "content", ""))) for m in messages)
+    total = sum(_message_context_size(m) for m in messages)
     if total <= max_chars:
         return messages
 
@@ -381,15 +387,35 @@ def _trim_inner_loop_messages(messages: list[BaseMessage], *, max_chars: int) ->
     while body and total > max_chars:
         if not isinstance(body[0], AIMessage):
             dropped = body.pop(0)
-            total -= len(message_text(getattr(dropped, "content", "")))
+            total -= _message_context_size(dropped)
             continue
         dropped = body.pop(0)
-        total -= len(message_text(getattr(dropped, "content", "")))
+        total -= _message_context_size(dropped)
         while body and isinstance(body[0], ToolMessage):
             tool_dropped = body.pop(0)
-            total -= len(message_text(getattr(tool_dropped, "content", "")))
+            total -= _message_context_size(tool_dropped)
 
     return [*head, *body]
+
+
+def _message_context_size(message: BaseMessage) -> int:
+    size = len(message_text(getattr(message, "content", "")))
+    if isinstance(message, AIMessage):
+        reasoning_content = message.additional_kwargs.get("reasoning_content")
+        if isinstance(reasoning_content, str):
+            size += len(reasoning_content)
+        if message.tool_calls:
+            size += len(_json_dump(message.tool_calls))
+        if message.invalid_tool_calls:
+            size += len(_json_dump(message.invalid_tool_calls))
+        raw_tool_calls = message.additional_kwargs.get("tool_calls")
+        if raw_tool_calls:
+            size += len(_json_dump(raw_tool_calls))
+    if isinstance(message, ToolMessage):
+        size += len(message.tool_call_id)
+        if message.name:
+            size += len(message.name)
+    return size
 
 
 def _langchain_tool_schema(tool: ChatToolSpec) -> dict[str, Any]:
@@ -460,7 +486,7 @@ def _hostname(url: str) -> str:
 
 
 async def _skill_tool_specs(current_user: CurrentUser | None) -> list[ChatToolSpec]:
-    prompts = await _cached_list_prompts(current_user)
+    prompts = await _list_prompts(current_user)
     return [
         ChatToolSpec(
             name=prompt.name,
@@ -473,7 +499,7 @@ async def _skill_tool_specs(current_user: CurrentUser | None) -> list[ChatToolSp
 
 
 async def _mcp_tool_specs(current_user: CurrentUser | None) -> list[ChatToolSpec]:
-    tools = await _cached_list_tools(current_user)
+    tools = await _list_tools(current_user)
     return [
         ChatToolSpec(
             name=tool.name,
@@ -485,51 +511,19 @@ async def _mcp_tool_specs(current_user: CurrentUser | None) -> list[ChatToolSpec
     ]
 
 
-def _cache_key(current_user: CurrentUser | None, namespace: str) -> str:
-    perms = sorted(current_user.permissions) if current_user is not None else []
-    return f"{namespace}|" + ",".join(perms)
-
-
-async def _cached_list_tools(current_user: CurrentUser | None) -> list[Tool]:
-    key = _cache_key(current_user, "tools")
-    return await _cached_listing(
-        key,
-        lambda: mcp_runtime.list_tools_for_user(
-            current_user,
-            gate_permission=Permission.CHAT_TOOLS_CALL,
-            chat_safe_only=True,
-        ),
+async def _list_tools(current_user: CurrentUser | None) -> list[Tool]:
+    return await mcp_runtime.list_tools_for_user(
+        current_user,
+        gate_permission=Permission.CHAT_TOOLS_CALL,
+        chat_safe_only=True,
     )
 
 
-async def _cached_list_prompts(current_user: CurrentUser | None) -> list[Prompt]:
-    key = _cache_key(current_user, "prompts")
-    return await _cached_listing(
-        key,
-        lambda: mcp_runtime.list_prompts_for_user(
-            current_user,
-            gate_permission=Permission.CHAT_SKILLS_CALL,
-        ),
+async def _list_prompts(current_user: CurrentUser | None) -> list[Prompt]:
+    return await mcp_runtime.list_prompts_for_user(
+        current_user,
+        gate_permission=Permission.CHAT_SKILLS_CALL,
     )
-
-
-async def _cached_listing(key: str, loader: Callable[[], Any]) -> list[Any]:
-    now = time.monotonic()
-    cached = _capability_cache.get(key)
-    if cached is not None and now - cached[0] < _CAPABILITY_CACHE_TTL_SECONDS:
-        return cached[1]
-    async with _capability_cache_lock:
-        cached = _capability_cache.get(key)
-        if cached is not None and time.monotonic() - cached[0] < _CAPABILITY_CACHE_TTL_SECONDS:
-            return cached[1]
-        value = await loader()
-        _capability_cache[key] = (time.monotonic(), value)
-        return value
-
-
-def _invalidate_capability_cache() -> None:
-    """Clear the in-process capability listing cache (test helper)."""
-    _capability_cache.clear()
 
 
 def _prompt_input_schema(prompt: Prompt) -> dict[str, Any]:
@@ -567,6 +561,36 @@ def _tool_call_requests(message: AIMessage, specs: list[ChatToolSpec]) -> list[T
             )
         )
     return requests
+
+
+def _unavailable_tool_call_results(message: AIMessage, specs: list[ChatToolSpec]) -> list[ToolCallResult]:
+    available_names = {spec.name for spec in specs}
+    results: list[ToolCallResult] = []
+    for index, call in enumerate(getattr(message, "tool_calls", []) or []):
+        name = call.get("name") if isinstance(call, dict) else getattr(call, "name", None)
+        if not isinstance(name, str) or name in available_names:
+            continue
+        raw_args = call.get("args") if isinstance(call, dict) else getattr(call, "args", {})
+        args = raw_args if isinstance(raw_args, dict) else {}
+        call_id = call.get("id") if isinstance(call, dict) else getattr(call, "id", None)
+        request = ToolCallRequest(
+            id=str(call_id or f"call_{index}_{uuid.uuid4().hex}"),
+            name=name,
+            arguments=args,
+            spec=ChatToolSpec(
+                name=name,
+                kind="tool",
+                description="Unavailable in this chat context",
+                input_schema={"type": "object"},
+            ),
+        )
+        results.append(
+            ToolCallResult(
+                request=request,
+                content=_json_dump({"error": f"Tool '{name}' is not available in this chat context"}),
+            )
+        )
+    return results
 
 
 def _tool_request_key(request: ToolCallRequest) -> str:
@@ -697,6 +721,55 @@ def _tool_call_user_summary(results: list[ToolCallResult]) -> str:
     )
 
 
+def _blocked_tool_call_results(results: list[ToolCallResult]) -> list[ToolCallResult]:
+    return [result for result in results if _is_blocked_tool_call_result(result.content)]
+
+
+def _is_blocked_tool_call_result(content: str) -> bool:
+    stripped = content.strip()
+    if stripped.startswith("Permission denied:"):
+        return True
+    try:
+        data = json.loads(stripped)
+    except json.JSONDecodeError:
+        return False
+    if not isinstance(data, dict):
+        return False
+    error = data.get("error")
+    if not isinstance(error, str):
+        return False
+    normalized = error.lower()
+    return (
+        normalized.startswith("permission denied:")
+        or "not available to chat" in normalized
+        or "not available in this chat context" in normalized
+    )
+
+
+def _blocked_tool_call_response(results: list[ToolCallResult]) -> str:
+    lines = [
+        "Seizu blocked the requested action because the tool or skill is not available to this chat session, "
+        "or the current user/agent permissions do not allow it."
+    ]
+    for result in results:
+        lines.append(
+            f"- `{result.request.name}` with arguments `{_json_dump(result.request.arguments)}` was blocked: "
+            f"{_blocked_tool_call_reason(result.content)}"
+        )
+    lines.append("No blocked action was executed.")
+    return "\n".join(lines)
+
+
+def _blocked_tool_call_reason(content: str) -> str:
+    try:
+        data = json.loads(content)
+    except json.JSONDecodeError:
+        return content.strip() or "blocked"
+    if isinstance(data, dict) and isinstance(data.get("error"), str):
+        return data["error"]
+    return content.strip() or "blocked"
+
+
 def _repeated_tool_call_retry_message(requests: list[ToolCallRequest], action_summaries: list[str]) -> str:
     repeated = ", ".join(f"`{request.name}` with arguments `{_json_dump(request.arguments)}`" for request in requests)
     prior = (
@@ -762,10 +835,10 @@ def _json_dump(value: Any) -> str:
 
 
 async def build_capability_context(current_user: CurrentUser | None) -> str:
-    skills = await _cached_list_prompts(current_user)
+    skills = await _list_prompts(current_user)
     if settings.CHAT_LLM_PROGRESSIVE_DISCLOSURE:
         return _progressive_capability_context(skills)
-    tools = await _cached_list_tools(current_user)
+    tools = await _list_tools(current_user)
     return _full_capability_context(skills, tools)
 
 
