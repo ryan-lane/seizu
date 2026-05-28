@@ -1,19 +1,31 @@
+import asyncio
 import json
 import logging
 import uuid
 from collections.abc import AsyncIterator
 from typing import Any
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Path, Query
 from fastapi.responses import StreamingResponse
 from langchain_core.messages import AIMessage, HumanMessage
 
 from reporting import settings
 from reporting.authnz import CurrentUser, require_permission
 from reporting.authnz.permissions import Permission
-from reporting.schema.chat import ChatHistoryMessage, ChatHistoryResponse, ChatStreamRequest
+from reporting.schema.chat import (
+    CHAT_THREAD_ID_PATTERN,
+    ChatHistoryMessage,
+    ChatHistoryResponse,
+    ChatSessionItem,
+    ChatSessionsResponse,
+    ChatStreamRequest,
+    CreateChatSessionRequest,
+    UpdateChatSessionRequest,
+)
+from reporting.services import report_store
 from reporting.services.chat_graph import (
     ChatState,
+    delete_thread_messages,
     get_chat_graph,
     load_thread_messages,
     namespaced_thread_id,
@@ -22,6 +34,13 @@ from reporting.services.chat_messages import message_text
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
+
+
+async def _touch_chat_session_later(user_id: str, thread_id: str) -> None:
+    try:
+        await report_store.touch_chat_session(user_id, thread_id)
+    except Exception:
+        logger.exception("Failed to update chat session timestamp", extra={"thread_id": thread_id})
 
 
 @router.post(
@@ -54,17 +73,26 @@ async def stream_chat(
 async def _stream_chat_response(body: ChatStreamRequest, current: CurrentUser) -> AsyncIterator[str]:
     message_id = f"msg_{uuid.uuid4().hex}"
     text_id = f"text_{uuid.uuid4().hex}"
-
-    yield _sse_data({"type": "start", "messageId": message_id})
-    yield _sse_data({"type": "text-start", "id": text_id})
+    text_started = False
 
     try:
+        session = await report_store.get_chat_session(current.user.user_id, body.thread_id)
+        if session is None:
+            yield _sse_data({"type": "error", "errorText": "Session not found"})
+            yield _sse_data({"type": "finish", "finishReason": "error"})
+            yield "data: [DONE]\n\n"
+            return
+        asyncio.create_task(_touch_chat_session_later(current.user.user_id, body.thread_id))
+        yield _sse_data({"type": "start", "messageId": message_id})
+        yield _sse_data({"type": "text-start", "id": text_id})
+        text_started = True
         async for delta in _token_source(body, current):
             if delta:
                 yield _sse_data({"type": "text-delta", "id": text_id, "delta": delta})
     except Exception:
         logger.exception("Chat stream failed")
-        yield _sse_data({"type": "text-end", "id": text_id})
+        if text_started:
+            yield _sse_data({"type": "text-end", "id": text_id})
         yield _sse_data({"type": "error", "errorText": "Chat stream failed"})
         yield _sse_data({"type": "finish", "finishReason": "error"})
         yield "data: [DONE]\n\n"
@@ -97,7 +125,7 @@ def _sse_data(payload: dict[str, Any]) -> str:
 
 @router.get("/api/v1/chat/history", response_model=ChatHistoryResponse)
 async def chat_history(
-    thread_id: str = Query(min_length=1, max_length=200),
+    thread_id: str = Query(min_length=1, max_length=32, pattern=CHAT_THREAD_ID_PATTERN),
     limit: int = Query(default=settings.CHAT_HISTORY_LIMIT, ge=1, le=500),
     current: CurrentUser = Depends(require_permission(Permission.CHAT_USE)),
 ) -> ChatHistoryResponse:
@@ -106,6 +134,9 @@ async def chat_history(
     Lets the SPA rehydrate a conversation after a reload, since the client-side
     message state is otherwise lost.
     """
+    session = await report_store.get_chat_session(current.user.user_id, thread_id)
+    if session is None:
+        raise HTTPException(status_code=404, detail="Session not found")
     messages = await load_thread_messages(current, thread_id, limit=limit)
     return ChatHistoryResponse(
         messages=[message for index, item in enumerate(messages) if (message := _to_history_message(item, index))]
@@ -125,3 +156,67 @@ def _to_history_message(message: Any, index: int) -> ChatHistoryMessage | None:
         return None
     message_id = str(message.id) if message.id else f"{role}-{index}"
     return ChatHistoryMessage(id=message_id, role=role, text=text)
+
+
+@router.get("/api/v1/chat/sessions", response_model=ChatSessionsResponse)
+async def list_chat_sessions(
+    limit: int = Query(default=50, ge=1, le=100),
+    current: CurrentUser = Depends(require_permission(Permission.CHAT_USE)),
+) -> ChatSessionsResponse:
+    """Return all chat sessions for the current user, newest first."""
+    sessions = await report_store.list_chat_sessions(current.user.user_id, limit=limit)
+    return ChatSessionsResponse(
+        sessions=sessions,
+    )
+
+
+@router.post("/api/v1/chat/sessions", response_model=ChatSessionItem, status_code=201)
+async def create_chat_session(
+    body: CreateChatSessionRequest,
+    current: CurrentUser = Depends(require_permission(Permission.CHAT_USE)),
+) -> ChatSessionItem:
+    """Create a new chat session and return it."""
+    return await report_store.create_chat_session(current.user.user_id, body.title)
+
+
+@router.get("/api/v1/chat/sessions/{thread_id}", response_model=ChatSessionItem)
+async def get_chat_session(
+    thread_id: str = Path(min_length=1, max_length=32, pattern=CHAT_THREAD_ID_PATTERN),
+    current: CurrentUser = Depends(require_permission(Permission.CHAT_USE)),
+) -> ChatSessionItem:
+    """Return one chat session for the current user."""
+    session = await report_store.get_chat_session(current.user.user_id, thread_id)
+    if session is None:
+        raise HTTPException(status_code=404, detail="Session not found")
+    return session
+
+
+@router.patch("/api/v1/chat/sessions/{thread_id}", response_model=ChatSessionItem)
+async def update_chat_session(
+    body: UpdateChatSessionRequest,
+    thread_id: str = Path(min_length=1, max_length=32, pattern=CHAT_THREAD_ID_PATTERN),
+    current: CurrentUser = Depends(require_permission(Permission.CHAT_USE)),
+) -> ChatSessionItem:
+    """Rename a chat session."""
+    result = await report_store.update_chat_session_title(current.user.user_id, thread_id, body.title)
+    if result is None:
+        raise HTTPException(status_code=404, detail="Session not found")
+    return result
+
+
+@router.delete("/api/v1/chat/sessions/{thread_id}", status_code=204)
+async def delete_chat_session(
+    thread_id: str = Path(min_length=1, max_length=32, pattern=CHAT_THREAD_ID_PATTERN),
+    current: CurrentUser = Depends(require_permission(Permission.CHAT_USE)),
+) -> None:
+    """Delete a chat session."""
+    try:
+        deleted = await report_store.delete_chat_session(current.user.user_id, thread_id)
+    except Exception as exc:
+        logger.exception("Failed to delete chat session", extra={"thread_id": thread_id})
+        raise HTTPException(status_code=503, detail="Failed to delete chat session") from exc
+    if deleted:
+        try:
+            await delete_thread_messages(current, thread_id)
+        except Exception:
+            logger.exception("Failed to delete chat session checkpoints", extra={"thread_id": thread_id})

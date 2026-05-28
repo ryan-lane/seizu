@@ -35,6 +35,7 @@ const routes = [
       { path: 'reports/:id/versions/:version', element: <ReportVersionView /> },
       { path: 'query-console', element: <QueryConsole /> },
       { path: 'chat', element: <ChatInterface /> },
+      { path: 'chat/:threadId', element: <ChatInterface /> },
       { path: 'scheduled-queries', element: <ScheduledQueries /> },
       {
         path: 'scheduled-queries/:id/history',

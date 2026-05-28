@@ -7,6 +7,7 @@ from httpx import ASGITransport, AsyncClient
 from reporting.app import create_app
 from reporting.authnz import CurrentUser, get_current_user
 from reporting.authnz.permissions import ALL_PERMISSIONS
+from reporting.schema.chat import ChatSessionItem
 from reporting.schema.report_config import User
 
 _FAKE_USER = User(
@@ -45,15 +46,82 @@ def _make_app(current: CurrentUser | None = None):
     return app
 
 
+def _patch_chat_sessions(mocker, existing: list[tuple[str, str]] | None = None):
+    sessions: dict[tuple[str, str], ChatSessionItem] = {}
+    counter = 0
+    id_counter = 1000
+
+    def _now() -> str:
+        nonlocal counter
+        counter += 1
+        return f"2024-01-01T00:00:{counter:02d}+00:00"
+
+    for user_id, thread_id in existing or []:
+        now = _now()
+        sessions[(user_id, thread_id)] = ChatSessionItem(
+            thread_id=thread_id,
+            title="",
+            created_at=now,
+            updated_at=now,
+        )
+
+    async def list_chat_sessions(user_id: str, limit: int) -> list[ChatSessionItem]:
+        return sorted(
+            [session for (owner, _), session in sessions.items() if owner == user_id],
+            key=lambda session: session.updated_at,
+            reverse=True,
+        )[:limit]
+
+    async def get_chat_session(user_id: str, thread_id: str) -> ChatSessionItem | None:
+        return sessions.get((user_id, thread_id))
+
+    async def create_chat_session(user_id: str, title: str) -> ChatSessionItem:
+        nonlocal id_counter
+        id_counter += 1
+        thread_id = str(id_counter)
+        now = _now()
+        session = ChatSessionItem(thread_id=thread_id, title=title, created_at=now, updated_at=now)
+        sessions[(user_id, thread_id)] = session
+        return session
+
+    async def touch_chat_session(user_id: str, thread_id: str) -> ChatSessionItem | None:
+        existing_session = sessions.get((user_id, thread_id))
+        if existing_session is None:
+            return None
+        updated = existing_session.model_copy(update={"updated_at": _now()})
+        sessions[(user_id, thread_id)] = updated
+        return updated
+
+    async def update_chat_session_title(user_id: str, thread_id: str, title: str) -> ChatSessionItem | None:
+        existing_session = sessions.get((user_id, thread_id))
+        if existing_session is None:
+            return None
+        updated = existing_session.model_copy(update={"title": title, "updated_at": _now()})
+        sessions[(user_id, thread_id)] = updated
+        return updated
+
+    async def delete_chat_session(user_id: str, thread_id: str) -> bool:
+        return sessions.pop((user_id, thread_id), None) is not None
+
+    mocker.patch("reporting.routes.chat.report_store.list_chat_sessions", list_chat_sessions)
+    mocker.patch("reporting.routes.chat.report_store.get_chat_session", get_chat_session)
+    mocker.patch("reporting.routes.chat.report_store.create_chat_session", create_chat_session)
+    mocker.patch("reporting.routes.chat.report_store.touch_chat_session", touch_chat_session)
+    mocker.patch("reporting.routes.chat.report_store.update_chat_session_title", update_chat_session_title)
+    mocker.patch("reporting.routes.chat.report_store.delete_chat_session", delete_chat_session)
+    return sessions
+
+
 async def test_chat_stream_success(mocker):
     fake_graph = FakeChatGraph()
     mocker.patch("reporting.routes.chat.get_chat_graph", return_value=fake_graph)
+    _patch_chat_sessions(mocker, [("test-user-id", "1001")])
 
     app = _make_app()
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         response = await client.post(
             "/api/v1/chat/stream",
-            json={"message": "Hi", "thread_id": "thread-1"},
+            json={"message": "Hi", "thread_id": "1001"},
         )
 
     assert response.status_code == 200
@@ -67,7 +135,7 @@ async def test_chat_stream_success(mocker):
     assert "data: [DONE]" in body
 
     graph_input, config, stream_mode = fake_graph.calls[0]
-    assert config["configurable"]["thread_id"] == "user:test-user-id:thread:thread-1"
+    assert config["configurable"]["thread_id"] == "user:test-user-id:thread:1001"
     assert config["configurable"]["current_user"].user.user_id == "test-user-id"
     assert stream_mode == "custom"
     assert graph_input["messages"][0].content == "Hi"
@@ -83,12 +151,13 @@ async def test_chat_stream_with_real_graph_emits_tokens(mocker):
     mocker.patch("reporting.settings.CHAT_LLM_PROVIDER", "mock")
     graph = build_chat_graph(MemorySaver())
     mocker.patch("reporting.routes.chat.get_chat_graph", return_value=graph)
+    _patch_chat_sessions(mocker, [("test-user-id", "1002")])
 
     app = _make_app()
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         response = await client.post(
             "/api/v1/chat/stream",
-            json={"message": "Hi", "thread_id": "thread-real"},
+            json={"message": "Hi", "thread_id": "1002"},
         )
 
     assert response.status_code == 200
@@ -105,12 +174,13 @@ async def test_chat_stream_with_real_graph_emits_tokens(mocker):
 
 async def test_chat_stream_requires_chat_permission(mocker):
     mocker.patch("reporting.routes.chat.get_chat_graph")
+    _patch_chat_sessions(mocker)
     app = _make_app(_current_user(frozenset()))
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         response = await client.post(
             "/api/v1/chat/stream",
-            json={"message": "Hi", "thread_id": "thread-1"},
+            json={"message": "Hi", "thread_id": "1001"},
         )
 
     assert response.status_code == 403
@@ -118,15 +188,34 @@ async def test_chat_stream_requires_chat_permission(mocker):
 
 async def test_chat_stream_validates_body(mocker):
     mocker.patch("reporting.routes.chat.get_chat_graph")
+    _patch_chat_sessions(mocker)
     app = _make_app()
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         response = await client.post(
             "/api/v1/chat/stream",
-            json={"message": "", "thread_id": "thread-1"},
+            json={"message": "", "thread_id": "1001"},
         )
 
     assert response.status_code == 422
+
+
+async def test_chat_stream_rejects_missing_session_before_graph_write(mocker):
+    graph = mocker.patch("reporting.routes.chat.get_chat_graph")
+    _patch_chat_sessions(mocker)
+    app = _make_app()
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.post(
+            "/api/v1/chat/stream",
+            json={"message": "Hi", "thread_id": "9999"},
+        )
+
+    assert response.status_code == 200
+    assert '"errorText":"Session not found"' in response.text
+    assert '"finishReason":"error"' in response.text
+    assert '"type":"text-start"' not in response.text
+    graph.assert_not_called()
 
 
 async def test_chat_history_round_trips_persisted_messages(mocker):
@@ -141,15 +230,16 @@ async def test_chat_history_round_trips_persisted_messages(mocker):
     # through different module bindings; patch both so they share one graph.
     mocker.patch("reporting.routes.chat.get_chat_graph", return_value=graph)
     mocker.patch("reporting.services.chat_graph.get_chat_graph", return_value=graph)
+    _patch_chat_sessions(mocker, [("test-user-id", "1003")])
 
     app = _make_app()
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         stream = await client.post(
             "/api/v1/chat/stream",
-            json={"message": "Hi", "thread_id": "thread-hist"},
+            json={"message": "Hi", "thread_id": "1003"},
         )
         assert stream.status_code == 200
-        history = await client.get("/api/v1/chat/history", params={"thread_id": "thread-hist"})
+        history = await client.get("/api/v1/chat/history", params={"thread_id": "1003"})
 
     assert history.status_code == 200
     messages = history.json()["messages"]
@@ -158,6 +248,48 @@ async def test_chat_history_round_trips_persisted_messages(mocker):
     assert messages[1]["role"] == "assistant"
     assert messages[1]["text"] == "I received your message: Hi"
     assert all(message["id"] for message in messages)
+
+
+async def test_chat_sessions_list_sorts_by_updated_at(mocker):
+    _patch_chat_sessions(mocker)
+    app = _make_app()
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        old_session = await client.post("/api/v1/chat/sessions", json={"title": "Old"})
+        new_session = await client.post("/api/v1/chat/sessions", json={"title": "New"})
+        assert old_session.status_code == 201
+        assert new_session.status_code == 201
+        old_thread_id = old_session.json()["thread_id"]
+        new_thread_id = new_session.json()["thread_id"]
+        renamed_old = await client.patch(f"/api/v1/chat/sessions/{old_thread_id}", json={"title": "Renamed old"})
+        assert renamed_old.status_code == 200
+        response = await client.get("/api/v1/chat/sessions", params={"limit": 10})
+
+    assert response.status_code == 200
+    assert [session["thread_id"] for session in response.json()["sessions"]] == [old_thread_id, new_thread_id]
+
+
+async def test_create_chat_session_rejects_client_thread_id(mocker):
+    _patch_chat_sessions(mocker)
+    app = _make_app()
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.post("/api/v1/chat/sessions", json={"thread_id": "legacy", "title": "Legacy"})
+
+    assert response.status_code == 422
+
+
+async def test_get_chat_session_returns_only_owned_session(mocker):
+    _patch_chat_sessions(mocker, [("test-user-id", "1005"), ("other-user-id", "1006")])
+    app = _make_app()
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        owned = await client.get("/api/v1/chat/sessions/1005")
+        other = await client.get("/api/v1/chat/sessions/1006")
+
+    assert owned.status_code == 200
+    assert owned.json()["thread_id"] == "1005"
+    assert other.status_code == 404
 
 
 async def test_chat_history_isolated_per_user(mocker):
@@ -170,11 +302,12 @@ async def test_chat_history_isolated_per_user(mocker):
     graph = build_chat_graph(MemorySaver())
     mocker.patch("reporting.routes.chat.get_chat_graph", return_value=graph)
     mocker.patch("reporting.services.chat_graph.get_chat_graph", return_value=graph)
+    _patch_chat_sessions(mocker, [("test-user-id", "1007")])
 
     app = create_app()
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         app.dependency_overrides[get_current_user] = lambda: _current_user()
-        await client.post("/api/v1/chat/stream", json={"message": "Hi", "thread_id": "shared"})
+        await client.post("/api/v1/chat/stream", json={"message": "Hi", "thread_id": "1007"})
 
         other = CurrentUser(
             user=User(
@@ -189,10 +322,79 @@ async def test_chat_history_isolated_per_user(mocker):
             permissions=ALL_PERMISSIONS,
         )
         app.dependency_overrides[get_current_user] = lambda: other
-        history = await client.get("/api/v1/chat/history", params={"thread_id": "shared"})
+        history = await client.get("/api/v1/chat/history", params={"thread_id": "1007"})
 
-    assert history.status_code == 200
-    assert history.json()["messages"] == []
+    assert history.status_code == 404
+
+
+async def test_chat_delete_removes_session_and_persisted_history(mocker):
+    from langgraph.checkpoint.memory import MemorySaver
+
+    from reporting.services.chat_graph import build_chat_graph
+
+    mocker.patch("reporting.settings.CHAT_LLM_PROVIDER", "mock")
+    graph = build_chat_graph(MemorySaver())
+    mocker.patch("reporting.routes.chat.get_chat_graph", return_value=graph)
+    mocker.patch("reporting.services.chat_graph.get_chat_graph", return_value=graph)
+    _patch_chat_sessions(mocker, [("test-user-id", "1008")])
+
+    app = _make_app()
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        stream = await client.post(
+            "/api/v1/chat/stream",
+            json={"message": "Delete this", "thread_id": "1008"},
+        )
+        assert stream.status_code == 200
+        before_delete = await client.get("/api/v1/chat/history", params={"thread_id": "1008"})
+        assert before_delete.status_code == 200
+        assert before_delete.json()["messages"]
+
+        deleted = await client.delete("/api/v1/chat/sessions/1008")
+        assert deleted.status_code == 204
+        after_delete = await client.get("/api/v1/chat/history", params={"thread_id": "1008"})
+        stream_after_delete = await client.post(
+            "/api/v1/chat/stream",
+            json={"message": "Still there?", "thread_id": "1008"},
+        )
+
+    assert after_delete.status_code == 404
+    assert stream_after_delete.status_code == 200
+    assert '"errorText":"Session not found"' in stream_after_delete.text
+
+
+async def test_chat_delete_is_idempotent_for_missing_session(mocker):
+    _patch_chat_sessions(mocker)
+    delete_messages = mocker.patch("reporting.routes.chat.delete_thread_messages")
+    app = _make_app()
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.delete("/api/v1/chat/sessions/9999")
+
+    assert response.status_code == 204
+    delete_messages.assert_not_called()
+
+
+async def test_chat_delete_ignores_checkpoint_cleanup_failure(mocker):
+    _patch_chat_sessions(mocker, [("test-user-id", "1010")])
+    mocker.patch("reporting.routes.chat.delete_thread_messages", side_effect=RuntimeError("cleanup failed"))
+    app = _make_app()
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.delete("/api/v1/chat/sessions/1010")
+
+    assert response.status_code == 204
+
+
+async def test_chat_delete_store_failure_returns_503(mocker):
+    _patch_chat_sessions(mocker, [("test-user-id", "1011")])
+    mocker.patch("reporting.routes.chat.report_store.delete_chat_session", side_effect=RuntimeError("contention"))
+    mocker.patch("reporting.routes.chat.delete_thread_messages")
+    app = _make_app()
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.delete("/api/v1/chat/sessions/1011")
+
+    assert response.status_code == 503
 
 
 async def test_chat_stream_no_longer_treats_slash_text_as_command(mocker):
@@ -205,12 +407,13 @@ async def test_chat_stream_no_longer_treats_slash_text_as_command(mocker):
     graph = build_chat_graph(MemorySaver())
     mocker.patch("reporting.routes.chat.get_chat_graph", return_value=graph)
     mocker.patch("reporting.services.chat_graph.get_chat_graph", return_value=graph)
+    _patch_chat_sessions(mocker, [("test-user-id", "1009")])
 
     app = _make_app()
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         stream = await client.post(
             "/api/v1/chat/stream",
-            json={"message": "/tools", "thread_id": "thread-cmd"},
+            json={"message": "/tools", "thread_id": "1009"},
         )
         assert stream.status_code == 200
         deltas = "".join(
@@ -220,7 +423,7 @@ async def test_chat_stream_no_longer_treats_slash_text_as_command(mocker):
         )
         assert deltas == "I received your message: /tools"
 
-        history = await client.get("/api/v1/chat/history", params={"thread_id": "thread-cmd"})
+        history = await client.get("/api/v1/chat/history", params={"thread_id": "1009"})
 
     assert history.status_code == 200
     assert [message["text"] for message in history.json()["messages"]] == ["/tools", "I received your message: /tools"]
@@ -241,9 +444,10 @@ def test_chat_routes_absent_when_disabled(mocker):
 
 async def test_chat_history_requires_chat_permission(mocker):
     mocker.patch("reporting.routes.chat.get_chat_graph")
+    _patch_chat_sessions(mocker, [("test-user-id", "1001")])
     app = _make_app(_current_user(frozenset()))
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
-        response = await client.get("/api/v1/chat/history", params={"thread_id": "thread-1"})
+        response = await client.get("/api/v1/chat/history", params={"thread_id": "1001"})
 
     assert response.status_code == 403

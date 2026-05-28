@@ -164,6 +164,24 @@ async def load_thread_messages(current_user: CurrentUser, thread_id: str, *, lim
     return filtered[-limit:] if limit > 0 else []
 
 
+async def delete_thread_messages(current_user: CurrentUser, thread_id: str) -> None:
+    """Permanently delete persisted LangGraph state for a user's chat thread."""
+    graph = get_chat_graph()
+    checkpointer = getattr(graph, "checkpointer", None)
+    if checkpointer is None:
+        raise RuntimeError("Chat graph does not expose a checkpointer")
+    namespaced_id = namespaced_thread_id(current_user, thread_id)
+    async_delete = getattr(checkpointer, "adelete_thread", None)
+    if callable(async_delete):
+        await async_delete(namespaced_id)
+        return
+    sync_delete = getattr(checkpointer, "delete_thread", None)
+    if callable(sync_delete):
+        await asyncio.to_thread(sync_delete, namespaced_id)
+        return
+    raise RuntimeError("Chat checkpointer does not support thread deletion")
+
+
 async def mock_agent_node(state: ChatState, _config: RunnableConfig) -> ChatState:
     last_user_message = _last_user_text(state["messages"])
     response = f"I received your message: {last_user_message}"

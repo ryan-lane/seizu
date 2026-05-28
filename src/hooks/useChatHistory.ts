@@ -1,7 +1,6 @@
-import { useCallback, useContext, useRef } from 'react';
+import { useCallback } from 'react';
 import type { UIMessage } from 'ai';
-import { AuthContext } from 'src/auth.context';
-import { AuthConfigContext } from 'src/authConfig.context';
+import { useAuthHeaders } from 'src/hooks/useAuthHeaders';
 
 interface ChatHistoryMessage {
   id: string;
@@ -28,28 +27,23 @@ function toUIMessage(message: ChatHistoryMessage): UIMessage {
  * failure — a missing history should never block starting a conversation.
  */
 export function useChatHistory(): (threadId: string) => Promise<UIMessage[]> {
-  const { accessToken } = useContext(AuthContext);
-  const { auth_required } = useContext(AuthConfigContext);
-  const accessTokenRef = useRef(accessToken);
-  accessTokenRef.current = accessToken;
-  const authRequiredRef = useRef(auth_required);
-  authRequiredRef.current = auth_required;
+  const { checkAuthReady, authHeaders } = useAuthHeaders();
 
-  return useCallback(async (threadId: string): Promise<UIMessage[]> => {
-    if (authRequiredRef.current && !accessTokenRef.current) return [];
-    const headers: Record<string, string> = {};
-    if (accessTokenRef.current)
-      headers.Authorization = `Bearer ${accessTokenRef.current}`;
-    try {
-      const res = await fetch(
-        `/api/v1/chat/history?thread_id=${encodeURIComponent(threadId)}`,
-        { headers },
-      );
-      if (!res.ok) return [];
-      const data = (await res.json()) as ChatHistoryResponse;
-      return data.messages.map(toUIMessage);
-    } catch {
-      return [];
-    }
-  }, []);
+  return useCallback(
+    async (threadId: string): Promise<UIMessage[]> => {
+      if (!checkAuthReady()) return [];
+      try {
+        const res = await fetch(
+          `/api/v1/chat/history?thread_id=${encodeURIComponent(threadId)}`,
+          { headers: authHeaders() },
+        );
+        if (!res.ok) return [];
+        const data = (await res.json()) as ChatHistoryResponse;
+        return data.messages.map(toUIMessage);
+      } catch {
+        return [];
+      }
+    },
+    [authHeaders, checkAuthReady],
+  );
 }
