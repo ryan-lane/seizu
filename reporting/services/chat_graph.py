@@ -1,5 +1,6 @@
 import asyncio
 import json
+import time
 import uuid
 from collections.abc import AsyncIterator, Callable
 from dataclasses import dataclass
@@ -28,8 +29,9 @@ from typing_extensions import TypedDict
 from reporting import settings
 from reporting.authnz import CurrentUser
 from reporting.authnz.permissions import Permission
-from reporting.services import mcp_runtime
+from reporting.services import capability_revision, mcp_runtime
 from reporting.services.chat_messages import MessageTag, drop_tagged, has_tag, message_text, tag_message
+from reporting.services.mcp_runtime import ChatBlockReason
 
 
 class ChatState(TypedDict):
@@ -77,6 +79,7 @@ class ToolCallRequest:
 class ToolCallResult:
     request: ToolCallRequest
     content: str
+    blocked: ChatBlockReason | None = None
 
 
 class SeizuChatDeepSeekMixin:
@@ -129,6 +132,16 @@ class SeizuChatDeepSeekMixin:
 
 
 _VALID_CHAT_PROVIDERS = frozenset({"mock", "openai", "anthropic", "gemini", "deepseek"})
+
+# Revision-keyed cache for skill / tool listings the chat agent shows the LLM.
+# A cache hit requires both ``stored_revision == capability_revision.get_revision()``
+# (so an admin's create/update/delete in this worker is reflected immediately)
+# AND ``time - fetched_at < _CAPABILITY_CACHE_TTL_SECONDS`` (a safety net that
+# bounds cross-worker staleness — each gunicorn worker has its own counter, so
+# a write in worker A is not seen by worker B until B's TTL expires).
+_CAPABILITY_CACHE_TTL_SECONDS = 30.0
+_capability_cache_lock = asyncio.Lock()
+_capability_cache: dict[str, tuple[int, float, list[Any]]] = {}
 
 
 def namespaced_thread_id(current_user: CurrentUser, thread_id: str) -> str:
@@ -207,19 +220,20 @@ async def chat_agent_node(state: ChatState, config: RunnableConfig) -> ChatState
     pending_system_addendum = ""
 
     response = ""
+    streamed_in_last_turn = ""
     while action_count < settings.CHAT_LLM_MAX_AUTO_ACTIONS:
         turn_system_prompt = _combined_system_prompt(base_system_prompt, pending_system_addendum)
         pending_system_addendum = ""
         available_specs = [*skill_specs, *tool_specs]
-        ai_message, streamed_in_turn = await _run_llm_tool_turn(
+        ai_message, streamed_in_last_turn = await _run_llm_tool_turn(
             model,
             turn_system_prompt,
             messages,
             available_specs,
             config,
-            writer if not available_specs else None,
+            writer,
         )
-        streamed_response += streamed_in_turn
+        streamed_response = streamed_in_last_turn
         unavailable = _unavailable_tool_call_results(ai_message, available_specs)
         if unavailable:
             action_summaries.append(_tool_call_user_summary(unavailable))
@@ -286,10 +300,10 @@ async def chat_agent_node(state: ChatState, config: RunnableConfig) -> ChatState
         synthesis_system_prompt = _combined_system_prompt(
             base_system_prompt, _final_synthesis_retry_message(action_summaries)
         )
-        final_message, streamed_in_turn = await _run_llm_tool_turn(
+        final_message, streamed_in_last_turn = await _run_llm_tool_turn(
             model, synthesis_system_prompt, messages, [], config, writer
         )
-        streamed_response += streamed_in_turn
+        streamed_response = streamed_in_last_turn
         response = message_text(final_message.content)
 
     if not response:
@@ -329,9 +343,16 @@ async def _run_llm_tool_turn(
 ) -> tuple[AIMessage, str]:
     """Run one LLM turn, streaming text deltas via *writer* as they arrive.
 
+    Streaming policy: text deltas are emitted live *until* a chunk in this
+    turn signals a tool call (tool_call_chunks, parsed tool_calls, or an
+    Anthropic ``tool_use`` content block). After that, any remaining text in
+    the turn is treated as pre-tool reasoning and is buffered into the merged
+    message but not shown to the user — they would otherwise see "Let me
+    check…" preambles that are about to be invalidated by a tool run.
+
     Returns ``(ai_message, streamed_text)``. ``streamed_text`` is the
-    concatenation of text deltas already written to the stream — the caller
-    uses it to avoid double-emitting the final response.
+    concatenation of deltas the caller has already shipped, so it can avoid
+    re-emitting the final response if it matches.
     """
     runnable = model
     bind_tools = getattr(model, "bind_tools", None)
@@ -340,11 +361,14 @@ async def _run_llm_tool_turn(
 
     merged: Any | None = None
     streamed = ""
+    stream_text = writer is not None
     async for chunk in runnable.astream(
         [SystemMessage(content=system_prompt), *messages],
         config=config,
     ):
-        if writer is not None:
+        if stream_text and _chunk_signals_tool_call(chunk):
+            stream_text = False
+        if stream_text and writer is not None:
             delta = message_text(getattr(chunk, "content", ""))
             if delta:
                 writer({"kind": "token", "content": delta})
@@ -360,6 +384,25 @@ async def _run_llm_tool_turn(
         id=getattr(merged, "id", None),
     )
     return fallback, streamed
+
+
+def _chunk_signals_tool_call(chunk: Any) -> bool:
+    """True if *chunk* carries a tool-call delta — partial or complete."""
+    if getattr(chunk, "tool_call_chunks", None):
+        return True
+    if getattr(chunk, "tool_calls", None):
+        return True
+    if getattr(chunk, "invalid_tool_calls", None):
+        return True
+    # Anthropic streams ``tool_use`` blocks inside ``content`` as content-block
+    # dicts; LangChain typically also surfaces them via ``tool_call_chunks`` but
+    # we still check the content list so we trip on the earliest signal.
+    content = getattr(chunk, "content", None)
+    if isinstance(content, list):
+        for item in content:
+            if isinstance(item, dict) and item.get("type") in ("tool_use", "tool_call"):
+                return True
+    return False
 
 
 def _trim_inner_loop_messages(messages: list[BaseMessage], *, max_chars: int) -> list[BaseMessage]:
@@ -512,18 +555,55 @@ async def _mcp_tool_specs(current_user: CurrentUser | None) -> list[ChatToolSpec
 
 
 async def _list_tools(current_user: CurrentUser | None) -> list[Tool]:
-    return await mcp_runtime.list_tools_for_user(
-        current_user,
-        gate_permission=Permission.CHAT_TOOLS_CALL,
-        chat_safe_only=True,
+    return await _cached_listing(
+        _cache_key(current_user, "tools"),
+        lambda: mcp_runtime.list_tools_for_user(
+            current_user,
+            gate_permission=Permission.CHAT_TOOLS_CALL,
+            chat_safe_only=True,
+        ),
     )
 
 
 async def _list_prompts(current_user: CurrentUser | None) -> list[Prompt]:
-    return await mcp_runtime.list_prompts_for_user(
-        current_user,
-        gate_permission=Permission.CHAT_SKILLS_CALL,
+    return await _cached_listing(
+        _cache_key(current_user, "prompts"),
+        lambda: mcp_runtime.list_prompts_for_user(
+            current_user,
+            gate_permission=Permission.CHAT_SKILLS_CALL,
+        ),
     )
+
+
+def _cache_key(current_user: CurrentUser | None, namespace: str) -> str:
+    perms = sorted(current_user.permissions) if current_user is not None else []
+    return f"{namespace}|" + ",".join(perms)
+
+
+async def _cached_listing(key: str, loader: Callable[[], Any]) -> list[Any]:
+    current_revision = capability_revision.get_revision()
+    cached = _capability_cache.get(key)
+    now = time.monotonic()
+    if cached is not None:
+        stored_revision, fetched_at, value = cached
+        if stored_revision == current_revision and now - fetched_at < _CAPABILITY_CACHE_TTL_SECONDS:
+            return value
+    async with _capability_cache_lock:
+        # Re-check under lock — another coroutine may have populated the entry.
+        current_revision = capability_revision.get_revision()
+        cached = _capability_cache.get(key)
+        if cached is not None:
+            stored_revision, fetched_at, value = cached
+            if stored_revision == current_revision and time.monotonic() - fetched_at < _CAPABILITY_CACHE_TTL_SECONDS:
+                return value
+        value = await loader()
+        _capability_cache[key] = (current_revision, time.monotonic(), value)
+        return value
+
+
+def _invalidate_capability_cache() -> None:
+    """Clear the in-process capability listing cache (test helper)."""
+    _capability_cache.clear()
 
 
 def _prompt_input_schema(prompt: Prompt) -> dict[str, Any]:
@@ -588,6 +668,7 @@ def _unavailable_tool_call_results(message: AIMessage, specs: list[ChatToolSpec]
             ToolCallResult(
                 request=request,
                 content=_json_dump({"error": f"Tool '{name}' is not available in this chat context"}),
+                blocked=ChatBlockReason.NOT_AVAILABLE,
             )
         )
     return results
@@ -615,16 +696,15 @@ async def _run_tool_call_batch(
 async def _run_tool_call(request: ToolCallRequest, current_user: CurrentUser | None) -> ToolCallResult:
     if request.spec.kind == "skill":
         string_arguments = {key: str(value) for key, value in request.arguments.items()}
-        result = await mcp_runtime.get_prompt_for_user(
+        outcome = await mcp_runtime.render_prompt_for_chat(
             current_user,
             request.name,
             string_arguments,
             gate_permission=Permission.CHAT_SKILLS_CALL,
         )
-        content = "\n\n".join(text for message in result.messages if (text := _content_text(message.content)))
-        return ToolCallResult(request=request, content=content)
+        return ToolCallResult(request=request, content=outcome.text, blocked=outcome.blocked)
 
-    result = await mcp_runtime.call_tool_for_user(
+    outcome = await mcp_runtime.call_tool_for_chat(
         current_user,
         request.name,
         request.arguments,
@@ -633,7 +713,7 @@ async def _run_tool_call(request: ToolCallRequest, current_user: CurrentUser | N
         result_max_rows=settings.CHAT_TOOL_RESULT_MAX_ROWS,
         result_max_bytes=settings.CHAT_TOOL_RESULT_MAX_BYTES,
     )
-    return ToolCallResult(request=request, content=_text_content_response(result))
+    return ToolCallResult(request=request, content=outcome.text, blocked=outcome.blocked)
 
 
 def build_system_prompt(provider: str | None = None, current_user: CurrentUser | None = None) -> str:
@@ -722,28 +802,7 @@ def _tool_call_user_summary(results: list[ToolCallResult]) -> str:
 
 
 def _blocked_tool_call_results(results: list[ToolCallResult]) -> list[ToolCallResult]:
-    return [result for result in results if _is_blocked_tool_call_result(result.content)]
-
-
-def _is_blocked_tool_call_result(content: str) -> bool:
-    stripped = content.strip()
-    if stripped.startswith("Permission denied:"):
-        return True
-    try:
-        data = json.loads(stripped)
-    except json.JSONDecodeError:
-        return False
-    if not isinstance(data, dict):
-        return False
-    error = data.get("error")
-    if not isinstance(error, str):
-        return False
-    normalized = error.lower()
-    return (
-        normalized.startswith("permission denied:")
-        or "not available to chat" in normalized
-        or "not available in this chat context" in normalized
-    )
+    return [result for result in results if result.blocked is not None]
 
 
 def _blocked_tool_call_response(results: list[ToolCallResult]) -> str:
@@ -753,14 +812,29 @@ def _blocked_tool_call_response(results: list[ToolCallResult]) -> str:
     ]
     for result in results:
         lines.append(
-            f"- `{result.request.name}` with arguments `{_json_dump(result.request.arguments)}` was blocked: "
-            f"{_blocked_tool_call_reason(result.content)}"
+            f"- `{result.request.name}` with arguments `{_json_dump(result.request.arguments)}` was blocked "
+            f"({_blocked_tool_call_reason_label(result.blocked)}): {_blocked_tool_call_body(result.content)}"
         )
     lines.append("No blocked action was executed.")
     return "\n".join(lines)
 
 
-def _blocked_tool_call_reason(content: str) -> str:
+def _blocked_tool_call_reason_label(reason: ChatBlockReason | None) -> str:
+    if reason == ChatBlockReason.PERMISSION_DENIED:
+        return "permission denied"
+    if reason == ChatBlockReason.NOT_AVAILABLE:
+        return "not available in this chat session"
+    return "blocked"
+
+
+def _blocked_tool_call_body(content: str) -> str:
+    """Extract the error message embedded in a chat-block result body, if any.
+
+    Block results come from ``mcp_runtime`` with the explicit block reason on
+    ``ToolCallResult.blocked``; this helper just picks the human-friendly
+    error string out of the JSON body for user display. The decision to flag a
+    result as blocked is *not* made here.
+    """
     try:
         data = json.loads(content)
     except json.JSONDecodeError:

@@ -1,16 +1,31 @@
 import asyncio
 
+import pytest
 from langchain_core.messages import AIMessage, AIMessageChunk, HumanMessage, SystemMessage, ToolMessage
 from langchain_core.messages.modifier import RemoveMessage
-from mcp.types import GetPromptResult, Prompt, PromptArgument, PromptMessage, TextContent, Tool
+from mcp.types import Prompt, PromptArgument, Tool
 
 from reporting.authnz import CurrentUser
 from reporting.authnz.permissions import Permission
 from reporting.schema.report_config import User
-from reporting.services import chat_graph
+from reporting.services import capability_revision, chat_graph
 from reporting.services.chat_messages import MessageTag, has_tag
+from reporting.services.mcp_runtime import ChatActionOutcome, ChatBlockReason
 
 _NOW = "2024-01-01T00:00:00+00:00"
+
+
+@pytest.fixture(autouse=True)
+def _clear_capability_cache():
+    """Wipe the in-process skill/tool listing cache between tests.
+
+    The cache is keyed by ``(permissions, capability_revision)`` — without
+    clearing, mock invocations from a previous test would be served from the
+    cache and the current test's mocks would never be called.
+    """
+    chat_graph._invalidate_capability_cache()
+    yield
+    chat_graph._invalidate_capability_cache()
 
 
 def _user() -> CurrentUser:
@@ -164,8 +179,8 @@ async def test_chat_graph_buffers_tool_enabled_text_until_final_response(mocker)
         return_value=[Tool(name="security__one", description="One", inputSchema={"type": "object"})],
     )
     mocker.patch(
-        "reporting.services.chat_graph.mcp_runtime.call_tool_for_user",
-        return_value=[TextContent(type="text", text='{"ok": true}')],
+        "reporting.services.chat_graph.mcp_runtime.call_tool_for_chat",
+        return_value=ChatActionOutcome(text='{"ok": true}'),
     )
     graph = chat_graph.build_chat_graph(MemorySaver())
 
@@ -182,6 +197,50 @@ async def test_chat_graph_buffers_tool_enabled_text_until_final_response(mocker)
     assert "Inspecting now" not in streamed
     assert "Running tool `security__one`..." in streamed
     assert "Final answer." in streamed
+
+
+async def test_run_llm_tool_turn_streams_until_tool_call_chunk_arrives():
+    """Live-streams early text; switches to buffer once a tool-call chunk lands.
+
+    Mirrors how Anthropic-style providers stream a short preamble then a
+    ``tool_use`` block — the preamble reaches the user, but text after the
+    tool signal is pre-tool reasoning that the loop will discard.
+    """
+
+    class _PeekModel:
+        async def astream(self, input, config=None, **kwargs):
+            yield AIMessageChunk(content="Let me check ")
+            yield AIMessageChunk(
+                content="",
+                tool_call_chunks=[{"name": "security__one", "args": "{}", "id": "call_1", "index": 0}],
+            )
+            yield AIMessageChunk(content=" — actually wait")
+
+    streamed_deltas: list[str] = []
+
+    def writer(item: dict) -> None:
+        streamed_deltas.append(item["content"])
+
+    ai_message, streamed = await chat_graph._run_llm_tool_turn(
+        _PeekModel(),
+        "system",
+        [HumanMessage(content="hi")],
+        [],
+        {},
+        writer,
+    )
+
+    assert streamed_deltas == ["Let me check "]
+    assert streamed == "Let me check "
+    # The buffered merged message still reflects the full LLM response
+    # (so the loop can read the tool call and any post-signal text).
+    assert "— actually wait" in message_text_of(ai_message)
+
+
+def message_text_of(message):
+    from reporting.services.chat_messages import message_text
+
+    return message_text(message.content)
 
 
 async def test_chat_graph_streams_real_llm_with_seizu_prompt(mocker):
@@ -250,17 +309,9 @@ async def test_chat_graph_auto_runs_model_requested_skill(mocker):
     )
     mocker.patch("reporting.services.chat_graph.mcp_runtime.list_tools_for_user", return_value=[])
     render_skill = mocker.patch(
-        "reporting.services.chat_graph.mcp_runtime.get_prompt_for_user",
-        return_value=GetPromptResult(
-            messages=[
-                PromptMessage(
-                    role="user",
-                    content=TextContent(
-                        type="text",
-                        text="Call github_security__org_overview with org=mappedsky, then summarize.",
-                    ),
-                )
-            ]
+        "reporting.services.chat_graph.mcp_runtime.render_prompt_for_chat",
+        return_value=ChatActionOutcome(
+            text="Call github_security__org_overview with org=mappedsky, then summarize.",
         ),
     )
     graph = chat_graph.build_chat_graph(MemorySaver())
@@ -300,7 +351,7 @@ async def test_chat_graph_runs_model_requested_tools_in_parallel(mocker):
         if len(started) == 2:
             both_started.set()
         await asyncio.wait_for(both_started.wait(), timeout=1)
-        return [TextContent(type="text", text=f'{{"tool": "{name}"}}')]
+        return ChatActionOutcome(text=f'{{"tool": "{name}"}}')
 
     fake_model = _ToolCallingFakeModel(
         [
@@ -327,7 +378,7 @@ async def test_chat_graph_runs_model_requested_tools_in_parallel(mocker):
         ],
     )
     call_tool = mocker.patch(
-        "reporting.services.chat_graph.mcp_runtime.call_tool_for_user",
+        "reporting.services.chat_graph.mcp_runtime.call_tool_for_chat",
         side_effect=_call_tool,
     )
     graph = chat_graph.build_chat_graph(MemorySaver())
@@ -369,8 +420,8 @@ async def test_chat_graph_retries_empty_response_after_action_result(mocker):
         return_value=[Tool(name="security__one", description="One", inputSchema={"type": "object"})],
     )
     mocker.patch(
-        "reporting.services.chat_graph.mcp_runtime.call_tool_for_user",
-        return_value=[TextContent(type="text", text='{"ok": true}')],
+        "reporting.services.chat_graph.mcp_runtime.call_tool_for_chat",
+        return_value=ChatActionOutcome(text='{"ok": true}'),
     )
     graph = chat_graph.build_chat_graph(MemorySaver())
 
@@ -425,8 +476,8 @@ async def test_chat_graph_retries_repeated_tool_call_without_rerunning(mocker):
         ],
     )
     call_tool = mocker.patch(
-        "reporting.services.chat_graph.mcp_runtime.call_tool_for_user",
-        return_value=[TextContent(type="text", text='{"tools": []}')],
+        "reporting.services.chat_graph.mcp_runtime.call_tool_for_chat",
+        return_value=ChatActionOutcome(text='{"tools": []}'),
     )
     graph = chat_graph.build_chat_graph(MemorySaver())
 
@@ -465,8 +516,8 @@ async def test_chat_graph_repeated_tool_fallback_does_not_rerun_or_dump_internal
         return_value=[Tool(name="skillsets__list", description="List skillsets", inputSchema={"type": "object"})],
     )
     call_tool = mocker.patch(
-        "reporting.services.chat_graph.mcp_runtime.call_tool_for_user",
-        return_value=[TextContent(type="text", text='{"skillsets": []}')],
+        "reporting.services.chat_graph.mcp_runtime.call_tool_for_chat",
+        return_value=ChatActionOutcome(text='{"skillsets": []}'),
     )
     graph = chat_graph.build_chat_graph(MemorySaver())
     config = {"configurable": {"thread_id": "thread-repeat-tool-fallback", "current_user": _user()}}
@@ -572,8 +623,8 @@ async def test_chat_graph_empty_response_fallback_preserves_last_action_result(m
         return_value=[Tool(name="security__one", description="One", inputSchema={"type": "object"})],
     )
     mocker.patch(
-        "reporting.services.chat_graph.mcp_runtime.call_tool_for_user",
-        return_value=[TextContent(type="text", text='{"finding": "missing toolset_id"}')],
+        "reporting.services.chat_graph.mcp_runtime.call_tool_for_chat",
+        return_value=ChatActionOutcome(text='{"finding": "missing toolset_id"}'),
     )
     graph = chat_graph.build_chat_graph(MemorySaver())
 
@@ -613,7 +664,7 @@ async def test_chat_graph_reports_unavailable_tool_call_and_persists_notice(mock
         "reporting.services.chat_graph.mcp_runtime.list_tools_for_user",
         return_value=[Tool(name="toolsets__list", description="List toolsets", inputSchema={"type": "object"})],
     )
-    call_tool = mocker.patch("reporting.services.chat_graph.mcp_runtime.call_tool_for_user")
+    call_tool = mocker.patch("reporting.services.chat_graph.mcp_runtime.call_tool_for_chat")
     graph = chat_graph.build_chat_graph(MemorySaver())
     config = {"configurable": {"thread_id": "thread-unavailable-tool", "current_user": _user()}}
 
@@ -652,8 +703,11 @@ async def test_chat_graph_reports_permission_denied_tool_result_and_persists_not
         return_value=[Tool(name="security__one", description="One", inputSchema={"type": "object"})],
     )
     mocker.patch(
-        "reporting.services.chat_graph.mcp_runtime.call_tool_for_user",
-        return_value=[TextContent(type="text", text='{"error": "Permission denied: tools:call"}')],
+        "reporting.services.chat_graph.mcp_runtime.call_tool_for_chat",
+        return_value=ChatActionOutcome(
+            text='{"error": "Permission denied: tools:call"}',
+            blocked=ChatBlockReason.PERMISSION_DENIED,
+        ),
     )
     graph = chat_graph.build_chat_graph(MemorySaver())
     config = {"configurable": {"thread_id": "thread-permission-denied-tool", "current_user": _user()}}
@@ -694,10 +748,8 @@ async def test_chat_graph_does_not_persist_internal_command_attempt(mocker):
     )
     mocker.patch("reporting.services.chat_graph.mcp_runtime.list_tools_for_user", return_value=[])
     mocker.patch(
-        "reporting.services.chat_graph.mcp_runtime.get_prompt_for_user",
-        return_value=GetPromptResult(
-            messages=[PromptMessage(role="user", content=TextContent(type="text", text="Rendered skill."))]
-        ),
+        "reporting.services.chat_graph.mcp_runtime.render_prompt_for_chat",
+        return_value=ChatActionOutcome(text="Rendered skill."),
     )
     graph = chat_graph.build_chat_graph(MemorySaver())
     current = _user()
@@ -852,7 +904,24 @@ async def test_capability_context_progressive_disclosure_lists_only_skills(mocke
     list_tools.assert_not_called()
 
 
-async def test_capability_context_does_not_cache_stale_skill_list(mocker):
+async def test_capability_context_serves_cached_listing_within_revision(mocker):
+    """Within the same capability revision, the cache short-circuits the store."""
+    mocker.patch("reporting.settings.CHAT_LLM_PROGRESSIVE_DISCLOSURE", True)
+    list_prompts = mocker.patch(
+        "reporting.services.chat_graph.mcp_runtime.list_prompts_for_user",
+        return_value=[Prompt(name="first__skill", description="First", arguments=[])],
+    )
+
+    first = await chat_graph.build_capability_context(_user())
+    second = await chat_graph.build_capability_context(_user())
+
+    assert "first__skill" in first
+    assert "first__skill" in second
+    assert list_prompts.await_count == 1
+
+
+async def test_capability_context_invalidates_on_revision_bump(mocker):
+    """A capability-revision bump invalidates the cache immediately."""
     mocker.patch("reporting.settings.CHAT_LLM_PROGRESSIVE_DISCLOSURE", True)
     list_prompts = mocker.patch(
         "reporting.services.chat_graph.mcp_runtime.list_prompts_for_user",
@@ -863,6 +932,7 @@ async def test_capability_context_does_not_cache_stale_skill_list(mocker):
     )
 
     first = await chat_graph.build_capability_context(_user())
+    capability_revision.bump_revision()
     second = await chat_graph.build_capability_context(_user())
 
     assert "first__skill" in first
