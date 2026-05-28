@@ -196,6 +196,15 @@ function safeSubstitutedUrl(url: string): string {
   return '#';
 }
 
+function safeUntrustedUrl(url: string, { image }: { image: boolean }): string {
+  const normalized = url.replace(URL_CONTROL_CHARS_RE, '').trim();
+  if (!normalized) return '#';
+  if (normalized.startsWith('//')) return '#';
+  if (!SCHEME_RE.test(normalized)) return normalized;
+  if (image) return /^https?:/i.test(normalized) ? normalized : '#';
+  return ALLOWED_SUBSTITUTED_PROTO_RE.test(normalized) ? normalized : '#';
+}
+
 function substituteUrlVars(
   url: string,
   variables: Record<string, unknown>,
@@ -226,6 +235,9 @@ const linkNode = {
         config.variables ?? {},
       );
       if (changed) attributes.href = safeSubstitutedUrl(value);
+      else if (config.untrustedUrls) {
+        attributes.href = safeUntrustedUrl(attributes.href, { image: false });
+      }
     }
     return new Tag(
       'MuiLink',
@@ -245,8 +257,15 @@ const imageNode = {
         config.variables ?? {},
       );
       if (changed) attributes.src = safeSubstitutedUrl(value);
+      else if (config.untrustedUrls) {
+        attributes.src = safeUntrustedUrl(attributes.src, { image: true });
+      }
     }
-    return new Tag('img', attributes);
+    return new Tag('img', {
+      loading: 'lazy',
+      referrerPolicy: 'no-referrer',
+      ...attributes,
+    });
   },
 };
 
@@ -267,19 +286,25 @@ const markdocNodes = {
 export interface MarkdocRendererProps {
   source: string;
   variables?: Record<string, string>;
+  untrustedUrls?: boolean;
 }
 
-export function MarkdocRenderer({ source, variables }: MarkdocRendererProps) {
+export function MarkdocRenderer({
+  source,
+  variables,
+  untrustedUrls = false,
+}: MarkdocRendererProps) {
   const rendered = React.useMemo(() => {
     const ast = Markdoc.parse(source ?? '');
     const content = Markdoc.transform(ast, {
       variables: variables ?? {},
       nodes: markdocNodes,
+      untrustedUrls,
     });
     return Markdoc.renderers.react(content, React, {
       components: markdocComponents,
     });
-  }, [source, variables]);
+  }, [source, variables, untrustedUrls]);
 
   return <>{rendered}</>;
 }

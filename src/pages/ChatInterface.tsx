@@ -22,11 +22,14 @@ import Send from '@mui/icons-material/Send';
 import Stop from '@mui/icons-material/Stop';
 import SmartToy from '@mui/icons-material/SmartToy';
 import Person from '@mui/icons-material/Person';
+import Check from '@mui/icons-material/Check';
+import ContentCopy from '@mui/icons-material/ContentCopy';
 import { AuthContext } from 'src/auth.context';
 import { AuthConfigContext } from 'src/authConfig.context';
 import { usePermissionState } from 'src/hooks/usePermissions';
 import { useChatHistory } from 'src/hooks/useChatHistory';
 import { useFeature } from 'src/features.context';
+import { MarkdocRenderer } from 'src/components/markdoc/renderer';
 import { pageContentSx } from 'src/theme/layout';
 
 const CHAT_THREAD_STORAGE_KEY = 'seizu:chat:thread-id';
@@ -65,6 +68,7 @@ export default function ChatInterface() {
   const chatEnabled = useFeature('chat');
   const fetchHistory = useChatHistory();
   const [input, setInput] = useState('');
+  const [copiedMessageId, setCopiedMessageId] = useState<string | null>(null);
   const [threadId] = useState(getInitialThreadId);
   const [historyLoading, setHistoryLoading] = useState(true);
   const hydratedRef = useRef(false);
@@ -150,6 +154,18 @@ export default function ChatInterface() {
 
   const handleInputChange = (event: ChangeEvent<HTMLTextAreaElement>) => {
     setInput(event.target.value);
+  };
+
+  const handleCopyAssistantResponse = async (message: UIMessage) => {
+    const text = messageText(message);
+    if (!text || !navigator.clipboard) return;
+    await navigator.clipboard.writeText(text);
+    setCopiedMessageId(message.id);
+    window.setTimeout(() => {
+      setCopiedMessageId((current) =>
+        current === message.id ? null : current,
+      );
+    }, 1800);
   };
 
   if (!chatEnabled) {
@@ -241,59 +257,158 @@ export default function ChatInterface() {
             </Box>
           ) : (
             <>
-              {messages.map((message) => (
-                <Box
-                  key={message.id}
-                  sx={{
-                    alignItems:
-                      message.role === 'user' ? 'flex-end' : 'flex-start',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    mb: 1.5,
-                  }}
-                >
+              {messages.map((message) => {
+                const text = messageText(message);
+                const copied = copiedMessageId === message.id;
+                return (
                   <Box
+                    key={message.id}
                     sx={{
-                      alignItems: 'center',
-                      color: 'text.secondary',
+                      alignItems:
+                        message.role === 'user' ? 'flex-end' : 'flex-start',
                       display: 'flex',
-                      gap: 0.75,
-                      mb: 0.5,
+                      flexDirection: 'column',
+                      mb: 1.5,
                     }}
                   >
-                    {message.role === 'user' ? (
-                      <Person fontSize="small" />
-                    ) : (
-                      <SmartToy fontSize="small" />
-                    )}
-                    <Typography variant="caption">
-                      {message.role === 'user' ? 'You' : 'Assistant'}
-                    </Typography>
+                    <Box
+                      sx={{
+                        alignItems: 'center',
+                        color: 'text.secondary',
+                        display: 'flex',
+                        gap: 0.75,
+                        mb: 0.5,
+                      }}
+                    >
+                      {message.role === 'user' ? (
+                        <Person fontSize="small" />
+                      ) : (
+                        <SmartToy fontSize="small" />
+                      )}
+                      <Typography variant="caption">
+                        {message.role === 'user' ? 'You' : 'Assistant'}
+                      </Typography>
+                    </Box>
+                    <Box
+                      sx={{
+                        bgcolor:
+                          message.role === 'user'
+                            ? 'primary.main'
+                            : 'action.hover',
+                        borderRadius: 2,
+                        color:
+                          message.role === 'user'
+                            ? 'primary.contrastText'
+                            : 'text.primary',
+                        maxWidth: { xs: '92%', md: '74%' },
+                        px: 1.5,
+                        py: 1,
+                        whiteSpace:
+                          message.role === 'user' ? 'pre-wrap' : 'normal',
+                        wordBreak: 'break-word',
+                      }}
+                    >
+                      {message.role === 'user' ? (
+                        <Typography variant="body2">
+                          {text || (busy ? '...' : '')}
+                        </Typography>
+                      ) : (
+                        <Box
+                          sx={(theme) => ({
+                            '& > :first-child': { mt: 0 },
+                            '& > :last-child': { mb: 0 },
+                            '& p': { mb: 1, mt: 0 },
+                            '& ul, & ol': { my: 1, pl: 3 },
+                            '& li': { mb: 0.5 },
+                            '& h2, & h3, & h4, & h5, & h6': {
+                              fontSize: theme.typography.subtitle2.fontSize,
+                              lineHeight: 1.4,
+                              mb: 1,
+                              mt: 1.25,
+                            },
+                            '& hr': {
+                              border: 0,
+                              borderTop: 1,
+                              borderColor: 'divider',
+                              my: 2,
+                            },
+                            '& pre': {
+                              bgcolor: 'background.paper',
+                              border: 1,
+                              borderColor: 'divider',
+                              borderRadius: 1,
+                              fontFamily: '"JetBrains Mono", monospace',
+                              fontSize: theme.typography.body2.fontSize,
+                              lineHeight: 1.6,
+                              my: 1.25,
+                              overflowX: 'auto',
+                              p: 1,
+                              whiteSpace: 'pre',
+                            },
+                            '& code': {
+                              bgcolor: 'background.paper',
+                              borderRadius: 0.5,
+                              fontFamily: '"JetBrains Mono", monospace',
+                              fontSize: '0.92em',
+                              px: 0.5,
+                            },
+                            '& pre code': {
+                              bgcolor: 'transparent',
+                              borderRadius: 0,
+                              display: 'block',
+                              fontSize: 'inherit',
+                              lineHeight: 'inherit',
+                              p: 0,
+                              whiteSpace: 'inherit',
+                            },
+                            '& img': {
+                              height: 'auto',
+                              maxWidth: '100%',
+                            },
+                          })}
+                        >
+                          <MarkdocRenderer
+                            source={text || (busy ? '...' : '')}
+                            untrustedUrls
+                          />
+                          <Box
+                            aria-label="Assistant response actions"
+                            sx={{
+                              alignItems: 'center',
+                              display: 'flex',
+                              gap: 0.5,
+                              justifyContent: 'flex-start',
+                              mt: 1,
+                            }}
+                          >
+                            <Tooltip
+                              title={copied ? 'Copied' : 'Copy response'}
+                            >
+                              <span>
+                                <IconButton
+                                  aria-label="Copy assistant response"
+                                  disabled={!text}
+                                  onClick={() => {
+                                    void handleCopyAssistantResponse(message);
+                                  }}
+                                  size="small"
+                                  sx={{ color: 'text.secondary', p: 0.25 }}
+                                >
+                                  {copied ? (
+                                    <Check sx={{ fontSize: 16 }} />
+                                  ) : (
+                                    <ContentCopy sx={{ fontSize: 16 }} />
+                                  )}
+                                </IconButton>
+                              </span>
+                            </Tooltip>
+                          </Box>
+                        </Box>
+                      )}
+                    </Box>
                   </Box>
-                  <Box
-                    sx={{
-                      bgcolor:
-                        message.role === 'user'
-                          ? 'primary.main'
-                          : 'action.hover',
-                      borderRadius: 2,
-                      color:
-                        message.role === 'user'
-                          ? 'primary.contrastText'
-                          : 'text.primary',
-                      maxWidth: { xs: '92%', md: '74%' },
-                      px: 1.5,
-                      py: 1,
-                      whiteSpace: 'pre-wrap',
-                      wordBreak: 'break-word',
-                    }}
-                  >
-                    <Typography variant="body2">
-                      {messageText(message) || (busy ? '...' : '')}
-                    </Typography>
-                  </Box>
-                </Box>
-              ))}
+                );
+              })}
               {showWorkingIndicator ? (
                 <Box
                   sx={{
