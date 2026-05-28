@@ -34,7 +34,7 @@ from reporting.routes import toolsets as toolsets_routes
 from reporting.routes import users as users_routes
 from reporting.routes import validate as validate_routes
 from reporting.services import report_store
-from reporting.services.chat_graph import initialize_chat_checkpoints
+from reporting.services.chat_graph import initialize_chat_checkpoints, validate_chat_llm_config
 
 _CSP_NONCE_PLACEHOLDER = "{{ csp_nonce() }}"
 
@@ -110,12 +110,16 @@ _TIMEOUT_RESPONSE_BODY = b'{"error":"Request timed out"}'
 class _TimeoutMiddleware:
     """Abort HTTP requests that exceed API_REQUEST_TIMEOUT seconds with a 504."""
 
-    def __init__(self, app: StarletteASGIApp, timeout: float) -> None:
+    def __init__(self, app: StarletteASGIApp, timeout: float, exempt_paths: frozenset[str] | None = None) -> None:
         self._app = app
         self._timeout = timeout
+        self._exempt_paths = exempt_paths or frozenset({"/api/v1/chat/stream"})
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
         if scope["type"] != "http":
+            await self._app(scope, receive, send)
+            return
+        if scope.get("path", "") in self._exempt_paths:
             await self._app(scope, receive, send)
             return
 
@@ -151,6 +155,8 @@ class _TimeoutMiddleware:
                         "more_body": False,
                     }
                 )
+            else:
+                await send({"type": "http.response.body", "body": b"", "more_body": False})
 
 
 _CSRF_HEADER_NAME = "x-seizu-csrf"
@@ -256,6 +262,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     if should_init:
         await report_store.initialize()
     if settings.CHAT_ENABLED:
+        validate_chat_llm_config()
         await initialize_chat_checkpoints()
     mcp_session_manager = getattr(app.state, "mcp_session_manager", None)
     if mcp_session_manager is not None:

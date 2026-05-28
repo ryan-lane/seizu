@@ -116,6 +116,13 @@ describe('ChatInterface', () => {
       Authorization: 'Bearer token-123',
       'X-Seizu-Csrf': '1',
     });
+    expect(mockUseChat).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: threadId,
+        experimental_throttle: 50,
+        transport: expect.any(Object),
+      }),
+    );
 
     const prepared = transportOptions.prepareSendMessagesRequest?.({
       id: 'chat-id',
@@ -191,10 +198,48 @@ describe('ChatInterface', () => {
       expect(fetchHistory).toHaveBeenCalledWith(threadId);
       expect(setMessages).toHaveBeenCalledTimes(1);
     });
-    // The updater fills history only when the client list is still empty.
-    const updater = setMessages.mock.calls[0][0] as (m: unknown[]) => unknown[];
-    expect(updater([])).toEqual(history);
-    expect(updater([{ id: 'existing' }])).toEqual([{ id: 'existing' }]);
+    expect(setMessages).toHaveBeenCalledWith(history);
+  });
+
+  it('does not hydrate over existing client messages', async () => {
+    const history = [
+      {
+        id: 'h1',
+        role: 'user' as const,
+        parts: [{ type: 'text' as const, text: 'Earlier question' }],
+      },
+    ];
+    const fetchHistory = jest.fn().mockResolvedValue(history);
+    mockUseChatHistory.mockReturnValue(fetchHistory);
+    const setMessages = jest.fn();
+    mockUseChat.mockReturnValue({
+      id: 'chat-id',
+      messages: [
+        {
+          id: 'local-message',
+          role: 'user',
+          parts: [{ type: 'text', text: 'Already typing' }],
+        },
+      ],
+      sendMessage: jest.fn(),
+      regenerate: jest.fn(),
+      stop: jest.fn(),
+      resumeStream: jest.fn(),
+      addToolResult: jest.fn(),
+      addToolOutput: jest.fn(),
+      addToolApprovalResponse: jest.fn(),
+      status: 'ready',
+      error: undefined,
+      setMessages,
+      clearError: jest.fn(),
+    });
+
+    renderChat();
+
+    await waitFor(() => {
+      expect(fetchHistory).toHaveBeenCalled();
+    });
+    expect(setMessages).not.toHaveBeenCalled();
   });
 
   it('sends typed input through useChat', async () => {
@@ -257,5 +302,35 @@ describe('ChatInterface', () => {
 
     expect(screen.getByText('Assistant')).toBeInTheDocument();
     expect(screen.getByText('Streaming response')).toBeInTheDocument();
+    expect(screen.getByText('Assistant is working...')).toBeInTheDocument();
+  });
+
+  it('shows an assistant working indicator before assistant text arrives', async () => {
+    mockUseChat.mockReturnValue({
+      id: 'chat-id',
+      messages: [
+        {
+          id: 'user-message',
+          role: 'user',
+          parts: [{ type: 'text', text: 'Run the overview' }],
+        },
+      ],
+      sendMessage: jest.fn(),
+      regenerate: jest.fn(),
+      stop: jest.fn(),
+      resumeStream: jest.fn(),
+      addToolResult: jest.fn(),
+      addToolOutput: jest.fn(),
+      addToolApprovalResponse: jest.fn(),
+      status: 'submitted',
+      error: undefined,
+      setMessages: jest.fn(),
+      clearError: jest.fn(),
+    });
+
+    renderChat();
+    await act(async () => {});
+
+    expect(screen.getByText('Assistant is working...')).toBeInTheDocument();
   });
 });

@@ -80,6 +80,7 @@ async def test_chat_stream_with_real_graph_emits_tokens(mocker):
 
     from reporting.services.chat_graph import build_chat_graph
 
+    mocker.patch("reporting.settings.CHAT_LLM_PROVIDER", "mock")
     graph = build_chat_graph(MemorySaver())
     mocker.patch("reporting.routes.chat.get_chat_graph", return_value=graph)
 
@@ -134,6 +135,7 @@ async def test_chat_history_round_trips_persisted_messages(mocker):
 
     from reporting.services.chat_graph import build_chat_graph
 
+    mocker.patch("reporting.settings.CHAT_LLM_PROVIDER", "mock")
     graph = build_chat_graph(MemorySaver())
     # The stream endpoint and load_thread_messages resolve get_chat_graph
     # through different module bindings; patch both so they share one graph.
@@ -164,6 +166,7 @@ async def test_chat_history_isolated_per_user(mocker):
 
     from reporting.services.chat_graph import build_chat_graph
 
+    mocker.patch("reporting.settings.CHAT_LLM_PROVIDER", "mock")
     graph = build_chat_graph(MemorySaver())
     mocker.patch("reporting.routes.chat.get_chat_graph", return_value=graph)
     mocker.patch("reporting.services.chat_graph.get_chat_graph", return_value=graph)
@@ -192,19 +195,16 @@ async def test_chat_history_isolated_per_user(mocker):
     assert history.json()["messages"] == []
 
 
-async def test_chat_stream_command_is_not_persisted(mocker):
-    """A slash command streams its result but leaves the thread empty."""
+async def test_chat_stream_no_longer_treats_slash_text_as_command(mocker):
+    """Slash-looking text is just chat input; native UI tooling will own actions."""
     from langgraph.checkpoint.memory import MemorySaver
 
     from reporting.services.chat_graph import build_chat_graph
 
+    mocker.patch("reporting.settings.CHAT_LLM_PROVIDER", "mock")
     graph = build_chat_graph(MemorySaver())
     mocker.patch("reporting.routes.chat.get_chat_graph", return_value=graph)
     mocker.patch("reporting.services.chat_graph.get_chat_graph", return_value=graph)
-    mocker.patch(
-        "reporting.services.chat_graph.mcp_runtime.list_tools_for_user",
-        return_value=[],
-    )
 
     app = _make_app()
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
@@ -218,12 +218,12 @@ async def test_chat_stream_command_is_not_persisted(mocker):
             for line in stream.text.splitlines()
             if line.startswith("data: ") and '"text-delta"' in line
         )
-        assert deltas == "No MCP tools are available to this chat session."
+        assert deltas == "I received your message: /tools"
 
         history = await client.get("/api/v1/chat/history", params={"thread_id": "thread-cmd"})
 
     assert history.status_code == 200
-    assert history.json()["messages"] == []
+    assert [message["text"] for message in history.json()["messages"]] == ["/tools", "I received your message: /tools"]
 
 
 def test_chat_routes_registered_when_enabled():

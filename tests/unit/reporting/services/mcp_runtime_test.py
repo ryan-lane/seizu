@@ -241,6 +241,20 @@ async def test_chat_safe_tool_call_rejects_mutating_builtin_before_handler():
     assert json.loads(result[0].text) == {"error": "Tool 'reports__create' is not available to chat"}
 
 
+async def test_builtin_call_validates_required_arguments_before_handler(mocker):
+    get_skillset = mocker.patch("reporting.services.mcp_builtins.skillsets.report_store.get_skillset")
+    current = _user(frozenset({Permission.SKILLS_READ.value}))
+
+    result = await mcp_runtime.call_tool_for_user(
+        current,
+        "skillsets__list_skills",
+        {},
+    )
+
+    assert json.loads(result[0].text) == {"error": "Missing required argument(s): skillset_id"}
+    get_skillset.assert_not_called()
+
+
 async def test_chat_skill_gate_blocks_listing_before_store_lookup(mocker):
     list_enabled_skills = mocker.patch("reporting.services.mcp_runtime.report_store.list_enabled_skills")
     current = _user(frozenset({Permission.SKILLS_RENDER.value}))
@@ -281,3 +295,105 @@ async def test_chat_skill_render_uses_mcp_acl_and_renders_prompt(mocker):
     )
 
     assert result.messages[0].content.text == "Summarize alerts."
+
+
+# ---------------------------------------------------------------------------
+# Chat-specific outcomes (structured block reasons replace string matching)
+# ---------------------------------------------------------------------------
+
+
+async def test_call_tool_for_chat_flags_permission_denied_with_enum(mocker):
+    mocker.patch("reporting.services.mcp_runtime.report_store.get_enabled_tool")
+    current = _user(frozenset({Permission.TOOLS_CALL.value}))
+
+    outcome = await mcp_runtime.call_tool_for_chat(
+        current,
+        "security__lookup",
+        {},
+        gate_permission=Permission.CHAT_TOOLS_CALL,
+    )
+
+    assert outcome.blocked == mcp_runtime.ChatBlockReason.PERMISSION_DENIED
+    assert "chat:tools:call" in outcome.text
+
+
+async def test_call_tool_for_chat_flags_not_available_for_chat_unsafe_builtin(mocker):
+    """A built-in tool that requires a write permission is hidden from chat."""
+
+    from reporting.services.mcp_builtins.base import BuiltinTool
+
+    write_only_tool = BuiltinTool(
+        name="reports__delete",
+        group="reports",
+        description="Delete a report",
+        input_schema={"type": "object"},
+        required_permissions=["reports:delete"],
+        handler=lambda args, current_user: None,  # pragma: no cover — never called
+    )
+    mocker.patch("reporting.services.mcp_runtime.find_builtin", return_value=write_only_tool)
+    current = _user(frozenset({Permission.CHAT_TOOLS_CALL.value, "reports:delete"}))
+
+    outcome = await mcp_runtime.call_tool_for_chat(
+        current,
+        "reports__delete",
+        {},
+        gate_permission=Permission.CHAT_TOOLS_CALL,
+        chat_safe_only=True,
+    )
+
+    assert outcome.blocked == mcp_runtime.ChatBlockReason.NOT_AVAILABLE
+    assert "not available to chat" in outcome.text
+
+
+async def test_call_tool_for_chat_returns_none_blocked_on_success(mocker):
+    mocker.patch("reporting.services.mcp_runtime.report_store.get_enabled_tool", return_value=_tool())
+    mocker.patch(
+        "reporting.services.mcp_runtime.reporting_neo4j.run_query",
+        return_value=[{"name": "node-1"}],
+    )
+    current = _user(frozenset({Permission.CHAT_TOOLS_CALL.value, Permission.TOOLS_CALL.value}))
+
+    outcome = await mcp_runtime.call_tool_for_chat(
+        current,
+        "security__lookup",
+        {"limit": 3},
+        gate_permission=Permission.CHAT_TOOLS_CALL,
+    )
+
+    assert outcome.blocked is None
+    assert json.loads(outcome.text) == [{"name": "node-1"}]
+
+
+async def test_render_prompt_for_chat_flags_permission_denied_with_enum(mocker):
+    get_enabled_skill = mocker.patch("reporting.services.mcp_runtime.report_store.get_enabled_skill")
+    current = _user(frozenset({Permission.CHAT_SKILLS_CALL.value}))
+
+    outcome = await mcp_runtime.render_prompt_for_chat(
+        current,
+        "security__summarize",
+        {"topic": "alerts"},
+        gate_permission=Permission.CHAT_SKILLS_CALL,
+    )
+
+    assert outcome.blocked == mcp_runtime.ChatBlockReason.PERMISSION_DENIED
+    assert "Permission denied: skills:render" in outcome.text
+    get_enabled_skill.assert_not_called()
+
+
+async def test_render_prompt_for_chat_returns_none_blocked_on_success(mocker):
+    mocker.patch(
+        "reporting.services.mcp_runtime.report_store.get_enabled_skill",
+        return_value=_skill().model_copy(update={"tools_required": ["security__lookup"]}),
+    )
+    current = _user(frozenset({Permission.CHAT_SKILLS_CALL.value, Permission.SKILLS_RENDER.value}))
+
+    outcome = await mcp_runtime.render_prompt_for_chat(
+        current,
+        "security__summarize",
+        {"topic": "alerts"},
+        gate_permission=Permission.CHAT_SKILLS_CALL,
+    )
+
+    assert outcome.blocked is None
+    assert "Summarize alerts." in outcome.text
+    assert outcome.tools_required == ("security__lookup",)

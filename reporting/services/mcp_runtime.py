@@ -2,6 +2,8 @@
 
 import json
 import logging
+from dataclasses import dataclass
+from enum import StrEnum
 from typing import Any
 
 from mcp.types import GetPromptResult, Prompt, PromptArgument, PromptMessage, TextContent, Tool
@@ -14,6 +16,39 @@ from reporting.services import report_store, reporting_neo4j
 from reporting.services.mcp_builtins import find_builtin, list_builtin_tools
 
 logger = logging.getLogger(__name__)
+
+
+class ChatBlockReason(StrEnum):
+    """Structured reason that the chat layer should stop a tool/skill turn.
+
+    The MCP wire format only carries free-form ``TextContent``, so when chat
+    re-uses the MCP runtime it cannot tell a permission-denied error apart
+    from a tool's natural text output by inspecting the body. This enum is
+    the structured signal that travels alongside the body for the chat path
+    so the chat layer never has to string-match on error messages.
+    """
+
+    PERMISSION_DENIED = "permission_denied"
+    NOT_AVAILABLE = "not_available"
+
+
+@dataclass(frozen=True)
+class ChatActionOutcome:
+    """Chat-specific result for a tool call or skill render.
+
+    ``text`` is the user-visible body (JSON-serialized tool result, rendered
+    skill text, or the error message). ``blocked`` is ``None`` for normal
+    results and one of :class:`ChatBlockReason` when the runtime refused the
+    call — the chat agent breaks the turn and surfaces a structured notice
+    instead of letting the model retry against an authorization wall.
+    ``tools_required`` carries stored skill metadata for strict progressive
+    disclosure; it is empty for normal tool calls.
+    """
+
+    text: str
+    blocked: ChatBlockReason | None = None
+    tools_required: tuple[str, ...] = ()
+
 
 _PARAM_TYPE_MAP: dict[str, str] = {
     "string": "string",
@@ -96,6 +131,13 @@ def _permissions(current_user: CurrentUser | None, permissions: frozenset[str] |
     return current_user.permissions if current_user is not None else frozenset()
 
 
+def _missing_required_arguments(input_schema: dict[str, Any], args: dict[str, Any]) -> list[str]:
+    required = input_schema.get("required")
+    if not isinstance(required, list):
+        return []
+    return [name for name in required if isinstance(name, str) and name not in args]
+
+
 async def list_tools_for_user(
     current_user: CurrentUser | None,
     *,
@@ -148,54 +190,127 @@ async def call_tool_for_user(
     result_max_rows: int | None = None,
     result_max_bytes: int | None = None,
 ) -> list[TextContent]:
+    """MCP-shaped tool call. Use ``call_tool_for_chat`` from the chat agent."""
+    content, _blocked = await _call_tool_core(
+        current_user,
+        name,
+        arguments,
+        gate_permission=gate_permission,
+        permissions=permissions,
+        chat_safe_only=chat_safe_only,
+        result_max_rows=result_max_rows,
+        result_max_bytes=result_max_bytes,
+    )
+    return content
+
+
+async def call_tool_for_chat(
+    current_user: CurrentUser | None,
+    name: str,
+    arguments: dict[str, Any] | None,
+    *,
+    gate_permission: Permission | None = None,
+    permissions: frozenset[str] | None = None,
+    chat_safe_only: bool = False,
+    result_max_rows: int | None = None,
+    result_max_bytes: int | None = None,
+) -> ChatActionOutcome:
+    """Chat-oriented tool call returning the body together with a block reason.
+
+    Identical to :func:`call_tool_for_user` for execution, but the chat agent
+    needs to distinguish authorization failures from a tool's natural output
+    so it can stop the turn instead of letting the model retry. The block
+    reason is the structured replacement for matching error strings.
+    """
+    content, blocked = await _call_tool_core(
+        current_user,
+        name,
+        arguments,
+        gate_permission=gate_permission,
+        permissions=permissions,
+        chat_safe_only=chat_safe_only,
+        result_max_rows=result_max_rows,
+        result_max_bytes=result_max_bytes,
+    )
+    return ChatActionOutcome(text=_text_content_to_string(content), blocked=blocked)
+
+
+async def _call_tool_core(
+    current_user: CurrentUser | None,
+    name: str,
+    arguments: dict[str, Any] | None,
+    *,
+    gate_permission: Permission | None = None,
+    permissions: frozenset[str] | None = None,
+    chat_safe_only: bool = False,
+    result_max_rows: int | None = None,
+    result_max_bytes: int | None = None,
+) -> tuple[list[TextContent], ChatBlockReason | None]:
     args = arguments or {}
     perms = _permissions(current_user, permissions)
     if gate_permission and gate_permission.value not in perms:
-        return text_response({"error": f"Permission denied: {gate_permission.value}"})
+        return (
+            text_response({"error": f"Permission denied: {gate_permission.value}"}),
+            ChatBlockReason.PERMISSION_DENIED,
+        )
 
     builtin = find_builtin(name)
     if builtin is not None:
         if chat_safe_only and not _is_chat_safe_builtin(builtin.required_permissions):
-            return text_response({"error": f"Tool '{name}' is not available to chat"})
+            return (
+                text_response({"error": f"Tool '{name}' is not available to chat"}),
+                ChatBlockReason.NOT_AVAILABLE,
+            )
         missing = missing_permissions(builtin.required_permissions, perms)
         if missing:
-            return text_response({"error": f"Permission denied: {', '.join(missing)}"})
+            return (
+                text_response({"error": f"Permission denied: {', '.join(missing)}"}),
+                ChatBlockReason.PERMISSION_DENIED,
+            )
+        missing_args = _missing_required_arguments(builtin.input_schema, args)
+        if missing_args:
+            return text_response({"error": f"Missing required argument(s): {', '.join(missing_args)}"}), None
         try:
             result = await builtin.handler(args, current_user)
-            return _bounded_text_response(
-                result,
-                max_rows=result_max_rows,
-                max_bytes=result_max_bytes,
+            return (
+                _bounded_text_response(result, max_rows=result_max_rows, max_bytes=result_max_bytes),
+                None,
             )
         except Exception:
             logger.exception("Failed to execute built-in MCP tool %s", name)
-            return text_response({"error": f"Failed to execute tool '{name}'"})
+            return text_response({"error": f"Failed to execute tool '{name}'"}), None
 
     if Permission.TOOLS_CALL.value not in perms:
-        return text_response({"error": f"Permission denied: {Permission.TOOLS_CALL.value}"})
+        return (
+            text_response({"error": f"Permission denied: {Permission.TOOLS_CALL.value}"}),
+            ChatBlockReason.PERMISSION_DENIED,
+        )
     try:
         parsed_name = parse_user_defined_name(name)
         target_tool = await report_store.get_enabled_tool(parsed_name[0], parsed_name[1]) if parsed_name else None
         if target_tool is None:
-            return text_response({"error": f"Tool '{name}' not found"})
+            return text_response({"error": f"Tool '{name}' not found"}), None
 
         arg_errors = validate_tool_arguments(target_tool.parameters, args)
         if arg_errors:
-            return text_response({"errors": arg_errors})
+            return text_response({"errors": arg_errors}), None
 
         params_with_defaults = {p.name: p.default for p in target_tool.parameters}
         params_with_defaults.update(args)
 
         results = await reporting_neo4j.run_query(target_tool.cypher, parameters=params_with_defaults)
         serialized = [{key: _serialize_neo4j_value(value) for key, value in record.items()} for record in results]
-        return _bounded_text_response(
-            serialized,
-            max_rows=result_max_rows,
-            max_bytes=result_max_bytes,
+        return (
+            _bounded_text_response(serialized, max_rows=result_max_rows, max_bytes=result_max_bytes),
+            None,
         )
     except Exception:
         logger.exception("Failed to execute MCP tool %s", name)
-        return text_response({"error": f"Failed to execute tool '{name}'"})
+        return text_response({"error": f"Failed to execute tool '{name}'"}), None
+
+
+def _text_content_to_string(content: list[TextContent]) -> str:
+    return "\n\n".join(item.text for item in content if hasattr(item, "text"))
 
 
 async def list_prompts_for_user(
@@ -242,24 +357,67 @@ async def get_prompt_for_user(
     gate_permission: Permission | None = None,
     permissions: frozenset[str] | None = None,
 ) -> GetPromptResult:
+    """MCP-shaped prompt render. Use ``render_prompt_for_chat`` from the chat agent."""
+    result, _blocked, _tools_required = await _get_prompt_core(
+        current_user,
+        name,
+        arguments,
+        gate_permission=gate_permission,
+        permissions=permissions,
+    )
+    return result
+
+
+async def render_prompt_for_chat(
+    current_user: CurrentUser | None,
+    name: str,
+    arguments: dict[str, str] | None,
+    *,
+    gate_permission: Permission | None = None,
+    permissions: frozenset[str] | None = None,
+) -> ChatActionOutcome:
+    """Chat-oriented skill render returning the body together with a block reason."""
+    result, blocked, tools_required = await _get_prompt_core(
+        current_user,
+        name,
+        arguments,
+        gate_permission=gate_permission,
+        permissions=permissions,
+    )
+    text = "\n\n".join(t for m in result.messages if (t := _prompt_message_text(m.content)))
+    return ChatActionOutcome(text=text, blocked=blocked, tools_required=tools_required)
+
+
+async def _get_prompt_core(
+    current_user: CurrentUser | None,
+    name: str,
+    arguments: dict[str, str] | None,
+    *,
+    gate_permission: Permission | None = None,
+    permissions: frozenset[str] | None = None,
+) -> tuple[GetPromptResult, ChatBlockReason | None, tuple[str, ...]]:
     perms = _permissions(current_user, permissions)
     if gate_permission and gate_permission.value not in perms:
-        return _permission_denied_prompt(gate_permission.value)
+        return _permission_denied_prompt(gate_permission.value), ChatBlockReason.PERMISSION_DENIED, ()
     if Permission.SKILLS_RENDER.value not in perms:
-        return _permission_denied_prompt(Permission.SKILLS_RENDER.value)
+        return _permission_denied_prompt(Permission.SKILLS_RENDER.value), ChatBlockReason.PERMISSION_DENIED, ()
 
     try:
         parsed_name = parse_user_defined_name(name)
         target_skill = await report_store.get_enabled_skill(parsed_name[0], parsed_name[1]) if parsed_name else None
         if target_skill is None:
-            return GetPromptResult(
-                description="Skill not found",
-                messages=[
-                    PromptMessage(
-                        role="user",
-                        content=TextContent(type="text", text=f"Skill '{name}' not found"),
-                    )
-                ],
+            return (
+                GetPromptResult(
+                    description="Skill not found",
+                    messages=[
+                        PromptMessage(
+                            role="user",
+                            content=TextContent(type="text", text=f"Skill '{name}' not found"),
+                        )
+                    ],
+                ),
+                None,
+                (),
             )
         rendered, errors = render_skill_prompt(
             target_skill.parameters,
@@ -269,21 +427,34 @@ async def get_prompt_for_user(
             target_skill.tools_required,
         )
         text = rendered if rendered is not None else json.dumps({"errors": errors}, indent=2)
-        return GetPromptResult(
-            description=target_skill.description or target_skill.name,
-            messages=[PromptMessage(role="user", content=TextContent(type="text", text=text))],
+        return (
+            GetPromptResult(
+                description=target_skill.description or target_skill.name,
+                messages=[PromptMessage(role="user", content=TextContent(type="text", text=text))],
+            ),
+            None,
+            tuple(target_skill.tools_required),
         )
     except Exception:
         logger.exception("Failed to render MCP prompt %s", name)
-        return GetPromptResult(
-            description="Skill render failed",
-            messages=[
-                PromptMessage(
-                    role="user",
-                    content=TextContent(type="text", text=f"Failed to render skill '{name}'"),
-                )
-            ],
+        return (
+            GetPromptResult(
+                description="Skill render failed",
+                messages=[
+                    PromptMessage(
+                        role="user",
+                        content=TextContent(type="text", text=f"Failed to render skill '{name}'"),
+                    )
+                ],
+            ),
+            None,
+            (),
         )
+
+
+def _prompt_message_text(content: Any) -> str | None:
+    text = getattr(content, "text", None)
+    return text if isinstance(text, str) else None
 
 
 def _permission_denied_prompt(permission: str) -> GetPromptResult:

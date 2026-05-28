@@ -1,6 +1,6 @@
 from importlib import resources
 
-from reporting.utils.settings import bool_env, int_env, list_env, str_env
+from reporting.utils.settings import bool_env, float_env, int_env, list_env, str_env
 
 
 def _parse_kv_pairs(items: list[str]) -> dict[str, str]:
@@ -285,6 +285,54 @@ SQL_DATABASE_URL = str_env("SQL_DATABASE_URL", "")
 # registered, checkpoint storage is not initialized, and the frontend hides the
 # Chat UI (surfaced via GET /api/v1/config -> features.chat).
 CHAT_ENABLED = bool_env("CHAT_ENABLED", True)
+
+# LLM provider for the chat assistant. "mock" keeps local/dev chat deterministic
+# and keyless; set to "openai", "anthropic", "gemini", or "deepseek" to call a
+# real model through the LangGraph chat node.
+CHAT_LLM_PROVIDER = str_env("CHAT_LLM_PROVIDER", "mock")
+# Model identifier for the selected provider. Required whenever
+# CHAT_LLM_PROVIDER is not "mock"; Seizu fails fast at startup if a real
+# provider is selected without an explicit model.
+CHAT_LLM_MODEL = str_env("CHAT_LLM_MODEL", "")
+# Optional provider API key override. If empty, provider-specific env vars below
+# are used, then the underlying SDK's normal environment lookup applies.
+CHAT_LLM_API_KEY = str_env("CHAT_LLM_API_KEY", "")
+# Optional provider base URL override. Useful for provider gateways and private
+# endpoints when the selected LangChain integration supports it.
+CHAT_LLM_BASE_URL = str_env("CHAT_LLM_BASE_URL", "")
+# Generation controls for real chat providers.
+CHAT_LLM_TEMPERATURE = float_env("CHAT_LLM_TEMPERATURE", 0.2)
+CHAT_LLM_MAX_TOKENS = int_env("CHAT_LLM_MAX_TOKENS", 2048)
+CHAT_LLM_TIMEOUT_SECONDS = int_env("CHAT_LLM_TIMEOUT_SECONDS", 60)
+CHAT_LLM_MAX_RETRIES = int_env("CHAT_LLM_MAX_RETRIES", 2)
+# Maximum prior messages/characters sent to the LLM. Checkpoints may retain
+# more messages for UI history; this separate cap controls model cost, latency,
+# and provider context pressure.
+CHAT_LLM_CONTEXT_MAX_MESSAGES = int_env("CHAT_LLM_CONTEXT_MAX_MESSAGES", 80)
+CHAT_LLM_CONTEXT_MAX_CHARS = int_env("CHAT_LLM_CONTEXT_MAX_CHARS", 120_000)
+# Optional full prompt override. Leave empty to use Seizu's provider-aware
+# security-dashboard prompt.
+CHAT_LLM_SYSTEM_PROMPT = str_env("CHAT_LLM_SYSTEM_PROMPT", "")
+# When true, the model sees available skills first and lets rendered skills
+# disclose which tools to use. When false, the model sees both chat-safe tools
+# and skills up front, matching the normal MCP list-tools/list-prompts shape.
+CHAT_LLM_PROGRESSIVE_DISCLOSURE = bool_env("CHAT_LLM_PROGRESSIVE_DISCLOSURE", True)
+# Maximum model-requested structured skill/tool calls the chat agent will execute
+# during one assistant turn. This bounds progressive skill rendering plus
+# follow-on tool calls so a model cannot loop indefinitely.
+CHAT_LLM_MAX_AUTO_ACTIONS = int_env("CHAT_LLM_MAX_AUTO_ACTIONS", 12)
+# Maximum model-requested tool calls to run concurrently during one auto-action
+# batch. Tool handlers are async, so this uses asyncio concurrency rather than
+# a threadpool for the normal Neo4j/store I/O path.
+CHAT_LLM_MAX_PARALLEL_TOOL_CALLS = int_env("CHAT_LLM_MAX_PARALLEL_TOOL_CALLS", 4)
+
+# Standard provider API key env vars. These are intentionally not exposed via
+# GET /api/v1/config.
+OPENAI_API_KEY = str_env("OPENAI_API_KEY", "")
+ANTHROPIC_API_KEY = str_env("ANTHROPIC_API_KEY", "")
+GEMINI_API_KEY = str_env("GEMINI_API_KEY", "")
+GOOGLE_API_KEY = str_env("GOOGLE_API_KEY", "")
+DEEPSEEK_API_KEY = str_env("DEEPSEEK_API_KEY", "")
 
 # Dedicated DynamoDB table used by LangGraph to persist chat checkpoints.
 CHAT_CHECKPOINT_TABLE_NAME = str_env("CHAT_CHECKPOINT_TABLE_NAME", "seizu-chat-checkpoints")

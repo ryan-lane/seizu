@@ -12,14 +12,13 @@ from reporting import settings
 from reporting.authnz import CurrentUser, require_permission
 from reporting.authnz.permissions import Permission
 from reporting.schema.chat import ChatHistoryMessage, ChatHistoryResponse, ChatStreamRequest
-from reporting.services.chat_commands import SlashCommandError, parse_slash_command
 from reporting.services.chat_graph import (
     ChatState,
     get_chat_graph,
     load_thread_messages,
     namespaced_thread_id,
-    respond_to_command,
 )
+from reporting.services.chat_messages import message_text
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -77,18 +76,6 @@ async def _stream_chat_response(body: ChatStreamRequest, current: CurrentUser) -
 
 
 async def _token_source(body: ChatStreamRequest, current: CurrentUser) -> AsyncIterator[str]:
-    # Parse once: a recognized console command (or a malformed one) is handled
-    # inline and streamed to the UI, but never runs the checkpointed graph, so
-    # neither the command nor its output enters the thread or future LLM context.
-    try:
-        command = parse_slash_command(body.message)
-    except SlashCommandError as exc:
-        yield str(exc)
-        return
-    if command is not None:
-        yield await respond_to_command(command, current)
-        return
-
     graph = get_chat_graph()
     graph_input: ChatState = {"messages": [HumanMessage(content=body.message, id=f"msg_{uuid.uuid4().hex}")]}
     config = {
@@ -133,23 +120,8 @@ def _to_history_message(message: Any, index: int) -> ChatHistoryMessage | None:
     else:
         # Skip system/tool messages — the UI only renders the user/assistant turns.
         return None
-    text = _message_text(message.content)
+    text = message_text(message.content)
     if not text:
         return None
     message_id = str(message.id) if message.id else f"{role}-{index}"
     return ChatHistoryMessage(id=message_id, role=role, text=text)
-
-
-def _message_text(content: Any) -> str:
-    """Flatten LangChain message content (str or content blocks) to plain text."""
-    if isinstance(content, str):
-        return content
-    if isinstance(content, list):
-        parts: list[str] = []
-        for item in content:
-            if isinstance(item, str):
-                parts.append(item)
-            elif isinstance(item, dict) and isinstance(item.get("text"), str):
-                parts.append(item["text"])
-        return "".join(parts)
-    return ""

@@ -17,14 +17,41 @@ from typing import Any
 
 from langchain_core.messages import BaseMessage
 
+
+def message_text(content: Any) -> str:
+    """Flatten LangChain message content (str | content blocks) to plain text.
+
+    LangChain providers return ``content`` as either a string (OpenAI-style) or
+    a list of content-block dicts (Anthropic, Gemini). Non-text blocks
+    (``thinking``, ``image``, etc.) are dropped — only ``text`` parts are
+    concatenated, so callers always see what the user can read.
+    """
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        parts: list[str] = []
+        for item in content:
+            if isinstance(item, str):
+                parts.append(item)
+            elif isinstance(item, dict):
+                text = item.get("text")
+                if isinstance(text, str):
+                    parts.append(text)
+        return "".join(parts)
+    return ""
+
+
 _TAGS_KEY = "seizu_tags"
 
 
 class MessageTag(StrEnum):
     # Streamed to the UI but never persisted to the thread checkpoint and never
-    # replayed into LLM context (e.g. console slash-command turns). Add future
-    # tags here.
+    # replayed into LLM context.
     EPHEMERAL = "ephemeral"
+    # Persisted for UI/history visibility, but excluded from future LLM context
+    # because it represents a failed/partial model turn rather than useful
+    # conversation evidence.
+    BROKEN = "broken"
 
 
 def tag_message(message: BaseMessage, *tags: MessageTag) -> BaseMessage:

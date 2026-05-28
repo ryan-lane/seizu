@@ -332,6 +332,25 @@ services:
       # Chat assistant — set CHAT_ENABLED=false in .env to disable the feature
       # (routes + checkpoint init + UI). Defaults to true when unset.
       - CHAT_ENABLED
+      - CHAT_LLM_PROVIDER
+      - CHAT_LLM_MODEL
+      - CHAT_LLM_API_KEY
+      - CHAT_LLM_BASE_URL
+      - CHAT_LLM_TEMPERATURE
+      - CHAT_LLM_MAX_TOKENS
+      - CHAT_LLM_TIMEOUT_SECONDS
+      - CHAT_LLM_MAX_RETRIES
+      - CHAT_LLM_CONTEXT_MAX_MESSAGES
+      - CHAT_LLM_CONTEXT_MAX_CHARS
+      - CHAT_LLM_SYSTEM_PROMPT
+      - CHAT_LLM_PROGRESSIVE_DISCLOSURE
+      - CHAT_LLM_MAX_AUTO_ACTIONS
+      - CHAT_LLM_MAX_PARALLEL_TOOL_CALLS
+      - OPENAI_API_KEY
+      - ANTHROPIC_API_KEY
+      - GEMINI_API_KEY
+      - GOOGLE_API_KEY
+      - DEEPSEEK_API_KEY
       - CHAT_CHECKPOINT_TABLE_NAME=seizu-chat-checkpoints
       - CHAT_CHECKPOINT_CREATE_TABLE=true
       - CHAT_CHECKPOINT_TTL_SECONDS=2592000
