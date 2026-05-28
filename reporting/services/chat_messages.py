@@ -22,9 +22,12 @@ _TAGS_KEY = "seizu_tags"
 
 class MessageTag(StrEnum):
     # Streamed to the UI but never persisted to the thread checkpoint and never
-    # replayed into LLM context (e.g. console slash-command turns). Add future
-    # tags here.
+    # replayed into LLM context.
     EPHEMERAL = "ephemeral"
+    # Persisted for UI/history visibility, but excluded from future LLM context
+    # because it represents a failed/partial model turn rather than useful
+    # conversation evidence.
+    BROKEN = "broken"
 
 
 def tag_message(message: BaseMessage, *tags: MessageTag) -> BaseMessage:

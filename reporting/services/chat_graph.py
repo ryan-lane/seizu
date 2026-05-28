@@ -1,24 +1,36 @@
 import asyncio
+import json
+import re
 import uuid
+from collections.abc import AsyncIterator
+from dataclasses import dataclass
 from functools import lru_cache
-from typing import Annotated, Any, Protocol
+from typing import Annotated, Any, Literal, Protocol
 
 import botocore.config
 from botocore.exceptions import ClientError
-from langchain_core.messages import AIMessage, HumanMessage, RemoveMessage
+from langchain_core.messages import (
+    AIMessage,
+    AIMessageChunk,
+    BaseMessage,
+    HumanMessage,
+    RemoveMessage,
+    SystemMessage,
+    ToolMessage,
+)
 from langchain_core.runnables import RunnableConfig
 from langgraph.config import get_stream_writer
 from langgraph.graph import END, START, StateGraph
 from langgraph.graph.message import add_messages
 from langgraph_checkpoint_aws import DynamoDBSaver
+from mcp.types import Prompt, Tool
 from typing_extensions import TypedDict
 
 from reporting import settings
 from reporting.authnz import CurrentUser
 from reporting.authnz.permissions import Permission
 from reporting.services import mcp_runtime
-from reporting.services.chat_commands import SlashCommand, SlashCommandError, parse_slash_command
-from reporting.services.chat_messages import MessageTag, drop_tagged
+from reporting.services.chat_messages import MessageTag, drop_tagged, has_tag, tag_message
 
 
 class ChatState(TypedDict):
@@ -35,6 +47,98 @@ class ChatGraph(Protocol):
     ) -> Any: ...
 
     def aget_state(self, config: dict[str, Any]) -> Any: ...
+
+
+class ChatModel(Protocol):
+    def astream(
+        self,
+        input: list[BaseMessage],
+        config: RunnableConfig | None = None,
+        **kwargs: Any,
+    ) -> AsyncIterator[Any]: ...
+
+
+@dataclass(frozen=True)
+class ChatToolSpec:
+    name: str
+    kind: Literal["skill", "tool"]
+    description: str
+    input_schema: dict[str, Any]
+
+
+@dataclass(frozen=True)
+class ToolCallRequest:
+    id: str
+    name: str
+    arguments: dict[str, Any]
+    spec: ChatToolSpec
+
+
+@dataclass(frozen=True)
+class ToolCallResult:
+    request: ToolCallRequest
+    content: str
+
+
+class SeizuChatDeepSeekMixin:
+    """Round-trip DeepSeek V4 thinking metadata across tool-call turns.
+
+    TODO: Remove this mixin when langchain-deepseek serializes
+    ``reasoning_content`` back into assistant tool-call messages upstream.
+    See https://github.com/langchain-ai/docs/issues/3765.
+    """
+
+    def _convert_chunk_to_generation_chunk(
+        self,
+        chunk: dict[str, Any],
+        default_chunk_class: type,
+        base_generation_info: dict[str, Any] | None,
+    ) -> Any:
+        generation_chunk = super()._convert_chunk_to_generation_chunk(  # type: ignore[misc]
+            chunk,
+            default_chunk_class,
+            base_generation_info,
+        )
+        reasoning_content = _deepseek_reasoning_content_delta(chunk)
+        if reasoning_content and generation_chunk is not None and isinstance(generation_chunk.message, AIMessageChunk):
+            generation_chunk.message.additional_kwargs["reasoning_content"] = reasoning_content
+        return generation_chunk
+
+    def _get_request_payload(
+        self,
+        input_: Any,
+        *,
+        stop: list[str] | None = None,
+        **kwargs: Any,
+    ) -> dict[str, Any]:
+        messages = self._convert_input(input_).to_messages()  # type: ignore[attr-defined]
+        payload = super()._get_request_payload(input_, stop=stop, **kwargs)  # type: ignore[misc]
+        _add_reasoning_content_to_payload(payload, messages)
+        return payload
+
+
+_DEFAULT_CHAT_MODELS: dict[str, str] = {
+    "openai": "chat-latest",
+    "anthropic": "claude-sonnet-4-6",
+    "gemini": "gemini-3.5-flash",
+    "deepseek": "deepseek-v4-pro",
+}
+
+_VALID_CHAT_PROVIDERS = frozenset({"mock", *_DEFAULT_CHAT_MODELS})
+_LEGACY_CHAT_COMMAND_RE = re.compile(
+    r"(?:^|\s|`)/(?:tools|skills|tool\s+\S+|skill\s+\S+|[A-Za-z0-9_.-]+__[A-Za-z0-9_.-]+(?:\s+\{|\s*$))"
+)
+_MUTATING_INTENT_RE = re.compile(
+    r"\b("
+    r"create|created|creating|"
+    r"update|updated|updating|"
+    r"modify|modified|modifying|"
+    r"delete|deleted|deleting|"
+    r"save|saved|saving|"
+    r"write|wrote|writing"
+    r")\b",
+    re.IGNORECASE,
+)
 
 
 def namespaced_thread_id(current_user: CurrentUser, thread_id: str) -> str:
@@ -66,8 +170,7 @@ async def load_thread_messages(current_user: CurrentUser, thread_id: str, *, lim
 
 async def mock_agent_node(state: ChatState, config: RunnableConfig) -> ChatState:
     last_user_message = _last_user_text(state["messages"])
-    current_user = _current_user_from_config(config)
-    response = await build_agent_response(last_user_message, current_user)
+    response = f"I received your message: {last_user_message}"
     ai_message = AIMessage(content=response, id=f"msg_{uuid.uuid4().hex}")
     writer = get_stream_writer()
 
@@ -78,85 +181,593 @@ async def mock_agent_node(state: ChatState, config: RunnableConfig) -> ChatState
     return {"messages": [*_trim_messages(state["messages"], ai_message), ai_message]}
 
 
-async def build_agent_response(message: str, current_user: CurrentUser | None) -> str:
-    """Render the assistant reply for a raw message (parses, then dispatches).
+async def chat_agent_node(state: ChatState, config: RunnableConfig) -> ChatState:
+    provider = _chat_provider()
+    if provider == "mock":
+        return await mock_agent_node(state, config)
 
-    Used by the graph node for ordinary turns; the route parses once itself and
-    calls respond_to_command directly for the ephemeral command path.
-    """
-    try:
-        command = parse_slash_command(message)
-    except SlashCommandError as exc:
-        return str(exc)
-    if command is None:
-        return f"I received your message: {message}"
-    return await respond_to_command(command, current_user)
+    current_user = _current_user_from_config(config)
+    messages = _llm_context_messages(state["messages"])
+    model = get_chat_model()
+    writer = get_stream_writer()
+    system_prompt = build_system_prompt(provider, current_user)
+    capability_context = await build_capability_context(current_user)
+    if capability_context:
+        system_prompt = f"{system_prompt}\n\n{capability_context}"
+
+    skill_specs = await _skill_tool_specs(current_user)
+    tool_specs: list[ChatToolSpec] = []
+    expose_tools = not settings.CHAT_LLM_PROGRESSIVE_DISCLOSURE
+    if expose_tools:
+        tool_specs = await _mcp_tool_specs(current_user)
+
+    action_count = 0
+    action_summaries: list[str] = []
+    executed_action_keys: set[str] = set()
+    empty_retry_used = False
+    repeated_action_retry_used = False
+    response_is_broken = False
+
+    response = ""
+    while action_count < settings.CHAT_LLM_MAX_AUTO_ACTIONS:
+        ai_message = await _run_llm_tool_turn(model, system_prompt, messages, [*skill_specs, *tool_specs], config)
+        requested = _tool_call_requests(ai_message, [*skill_specs, *tool_specs])
+        if not requested:
+            response = _message_text(ai_message.content)
+            if response:
+                break
+            if action_summaries:
+                break
+            if not empty_retry_used:
+                empty_retry_used = True
+                messages = [
+                    *messages,
+                    SystemMessage(content=_initial_empty_response_retry_message(), id=f"msg_{uuid.uuid4().hex}"),
+                ]
+                continue
+            break
+
+        remaining = settings.CHAT_LLM_MAX_AUTO_ACTIONS - action_count
+        batch = requested[:remaining]
+        repeated = [request for request in batch if _tool_request_key(request) in executed_action_keys]
+        batch = [request for request in batch if _tool_request_key(request) not in executed_action_keys]
+        if not batch:
+            if repeated:
+                if not repeated_action_retry_used:
+                    repeated_action_retry_used = True
+                    messages = [
+                        *messages,
+                        ai_message,
+                        SystemMessage(
+                            content=_repeated_tool_call_retry_message(repeated, action_summaries),
+                            id=f"msg_{uuid.uuid4().hex}",
+                        ),
+                    ]
+                    continue
+                response = _repeated_tool_call_fallback(repeated, action_summaries)
+                response_is_broken = True
+                break
+            break
+
+        action_count += len(batch)
+        executed_action_keys.update(_tool_request_key(request) for request in batch)
+        writer({"kind": "token", "content": _tool_call_start_status(batch)})
+        results = await _run_tool_call_batch(batch, current_user)
+        action_summaries.append(_tool_call_user_summary(results))
+        messages = [
+            *messages,
+            ai_message,
+            *[
+                ToolMessage(
+                    content=result.content,
+                    name=result.request.name,
+                    tool_call_id=result.request.id,
+                    id=f"msg_{uuid.uuid4().hex}",
+                )
+                for result in results
+            ],
+        ]
+        if any(result.request.spec.kind == "skill" for result in results) and not expose_tools:
+            expose_tools = True
+            tool_specs = await _mcp_tool_specs(current_user)
+
+    if not response and action_summaries and not response_is_broken:
+        messages = [
+            *messages,
+            SystemMessage(content=_final_synthesis_retry_message(action_summaries), id=f"msg_{uuid.uuid4().hex}"),
+        ]
+        final_message = await _run_llm_tool_turn(model, system_prompt, messages, [], config)
+        response = _message_text(final_message.content)
+
+    if not response:
+        response = _empty_response_fallback(action_summaries)
+        response_is_broken = True
+
+    if _announces_unavailable_mutation(response):
+        response = _unavailable_mutation_fallback(action_summaries)
+        response_is_broken = True
+
+    if _contains_legacy_chat_command(response):
+        response = _invalid_auto_command_fallback(response, action_summaries)
+        response_is_broken = True
+
+    for chunk in _chunk_text(response):
+        writer({"kind": "token", "content": chunk})
+    ai_message = AIMessage(content=response, id=f"msg_{uuid.uuid4().hex}")
+    if response_is_broken:
+        tag_message(ai_message, MessageTag.BROKEN)
+    return {"messages": [*_trim_messages(state["messages"], ai_message), ai_message]}
 
 
-async def respond_to_command(command: SlashCommand, current_user: CurrentUser | None) -> str:
-    """Dispatch an already-parsed console command to its MCP-backed handler."""
-    if command.command == "tools":
-        return await _list_tools_response(current_user)
-    if command.command == "tool":
-        return await _call_tool_response(command, current_user)
-    if command.command == "skills":
-        return await _list_skills_response(current_user)
-    return await _render_skill_response(command, current_user)
+async def _run_llm_tool_turn(
+    model: ChatModel,
+    system_prompt: str,
+    messages: list[BaseMessage],
+    tools: list[ChatToolSpec],
+    config: RunnableConfig,
+) -> AIMessage:
+    runnable = model
+    bind_tools = getattr(model, "bind_tools", None)
+    if tools and callable(bind_tools):
+        runnable = bind_tools([_langchain_tool_schema(tool) for tool in tools])
+
+    merged: Any | None = None
+    async for chunk in runnable.astream(
+        [SystemMessage(content=system_prompt), *messages],
+        config=config,
+    ):
+        merged = chunk if merged is None else merged + chunk
+
+    if isinstance(merged, AIMessage):
+        return merged
+    return AIMessage(
+        content=_message_text(getattr(merged, "content", "")) if merged is not None else "",
+        tool_calls=list(getattr(merged, "tool_calls", []) or []),
+        invalid_tool_calls=list(getattr(merged, "invalid_tool_calls", []) or []),
+        id=getattr(merged, "id", None),
+    )
 
 
-async def _list_tools_response(current_user: CurrentUser | None) -> str:
+def _langchain_tool_schema(tool: ChatToolSpec) -> dict[str, Any]:
+    return {
+        "type": "function",
+        "function": {
+            "name": tool.name,
+            "description": tool.description or tool.name,
+            "parameters": _json_schema_object(tool.input_schema),
+        },
+    }
+
+
+def _json_schema_object(schema: dict[str, Any]) -> dict[str, Any]:
+    result = dict(schema)
+    result.setdefault("type", "object")
+    result.setdefault("properties", {})
+    return result
+
+
+def _deepseek_reasoning_content_delta(chunk: dict[str, Any]) -> str:
+    choices = chunk.get("choices") or chunk.get("chunk", {}).get("choices") or []
+    if not choices:
+        return ""
+    first = choices[0]
+    if not isinstance(first, dict):
+        return ""
+    delta = first.get("delta")
+    if not isinstance(delta, dict):
+        return ""
+    reasoning_content = delta.get("reasoning_content")
+    return reasoning_content if isinstance(reasoning_content, str) else ""
+
+
+def _add_reasoning_content_to_payload(payload: dict[str, Any], messages: list[BaseMessage]) -> None:
+    payload_messages = payload.get("messages")
+    if not isinstance(payload_messages, list):
+        return
+    payload_index = 0
+    for message in messages:
+        if payload_index >= len(payload_messages):
+            return
+        payload_message = payload_messages[payload_index]
+        payload_index += 1
+        if not isinstance(message, AIMessage) or not isinstance(payload_message, dict):
+            continue
+        reasoning_content = message.additional_kwargs.get("reasoning_content")
+        if isinstance(reasoning_content, str) and reasoning_content:
+            payload_message["reasoning_content"] = reasoning_content
+
+
+def _uses_deepseek_compatible_endpoint(model_name: str) -> bool:
+    base_url = settings.CHAT_LLM_BASE_URL.lower()
+    return "deepseek" in base_url or model_name.lower().startswith("deepseek")
+
+
+async def _skill_tool_specs(current_user: CurrentUser | None) -> list[ChatToolSpec]:
+    prompts = await mcp_runtime.list_prompts_for_user(
+        current_user,
+        gate_permission=Permission.CHAT_SKILLS_CALL,
+    )
+    return [
+        ChatToolSpec(
+            name=prompt.name,
+            kind="skill",
+            description=prompt.description or f"{prompt.name} skill",
+            input_schema=_prompt_input_schema(prompt),
+        )
+        for prompt in prompts
+    ]
+
+
+async def _mcp_tool_specs(current_user: CurrentUser | None) -> list[ChatToolSpec]:
     tools = await mcp_runtime.list_tools_for_user(
         current_user,
         gate_permission=Permission.CHAT_TOOLS_CALL,
         chat_safe_only=True,
     )
-    if not tools:
-        return "No MCP tools are available to this chat session."
-    lines = [f"- {tool.name}: {tool.description or 'No description'}" for tool in tools[:30]]
-    if len(tools) > 30:
-        lines.append(f"- ...and {len(tools) - 30} more")
-    return "Available MCP tools:\n" + "\n".join(lines)
+    return [
+        ChatToolSpec(
+            name=tool.name,
+            kind="tool",
+            description=tool.description or f"{tool.name} tool",
+            input_schema=tool.inputSchema if isinstance(tool.inputSchema, dict) else {"type": "object"},
+        )
+        for tool in tools
+    ]
 
 
-async def _call_tool_response(command: SlashCommand, current_user: CurrentUser | None) -> str:
-    if not command.name:
-        return "Expected `/tool <name> {...json args...}`."
+def _prompt_input_schema(prompt: Prompt) -> dict[str, Any]:
+    properties: dict[str, Any] = {}
+    required: list[str] = []
+    for argument in prompt.arguments or []:
+        properties[argument.name] = {
+            "type": "string",
+            "description": argument.description or argument.name,
+        }
+        if argument.required:
+            required.append(argument.name)
+    schema: dict[str, Any] = {"type": "object", "properties": properties}
+    if required:
+        schema["required"] = required
+    return schema
+
+
+def _tool_call_requests(message: AIMessage, specs: list[ChatToolSpec]) -> list[ToolCallRequest]:
+    by_name = {spec.name: spec for spec in specs}
+    requests: list[ToolCallRequest] = []
+    for index, call in enumerate(getattr(message, "tool_calls", []) or []):
+        name = call.get("name") if isinstance(call, dict) else getattr(call, "name", None)
+        if not isinstance(name, str) or name not in by_name:
+            continue
+        raw_args = call.get("args") if isinstance(call, dict) else getattr(call, "args", {})
+        args = raw_args if isinstance(raw_args, dict) else {}
+        call_id = call.get("id") if isinstance(call, dict) else getattr(call, "id", None)
+        requests.append(
+            ToolCallRequest(
+                id=str(call_id or f"call_{index}_{uuid.uuid4().hex}"),
+                name=name,
+                arguments=args,
+                spec=by_name[name],
+            )
+        )
+    return requests
+
+
+def _tool_request_key(request: ToolCallRequest) -> str:
+    return f"{request.spec.kind}:{request.name}:{_json_dump(request.arguments)}"
+
+
+async def _run_tool_call_batch(
+    requests: list[ToolCallRequest], current_user: CurrentUser | None
+) -> list[ToolCallResult]:
+    max_parallel = settings.CHAT_LLM_MAX_PARALLEL_TOOL_CALLS
+    semaphore = asyncio.Semaphore(max_parallel) if max_parallel > 0 else None
+
+    async def run_one(request: ToolCallRequest) -> ToolCallResult:
+        if semaphore is None:
+            return await _run_tool_call(request, current_user)
+        async with semaphore:
+            return await _run_tool_call(request, current_user)
+
+    return list(await asyncio.gather(*(run_one(request) for request in requests)))
+
+
+async def _run_tool_call(request: ToolCallRequest, current_user: CurrentUser | None) -> ToolCallResult:
+    if request.spec.kind == "skill":
+        string_arguments = {key: str(value) for key, value in request.arguments.items()}
+        result = await mcp_runtime.get_prompt_for_user(
+            current_user,
+            request.name,
+            string_arguments,
+            gate_permission=Permission.CHAT_SKILLS_CALL,
+        )
+        content = "\n\n".join(text for message in result.messages if (text := _content_text(message.content)))
+        return ToolCallResult(request=request, content=content)
+
     result = await mcp_runtime.call_tool_for_user(
         current_user,
-        command.name,
-        command.arguments,
+        request.name,
+        request.arguments,
         gate_permission=Permission.CHAT_TOOLS_CALL,
         chat_safe_only=True,
         result_max_rows=settings.CHAT_TOOL_RESULT_MAX_ROWS,
         result_max_bytes=settings.CHAT_TOOL_RESULT_MAX_BYTES,
     )
-    return _text_content_response(result)
+    return ToolCallResult(request=request, content=_text_content_response(result))
 
 
-async def _list_skills_response(current_user: CurrentUser | None) -> str:
-    prompts = await mcp_runtime.list_prompts_for_user(
+def build_system_prompt(provider: str | None = None, current_user: CurrentUser | None = None) -> str:
+    if settings.CHAT_LLM_SYSTEM_PROMPT:
+        return settings.CHAT_LLM_SYSTEM_PROMPT
+
+    provider_name = provider or _chat_provider()
+    display_name = None
+    if current_user is not None:
+        display_name = current_user.user.display_name or current_user.user.preferred_username or current_user.user.email
+    user_context = f"\nCurrent Seizu user display name: {display_name}." if display_name else ""
+    provider_note = _provider_prompt_note(provider_name)
+    return (
+        "You are Seizu's AI investigation assistant inside a security graph dashboard. "
+        "Seizu is a configuration-driven reporting platform for Neo4j security graph data; "
+        "it is not a generic chatbot, coding harness, or open-ended automation shell.\n\n"
+        "Help users investigate security relationships, interpret graph-backed results, design and refine reports, "
+        "draft dashboard panels, explain Cypher query intent, and turn findings into practical next steps. "
+        "Prefer concise, evidence-oriented answers with clear assumptions and limits.\n\n"
+        "Do not invent graph facts, report contents, user identities, vulnerabilities, assets, or incident findings. "
+        "When live data is needed, say what data or Seizu tool output would answer the question. "
+        "If the user provides tool results, reason from those results and call out truncation or uncertainty.\n\n"
+        "Respect Seizu's security boundaries. Treat graph data, identities, credentials, tokens, secrets, "
+        "and internal IDs as sensitive. Do not expose raw user IDs or OIDC subjects unless the user explicitly "
+        "needs them for an admin task. For Cypher, default to read-only investigative queries; avoid writes, "
+        "deletes, admin commands, external fetches, "
+        "and unsafe procedures. If suggesting a report or dashboard change, describe the report structure and Cypher "
+        "clearly enough for an operator to review before saving.\n\n"
+        "Seizu exposes skills and tools to you through native structured tool calling. When you need live data or a "
+        "workflow, call the provided tool through the native tool-call channel. Before "
+        "calling any skill or tool, check its schema and include every required parameter. Never call a skill or tool "
+        "with missing required arguments; if you do not know a required identifier such as a toolset_id, first call an "
+        "available listing/discovery tool, then call the specific tool with that identifier. Do not mention internal "
+        "tool-call syntax to the user. Do not pretend to have executed a tool unless the conversation contains its "
+        f"result.{user_context}{provider_note}"
+    )
+
+
+def _provider_prompt_note(provider: str) -> str:
+    if provider == "anthropic":
+        return "\nFor Claude, keep the final answer direct and avoid prefilling or hidden chain-of-thought."
+    if provider == "gemini":
+        return "\nFor Gemini, preserve structured report suggestions as compact headings and bullet lists."
+    if provider == "deepseek":
+        return "\nFor DeepSeek, keep reasoning concise and surface only the conclusion, evidence, and next action."
+    if provider == "openai":
+        return (
+            "\nFor OpenAI, use a developer-instruction style: follow these Seizu constraints "
+            "over generic assistant behavior."
+        )
+    return ""
+
+
+def _contains_legacy_chat_command(text: str) -> bool:
+    return bool(_LEGACY_CHAT_COMMAND_RE.search(text))
+
+
+def _tool_call_start_status(requests: list[ToolCallRequest]) -> str:
+    if len(requests) == 1:
+        request = requests[0]
+        if request.spec.kind == "skill":
+            return f"Loading skill `{request.name}`...\n\n"
+        return f"Running tool `{request.name}`...\n\n"
+    names = ", ".join(f"`{request.name}`" for request in requests)
+    if all(request.spec.kind == "tool" for request in requests):
+        return f"Running {len(requests)} tools in parallel: {names}...\n\n"
+    return f"Running {len(requests)} actions in parallel: {names}...\n\n"
+
+
+def _tool_call_user_summary(results: list[ToolCallResult]) -> str:
+    if len(results) > 1:
+        rendered_results = "\n\n".join(
+            (
+                f"- `{result.request.name}` with arguments `{_json_dump(result.request.arguments)}` returned:\n"
+                f"{_truncate_text(result.content, 1800)}"
+            )
+            for result in results
+        )
+        return f"Seizu ran {len(results)} actions in parallel:\n\n{rendered_results}"
+    result = results[0]
+    action = "rendered skill" if result.request.spec.kind == "skill" else "ran tool"
+    return (
+        f"Seizu {action} `{result.request.name}` with arguments `{_json_dump(result.request.arguments)}`.\n\n"
+        f"Result:\n{_truncate_text(result.content, 4000)}"
+    )
+
+
+def _repeated_tool_call_retry_message(requests: list[ToolCallRequest], action_summaries: list[str]) -> str:
+    repeated = ", ".join(f"`{request.name}` with arguments `{_json_dump(request.arguments)}`" for request in requests)
+    prior = (
+        "\n\nMost recent completed action:\n" + _truncate_text(action_summaries[-1], 5000) if action_summaries else ""
+    )
+    return (
+        "You requested an action Seizu has already run in this turn: "
+        f"{repeated}. Do not repeat the same skill or tool call. Use the existing result to answer the user, or call "
+        "a different tool only if it adds new required evidence. If you have enough evidence, provide the final "
+        f"synthesis now.{prior}"
+    )
+
+
+def _repeated_tool_call_fallback(requests: list[ToolCallRequest], action_summaries: list[str]) -> str:
+    repeated = ", ".join(f"`{request.name}`" for request in requests)
+    details = (
+        "\n\nMost recent completed action:\n" + _truncate_text(action_summaries[-1], 5000) if action_summaries else ""
+    )
+    return (
+        "I stopped because the model repeatedly requested the same internal action instead of producing a final "
+        f"answer. Repeated action: {repeated}.{details}"
+    )
+
+
+def _initial_empty_response_retry_message() -> str:
+    return (
+        "Your previous response was empty before Seizu could run any skill or tool. Retry now. Either answer the "
+        "user directly, or use a structured skill/tool call with every required argument. Do not return an empty "
+        "response."
+    )
+
+
+def _final_synthesis_retry_message(action_summaries: list[str]) -> str:
+    joined_summaries = "\n".join(action_summaries)
+    return (
+        "Seizu has finished running the requested tool calls for this turn. Do not call any more tools. Provide the "
+        "final answer to the user using the action results below. Summarize the evidence, note uncertainty or "
+        f"truncation, and give practical next steps.\n\n{_truncate_text(joined_summaries, 12000)}"
+    )
+
+
+def _empty_response_fallback(action_summaries: list[str]) -> str:
+    if not action_summaries:
+        return (
+            "The model returned an empty response after retrying, and Seizu did not run any skill or tool for this "
+            "turn. Try rephrasing the request or starting a new chat thread."
+        )
+    return (
+        "I ran the Seizu workflow, but the model did not return a final synthesis after the last action. "
+        "The most recent action result is below, so the investigation state is not lost.\n\n"
+        f"{_truncate_text(action_summaries[-1], 6000)}"
+    )
+
+
+def _invalid_auto_command_fallback(response: str, action_summaries: list[str]) -> str:
+    details = (
+        "\n\nMost recent action result:\n" + _truncate_text(action_summaries[-1], 5000) if action_summaries else ""
+    )
+    return (
+        "I stopped because the model produced an incomplete or invalid internal skill/tool command instead of a "
+        "usable answer. The partial command was not run or shown as an action. Try narrowing the request or asking "
+        "for the workflow to be described rather than executed."
+        f"{details}"
+    )
+
+
+def _announces_unavailable_mutation(response: str) -> bool:
+    return bool(_MUTATING_INTENT_RE.search(response)) and not response.strip().endswith((".", "?", "!"))
+
+
+def _unavailable_mutation_fallback(action_summaries: list[str]) -> str:
+    details = (
+        "\n\nMost recent action result:\n" + _truncate_text(action_summaries[-1], 5000) if action_summaries else ""
+    )
+    return (
+        "I stopped before making changes. This chat session can inspect Seizu data and run chat-safe read tools, "
+        "but it cannot perform mutating actions such as creating, updating, deleting, or saving tools/skills. "
+        "Use the native Seizu UI for those edits."
+        f"{details}"
+    )
+
+
+def _truncate_text(text: str, max_chars: int) -> str:
+    if max_chars <= 0 or len(text) <= max_chars:
+        return text
+    return f"{text[:max_chars]}... [truncated]"
+
+
+def _json_dump(value: Any) -> str:
+    return json.dumps(value, separators=(",", ":"), default=str)
+
+
+async def build_capability_context(current_user: CurrentUser | None) -> str:
+    skills = await mcp_runtime.list_prompts_for_user(
         current_user,
         gate_permission=Permission.CHAT_SKILLS_CALL,
     )
-    if not prompts:
-        return "No MCP skills are available to this chat session."
-    lines = [f"- {prompt.name}: {prompt.description or 'No description'}" for prompt in prompts[:30]]
-    if len(prompts) > 30:
-        lines.append(f"- ...and {len(prompts) - 30} more")
-    return "Available MCP skills:\n" + "\n".join(lines)
+    if settings.CHAT_LLM_PROGRESSIVE_DISCLOSURE:
+        return _progressive_capability_context(skills)
 
-
-async def _render_skill_response(command: SlashCommand, current_user: CurrentUser | None) -> str:
-    if not command.name:
-        return "Expected `/skill <name> {...json args...}`."
-    string_arguments = {key: str(value) for key, value in command.arguments.items()}
-    result = await mcp_runtime.get_prompt_for_user(
+    tools = await mcp_runtime.list_tools_for_user(
         current_user,
-        command.name,
-        string_arguments,
-        gate_permission=Permission.CHAT_SKILLS_CALL,
+        gate_permission=Permission.CHAT_TOOLS_CALL,
+        chat_safe_only=True,
     )
-    return "\n\n".join(text for message in result.messages if (text := _content_text(message.content)))
+    return _full_capability_context(skills, tools)
+
+
+def _progressive_capability_context(skills: list[Prompt]) -> str:
+    if not skills:
+        return ""
+    return (
+        "Capability discovery mode: progressive disclosure is enabled. You are initially given structured skill "
+        "tools. When the task needs a workflow, call the relevant skill tool with every required argument. Seizu will "
+        "execute it internally and return the rendered skill to you. Rendered skills describe which tools to use and "
+        "how to use them; after a skill is rendered, Seizu will expose chat-safe structured tools for subsequent "
+        "tool calls. Do not rely on tools that have not been disclosed by a rendered skill or by prior conversation "
+        "context.\n\n"
+        f"Available skills:\n{_format_skills(skills)}"
+    )
+
+
+def _full_capability_context(skills: list[Prompt], tools: list[Tool]) -> str:
+    sections: list[str] = [
+        "Capability discovery mode: progressive disclosure is disabled. You are given both chat-safe tools and "
+        "skills up front, similar to a normal MCP listing. Use native structured tool calls and include every "
+        "required argument shown for the selected skill or tool."
+    ]
+    if skills:
+        sections.append(f"Available skills:\n{_format_skills(skills)}")
+    if tools:
+        sections.append(f"Available tools:\n{_format_tools(tools)}")
+    return "\n\n".join(sections) if len(sections) > 1 else ""
+
+
+def _format_skills(skills: list[Prompt]) -> str:
+    lines: list[str] = []
+    for skill in skills[:30]:
+        args = _prompt_arguments(skill)
+        description = skill.description or "No description"
+        line = f"- {skill.name}: {description}"
+        if args:
+            line = f"{line} Args: {args}"
+        lines.append(line)
+    if len(skills) > 30:
+        lines.append(f"- ...and {len(skills) - 30} more")
+    return "\n".join(lines)
+
+
+def _format_tools(tools: list[Tool]) -> str:
+    lines: list[str] = []
+    for tool in tools[:30]:
+        description = tool.description or "No description"
+        line = f"- {tool.name}: {description}"
+        args = _tool_arguments(tool)
+        if args:
+            line = f"{line} Args: {args}"
+        lines.append(line)
+    if len(tools) > 30:
+        lines.append(f"- ...and {len(tools) - 30} more")
+    return "\n".join(lines)
+
+
+def _prompt_arguments(prompt: Prompt) -> str:
+    arguments = prompt.arguments or []
+    if not arguments:
+        return ""
+    formatted: list[str] = []
+    for argument in arguments:
+        suffix = " required" if argument.required else " optional"
+        formatted.append(f"{argument.name} ({suffix.strip()})")
+    return ", ".join(formatted)
+
+
+def _tool_arguments(tool: Tool) -> str:
+    input_schema = tool.inputSchema
+    properties = input_schema.get("properties") if isinstance(input_schema, dict) else None
+    if not isinstance(properties, dict):
+        return ""
+    required_raw = input_schema.get("required") if isinstance(input_schema, dict) else None
+    required = set(required_raw) if isinstance(required_raw, list) else set()
+    formatted = []
+    for name in list(properties.keys())[:12]:
+        suffix = " required" if name in required else " optional"
+        formatted.append(f"{name} ({suffix.strip()})")
+    if len(properties) > 12:
+        formatted.append("...")
+    return ", ".join(formatted)
 
 
 def _text_content_response(content: list[Any]) -> str:
@@ -166,6 +777,22 @@ def _text_content_response(content: list[Any]) -> str:
 def _content_text(content: Any) -> str | None:
     text = getattr(content, "text", None)
     return text if isinstance(text, str) else None
+
+
+def _message_text(content: Any) -> str:
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        parts: list[str] = []
+        for item in content:
+            if isinstance(item, str):
+                parts.append(item)
+            elif isinstance(item, dict):
+                text = item.get("text")
+                if isinstance(text, str):
+                    parts.append(text)
+        return "".join(parts)
+    return ""
 
 
 def _current_user_from_config(config: RunnableConfig) -> CurrentUser | None:
@@ -183,6 +810,53 @@ def _last_user_text(messages: list[Any]) -> str:
         if isinstance(message, dict) and message.get("role") == "user":
             return str(message.get("content", ""))
     return ""
+
+
+def _llm_context_messages(messages: list[Any]) -> list[BaseMessage]:
+    filtered = drop_tagged(messages, MessageTag.EPHEMERAL, MessageTag.BROKEN)
+    context: list[BaseMessage] = []
+    for message in filtered:
+        if isinstance(message, HumanMessage):
+            context.append(message)
+        elif isinstance(message, AIMessage) and _message_text(message.content) and not _is_broken_ai_message(message):
+            context.append(message)
+
+    max_messages = settings.CHAT_LLM_CONTEXT_MAX_MESSAGES
+    if max_messages > 0:
+        context = context[-max_messages:]
+
+    max_chars = settings.CHAT_LLM_CONTEXT_MAX_CHARS
+    if max_chars <= 0:
+        return context
+
+    retained: list[BaseMessage] = []
+    total_chars = 0
+    for message in reversed(context):
+        text_len = len(_message_text(message.content))
+        if retained and total_chars + text_len > max_chars:
+            break
+        retained.append(message)
+        total_chars += text_len
+    return list(reversed(retained))
+
+
+def _is_broken_ai_message(message: AIMessage) -> bool:
+    if has_tag(message, MessageTag.BROKEN):
+        return True
+    text = _message_text(message.content)
+    if _contains_legacy_chat_command(text):
+        return True
+    normalized = " ".join(text.lower().split())
+    return any(
+        marker in normalized
+        for marker in (
+            "the model returned an empty response",
+            "did not return a final synthesis",
+            "did not run any skill or tool",
+            "incomplete or invalid internal skill/tool command",
+            "configured automatic action limit",
+        )
+    )
 
 
 def _trim_messages(existing_messages: list[Any], new_message: AIMessage) -> list[RemoveMessage]:
@@ -213,15 +887,87 @@ def _chunk_text(text: str, chunk_size: int = 8) -> list[str]:
 
 def build_chat_graph(checkpointer: Any) -> ChatGraph:
     graph = StateGraph(ChatState)
-    graph.add_node("mock_agent", mock_agent_node)
-    graph.add_edge(START, "mock_agent")
-    graph.add_edge("mock_agent", END)
+    graph.add_node("chat_agent", chat_agent_node)
+    graph.add_edge(START, "chat_agent")
+    graph.add_edge("chat_agent", END)
     return graph.compile(checkpointer=checkpointer)
 
 
 @lru_cache(maxsize=1)
 def get_chat_graph() -> ChatGraph:
     return build_chat_graph(_build_checkpointer())
+
+
+@lru_cache(maxsize=1)
+def get_chat_model() -> ChatModel:
+    provider = _chat_provider()
+    if provider == "mock":
+        raise RuntimeError("CHAT_LLM_PROVIDER=mock does not use a real chat model")
+    model_name = settings.CHAT_LLM_MODEL or _DEFAULT_CHAT_MODELS[provider]
+    max_tokens = settings.CHAT_LLM_MAX_TOKENS if settings.CHAT_LLM_MAX_TOKENS > 0 else None
+
+    if provider == "openai":
+        from langchain_openai import ChatOpenAI
+
+        kwargs = _chat_model_kwargs(settings.OPENAI_API_KEY)
+        if max_tokens is not None:
+            kwargs["max_tokens"] = max_tokens
+        if _uses_deepseek_compatible_endpoint(model_name):
+
+            class SeizuChatOpenAI(SeizuChatDeepSeekMixin, ChatOpenAI):
+                pass
+
+            return SeizuChatOpenAI(model=model_name, **kwargs)
+        return ChatOpenAI(model=model_name, **kwargs)
+
+    if provider == "deepseek":
+        from langchain_deepseek import ChatDeepSeek
+
+        class SeizuChatDeepSeek(SeizuChatDeepSeekMixin, ChatDeepSeek):
+            pass
+
+        kwargs = _chat_model_kwargs(settings.DEEPSEEK_API_KEY)
+        if settings.CHAT_LLM_BASE_URL:
+            kwargs["base_url"] = settings.CHAT_LLM_BASE_URL
+        if max_tokens is not None:
+            kwargs["max_tokens"] = max_tokens
+        return SeizuChatDeepSeek(model=model_name, **kwargs)
+
+    if provider == "anthropic":
+        from langchain_anthropic import ChatAnthropic
+
+        kwargs = _chat_model_kwargs(settings.ANTHROPIC_API_KEY)
+        if max_tokens is not None:
+            kwargs["max_tokens"] = max_tokens
+        return ChatAnthropic(model=model_name, **kwargs)
+
+    from langchain_google_genai import ChatGoogleGenerativeAI
+
+    kwargs = _chat_model_kwargs(settings.GEMINI_API_KEY or settings.GOOGLE_API_KEY)
+    if max_tokens is not None:
+        kwargs["max_output_tokens"] = max_tokens
+    return ChatGoogleGenerativeAI(model=model_name, **kwargs)
+
+
+def _chat_provider() -> str:
+    provider = settings.CHAT_LLM_PROVIDER.strip().lower()
+    if provider not in _VALID_CHAT_PROVIDERS:
+        raise ValueError("CHAT_LLM_PROVIDER must be one of: " + ", ".join(sorted(_VALID_CHAT_PROVIDERS)))
+    return provider
+
+
+def _chat_model_kwargs(provider_api_key: str) -> dict[str, Any]:
+    kwargs: dict[str, Any] = {
+        "temperature": settings.CHAT_LLM_TEMPERATURE,
+        "timeout": settings.CHAT_LLM_TIMEOUT_SECONDS,
+        "max_retries": settings.CHAT_LLM_MAX_RETRIES,
+    }
+    api_key = settings.CHAT_LLM_API_KEY or provider_api_key
+    if api_key:
+        kwargs["api_key"] = api_key
+    if settings.CHAT_LLM_BASE_URL:
+        kwargs["base_url"] = settings.CHAT_LLM_BASE_URL
+    return kwargs
 
 
 def _build_checkpointer() -> DynamoDBSaver:

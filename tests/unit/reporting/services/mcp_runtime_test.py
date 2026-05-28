@@ -241,6 +241,20 @@ async def test_chat_safe_tool_call_rejects_mutating_builtin_before_handler():
     assert json.loads(result[0].text) == {"error": "Tool 'reports__create' is not available to chat"}
 
 
+async def test_builtin_call_validates_required_arguments_before_handler(mocker):
+    get_skillset = mocker.patch("reporting.services.mcp_builtins.skillsets.report_store.get_skillset")
+    current = _user(frozenset({Permission.SKILLS_READ.value}))
+
+    result = await mcp_runtime.call_tool_for_user(
+        current,
+        "skillsets__list_skills",
+        {},
+    )
+
+    assert json.loads(result[0].text) == {"error": "Missing required argument(s): skillset_id"}
+    get_skillset.assert_not_called()
+
+
 async def test_chat_skill_gate_blocks_listing_before_store_lookup(mocker):
     list_enabled_skills = mocker.patch("reporting.services.mcp_runtime.report_store.list_enabled_skills")
     current = _user(frozenset({Permission.SKILLS_RENDER.value}))

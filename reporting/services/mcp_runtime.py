@@ -96,6 +96,13 @@ def _permissions(current_user: CurrentUser | None, permissions: frozenset[str] |
     return current_user.permissions if current_user is not None else frozenset()
 
 
+def _missing_required_arguments(input_schema: dict[str, Any], args: dict[str, Any]) -> list[str]:
+    required = input_schema.get("required")
+    if not isinstance(required, list):
+        return []
+    return [name for name in required if isinstance(name, str) and name not in args]
+
+
 async def list_tools_for_user(
     current_user: CurrentUser | None,
     *,
@@ -160,6 +167,9 @@ async def call_tool_for_user(
         missing = missing_permissions(builtin.required_permissions, perms)
         if missing:
             return text_response({"error": f"Permission denied: {', '.join(missing)}"})
+        missing_args = _missing_required_arguments(builtin.input_schema, args)
+        if missing_args:
+            return text_response({"error": f"Missing required argument(s): {', '.join(missing_args)}"})
         try:
             result = await builtin.handler(args, current_user)
             return _bounded_text_response(

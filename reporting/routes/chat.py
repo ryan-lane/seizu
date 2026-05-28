@@ -12,13 +12,11 @@ from reporting import settings
 from reporting.authnz import CurrentUser, require_permission
 from reporting.authnz.permissions import Permission
 from reporting.schema.chat import ChatHistoryMessage, ChatHistoryResponse, ChatStreamRequest
-from reporting.services.chat_commands import SlashCommandError, parse_slash_command
 from reporting.services.chat_graph import (
     ChatState,
     get_chat_graph,
     load_thread_messages,
     namespaced_thread_id,
-    respond_to_command,
 )
 
 logger = logging.getLogger(__name__)
@@ -77,18 +75,6 @@ async def _stream_chat_response(body: ChatStreamRequest, current: CurrentUser) -
 
 
 async def _token_source(body: ChatStreamRequest, current: CurrentUser) -> AsyncIterator[str]:
-    # Parse once: a recognized console command (or a malformed one) is handled
-    # inline and streamed to the UI, but never runs the checkpointed graph, so
-    # neither the command nor its output enters the thread or future LLM context.
-    try:
-        command = parse_slash_command(body.message)
-    except SlashCommandError as exc:
-        yield str(exc)
-        return
-    if command is not None:
-        yield await respond_to_command(command, current)
-        return
-
     graph = get_chat_graph()
     graph_input: ChatState = {"messages": [HumanMessage(content=body.message, id=f"msg_{uuid.uuid4().hex}")]}
     config = {

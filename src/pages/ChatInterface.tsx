@@ -1,4 +1,5 @@
 import {
+  ChangeEvent,
   FormEvent,
   useContext,
   useEffect,
@@ -14,7 +15,6 @@ import {
   CircularProgress,
   IconButton,
   Paper,
-  TextField,
   Tooltip,
   Typography,
 } from '@mui/material';
@@ -30,6 +30,7 @@ import { useFeature } from 'src/features.context';
 import { pageContentSx } from 'src/theme/layout';
 
 const CHAT_THREAD_STORAGE_KEY = 'seizu:chat:thread-id';
+const CHAT_MESSAGE_THROTTLE_MS = 50;
 
 // Persist the thread id so a reload resumes the same server-side conversation;
 // the client message list is rehydrated from the server on mount (see below).
@@ -67,6 +68,10 @@ export default function ChatInterface() {
   const [threadId] = useState(getInitialThreadId);
   const [historyLoading, setHistoryLoading] = useState(true);
   const hydratedRef = useRef(false);
+  const messagesRef = useRef<UIMessage[]>([]);
+  const setMessagesRef = useRef<
+    (messages: UIMessage[] | ((messages: UIMessage[]) => UIMessage[])) => void
+  >(() => {});
   const scrollRef = useRef<HTMLDivElement | null>(null);
 
   const transport = useMemo(
@@ -90,31 +95,32 @@ export default function ChatInterface() {
   const { messages, sendMessage, setMessages, status, stop, error } =
     useChat<UIMessage>({
       id: threadId,
+      experimental_throttle: CHAT_MESSAGE_THROTTLE_MS,
       transport,
     });
 
+  messagesRef.current = messages;
+  setMessagesRef.current = setMessages;
+
   const busy = status === 'submitted' || status === 'streaming';
-  const disabled = permissionsLoading || !hasPermission('chat:use');
+  const showWorkingIndicator = busy;
+  const canUseChat = hasPermission('chat:use');
+  const disabled = permissionsLoading || !canUseChat;
   const waitingForToken = auth_required && !accessToken;
 
   // Rehydrate the conversation from the server once, after auth/permissions
   // resolve. Only fill in if the client list is still empty so we never clobber
   // a message the user sent before history arrived.
   useEffect(() => {
-    if (
-      !chatEnabled ||
-      permissionsLoading ||
-      waitingForToken ||
-      !hasPermission('chat:use')
-    )
+    if (!chatEnabled || permissionsLoading || waitingForToken || !canUseChat)
       return;
     if (hydratedRef.current) return;
     hydratedRef.current = true;
     let cancelled = false;
     void fetchHistory(threadId).then((history) => {
       if (cancelled) return;
-      if (history.length > 0) {
-        setMessages((current) => (current.length > 0 ? current : history));
+      if (history.length > 0 && messagesRef.current.length === 0) {
+        setMessagesRef.current(history);
       }
       setHistoryLoading(false);
     });
@@ -125,10 +131,9 @@ export default function ChatInterface() {
     chatEnabled,
     threadId,
     fetchHistory,
-    setMessages,
     permissionsLoading,
     waitingForToken,
-    hasPermission,
+    canUseChat,
   ]);
 
   useEffect(() => {
@@ -141,6 +146,10 @@ export default function ChatInterface() {
     if (!trimmed || busy || disabled || waitingForToken) return;
     setInput('');
     void sendMessage({ text: trimmed });
+  };
+
+  const handleInputChange = (event: ChangeEvent<HTMLTextAreaElement>) => {
+    setInput(event.target.value);
   };
 
   if (!chatEnabled) {
@@ -159,7 +168,7 @@ export default function ChatInterface() {
     );
   }
 
-  if (!hasPermission('chat:use')) {
+  if (!canUseChat) {
     return (
       <Box sx={pageContentSx}>
         <Typography>You do not have access to chat.</Typography>
@@ -231,57 +240,77 @@ export default function ChatInterface() {
               </Typography>
             </Box>
           ) : (
-            messages.map((message) => (
-              <Box
-                key={message.id}
-                sx={{
-                  alignItems:
-                    message.role === 'user' ? 'flex-end' : 'flex-start',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  mb: 1.5,
-                }}
-              >
+            <>
+              {messages.map((message) => (
+                <Box
+                  key={message.id}
+                  sx={{
+                    alignItems:
+                      message.role === 'user' ? 'flex-end' : 'flex-start',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    mb: 1.5,
+                  }}
+                >
+                  <Box
+                    sx={{
+                      alignItems: 'center',
+                      color: 'text.secondary',
+                      display: 'flex',
+                      gap: 0.75,
+                      mb: 0.5,
+                    }}
+                  >
+                    {message.role === 'user' ? (
+                      <Person fontSize="small" />
+                    ) : (
+                      <SmartToy fontSize="small" />
+                    )}
+                    <Typography variant="caption">
+                      {message.role === 'user' ? 'You' : 'Assistant'}
+                    </Typography>
+                  </Box>
+                  <Box
+                    sx={{
+                      bgcolor:
+                        message.role === 'user'
+                          ? 'primary.main'
+                          : 'action.hover',
+                      borderRadius: 2,
+                      color:
+                        message.role === 'user'
+                          ? 'primary.contrastText'
+                          : 'text.primary',
+                      maxWidth: { xs: '92%', md: '74%' },
+                      px: 1.5,
+                      py: 1,
+                      whiteSpace: 'pre-wrap',
+                      wordBreak: 'break-word',
+                    }}
+                  >
+                    <Typography variant="body2">
+                      {messageText(message) || (busy ? '...' : '')}
+                    </Typography>
+                  </Box>
+                </Box>
+              ))}
+              {showWorkingIndicator ? (
                 <Box
                   sx={{
                     alignItems: 'center',
                     color: 'text.secondary',
                     display: 'flex',
-                    gap: 0.75,
-                    mb: 0.5,
+                    gap: 1,
+                    mb: 1.5,
                   }}
                 >
-                  {message.role === 'user' ? (
-                    <Person fontSize="small" />
-                  ) : (
-                    <SmartToy fontSize="small" />
-                  )}
-                  <Typography variant="caption">
-                    {message.role === 'user' ? 'You' : 'Assistant'}
-                  </Typography>
-                </Box>
-                <Box
-                  sx={{
-                    bgcolor:
-                      message.role === 'user' ? 'primary.main' : 'action.hover',
-                    borderRadius: 2,
-                    color:
-                      message.role === 'user'
-                        ? 'primary.contrastText'
-                        : 'text.primary',
-                    maxWidth: { xs: '92%', md: '74%' },
-                    px: 1.5,
-                    py: 1,
-                    whiteSpace: 'pre-wrap',
-                    wordBreak: 'break-word',
-                  }}
-                >
+                  <CircularProgress size={14} />
                   <Typography variant="body2">
-                    {messageText(message) || (busy ? '...' : '')}
+                    Assistant is working...
                   </Typography>
                 </Box>
-              </Box>
-            ))
+              ) : null}
+            </>
           )}
           <div ref={scrollRef} />
         </Box>
@@ -304,14 +333,43 @@ export default function ChatInterface() {
             p: 2,
           }}
         >
-          <TextField
-            fullWidth
-            multiline
-            maxRows={5}
+          <Box
+            component="textarea"
             value={input}
-            onChange={(event) => setInput(event.target.value)}
+            onChange={handleInputChange}
             placeholder="Ask about your security graph..."
             disabled={busy}
+            sx={(theme) => ({
+              bgcolor: 'background.paper',
+              border: 1,
+              borderColor: 'divider',
+              borderRadius: 1,
+              boxSizing: 'border-box',
+              color: 'text.primary',
+              flex: 1,
+              font: 'inherit',
+              lineHeight: 1.5,
+              maxHeight: 120,
+              minHeight: 44,
+              outline: 0,
+              overflowY: 'auto',
+              px: 1.5,
+              py: 1.1,
+              resize: 'none',
+              width: '100%',
+              '&::placeholder': {
+                color: 'text.secondary',
+                opacity: 1,
+              },
+              '&:focus': {
+                borderColor: 'primary.main',
+                boxShadow: `0 0 0 1px ${theme.palette.primary.main}`,
+              },
+              '&:disabled': {
+                bgcolor: 'action.disabledBackground',
+                color: 'text.disabled',
+              },
+            })}
           />
           {busy ? (
             <Tooltip title="Stop">
@@ -325,7 +383,9 @@ export default function ChatInterface() {
                 <IconButton
                   type="submit"
                   color="primary"
-                  disabled={!input.trim()}
+                  disabled={
+                    !input.trim() || busy || disabled || waitingForToken
+                  }
                   aria-label="Send"
                 >
                   <Send />
