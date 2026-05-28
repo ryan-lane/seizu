@@ -305,6 +305,117 @@ describe('ChatInterface', () => {
     expect(screen.getByText('Assistant is working...')).toBeInTheDocument();
   });
 
+  it('renders assistant responses with Markdoc in untrusted URL mode', async () => {
+    mockUseChat.mockReturnValue({
+      id: 'chat-id',
+      messages: [
+        {
+          id: 'assistant-message',
+          role: 'assistant',
+          parts: [
+            {
+              type: 'text',
+              text: [
+                '# Findings',
+                '',
+                '- **Critical** issue',
+                '',
+                '<script>alert(1)</script>',
+                '',
+                '[external app](slack://channel/T01)',
+                '',
+                '[safe](https://example.com/report)',
+              ].join('\n'),
+            },
+          ],
+        },
+      ],
+      sendMessage: jest.fn(),
+      regenerate: jest.fn(),
+      stop: jest.fn(),
+      resumeStream: jest.fn(),
+      addToolResult: jest.fn(),
+      addToolOutput: jest.fn(),
+      addToolApprovalResponse: jest.fn(),
+      status: 'ready',
+      error: undefined,
+      setMessages: jest.fn(),
+      clearError: jest.fn(),
+    });
+
+    const { container } = renderChat();
+    await act(async () => {});
+
+    expect(
+      screen.getByRole('heading', { name: 'Findings', level: 2 }),
+    ).toBeInTheDocument();
+    expect(screen.getByText('Critical')).toBeInTheDocument();
+    expect(container.querySelector('script')).toBeNull();
+    expect(screen.getByRole('link', { name: 'external app' })).toHaveAttribute(
+      'href',
+      '#',
+    );
+    expect(screen.getByRole('link', { name: 'safe' })).toHaveAttribute(
+      'href',
+      'https://example.com/report',
+    );
+  });
+
+  it('copies the unrendered assistant response text', async () => {
+    const writeText = jest.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, 'clipboard', {
+      configurable: true,
+      value: { writeText },
+    });
+    const rawResponse = [
+      '# Findings',
+      '',
+      '- **Critical** issue',
+      '',
+      '[safe](https://example.com/report)',
+    ].join('\n');
+    mockUseChat.mockReturnValue({
+      id: 'chat-id',
+      messages: [
+        {
+          id: 'user-message',
+          role: 'user',
+          parts: [{ type: 'text', text: 'Show findings' }],
+        },
+        {
+          id: 'assistant-message',
+          role: 'assistant',
+          parts: [{ type: 'text', text: rawResponse }],
+        },
+      ],
+      sendMessage: jest.fn(),
+      regenerate: jest.fn(),
+      stop: jest.fn(),
+      resumeStream: jest.fn(),
+      addToolResult: jest.fn(),
+      addToolOutput: jest.fn(),
+      addToolApprovalResponse: jest.fn(),
+      status: 'ready',
+      error: undefined,
+      setMessages: jest.fn(),
+      clearError: jest.fn(),
+    });
+
+    renderChat();
+    await act(async () => {});
+
+    expect(
+      screen.getAllByRole('button', { name: 'Copy assistant response' }),
+    ).toHaveLength(1);
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Copy assistant response' }),
+    );
+
+    await waitFor(() => {
+      expect(writeText).toHaveBeenCalledWith(rawResponse);
+    });
+  });
+
   it('shows an assistant working indicator before assistant text arrives', async () => {
     mockUseChat.mockReturnValue({
       id: 'chat-id',
