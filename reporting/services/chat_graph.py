@@ -1,8 +1,8 @@
 import asyncio
 import json
-import re
+import time
 import uuid
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Callable
 from dataclasses import dataclass
 from functools import lru_cache
 from typing import Annotated, Any, Literal, Protocol
@@ -30,7 +30,7 @@ from reporting import settings
 from reporting.authnz import CurrentUser
 from reporting.authnz.permissions import Permission
 from reporting.services import mcp_runtime
-from reporting.services.chat_messages import MessageTag, drop_tagged, has_tag, tag_message
+from reporting.services.chat_messages import MessageTag, drop_tagged, has_tag, message_text, tag_message
 
 
 class ChatState(TypedDict):
@@ -81,9 +81,21 @@ class ToolCallResult:
 
 
 class SeizuChatDeepSeekMixin:
-    """Round-trip DeepSeek V4 thinking metadata across tool-call turns.
+    """Round-trip DeepSeek's OpenAI-API-shape ``reasoning_content`` field.
 
-    TODO: Remove this mixin when langchain-deepseek serializes
+    DeepSeek emits its hidden chain-of-thought in the OpenAI Chat Completions
+    streaming shape under ``choices[0].delta.reasoning_content``. The current
+    ``langchain-deepseek`` adapter pulls that into ``AIMessageChunk.additional_kwargs``
+    on the way down, but does not write it back into the assistant turn on the
+    way up — so on a tool-call follow-up, DeepSeek loses its own thinking and
+    quality regresses. This mixin patches both halves.
+
+    Scope: DeepSeek only (and OpenAI-shape gateways routed to DeepSeek). It does
+    not handle Anthropic ``ThinkingBlock`` or Gemini reasoning parts, which use
+    different transport shapes; those providers don't need the round-trip
+    today because their LangChain adapters already serialise thinking back.
+
+    TODO: Remove this mixin when langchain-deepseek serialises
     ``reasoning_content`` back into assistant tool-call messages upstream.
     See https://github.com/langchain-ai/docs/issues/3765.
     """
@@ -117,28 +129,16 @@ class SeizuChatDeepSeekMixin:
         return payload
 
 
-_DEFAULT_CHAT_MODELS: dict[str, str] = {
-    "openai": "chat-latest",
-    "anthropic": "claude-sonnet-4-6",
-    "gemini": "gemini-3.5-flash",
-    "deepseek": "deepseek-v4-pro",
-}
+_VALID_CHAT_PROVIDERS = frozenset({"mock", "openai", "anthropic", "gemini", "deepseek"})
 
-_VALID_CHAT_PROVIDERS = frozenset({"mock", *_DEFAULT_CHAT_MODELS})
-_LEGACY_CHAT_COMMAND_RE = re.compile(
-    r"(?:^|\s|`)/(?:tools|skills|tool\s+\S+|skill\s+\S+|[A-Za-z0-9_.-]+__[A-Za-z0-9_.-]+(?:\s+\{|\s*$))"
-)
-_MUTATING_INTENT_RE = re.compile(
-    r"\b("
-    r"create|created|creating|"
-    r"update|updated|updating|"
-    r"modify|modified|modifying|"
-    r"delete|deleted|deleting|"
-    r"save|saved|saving|"
-    r"write|wrote|writing"
-    r")\b",
-    re.IGNORECASE,
-)
+# Per-process TTL cache for the *global* skill / tool listings the chat agent
+# advertises to the LLM. The MCP runtime call hits the report store on every
+# message — listing 50 skills and 50 tools is two store round-trips on the hot
+# path. Permissions still filter the result per-user; only the upstream listing
+# is shared, so a permission change is reflected within the TTL window.
+_CAPABILITY_CACHE_TTL_SECONDS = 60.0
+_capability_cache_lock = asyncio.Lock()
+_capability_cache: dict[str, tuple[float, list[Any]]] = {}
 
 
 def namespaced_thread_id(current_user: CurrentUser, thread_id: str) -> str:
@@ -168,12 +168,15 @@ async def load_thread_messages(current_user: CurrentUser, thread_id: str, *, lim
     return filtered[-limit:] if limit > 0 else []
 
 
-async def mock_agent_node(state: ChatState, config: RunnableConfig) -> ChatState:
+async def mock_agent_node(state: ChatState, _config: RunnableConfig) -> ChatState:
     last_user_message = _last_user_text(state["messages"])
     response = f"I received your message: {last_user_message}"
     ai_message = AIMessage(content=response, id=f"msg_{uuid.uuid4().hex}")
     writer = get_stream_writer()
 
+    # The mock has no real model behind it; emit small chunks with a sleep so
+    # the dev SSE path still feels like a stream and exercises the same client
+    # code as a real provider.
     for chunk in _chunk_text(response):
         writer({"kind": "token", "content": chunk})
         await asyncio.sleep(0.03)
@@ -190,10 +193,10 @@ async def chat_agent_node(state: ChatState, config: RunnableConfig) -> ChatState
     messages = _llm_context_messages(state["messages"])
     model = get_chat_model()
     writer = get_stream_writer()
-    system_prompt = build_system_prompt(provider, current_user)
+    base_system_prompt = build_system_prompt(provider, current_user)
     capability_context = await build_capability_context(current_user)
     if capability_context:
-        system_prompt = f"{system_prompt}\n\n{capability_context}"
+        base_system_prompt = f"{base_system_prompt}\n\n{capability_context}"
 
     skill_specs = await _skill_tool_specs(current_user)
     tool_specs: list[ChatToolSpec] = []
@@ -207,23 +210,30 @@ async def chat_agent_node(state: ChatState, config: RunnableConfig) -> ChatState
     empty_retry_used = False
     repeated_action_retry_used = False
     response_is_broken = False
+    streamed_response = ""
+    # Retry guidance for the *next* LLM call is appended to the system prompt
+    # so it never appears as a mid-conversation SystemMessage (which several
+    # provider adapters — most notably ChatAnthropic — discourage).
+    pending_system_addendum = ""
 
     response = ""
     while action_count < settings.CHAT_LLM_MAX_AUTO_ACTIONS:
-        ai_message = await _run_llm_tool_turn(model, system_prompt, messages, [*skill_specs, *tool_specs], config)
+        turn_system_prompt = _combined_system_prompt(base_system_prompt, pending_system_addendum)
+        pending_system_addendum = ""
+        ai_message, streamed_in_turn = await _run_llm_tool_turn(
+            model, turn_system_prompt, messages, [*skill_specs, *tool_specs], config, writer
+        )
+        streamed_response += streamed_in_turn
         requested = _tool_call_requests(ai_message, [*skill_specs, *tool_specs])
         if not requested:
-            response = _message_text(ai_message.content)
+            response = message_text(ai_message.content)
             if response:
                 break
             if action_summaries:
                 break
             if not empty_retry_used:
                 empty_retry_used = True
-                messages = [
-                    *messages,
-                    SystemMessage(content=_initial_empty_response_retry_message(), id=f"msg_{uuid.uuid4().hex}"),
-                ]
+                pending_system_addendum = _initial_empty_response_retry_message()
                 continue
             break
 
@@ -235,14 +245,8 @@ async def chat_agent_node(state: ChatState, config: RunnableConfig) -> ChatState
             if repeated:
                 if not repeated_action_retry_used:
                     repeated_action_retry_used = True
-                    messages = [
-                        *messages,
-                        ai_message,
-                        SystemMessage(
-                            content=_repeated_tool_call_retry_message(repeated, action_summaries),
-                            id=f"msg_{uuid.uuid4().hex}",
-                        ),
-                    ]
+                    messages = [*messages, ai_message]
+                    pending_system_addendum = _repeated_tool_call_retry_message(repeated, action_summaries)
                     continue
                 response = _repeated_tool_call_fallback(repeated, action_summaries)
                 response_is_broken = True
@@ -267,36 +271,46 @@ async def chat_agent_node(state: ChatState, config: RunnableConfig) -> ChatState
                 for result in results
             ],
         ]
+        messages = _trim_inner_loop_messages(messages, max_chars=settings.CHAT_LLM_CONTEXT_MAX_CHARS)
         if any(result.request.spec.kind == "skill" for result in results) and not expose_tools:
             expose_tools = True
             tool_specs = await _mcp_tool_specs(current_user)
 
     if not response and action_summaries and not response_is_broken:
-        messages = [
-            *messages,
-            SystemMessage(content=_final_synthesis_retry_message(action_summaries), id=f"msg_{uuid.uuid4().hex}"),
-        ]
-        final_message = await _run_llm_tool_turn(model, system_prompt, messages, [], config)
-        response = _message_text(final_message.content)
+        synthesis_system_prompt = _combined_system_prompt(
+            base_system_prompt, _final_synthesis_retry_message(action_summaries)
+        )
+        final_message, streamed_in_turn = await _run_llm_tool_turn(
+            model, synthesis_system_prompt, messages, [], config, writer
+        )
+        streamed_response += streamed_in_turn
+        response = message_text(final_message.content)
 
     if not response:
         response = _empty_response_fallback(action_summaries)
         response_is_broken = True
 
-    if _announces_unavailable_mutation(response):
-        response = _unavailable_mutation_fallback(action_summaries)
-        response_is_broken = True
+    # Streaming contract: the LLM-produced text is written to the writer as the
+    # chunks arrive, so it is already on the wire. Synthetic fallbacks (and any
+    # final tail not already streamed) are emitted here as a single delta.
+    if response and response != streamed_response:
+        if not streamed_response:
+            writer({"kind": "token", "content": response})
+        elif response.startswith(streamed_response):
+            writer({"kind": "token", "content": response[len(streamed_response) :]})
+        else:
+            writer({"kind": "token", "content": f"\n\n{response}"})
 
-    if _contains_legacy_chat_command(response):
-        response = _invalid_auto_command_fallback(response, action_summaries)
-        response_is_broken = True
-
-    for chunk in _chunk_text(response):
-        writer({"kind": "token", "content": chunk})
     ai_message = AIMessage(content=response, id=f"msg_{uuid.uuid4().hex}")
     if response_is_broken:
         tag_message(ai_message, MessageTag.BROKEN)
     return {"messages": [*_trim_messages(state["messages"], ai_message), ai_message]}
+
+
+def _combined_system_prompt(base: str, addendum: str) -> str:
+    if not addendum:
+        return base
+    return f"{base}\n\n{addendum}"
 
 
 async def _run_llm_tool_turn(
@@ -305,27 +319,77 @@ async def _run_llm_tool_turn(
     messages: list[BaseMessage],
     tools: list[ChatToolSpec],
     config: RunnableConfig,
-) -> AIMessage:
+    writer: Callable[[dict[str, Any]], None] | None = None,
+) -> tuple[AIMessage, str]:
+    """Run one LLM turn, streaming text deltas via *writer* as they arrive.
+
+    Returns ``(ai_message, streamed_text)``. ``streamed_text`` is the
+    concatenation of text deltas already written to the stream — the caller
+    uses it to avoid double-emitting the final response.
+    """
     runnable = model
     bind_tools = getattr(model, "bind_tools", None)
     if tools and callable(bind_tools):
         runnable = bind_tools([_langchain_tool_schema(tool) for tool in tools])
 
     merged: Any | None = None
+    streamed = ""
     async for chunk in runnable.astream(
         [SystemMessage(content=system_prompt), *messages],
         config=config,
     ):
+        if writer is not None:
+            delta = message_text(getattr(chunk, "content", ""))
+            if delta:
+                writer({"kind": "token", "content": delta})
+                streamed += delta
         merged = chunk if merged is None else merged + chunk
 
     if isinstance(merged, AIMessage):
-        return merged
-    return AIMessage(
-        content=_message_text(getattr(merged, "content", "")) if merged is not None else "",
+        return merged, streamed
+    fallback = AIMessage(
+        content=message_text(getattr(merged, "content", "")) if merged is not None else "",
         tool_calls=list(getattr(merged, "tool_calls", []) or []),
         invalid_tool_calls=list(getattr(merged, "invalid_tool_calls", []) or []),
         id=getattr(merged, "id", None),
     )
+    return fallback, streamed
+
+
+def _trim_inner_loop_messages(messages: list[BaseMessage], *, max_chars: int) -> list[BaseMessage]:
+    """Cap the inner-turn message list by total character count.
+
+    Tool results are bounded per call by ``CHAT_TOOL_RESULT_MAX_BYTES``, but
+    nothing else stops the loop from accumulating up to
+    ``CHAT_LLM_MAX_AUTO_ACTIONS`` × that cap into the next LLM call. This drops
+    oldest AI+ToolMessage turn pairs from the head once the accumulated text
+    exceeds the cap, keeping the user's original turn at index 0 (when it is a
+    ``HumanMessage``) and the most recent tool exchange intact.
+    """
+    if max_chars <= 0 or len(messages) <= 4:
+        return messages
+    total = sum(len(message_text(getattr(m, "content", ""))) for m in messages)
+    if total <= max_chars:
+        return messages
+
+    preserve_head = isinstance(messages[0], HumanMessage)
+    head: list[BaseMessage] = [messages[0]] if preserve_head else []
+    body = messages[1:] if preserve_head else messages[:]
+
+    # Drop AIMessage + its trailing ToolMessages as a unit; orphaning tool
+    # results breaks every provider's tool-call protocol.
+    while body and total > max_chars:
+        if not isinstance(body[0], AIMessage):
+            dropped = body.pop(0)
+            total -= len(message_text(getattr(dropped, "content", "")))
+            continue
+        dropped = body.pop(0)
+        total -= len(message_text(getattr(dropped, "content", "")))
+        while body and isinstance(body[0], ToolMessage):
+            tool_dropped = body.pop(0)
+            total -= len(message_text(getattr(tool_dropped, "content", "")))
+
+    return [*head, *body]
 
 
 def _langchain_tool_schema(tool: ChatToolSpec) -> dict[str, Any]:
@@ -378,15 +442,25 @@ def _add_reasoning_content_to_payload(payload: dict[str, Any], messages: list[Ba
 
 
 def _uses_deepseek_compatible_endpoint(model_name: str) -> bool:
-    base_url = settings.CHAT_LLM_BASE_URL.lower()
-    return "deepseek" in base_url or model_name.lower().startswith("deepseek")
+    base_url_host = _hostname(settings.CHAT_LLM_BASE_URL).lower()
+    if base_url_host.endswith("deepseek.com") or base_url_host.endswith(".deepseek.com"):
+        return True
+    return model_name.lower().startswith("deepseek-")
+
+
+def _hostname(url: str) -> str:
+    if not url:
+        return ""
+    from urllib.parse import urlparse
+
+    try:
+        return urlparse(url).hostname or ""
+    except ValueError:
+        return ""
 
 
 async def _skill_tool_specs(current_user: CurrentUser | None) -> list[ChatToolSpec]:
-    prompts = await mcp_runtime.list_prompts_for_user(
-        current_user,
-        gate_permission=Permission.CHAT_SKILLS_CALL,
-    )
+    prompts = await _cached_list_prompts(current_user)
     return [
         ChatToolSpec(
             name=prompt.name,
@@ -399,11 +473,7 @@ async def _skill_tool_specs(current_user: CurrentUser | None) -> list[ChatToolSp
 
 
 async def _mcp_tool_specs(current_user: CurrentUser | None) -> list[ChatToolSpec]:
-    tools = await mcp_runtime.list_tools_for_user(
-        current_user,
-        gate_permission=Permission.CHAT_TOOLS_CALL,
-        chat_safe_only=True,
-    )
+    tools = await _cached_list_tools(current_user)
     return [
         ChatToolSpec(
             name=tool.name,
@@ -413,6 +483,53 @@ async def _mcp_tool_specs(current_user: CurrentUser | None) -> list[ChatToolSpec
         )
         for tool in tools
     ]
+
+
+def _cache_key(current_user: CurrentUser | None, namespace: str) -> str:
+    perms = sorted(current_user.permissions) if current_user is not None else []
+    return f"{namespace}|" + ",".join(perms)
+
+
+async def _cached_list_tools(current_user: CurrentUser | None) -> list[Tool]:
+    key = _cache_key(current_user, "tools")
+    return await _cached_listing(
+        key,
+        lambda: mcp_runtime.list_tools_for_user(
+            current_user,
+            gate_permission=Permission.CHAT_TOOLS_CALL,
+            chat_safe_only=True,
+        ),
+    )
+
+
+async def _cached_list_prompts(current_user: CurrentUser | None) -> list[Prompt]:
+    key = _cache_key(current_user, "prompts")
+    return await _cached_listing(
+        key,
+        lambda: mcp_runtime.list_prompts_for_user(
+            current_user,
+            gate_permission=Permission.CHAT_SKILLS_CALL,
+        ),
+    )
+
+
+async def _cached_listing(key: str, loader: Callable[[], Any]) -> list[Any]:
+    now = time.monotonic()
+    cached = _capability_cache.get(key)
+    if cached is not None and now - cached[0] < _CAPABILITY_CACHE_TTL_SECONDS:
+        return cached[1]
+    async with _capability_cache_lock:
+        cached = _capability_cache.get(key)
+        if cached is not None and time.monotonic() - cached[0] < _CAPABILITY_CACHE_TTL_SECONDS:
+            return cached[1]
+        value = await loader()
+        _capability_cache[key] = (time.monotonic(), value)
+        return value
+
+
+def _invalidate_capability_cache() -> None:
+    """Clear the in-process capability listing cache (test helper)."""
+    _capability_cache.clear()
 
 
 def _prompt_input_schema(prompt: Prompt) -> dict[str, Any]:
@@ -503,7 +620,11 @@ def build_system_prompt(provider: str | None = None, current_user: CurrentUser |
     display_name = None
     if current_user is not None:
         display_name = current_user.user.display_name or current_user.user.preferred_username or current_user.user.email
-    user_context = f"\nCurrent Seizu user display name: {display_name}." if display_name else ""
+    # Quote display_name via json.dumps so a malicious display value (which
+    # users may control in some IdPs) cannot break out of the surrounding
+    # narrative to inject prior-instruction-overriding text into the system
+    # prompt. json.dumps escapes embedded quotes, newlines, and control chars.
+    user_context = f"\nCurrent Seizu user display name: {json.dumps(display_name)}." if display_name else ""
     provider_note = _provider_prompt_note(provider_name)
     return (
         "You are Seizu's AI investigation assistant inside a security graph dashboard. "
@@ -544,10 +665,6 @@ def _provider_prompt_note(provider: str) -> str:
             "over generic assistant behavior."
         )
     return ""
-
-
-def _contains_legacy_chat_command(text: str) -> bool:
-    return bool(_LEGACY_CHAT_COMMAND_RE.search(text))
 
 
 def _tool_call_start_status(requests: list[ToolCallRequest]) -> str:
@@ -634,34 +751,6 @@ def _empty_response_fallback(action_summaries: list[str]) -> str:
     )
 
 
-def _invalid_auto_command_fallback(response: str, action_summaries: list[str]) -> str:
-    details = (
-        "\n\nMost recent action result:\n" + _truncate_text(action_summaries[-1], 5000) if action_summaries else ""
-    )
-    return (
-        "I stopped because the model produced an incomplete or invalid internal skill/tool command instead of a "
-        "usable answer. The partial command was not run or shown as an action. Try narrowing the request or asking "
-        "for the workflow to be described rather than executed."
-        f"{details}"
-    )
-
-
-def _announces_unavailable_mutation(response: str) -> bool:
-    return bool(_MUTATING_INTENT_RE.search(response)) and not response.strip().endswith((".", "?", "!"))
-
-
-def _unavailable_mutation_fallback(action_summaries: list[str]) -> str:
-    details = (
-        "\n\nMost recent action result:\n" + _truncate_text(action_summaries[-1], 5000) if action_summaries else ""
-    )
-    return (
-        "I stopped before making changes. This chat session can inspect Seizu data and run chat-safe read tools, "
-        "but it cannot perform mutating actions such as creating, updating, deleting, or saving tools/skills. "
-        "Use the native Seizu UI for those edits."
-        f"{details}"
-    )
-
-
 def _truncate_text(text: str, max_chars: int) -> str:
     if max_chars <= 0 or len(text) <= max_chars:
         return text
@@ -673,18 +762,10 @@ def _json_dump(value: Any) -> str:
 
 
 async def build_capability_context(current_user: CurrentUser | None) -> str:
-    skills = await mcp_runtime.list_prompts_for_user(
-        current_user,
-        gate_permission=Permission.CHAT_SKILLS_CALL,
-    )
+    skills = await _cached_list_prompts(current_user)
     if settings.CHAT_LLM_PROGRESSIVE_DISCLOSURE:
         return _progressive_capability_context(skills)
-
-    tools = await mcp_runtime.list_tools_for_user(
-        current_user,
-        gate_permission=Permission.CHAT_TOOLS_CALL,
-        chat_safe_only=True,
-    )
+    tools = await _cached_list_tools(current_user)
     return _full_capability_context(skills, tools)
 
 
@@ -779,22 +860,6 @@ def _content_text(content: Any) -> str | None:
     return text if isinstance(text, str) else None
 
 
-def _message_text(content: Any) -> str:
-    if isinstance(content, str):
-        return content
-    if isinstance(content, list):
-        parts: list[str] = []
-        for item in content:
-            if isinstance(item, str):
-                parts.append(item)
-            elif isinstance(item, dict):
-                text = item.get("text")
-                if isinstance(text, str):
-                    parts.append(text)
-        return "".join(parts)
-    return ""
-
-
 def _current_user_from_config(config: RunnableConfig) -> CurrentUser | None:
     configurable = config.get("configurable")
     if not isinstance(configurable, dict):
@@ -818,7 +883,7 @@ def _llm_context_messages(messages: list[Any]) -> list[BaseMessage]:
     for message in filtered:
         if isinstance(message, HumanMessage):
             context.append(message)
-        elif isinstance(message, AIMessage) and _message_text(message.content) and not _is_broken_ai_message(message):
+        elif isinstance(message, AIMessage) and message_text(message.content) and not _is_broken_ai_message(message):
             context.append(message)
 
     max_messages = settings.CHAT_LLM_CONTEXT_MAX_MESSAGES
@@ -832,7 +897,7 @@ def _llm_context_messages(messages: list[Any]) -> list[BaseMessage]:
     retained: list[BaseMessage] = []
     total_chars = 0
     for message in reversed(context):
-        text_len = len(_message_text(message.content))
+        text_len = len(message_text(message.content))
         if retained and total_chars + text_len > max_chars:
             break
         retained.append(message)
@@ -843,9 +908,7 @@ def _llm_context_messages(messages: list[Any]) -> list[BaseMessage]:
 def _is_broken_ai_message(message: AIMessage) -> bool:
     if has_tag(message, MessageTag.BROKEN):
         return True
-    text = _message_text(message.content)
-    if _contains_legacy_chat_command(text):
-        return True
+    text = message_text(message.content)
     normalized = " ".join(text.lower().split())
     return any(
         marker in normalized
@@ -853,7 +916,6 @@ def _is_broken_ai_message(message: AIMessage) -> bool:
             "the model returned an empty response",
             "did not return a final synthesis",
             "did not run any skill or tool",
-            "incomplete or invalid internal skill/tool command",
             "configured automatic action limit",
         )
     )
@@ -903,50 +965,61 @@ def get_chat_model() -> ChatModel:
     provider = _chat_provider()
     if provider == "mock":
         raise RuntimeError("CHAT_LLM_PROVIDER=mock does not use a real chat model")
-    model_name = settings.CHAT_LLM_MODEL or _DEFAULT_CHAT_MODELS[provider]
+    model_name = _chat_model_name(provider)
     max_tokens = settings.CHAT_LLM_MAX_TOKENS if settings.CHAT_LLM_MAX_TOKENS > 0 else None
 
     if provider == "openai":
-        from langchain_openai import ChatOpenAI
-
-        kwargs = _chat_model_kwargs(settings.OPENAI_API_KEY)
+        kwargs = _chat_model_kwargs(settings.OPENAI_API_KEY, include_base_url=True)
         if max_tokens is not None:
             kwargs["max_tokens"] = max_tokens
-        if _uses_deepseek_compatible_endpoint(model_name):
-
-            class SeizuChatOpenAI(SeizuChatDeepSeekMixin, ChatOpenAI):
-                pass
-
-            return SeizuChatOpenAI(model=model_name, **kwargs)
-        return ChatOpenAI(model=model_name, **kwargs)
+        cls = _openai_chat_class(deepseek_compatible=_uses_deepseek_compatible_endpoint(model_name))
+        return cls(model=model_name, **kwargs)
 
     if provider == "deepseek":
-        from langchain_deepseek import ChatDeepSeek
-
-        class SeizuChatDeepSeek(SeizuChatDeepSeekMixin, ChatDeepSeek):
-            pass
-
-        kwargs = _chat_model_kwargs(settings.DEEPSEEK_API_KEY)
-        if settings.CHAT_LLM_BASE_URL:
-            kwargs["base_url"] = settings.CHAT_LLM_BASE_URL
+        kwargs = _chat_model_kwargs(settings.DEEPSEEK_API_KEY, include_base_url=True)
         if max_tokens is not None:
             kwargs["max_tokens"] = max_tokens
-        return SeizuChatDeepSeek(model=model_name, **kwargs)
+        return _deepseek_chat_class()(model=model_name, **kwargs)
 
     if provider == "anthropic":
-        from langchain_anthropic import ChatAnthropic
-
-        kwargs = _chat_model_kwargs(settings.ANTHROPIC_API_KEY)
+        kwargs = _chat_model_kwargs(settings.ANTHROPIC_API_KEY, include_base_url=True)
         if max_tokens is not None:
             kwargs["max_tokens"] = max_tokens
+        from langchain_anthropic import ChatAnthropic
+
         return ChatAnthropic(model=model_name, **kwargs)
 
-    from langchain_google_genai import ChatGoogleGenerativeAI
-
-    kwargs = _chat_model_kwargs(settings.GEMINI_API_KEY or settings.GOOGLE_API_KEY)
+    # gemini — ChatGoogleGenerativeAI does not accept a base_url kwarg, so the
+    # operator-set CHAT_LLM_BASE_URL is intentionally not forwarded here.
+    kwargs = _chat_model_kwargs(settings.GEMINI_API_KEY or settings.GOOGLE_API_KEY, include_base_url=False)
     if max_tokens is not None:
         kwargs["max_output_tokens"] = max_tokens
+    from langchain_google_genai import ChatGoogleGenerativeAI
+
     return ChatGoogleGenerativeAI(model=model_name, **kwargs)
+
+
+@lru_cache(maxsize=2)
+def _openai_chat_class(deepseek_compatible: bool) -> type:
+    from langchain_openai import ChatOpenAI
+
+    if not deepseek_compatible:
+        return ChatOpenAI
+
+    class SeizuChatOpenAI(SeizuChatDeepSeekMixin, ChatOpenAI):
+        pass
+
+    return SeizuChatOpenAI
+
+
+@lru_cache(maxsize=1)
+def _deepseek_chat_class() -> type:
+    from langchain_deepseek import ChatDeepSeek
+
+    class SeizuChatDeepSeek(SeizuChatDeepSeekMixin, ChatDeepSeek):
+        pass
+
+    return SeizuChatDeepSeek
 
 
 def _chat_provider() -> str:
@@ -956,7 +1029,18 @@ def _chat_provider() -> str:
     return provider
 
 
-def _chat_model_kwargs(provider_api_key: str) -> dict[str, Any]:
+def _chat_model_name(provider: str) -> str:
+    model = settings.CHAT_LLM_MODEL.strip()
+    if not model:
+        raise ValueError(
+            f"CHAT_LLM_MODEL is required when CHAT_LLM_PROVIDER={provider!r}. Set it to a model identifier "
+            "supported by the provider (e.g. an OpenAI/Anthropic/Gemini/DeepSeek model name). The mock provider "
+            "is the only one that runs without a model."
+        )
+    return model
+
+
+def _chat_model_kwargs(provider_api_key: str, *, include_base_url: bool) -> dict[str, Any]:
     kwargs: dict[str, Any] = {
         "temperature": settings.CHAT_LLM_TEMPERATURE,
         "timeout": settings.CHAT_LLM_TIMEOUT_SECONDS,
@@ -965,9 +1049,22 @@ def _chat_model_kwargs(provider_api_key: str) -> dict[str, Any]:
     api_key = settings.CHAT_LLM_API_KEY or provider_api_key
     if api_key:
         kwargs["api_key"] = api_key
-    if settings.CHAT_LLM_BASE_URL:
+    if include_base_url and settings.CHAT_LLM_BASE_URL:
         kwargs["base_url"] = settings.CHAT_LLM_BASE_URL
     return kwargs
+
+
+def validate_chat_llm_config() -> None:
+    """Fail-fast validation called at startup when chat is enabled.
+
+    Raises ``ValueError`` if ``CHAT_LLM_PROVIDER`` is unknown or, for a real
+    provider, ``CHAT_LLM_MODEL`` is missing. Catches typos that previously
+    surfaced only on the first user request.
+    """
+    provider = _chat_provider()
+    if provider == "mock":
+        return
+    _chat_model_name(provider)
 
 
 def _build_checkpointer() -> DynamoDBSaver:

@@ -18,6 +18,7 @@ from reporting.services.chat_graph import (
     load_thread_messages,
     namespaced_thread_id,
 )
+from reporting.services.chat_messages import message_text
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -119,23 +120,8 @@ def _to_history_message(message: Any, index: int) -> ChatHistoryMessage | None:
     else:
         # Skip system/tool messages — the UI only renders the user/assistant turns.
         return None
-    text = _message_text(message.content)
+    text = message_text(message.content)
     if not text:
         return None
     message_id = str(message.id) if message.id else f"{role}-{index}"
     return ChatHistoryMessage(id=message_id, role=role, text=text)
-
-
-def _message_text(content: Any) -> str:
-    """Flatten LangChain message content (str or content blocks) to plain text."""
-    if isinstance(content, str):
-        return content
-    if isinstance(content, list):
-        parts: list[str] = []
-        for item in content:
-            if isinstance(item, str):
-                parts.append(item)
-            elif isinstance(item, dict) and isinstance(item.get("text"), str):
-                parts.append(item["text"])
-        return "".join(parts)
-    return ""
