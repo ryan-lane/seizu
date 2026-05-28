@@ -290,8 +290,9 @@ CHAT_ENABLED = bool_env("CHAT_ENABLED", True)
 # and keyless; set to "openai", "anthropic", "gemini", or "deepseek" to call a
 # real model through the LangGraph chat node.
 CHAT_LLM_PROVIDER = str_env("CHAT_LLM_PROVIDER", "mock")
-# Optional model override. When empty, Seizu chooses a provider-specific default
-# intended for security investigations and report-authoring assistance.
+# Model identifier for the selected provider. Required whenever
+# CHAT_LLM_PROVIDER is not "mock"; Seizu fails fast at startup if a real
+# provider is selected without an explicit model.
 CHAT_LLM_MODEL = str_env("CHAT_LLM_MODEL", "")
 # Optional provider API key override. If empty, provider-specific env vars below
 # are used, then the underlying SDK's normal environment lookup applies.

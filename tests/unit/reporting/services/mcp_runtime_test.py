@@ -381,7 +381,10 @@ async def test_render_prompt_for_chat_flags_permission_denied_with_enum(mocker):
 
 
 async def test_render_prompt_for_chat_returns_none_blocked_on_success(mocker):
-    mocker.patch("reporting.services.mcp_runtime.report_store.get_enabled_skill", return_value=_skill())
+    mocker.patch(
+        "reporting.services.mcp_runtime.report_store.get_enabled_skill",
+        return_value=_skill().model_copy(update={"tools_required": ["security__lookup"]}),
+    )
     current = _user(frozenset({Permission.CHAT_SKILLS_CALL.value, Permission.SKILLS_RENDER.value}))
 
     outcome = await mcp_runtime.render_prompt_for_chat(
@@ -392,4 +395,5 @@ async def test_render_prompt_for_chat_returns_none_blocked_on_success(mocker):
     )
 
     assert outcome.blocked is None
-    assert outcome.text == "Summarize alerts."
+    assert "Summarize alerts." in outcome.text
+    assert outcome.tools_required == ("security__lookup",)

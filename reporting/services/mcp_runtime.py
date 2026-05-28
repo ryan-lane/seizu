@@ -41,10 +41,13 @@ class ChatActionOutcome:
     results and one of :class:`ChatBlockReason` when the runtime refused the
     call — the chat agent breaks the turn and surfaces a structured notice
     instead of letting the model retry against an authorization wall.
+    ``tools_required`` carries stored skill metadata for strict progressive
+    disclosure; it is empty for normal tool calls.
     """
 
     text: str
     blocked: ChatBlockReason | None = None
+    tools_required: tuple[str, ...] = ()
 
 
 _PARAM_TYPE_MAP: dict[str, str] = {
@@ -355,7 +358,7 @@ async def get_prompt_for_user(
     permissions: frozenset[str] | None = None,
 ) -> GetPromptResult:
     """MCP-shaped prompt render. Use ``render_prompt_for_chat`` from the chat agent."""
-    result, _blocked = await _get_prompt_core(
+    result, _blocked, _tools_required = await _get_prompt_core(
         current_user,
         name,
         arguments,
@@ -374,7 +377,7 @@ async def render_prompt_for_chat(
     permissions: frozenset[str] | None = None,
 ) -> ChatActionOutcome:
     """Chat-oriented skill render returning the body together with a block reason."""
-    result, blocked = await _get_prompt_core(
+    result, blocked, tools_required = await _get_prompt_core(
         current_user,
         name,
         arguments,
@@ -382,7 +385,7 @@ async def render_prompt_for_chat(
         permissions=permissions,
     )
     text = "\n\n".join(t for m in result.messages if (t := _prompt_message_text(m.content)))
-    return ChatActionOutcome(text=text, blocked=blocked)
+    return ChatActionOutcome(text=text, blocked=blocked, tools_required=tools_required)
 
 
 async def _get_prompt_core(
@@ -392,12 +395,12 @@ async def _get_prompt_core(
     *,
     gate_permission: Permission | None = None,
     permissions: frozenset[str] | None = None,
-) -> tuple[GetPromptResult, ChatBlockReason | None]:
+) -> tuple[GetPromptResult, ChatBlockReason | None, tuple[str, ...]]:
     perms = _permissions(current_user, permissions)
     if gate_permission and gate_permission.value not in perms:
-        return _permission_denied_prompt(gate_permission.value), ChatBlockReason.PERMISSION_DENIED
+        return _permission_denied_prompt(gate_permission.value), ChatBlockReason.PERMISSION_DENIED, ()
     if Permission.SKILLS_RENDER.value not in perms:
-        return _permission_denied_prompt(Permission.SKILLS_RENDER.value), ChatBlockReason.PERMISSION_DENIED
+        return _permission_denied_prompt(Permission.SKILLS_RENDER.value), ChatBlockReason.PERMISSION_DENIED, ()
 
     try:
         parsed_name = parse_user_defined_name(name)
@@ -414,6 +417,7 @@ async def _get_prompt_core(
                     ],
                 ),
                 None,
+                (),
             )
         rendered, errors = render_skill_prompt(
             target_skill.parameters,
@@ -429,6 +433,7 @@ async def _get_prompt_core(
                 messages=[PromptMessage(role="user", content=TextContent(type="text", text=text))],
             ),
             None,
+            tuple(target_skill.tools_required),
         )
     except Exception:
         logger.exception("Failed to render MCP prompt %s", name)
@@ -443,6 +448,7 @@ async def _get_prompt_core(
                 ],
             ),
             None,
+            (),
         )
 
 

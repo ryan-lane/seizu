@@ -1,8 +1,10 @@
 import asyncio
+import hashlib
 import json
+import re
 import uuid
 from collections.abc import AsyncIterator, Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from functools import lru_cache
 from typing import Annotated, Any, Literal, Protocol
 
@@ -64,6 +66,7 @@ class ChatToolSpec:
     kind: Literal["skill", "tool"]
     description: str
     input_schema: dict[str, Any]
+    llm_name: str | None = None
 
 
 @dataclass(frozen=True)
@@ -79,6 +82,7 @@ class ToolCallResult:
     request: ToolCallRequest
     content: str
     blocked: ChatBlockReason | None = None
+    tools_required: tuple[str, ...] = ()
 
 
 class SeizuChatDeepSeekMixin:
@@ -193,16 +197,17 @@ async def chat_agent_node(state: ChatState, config: RunnableConfig) -> ChatState
     # every read the turn needs.
     skills = await _list_chat_prompts(current_user)
     tools: list[Tool] = []
-    expose_tools = not settings.CHAT_LLM_PROGRESSIVE_DISCLOSURE
-    if expose_tools:
+    progressive_disclosure = settings.CHAT_LLM_PROGRESSIVE_DISCLOSURE
+    disclosed_tool_names: set[str] = set()
+    if not progressive_disclosure:
         tools = await _list_chat_tools(current_user)
 
-    capability_context = build_capability_context(skills, tools if expose_tools else None)
+    capability_context = build_capability_context(skills, tools if not progressive_disclosure else None)
     if capability_context:
         base_system_prompt = f"{base_system_prompt}\n\n{capability_context}"
 
     skill_specs = _skill_tool_specs(skills)
-    tool_specs: list[ChatToolSpec] = _mcp_tool_specs(tools) if expose_tools else []
+    tool_specs: list[ChatToolSpec] = _mcp_tool_specs(tools) if not progressive_disclosure else []
 
     action_count = 0
     action_summaries: list[str] = []
@@ -221,7 +226,7 @@ async def chat_agent_node(state: ChatState, config: RunnableConfig) -> ChatState
     while action_count < settings.CHAT_LLM_MAX_AUTO_ACTIONS:
         turn_system_prompt = _combined_system_prompt(base_system_prompt, pending_system_addendum)
         pending_system_addendum = ""
-        available_specs = [*skill_specs, *tool_specs]
+        available_specs = _with_provider_tool_names([*skill_specs, *tool_specs])
         ai_message, streamed_in_last_turn = await _run_llm_tool_turn(
             model,
             turn_system_prompt,
@@ -278,7 +283,7 @@ async def chat_agent_node(state: ChatState, config: RunnableConfig) -> ChatState
             *[
                 ToolMessage(
                     content=result.content,
-                    name=result.request.name,
+                    name=_llm_tool_name(result.request.spec),
                     tool_call_id=result.request.id,
                     id=f"msg_{uuid.uuid4().hex}",
                 )
@@ -289,10 +294,16 @@ async def chat_agent_node(state: ChatState, config: RunnableConfig) -> ChatState
         if blocked_results:
             response = _blocked_tool_call_response(blocked_results)
             break
-        if any(result.request.spec.kind == "skill" for result in results) and not expose_tools:
-            expose_tools = True
-            tools = await _list_chat_tools(current_user)
-            tool_specs = _mcp_tool_specs(tools)
+        if progressive_disclosure:
+            newly_disclosed = _disclosed_tool_names_from_skill_results(results)
+            if newly_disclosed:
+                disclosed_tool_names.update(newly_disclosed)
+                if not tools:
+                    tools = await _list_chat_tools(current_user)
+                available_by_name = {tool.name: tool for tool in tools}
+                tool_specs = _mcp_tool_specs(
+                    [tool for name, tool in available_by_name.items() if name in disclosed_tool_names]
+                )
 
     if not response and action_summaries and not response_is_broken:
         synthesis_system_prompt = _combined_system_prompt(
@@ -459,12 +470,74 @@ def _message_context_size(message: BaseMessage) -> int:
     return size
 
 
+_PROVIDER_TOOL_NAME_MAX_LEN = 64
+_PROVIDER_TOOL_NAME_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_-]{0,63}$")
+
+
+def _with_provider_tool_names(specs: list[ChatToolSpec]) -> list[ChatToolSpec]:
+    """Attach provider-safe names while keeping Seizu/MCP names canonical.
+
+    Most Seizu tool names are already provider-compatible. Very long names are
+    mapped for this LLM turn only; execution and user-visible status continue to
+    use ``spec.name``.
+    """
+    used: set[str] = set()
+    mapped: list[ChatToolSpec] = []
+    for spec in specs:
+        llm_name = _provider_tool_name(spec, used)
+        used.add(llm_name)
+        mapped.append(replace(spec, llm_name=llm_name if llm_name != spec.name else None))
+    return mapped
+
+
+def _provider_tool_name(spec: ChatToolSpec, used: set[str]) -> str:
+    if _PROVIDER_TOOL_NAME_RE.fullmatch(spec.name) and spec.name not in used:
+        return spec.name
+
+    prefix = "seizu_s" if spec.kind == "skill" else "seizu_t"
+    digest = hashlib.sha256(spec.name.encode("utf-8")).hexdigest()[:10]
+    slug = _provider_tool_name_slug(spec.name)
+    base = f"{prefix}_{digest}"
+    available = _PROVIDER_TOOL_NAME_MAX_LEN - len(base) - 1
+    candidate = f"{base}_{slug[:available]}" if available > 0 and slug else base
+    if candidate not in used:
+        return candidate
+
+    for index in range(1, 1000):
+        suffix = f"_{index}"
+        trimmed = candidate[: _PROVIDER_TOOL_NAME_MAX_LEN - len(suffix)]
+        fallback = f"{trimmed}{suffix}"
+        if fallback not in used:
+            return fallback
+    raise RuntimeError("Unable to allocate unique LLM tool name")
+
+
+def _provider_tool_name_slug(name: str) -> str:
+    slug = re.sub(r"[^A-Za-z0-9_-]+", "_", name).strip("_-").lower()
+    if not slug:
+        return ""
+    if not re.match(r"^[A-Za-z_]", slug):
+        slug = f"t_{slug}"
+    return slug
+
+
+def _llm_tool_name(tool: ChatToolSpec) -> str:
+    return tool.llm_name or tool.name
+
+
+def _llm_tool_description(tool: ChatToolSpec) -> str:
+    description = tool.description or tool.name
+    if tool.llm_name and tool.llm_name != tool.name:
+        return f"Seizu {tool.kind} `{tool.name}`. {description}"
+    return description
+
+
 def _langchain_tool_schema(tool: ChatToolSpec) -> dict[str, Any]:
     return {
         "type": "function",
         "function": {
-            "name": tool.name,
-            "description": tool.description or tool.name,
+            "name": _llm_tool_name(tool),
+            "description": _llm_tool_description(tool),
             "parameters": _json_schema_object(tool.input_schema),
         },
     }
@@ -582,28 +655,29 @@ def _prompt_input_schema(prompt: Prompt) -> dict[str, Any]:
 
 
 def _tool_call_requests(message: AIMessage, specs: list[ChatToolSpec]) -> list[ToolCallRequest]:
-    by_name = {spec.name: spec for spec in specs}
+    by_name = {_llm_tool_name(spec): spec for spec in specs}
     requests: list[ToolCallRequest] = []
     for index, call in enumerate(getattr(message, "tool_calls", []) or []):
-        name = call.get("name") if isinstance(call, dict) else getattr(call, "name", None)
-        if not isinstance(name, str) or name not in by_name:
+        llm_name = call.get("name") if isinstance(call, dict) else getattr(call, "name", None)
+        if not isinstance(llm_name, str) or llm_name not in by_name:
             continue
+        spec = by_name[llm_name]
         raw_args = call.get("args") if isinstance(call, dict) else getattr(call, "args", {})
         args = raw_args if isinstance(raw_args, dict) else {}
         call_id = call.get("id") if isinstance(call, dict) else getattr(call, "id", None)
         requests.append(
             ToolCallRequest(
                 id=str(call_id or f"call_{index}_{uuid.uuid4().hex}"),
-                name=name,
+                name=spec.name,
                 arguments=args,
-                spec=by_name[name],
+                spec=spec,
             )
         )
     return requests
 
 
 def _unavailable_tool_call_results(message: AIMessage, specs: list[ChatToolSpec]) -> list[ToolCallResult]:
-    available_names = {spec.name for spec in specs}
+    available_names = {_llm_tool_name(spec) for spec in specs}
     results: list[ToolCallResult] = []
     for index, call in enumerate(getattr(message, "tool_calls", []) or []):
         name = call.get("name") if isinstance(call, dict) else getattr(call, "name", None)
@@ -661,7 +735,12 @@ async def _run_tool_call(request: ToolCallRequest, current_user: CurrentUser | N
             string_arguments,
             gate_permission=Permission.CHAT_SKILLS_CALL,
         )
-        return ToolCallResult(request=request, content=outcome.text, blocked=outcome.blocked)
+        return ToolCallResult(
+            request=request,
+            content=outcome.text,
+            blocked=outcome.blocked,
+            tools_required=outcome.tools_required,
+        )
 
     outcome = await mcp_runtime.call_tool_for_chat(
         current_user,
@@ -762,6 +841,14 @@ def _tool_call_user_summary(results: list[ToolCallResult]) -> str:
 
 def _blocked_tool_call_results(results: list[ToolCallResult]) -> list[ToolCallResult]:
     return [result for result in results if result.blocked is not None]
+
+
+def _disclosed_tool_names_from_skill_results(results: list[ToolCallResult]) -> set[str]:
+    disclosed: set[str] = set()
+    for result in results:
+        if result.request.spec.kind == "skill" and result.blocked is None:
+            disclosed.update(result.tools_required)
+    return disclosed
 
 
 def _blocked_tool_call_response(results: list[ToolCallResult]) -> str:
@@ -888,9 +975,9 @@ def _progressive_capability_context(skills: list[Prompt]) -> str:
         "Capability discovery mode: progressive disclosure is enabled. You are initially given structured skill "
         "tools. When the task needs a workflow, call the relevant skill tool with every required argument. Seizu will "
         "execute it internally and return the rendered skill to you. Rendered skills describe which tools to use and "
-        "how to use them; after a skill is rendered, Seizu will expose chat-safe structured tools for subsequent "
-        "tool calls. Do not rely on tools that have not been disclosed by a rendered skill or by prior conversation "
-        "context.\n\n"
+        "how to use them; after a skill is rendered, Seizu will expose only the chat-safe structured tools that the "
+        "skill declares as required. Do not rely on tools that have not been disclosed by a rendered skill or by prior "
+        "conversation context.\n\n"
         f"Available skills:\n{_format_skills(skills)}"
     )
 
@@ -961,15 +1048,6 @@ def _tool_arguments(tool: Tool) -> str:
     if len(properties) > 12:
         formatted.append("...")
     return ", ".join(formatted)
-
-
-def _text_content_response(content: list[Any]) -> str:
-    return "\n\n".join(item.text for item in content if hasattr(item, "text"))
-
-
-def _content_text(content: Any) -> str | None:
-    text = getattr(content, "text", None)
-    return text if isinstance(text, str) else None
 
 
 def _current_user_from_config(config: RunnableConfig) -> CurrentUser | None:

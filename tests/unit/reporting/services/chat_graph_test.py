@@ -223,6 +223,31 @@ async def test_run_llm_tool_turn_streams_until_tool_call_chunk_arrives():
     assert "— actually wait" in message_text_of(ai_message)
 
 
+def test_provider_tool_name_mapping_keeps_seizu_execution_name():
+    long_name = "github_security_investigations__single_repository_security_overview_with_actions_and_alerts"
+    spec = chat_graph.ChatToolSpec(
+        name=long_name,
+        kind="tool",
+        description="Long-name tool",
+        input_schema={"type": "object"},
+    )
+
+    mapped = chat_graph._with_provider_tool_names([spec])[0]
+    llm_name = chat_graph._llm_tool_name(mapped)
+    schema = chat_graph._langchain_tool_schema(mapped)
+    requests = chat_graph._tool_call_requests(
+        AIMessage(content="", tool_calls=[_tool_call(llm_name, {"repo": "mappedsky/seizu"})]),
+        [mapped],
+    )
+
+    assert llm_name != long_name
+    assert len(llm_name) <= 64
+    assert schema["function"]["name"] == llm_name
+    assert long_name in schema["function"]["description"]
+    assert requests[0].name == long_name
+    assert requests[0].arguments == {"repo": "mappedsky/seizu"}
+
+
 def message_text_of(message):
     from reporting.services.chat_messages import message_text
 
@@ -324,6 +349,63 @@ async def test_chat_graph_auto_runs_model_requested_skill(mocker):
     )
     assert fake_model.bound_tools[0][0]["function"]["name"] == "investigation__triage"
     assert fake_model.inputs[1][-1].content == "Call github_security__org_overview with org=mappedsky, then summarize."
+
+
+async def test_progressive_disclosure_exposes_only_skill_required_tools(mocker):
+    from langgraph.checkpoint.memory import MemorySaver
+
+    fake_model = _ToolCallingFakeModel(
+        [
+            AIMessage(content="", tool_calls=[_tool_call("investigation__triage", {"org": "mappedsky"})]),
+            AIMessage(content="", tool_calls=[_tool_call("github_security__org_overview", {"org": "mappedsky"})]),
+            AIMessage(content="Mappedsky overview is summarized."),
+        ]
+    )
+    mocker.patch("reporting.settings.CHAT_LLM_PROVIDER", "openai")
+    mocker.patch("reporting.settings.CHAT_LLM_PROGRESSIVE_DISCLOSURE", True)
+    mocker.patch("reporting.services.chat_graph.get_chat_model", return_value=fake_model)
+    mocker.patch(
+        "reporting.services.chat_graph.mcp_runtime.list_prompts_for_user",
+        return_value=[Prompt(name="investigation__triage", description="Triage a graph investigation", arguments=[])],
+    )
+    list_tools = mocker.patch(
+        "reporting.services.chat_graph.mcp_runtime.list_tools_for_user",
+        return_value=[
+            Tool(name="github_security__org_overview", description="Org overview", inputSchema={"type": "object"}),
+            Tool(name="github_security__update_repo", description="Update repo", inputSchema={"type": "object"}),
+        ],
+    )
+    mocker.patch(
+        "reporting.services.chat_graph.mcp_runtime.render_prompt_for_chat",
+        return_value=ChatActionOutcome(
+            text="Use the org overview tool.",
+            tools_required=("github_security__org_overview",),
+        ),
+    )
+    call_tool = mocker.patch(
+        "reporting.services.chat_graph.mcp_runtime.call_tool_for_chat",
+        return_value=ChatActionOutcome(text='{"overview": true}'),
+    )
+    graph = chat_graph.build_chat_graph(MemorySaver())
+
+    chunks = [
+        chunk
+        async for chunk in graph.astream(
+            {"messages": [HumanMessage(content="Give me a security overview of mappedsky")]},
+            {"configurable": {"thread_id": "thread-strict-disclosure", "current_user": _user()}},
+            stream_mode="custom",
+        )
+    ]
+
+    streamed = "".join(chunk["content"] for chunk in chunks)
+    assert "Mappedsky overview is summarized." in streamed
+    assert fake_model.bound_tools[0][0]["function"]["name"] == "investigation__triage"
+    second_turn_names = {tool["function"]["name"] for tool in fake_model.bound_tools[1]}
+    assert "github_security__org_overview" in second_turn_names
+    assert "github_security__update_repo" not in second_turn_names
+    list_tools.assert_awaited_once()
+    call_tool.assert_awaited_once()
+    assert call_tool.await_args.args[1] == "github_security__org_overview"
 
 
 async def test_chat_graph_runs_model_requested_tools_in_parallel(mocker):
