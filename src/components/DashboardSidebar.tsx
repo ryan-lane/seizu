@@ -35,6 +35,7 @@ function DashboardSidebar({
   const { reports } = useReportsList();
   const hasPermission = usePermissions();
   const chatEnabled = useFeature('chat');
+  const canUseChat = chatEnabled && hasPermission('chat:use');
   const logoSrc = collapsed
     ? theme.palette.mode === 'dark'
       ? '/static/images/logo-mark.svg'
@@ -49,7 +50,6 @@ function DashboardSidebar({
       title: report.name,
       icon: Article,
     }));
-
   const items: NavItemData[] = [
     {
       href: '/app/dashboard',
@@ -71,7 +71,7 @@ function DashboardSidebar({
           },
         ]
       : []),
-    ...(chatEnabled && hasPermission('chat:use')
+    ...(canUseChat
       ? [
           {
             href: '/app/chat',

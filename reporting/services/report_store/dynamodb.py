@@ -1,8 +1,10 @@
 import asyncio
 import logging
+from collections.abc import Callable
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from decimal import Decimal
-from typing import Any
+from typing import Any, TypeVar
 
 import boto3
 import botocore.config
@@ -10,6 +12,7 @@ import botocore.exceptions
 from snowflake import SnowflakeGenerator
 
 from reporting import settings
+from reporting.schema.chat import ChatSessionItem
 from reporting.schema.mcp_config import (
     SkillItem,
     SkillsetListItem,
@@ -59,11 +62,26 @@ _PK_TOOLSET_LIST = "TOOLSET_LIST"
 _PK_SKILLSET_LIST = "SKILLSET_LIST"
 # Roles — list index PK for listing all user-defined roles.
 _PK_ROLE_LIST = "ROLE_LIST"
+# Chat sessions — metadata items are keyed by user/thread; list items are keyed
+# by user and sorted by updated_at for the sidebar.
+_PK_CHAT_SESSION_METADATA_PREFIX = "CHAT_SESSION#"
+_PK_CHAT_SESSION_LIST_PREFIX = "CHAT_SESSION_LIST#"
 # Group mappings — list index PK for listing all group-to-role mappings.
 # Query history — per-user SK prefix; items sorted newest-first by snowflake ID.
 _SK_QUERY_HISTORY_PREFIX = "HISTORY#"
 # Maximum history items fetched from DynamoDB per user (caps scan size).
 _QUERY_HISTORY_MAX = 500
+_CHAT_SESSION_LIST_MAX = 500
+_CHAT_SESSION_TRANSACTION_RETRIES = 3
+_T = TypeVar("_T")
+
+
+@dataclass(frozen=True)
+class ChatSessionUpdate:
+    item: dict[str, Any]
+    expression: str
+    values: dict[str, Any]
+    names: dict[str, str] | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -115,6 +133,157 @@ def _query_history_pk(user_id: str) -> str:
 def _query_history_sk(history_id: str) -> str:
     """Pad the snowflake ID so lexicographic order matches time order."""
     return f"{_SK_QUERY_HISTORY_PREFIX}{history_id.zfill(20)}"
+
+
+def _chat_session_metadata_pk(user_id: str) -> str:
+    return f"{_PK_CHAT_SESSION_METADATA_PREFIX}{user_id}"
+
+
+def _chat_session_list_pk(user_id: str) -> str:
+    return f"{_PK_CHAT_SESSION_LIST_PREFIX}{user_id}"
+
+
+def _chat_session_list_sk(updated_at: str, thread_id: str) -> str:
+    return f"UPDATED#{updated_at}#THREAD#{thread_id}"
+
+
+def _chat_session_from_item(item: dict[str, Any]) -> ChatSessionItem:
+    return ChatSessionItem(
+        thread_id=item["thread_id"],
+        title=item.get("title", ""),
+        created_at=item["created_at"],
+        updated_at=item["updated_at"],
+    )
+
+
+def _chat_session_update_transactions(
+    metadata_pk: str,
+    list_pk: str,
+    thread_id: str,
+    existing: dict[str, Any],
+    updated: dict[str, Any],
+    update_expression: str,
+    expression_attribute_values: dict[str, Any],
+    expression_attribute_names: dict[str, str] | None = None,
+) -> list[dict[str, Any]]:
+    if ":old_updated_at" in expression_attribute_values:
+        raise ValueError("expression_attribute_values must not define :old_updated_at")
+    update_op: dict[str, Any] = {
+        "TableName": settings.DYNAMODB_TABLE_NAME,
+        "Key": {"PK": metadata_pk, "SK": thread_id},
+        "UpdateExpression": update_expression,
+        "ExpressionAttributeValues": {
+            **expression_attribute_values,
+            ":old_updated_at": existing["updated_at"],
+        },
+        "ConditionExpression": "updated_at = :old_updated_at",
+    }
+    if expression_attribute_names:
+        update_op["ExpressionAttributeNames"] = expression_attribute_names
+    return [
+        {"Update": update_op},
+        {
+            "Delete": {
+                "TableName": settings.DYNAMODB_TABLE_NAME,
+                "Key": {
+                    "PK": list_pk,
+                    "SK": _chat_session_list_sk(existing["updated_at"], thread_id),
+                },
+            },
+        },
+        {
+            "Put": {
+                "TableName": settings.DYNAMODB_TABLE_NAME,
+                "Item": {
+                    **updated,
+                    "PK": list_pk,
+                    "SK": _chat_session_list_sk(updated["updated_at"], thread_id),
+                },
+            },
+        },
+    ]
+
+
+def _retry_chat_session_transaction(  # noqa: UP047 - mypy in this repo does not yet accept PEP 695 generics here.
+    table: Any,
+    metadata_pk: str,
+    thread_id: str,
+    build_transaction: Callable[[dict[str, Any]], tuple[_T, list[dict[str, Any]]]],
+) -> _T | None:
+    attempt = 0
+    while True:
+        existing_resp = table.get_item(Key={"PK": metadata_pk, "SK": thread_id})
+        existing = existing_resp.get("Item")
+        if existing is None:
+            return None
+        result, transact_items = build_transaction(existing)
+        try:
+            table.meta.client.transact_write_items(TransactItems=transact_items)
+            return result
+        except botocore.exceptions.ClientError as exc:
+            if (
+                exc.response["Error"]["Code"] == "TransactionCanceledException"
+                and attempt < _CHAT_SESSION_TRANSACTION_RETRIES - 1
+            ):
+                attempt += 1
+                continue
+            raise
+
+
+def _retry_chat_session_update(
+    table: Any,
+    metadata_pk: str,
+    list_pk: str,
+    thread_id: str,
+    build_update: Callable[[dict[str, Any], str], ChatSessionUpdate],
+) -> ChatSessionItem | None:
+    def _build_transaction(existing: dict[str, Any]) -> tuple[ChatSessionItem, list[dict[str, Any]]]:
+        now = datetime.now(tz=UTC).isoformat()
+        updated = build_update(existing, now)
+        return _chat_session_from_item(updated.item), _chat_session_update_transactions(
+            metadata_pk=metadata_pk,
+            list_pk=list_pk,
+            thread_id=thread_id,
+            existing=existing,
+            updated=updated.item,
+            update_expression=updated.expression,
+            expression_attribute_values=updated.values,
+            expression_attribute_names=updated.names,
+        )
+
+    return _retry_chat_session_transaction(table, metadata_pk, thread_id, _build_transaction)
+
+
+def _retry_chat_session_delete(
+    table: Any,
+    metadata_pk: str,
+    list_pk: str,
+    thread_id: str,
+) -> bool:
+    def _build_transaction(existing: dict[str, Any]) -> tuple[bool, list[dict[str, Any]]]:
+        return True, [
+            {
+                "Delete": {
+                    "TableName": settings.DYNAMODB_TABLE_NAME,
+                    "Key": {"PK": metadata_pk, "SK": thread_id},
+                    "ConditionExpression": "updated_at = :old_updated_at",
+                    "ExpressionAttributeValues": {
+                        ":old_updated_at": existing["updated_at"],
+                    },
+                },
+            },
+            {
+                "Delete": {
+                    "TableName": settings.DYNAMODB_TABLE_NAME,
+                    "Key": {
+                        "PK": list_pk,
+                        "SK": _chat_session_list_sk(existing["updated_at"], thread_id),
+                    },
+                },
+            },
+        ]
+
+    return _retry_chat_session_transaction(table, metadata_pk, thread_id, _build_transaction) or False
 
 
 def _role_pk(role_id: str) -> str:
@@ -2567,5 +2736,124 @@ class DynamoDBReportStore(ReportStore):
                 )
                 for it in paged
             ], total
+
+        return await asyncio.to_thread(_op)
+
+    # ------------------------------------------------------------------
+    # Chat sessions
+    # ------------------------------------------------------------------
+
+    async def list_chat_sessions(self, user_id: str, limit: int) -> list[ChatSessionItem]:
+        pk = _chat_session_list_pk(user_id)
+        bounded_limit = max(1, min(limit, _CHAT_SESSION_LIST_MAX))
+
+        def _op() -> list[ChatSessionItem]:
+            table = _get_table()
+            resp = table.query(
+                KeyConditionExpression="PK = :pk",
+                ExpressionAttributeValues={":pk": pk},
+                Limit=bounded_limit,
+                ScanIndexForward=False,
+            )
+            return [_chat_session_from_item(item) for item in resp.get("Items", [])]
+
+        return await asyncio.to_thread(_op)
+
+    async def get_chat_session(self, user_id: str, thread_id: str) -> ChatSessionItem | None:
+        def _op() -> ChatSessionItem | None:
+            table = _get_table()
+            resp = table.get_item(Key={"PK": _chat_session_metadata_pk(user_id), "SK": thread_id})
+            item = resp.get("Item")
+            return _chat_session_from_item(item) if item else None
+
+        return await asyncio.to_thread(_op)
+
+    async def create_chat_session(self, user_id: str, title: str) -> ChatSessionItem:
+        thread_id = generate_report_id()
+        now = datetime.now(tz=UTC).isoformat()
+        metadata_pk = _chat_session_metadata_pk(user_id)
+        list_pk = _chat_session_list_pk(user_id)
+        metadata_item = {
+            "PK": metadata_pk,
+            "SK": thread_id,
+            "thread_id": thread_id,
+            "user_id": user_id,
+            "title": title,
+            "created_at": now,
+            "updated_at": now,
+        }
+        list_item = {**metadata_item, "PK": list_pk, "SK": _chat_session_list_sk(now, thread_id)}
+
+        def _op() -> ChatSessionItem:
+            table = _get_table()
+            table.meta.client.transact_write_items(
+                TransactItems=[
+                    {
+                        "Put": {
+                            "TableName": settings.DYNAMODB_TABLE_NAME,
+                            "Item": metadata_item,
+                            "ConditionExpression": "attribute_not_exists(PK)",
+                        },
+                    },
+                    {
+                        "Put": {
+                            "TableName": settings.DYNAMODB_TABLE_NAME,
+                            "Item": list_item,
+                        },
+                    },
+                ]
+            )
+            return ChatSessionItem(thread_id=thread_id, title=title, created_at=now, updated_at=now)
+
+        return await asyncio.to_thread(_op)
+
+    async def touch_chat_session(self, user_id: str, thread_id: str) -> ChatSessionItem | None:
+        metadata_pk = _chat_session_metadata_pk(user_id)
+        list_pk = _chat_session_list_pk(user_id)
+
+        def _op() -> ChatSessionItem | None:
+            table = _get_table()
+            return _retry_chat_session_update(
+                table,
+                metadata_pk,
+                list_pk,
+                thread_id,
+                lambda existing, now: ChatSessionUpdate(
+                    item={**existing, "updated_at": now},
+                    expression="SET updated_at = :updated_at",
+                    values={":updated_at": now},
+                ),
+            )
+
+        return await asyncio.to_thread(_op)
+
+    async def update_chat_session_title(self, user_id: str, thread_id: str, title: str) -> ChatSessionItem | None:
+        metadata_pk = _chat_session_metadata_pk(user_id)
+        list_pk = _chat_session_list_pk(user_id)
+
+        def _op() -> ChatSessionItem | None:
+            table = _get_table()
+            return _retry_chat_session_update(
+                table,
+                metadata_pk,
+                list_pk,
+                thread_id,
+                lambda existing, now: ChatSessionUpdate(
+                    item={**existing, "title": title, "updated_at": now},
+                    expression="SET #t = :title, updated_at = :updated_at",
+                    values={":title": title, ":updated_at": now},
+                    names={"#t": "title"},
+                ),
+            )
+
+        return await asyncio.to_thread(_op)
+
+    async def delete_chat_session(self, user_id: str, thread_id: str) -> bool:
+        metadata_pk = _chat_session_metadata_pk(user_id)
+        list_pk = _chat_session_list_pk(user_id)
+
+        def _op() -> bool:
+            table = _get_table()
+            return _retry_chat_session_delete(table, metadata_pk, list_pk, thread_id)
 
         return await asyncio.to_thread(_op)

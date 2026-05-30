@@ -3,12 +3,13 @@ from datetime import UTC, datetime
 from typing import Any
 
 from snowflake import SnowflakeGenerator
-from sqlalchemy import JSON, Column, UniqueConstraint, and_, null, text, update
+from sqlalchemy import JSON, Column, UniqueConstraint, and_, delete, null, text, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, create_async_engine
 from sqlmodel import Field, SQLModel, col, select
 
 from reporting import settings
+from reporting.schema.chat import ChatSessionItem
 from reporting.schema.mcp_config import (
     SkillItem,
     SkillsetListItem,
@@ -258,6 +259,17 @@ class QueryHistoryRecord(SQLModel, table=True):  # type: ignore
     user_id: str = Field(index=True)
     query: str
     executed_at: str
+
+
+class ChatSessionRecord(SQLModel, table=True):  # type: ignore
+    __tablename__ = "chat_sessions"
+    __table_args__ = (UniqueConstraint("user_id", "thread_id"),)
+    id: int | None = Field(default=None, primary_key=True)
+    user_id: str = Field(index=True)
+    thread_id: str
+    title: str = ""
+    created_at: str
+    updated_at: str
 
 
 class RoleRecord(SQLModel, table=True):  # type: ignore
@@ -2266,3 +2278,118 @@ class SQLModelReportStore(ReportStore):
             )
 
     # ------------------------------------------------------------------
+    # Chat sessions
+    # ------------------------------------------------------------------
+
+    async def list_chat_sessions(self, user_id: str, limit: int) -> list[ChatSessionItem]:
+        async with AsyncSession(_get_engine()) as session:
+            stmt = (
+                select(ChatSessionRecord)
+                .where(col(ChatSessionRecord.user_id) == user_id)
+                .order_by(col(ChatSessionRecord.updated_at).desc())
+                .limit(limit)
+            )
+            result = await session.execute(stmt)
+            return [
+                ChatSessionItem(
+                    thread_id=r.thread_id,
+                    title=r.title,
+                    created_at=r.created_at,
+                    updated_at=r.updated_at,
+                )
+                for r in result.scalars().all()
+            ]
+
+    async def get_chat_session(self, user_id: str, thread_id: str) -> ChatSessionItem | None:
+        async with AsyncSession(_get_engine()) as session:
+            stmt = select(ChatSessionRecord).where(
+                col(ChatSessionRecord.user_id) == user_id,
+                col(ChatSessionRecord.thread_id) == thread_id,
+            )
+            result = await session.execute(stmt)
+            row = result.scalar_one_or_none()
+            if row is None:
+                return None
+            return ChatSessionItem(
+                thread_id=row.thread_id,
+                title=row.title,
+                created_at=row.created_at,
+                updated_at=row.updated_at,
+            )
+
+    async def create_chat_session(self, user_id: str, title: str) -> ChatSessionItem:
+        thread_id = generate_report_id()
+        now = datetime.now(tz=UTC).isoformat()
+        async with AsyncSession(_get_engine()) as session:
+            record = ChatSessionRecord(
+                user_id=user_id,
+                thread_id=thread_id,
+                title=title,
+                created_at=now,
+                updated_at=now,
+            )
+            session.add(record)
+            await session.commit()
+            return ChatSessionItem(thread_id=thread_id, title=title, created_at=now, updated_at=now)
+
+    async def touch_chat_session(self, user_id: str, thread_id: str) -> ChatSessionItem | None:
+        now = datetime.now(tz=UTC).isoformat()
+        async with AsyncSession(_get_engine()) as session:
+            stmt = (
+                update(ChatSessionRecord)
+                .where(
+                    col(ChatSessionRecord.user_id) == user_id,
+                    col(ChatSessionRecord.thread_id) == thread_id,
+                )
+                .values(updated_at=now)
+                .returning(ChatSessionRecord)
+            )
+            result = await session.execute(stmt)
+            row = result.scalar_one_or_none()
+            if row is None:
+                await session.commit()
+                return None
+            item = ChatSessionItem(
+                thread_id=row.thread_id,
+                title=row.title,
+                created_at=row.created_at,
+                updated_at=row.updated_at,
+            )
+            await session.commit()
+            return item
+
+    async def update_chat_session_title(self, user_id: str, thread_id: str, title: str) -> ChatSessionItem | None:
+        now = datetime.now(tz=UTC).isoformat()
+        async with AsyncSession(_get_engine()) as session:
+            stmt = (
+                update(ChatSessionRecord)
+                .where(
+                    col(ChatSessionRecord.user_id) == user_id,
+                    col(ChatSessionRecord.thread_id) == thread_id,
+                )
+                .values(title=title, updated_at=now)
+                .returning(ChatSessionRecord)
+            )
+            result = await session.execute(stmt)
+            row = result.scalar_one_or_none()
+            if row is None:
+                await session.commit()
+                return None
+            item = ChatSessionItem(
+                thread_id=row.thread_id,
+                title=row.title,
+                created_at=row.created_at,
+                updated_at=row.updated_at,
+            )
+            await session.commit()
+            return item
+
+    async def delete_chat_session(self, user_id: str, thread_id: str) -> bool:
+        async with AsyncSession(_get_engine()) as session:
+            stmt = delete(ChatSessionRecord).where(
+                col(ChatSessionRecord.user_id) == user_id,
+                col(ChatSessionRecord.thread_id) == thread_id,
+            )
+            result = await session.execute(stmt)
+            await session.commit()
+            return result.rowcount > 0

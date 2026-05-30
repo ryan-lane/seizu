@@ -2,6 +2,7 @@ import logging
 from datetime import datetime
 from typing import Any
 
+from reporting.schema.chat import ChatSessionItem
 from reporting.schema.mcp_config import (
     SkillItem,
     SkillsetListItem,
@@ -617,3 +618,32 @@ async def list_role_versions(role_id: str) -> list[RoleVersion]:
 
 async def get_role_version(role_id: str, version: int) -> RoleVersion | None:
     return await get_store().get_role_version(role_id, version)
+
+
+# ---------------------------------------------------------------------------
+# Chat session convenience functions
+# ---------------------------------------------------------------------------
+
+
+async def list_chat_sessions(user_id: str, limit: int) -> list[ChatSessionItem]:
+    return await get_store().list_chat_sessions(user_id, limit=limit)
+
+
+async def get_chat_session(user_id: str, thread_id: str) -> ChatSessionItem | None:
+    return await get_store().get_chat_session(user_id, thread_id)
+
+
+async def create_chat_session(user_id: str, title: str) -> ChatSessionItem:
+    return await get_store().create_chat_session(user_id, title)
+
+
+async def touch_chat_session(user_id: str, thread_id: str) -> ChatSessionItem | None:
+    return await get_store().touch_chat_session(user_id, thread_id)
+
+
+async def update_chat_session_title(user_id: str, thread_id: str, title: str) -> ChatSessionItem | None:
+    return await get_store().update_chat_session_title(user_id, thread_id, title)
+
+
+async def delete_chat_session(user_id: str, thread_id: str) -> bool:
+    return await get_store().delete_chat_session(user_id, thread_id)

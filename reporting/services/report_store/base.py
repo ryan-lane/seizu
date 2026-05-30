@@ -2,6 +2,7 @@ from abc import ABC, abstractmethod
 from datetime import datetime
 from typing import Any
 
+from reporting.schema.chat import ChatSessionItem
 from reporting.schema.mcp_config import (
     SkillItem,
     SkillsetListItem,
@@ -538,3 +539,31 @@ class ReportStore(ABC):
     @abstractmethod
     async def get_role_version(self, role_id: str, version: int) -> RoleVersion | None:
         """Return a specific version of a role, or None if not found."""
+
+    # ------------------------------------------------------------------
+    # Chat sessions
+    # ------------------------------------------------------------------
+
+    @abstractmethod
+    async def list_chat_sessions(self, user_id: str, limit: int) -> list[ChatSessionItem]:
+        """Return recent chat sessions for a user, sorted by updated_at descending."""
+
+    @abstractmethod
+    async def get_chat_session(self, user_id: str, thread_id: str) -> ChatSessionItem | None:
+        """Return a chat session for a user, or None if it does not exist."""
+
+    @abstractmethod
+    async def create_chat_session(self, user_id: str, title: str) -> ChatSessionItem:
+        """Create a new chat session with a store-generated ID."""
+
+    @abstractmethod
+    async def touch_chat_session(self, user_id: str, thread_id: str) -> ChatSessionItem | None:
+        """Update a session's updated_at. Returns None if the session is not found."""
+
+    @abstractmethod
+    async def update_chat_session_title(self, user_id: str, thread_id: str, title: str) -> ChatSessionItem | None:
+        """Update a session's title and updated_at. Returns None if the session is not found."""
+
+    @abstractmethod
+    async def delete_chat_session(self, user_id: str, thread_id: str) -> bool:
+        """Delete a session. Returns False if not found."""

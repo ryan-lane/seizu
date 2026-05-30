@@ -7,12 +7,14 @@ import {
   waitFor,
 } from '@testing-library/react';
 import { ThemeProvider, createTheme } from '@mui/material/styles';
+import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import ChatInterface from 'src/pages/ChatInterface';
 import { AuthContext } from 'src/auth.context';
 import { AuthConfigContext } from 'src/authConfig.context';
 import { FeaturesContext, DEFAULT_FEATURES } from 'src/features.context';
 import * as usePermissionsModule from 'src/hooks/usePermissions';
 import * as useChatHistoryModule from 'src/hooks/useChatHistory';
+import * as useChatSessionsModule from 'src/hooks/useChatSessions';
 import { useChat } from '@ai-sdk/react';
 import { DefaultChatTransport } from 'ai';
 
@@ -22,6 +24,10 @@ jest.mock('src/hooks/usePermissions', () => ({
 
 jest.mock('src/hooks/useChatHistory', () => ({
   useChatHistory: jest.fn(),
+}));
+
+jest.mock('src/hooks/useChatSessions', () => ({
+  useChatSessions: jest.fn(),
 }));
 
 jest.mock('@ai-sdk/react', () => ({
@@ -42,6 +48,10 @@ const mockUseChatHistory =
   useChatHistoryModule.useChatHistory as jest.MockedFunction<
     typeof useChatHistoryModule.useChatHistory
   >;
+const mockUseChatSessions =
+  useChatSessionsModule.useChatSessions as jest.MockedFunction<
+    typeof useChatSessionsModule.useChatSessions
+  >;
 const mockUseChat = useChat as jest.MockedFunction<typeof useChat>;
 const mockDefaultChatTransport = DefaultChatTransport as jest.MockedClass<
   typeof DefaultChatTransport
@@ -51,24 +61,35 @@ const theme = createTheme();
 function renderChat({
   accessToken = 'token-123',
   chatEnabled = true,
+  initialPath = '/app/chat',
 }: {
   accessToken?: string | null;
   chatEnabled?: boolean;
+  initialPath?: string;
 } = {}) {
   return render(
-    <AuthConfigContext.Provider
-      value={{ auth_required: accessToken !== null, oidc: null, loaded: true }}
-    >
-      <FeaturesContext.Provider
-        value={{ ...DEFAULT_FEATURES, chat: chatEnabled }}
+    <MemoryRouter initialEntries={[initialPath]}>
+      <AuthConfigContext.Provider
+        value={{
+          auth_required: accessToken !== null,
+          oidc: null,
+          loaded: true,
+        }}
       >
-        <AuthContext.Provider value={{ accessToken, isLoading: false }}>
-          <ThemeProvider theme={theme}>
-            <ChatInterface />
-          </ThemeProvider>
-        </AuthContext.Provider>
-      </FeaturesContext.Provider>
-    </AuthConfigContext.Provider>,
+        <FeaturesContext.Provider
+          value={{ ...DEFAULT_FEATURES, chat: chatEnabled }}
+        >
+          <AuthContext.Provider value={{ accessToken, isLoading: false }}>
+            <ThemeProvider theme={theme}>
+              <Routes>
+                <Route path="/app/chat" element={<ChatInterface />} />
+                <Route path="/app/chat/:threadId" element={<ChatInterface />} />
+              </Routes>
+            </ThemeProvider>
+          </AuthContext.Provider>
+        </FeaturesContext.Provider>
+      </AuthConfigContext.Provider>
+    </MemoryRouter>,
   );
 }
 
@@ -77,6 +98,23 @@ describe('ChatInterface', () => {
     jest.clearAllMocks();
     window.localStorage.clear();
     mockUseChatHistory.mockReturnValue(() => Promise.resolve([]));
+    mockUseChatSessions.mockReturnValue({
+      sessions: [
+        {
+          thread_id: 'thread-1',
+          title: 'Session 1',
+          created_at: '2024-01-01T00:00:00+00:00',
+          updated_at: '2024-01-01T00:00:00+00:00',
+        },
+      ],
+      loading: false,
+      error: null,
+      createSession: jest.fn(),
+      getSession: jest.fn().mockResolvedValue(null),
+      updateSession: jest.fn(),
+      deleteSession: jest.fn(),
+      touchSession: jest.fn(),
+    });
     mockUsePermissionState.mockReturnValue({
       hasPermission: (permission: string) => permission === 'chat:use',
       loading: false,
@@ -101,28 +139,30 @@ describe('ChatInterface', () => {
 
   afterEach(cleanup);
 
-  it('persists a stable thread id and configures the chat stream request body', async () => {
+  it('persists the active session id and configures the chat stream request body', async () => {
     renderChat();
     await act(async () => {}); // flush the on-mount history fetch
 
-    const threadId = window.localStorage.getItem('seizu:chat:thread-id');
-    expect(threadId).toMatch(
-      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
-    );
+    const threadId = window.localStorage.getItem('seizu:chat:active-session');
+    expect(threadId).toBe('thread-1');
 
-    const transportOptions = mockDefaultChatTransport.mock.calls[0][0];
+    await waitFor(() => {
+      expect(mockUseChat).toHaveBeenCalledWith(
+        expect.objectContaining({
+          id: threadId,
+          experimental_throttle: 50,
+          transport: expect.any(Object),
+        }),
+      );
+    });
+
+    const transportOptions = mockDefaultChatTransport.mock.calls.at(-1)?.[0];
+    expect(transportOptions).toBeDefined();
+    if (!transportOptions) throw new Error('missing transport options');
     expect(transportOptions.api).toBe('/api/v1/chat/stream');
     expect(transportOptions.headers).toEqual({
-      Authorization: 'Bearer token-123',
       'X-Seizu-Csrf': '1',
     });
-    expect(mockUseChat).toHaveBeenCalledWith(
-      expect.objectContaining({
-        id: threadId,
-        experimental_throttle: 50,
-        transport: expect.any(Object),
-      }),
-    );
 
     const prepared = transportOptions.prepareSendMessagesRequest?.({
       id: 'chat-id',
@@ -140,10 +180,74 @@ describe('ChatInterface', () => {
       api: '/api/v1/chat/stream',
       trigger: 'submit-message',
       messageId: 'user-message',
-    }) as { body: { message: string; thread_id: string } } | undefined;
+    }) as
+      | {
+          headers: Record<string, string>;
+          body: { message: string; thread_id: string };
+        }
+      | undefined;
 
+    expect(prepared?.headers).toEqual({
+      Authorization: 'Bearer token-123',
+      'X-Seizu-Csrf': '1',
+    });
     expect(prepared?.body.message).toBe('Hello graph');
     expect(prepared?.body.thread_id).toBe(threadId);
+  });
+
+  it('uses the latest access token when preparing chat stream requests', async () => {
+    const { rerender } = renderChat({ accessToken: 'token-1' });
+    await act(async () => {});
+
+    rerender(
+      <MemoryRouter initialEntries={['/app/chat']}>
+        <AuthConfigContext.Provider
+          value={{
+            auth_required: true,
+            oidc: null,
+            loaded: true,
+          }}
+        >
+          <FeaturesContext.Provider value={{ ...DEFAULT_FEATURES, chat: true }}>
+            <AuthContext.Provider
+              value={{ accessToken: 'token-2', isLoading: false }}
+            >
+              <ThemeProvider theme={theme}>
+                <Routes>
+                  <Route path="/app/chat" element={<ChatInterface />} />
+                  <Route
+                    path="/app/chat/:threadId"
+                    element={<ChatInterface />}
+                  />
+                </Routes>
+              </ThemeProvider>
+            </AuthContext.Provider>
+          </FeaturesContext.Provider>
+        </AuthConfigContext.Provider>
+      </MemoryRouter>,
+    );
+
+    const transportOptions = mockDefaultChatTransport.mock.calls.at(-1)?.[0];
+    if (!transportOptions) throw new Error('missing transport options');
+    const prepared = transportOptions.prepareSendMessagesRequest?.({
+      id: 'chat-id',
+      messages: [
+        {
+          id: 'user-message',
+          role: 'user',
+          parts: [{ type: 'text', text: 'Fresh token please' }],
+        },
+      ],
+      requestMetadata: undefined,
+      body: undefined,
+      credentials: 'same-origin',
+      headers: transportOptions.headers as HeadersInit,
+      api: '/api/v1/chat/stream',
+      trigger: 'submit-message',
+      messageId: 'user-message',
+    }) as { headers: Record<string, string> } | undefined;
+
+    expect(prepared?.headers.Authorization).toBe('Bearer token-2');
   });
 
   it('shows a disabled message when the chat feature is off', () => {
@@ -193,12 +297,32 @@ describe('ChatInterface', () => {
 
     renderChat();
 
-    const threadId = window.localStorage.getItem('seizu:chat:thread-id');
     await waitFor(() => {
-      expect(fetchHistory).toHaveBeenCalledWith(threadId);
+      expect(fetchHistory).toHaveBeenCalledWith('thread-1');
       expect(setMessages).toHaveBeenCalledTimes(1);
     });
     expect(setMessages).toHaveBeenCalledWith(history);
+  });
+
+  it('uses a linked session from the route', async () => {
+    renderChat({ initialPath: '/app/chat/thread-1' });
+
+    await waitFor(() => {
+      expect(mockUseChat).toHaveBeenCalledWith(
+        expect.objectContaining({ id: 'thread-1' }),
+      );
+    });
+    expect(window.localStorage.getItem('seizu:chat:active-session')).toBe(
+      'thread-1',
+    );
+  });
+
+  it('shows a not-found state for a missing linked session', async () => {
+    renderChat({ initialPath: '/app/chat/missing-session' });
+
+    expect(
+      await screen.findByText('Chat session not found.'),
+    ).toBeInTheDocument();
   });
 
   it('does not hydrate over existing client messages', async () => {
@@ -239,7 +363,7 @@ describe('ChatInterface', () => {
     await waitFor(() => {
       expect(fetchHistory).toHaveBeenCalled();
     });
-    expect(setMessages).not.toHaveBeenCalled();
+    expect(setMessages).not.toHaveBeenCalledWith(history);
   });
 
   it('sends typed input through useChat', async () => {
