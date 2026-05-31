@@ -3,9 +3,7 @@ import { useAuthHeaders } from 'src/hooks/useAuthHeaders';
 
 export interface ActionConfirmation {
   confirmation_id: string;
-  user_id: string;
   source: 'mcp' | 'chat';
-  session_key: string;
   tool_name: string;
   action: string;
   resource_type: string;

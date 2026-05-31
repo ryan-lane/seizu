@@ -5,7 +5,7 @@ from reporting.authnz.permissions import Permission
 from reporting.schema.confirmations import ActionConfirmation
 from reporting.schema.mcp_config import SkillItem, ToolItem, ToolParamDef
 from reporting.schema.report_config import ReportAccess, ReportListItem, User
-from reporting.services import mcp_runtime
+from reporting.services import action_confirmations, mcp_runtime
 
 _NOW = "2024-01-01T00:00:00+00:00"
 _LATER = "2099-01-01T00:30:00+00:00"
@@ -91,6 +91,7 @@ def _confirmation(status: str = "pending") -> ActionConfirmation:
             "resource_type": "report",
             "resource_id": "r1",
             "arguments": {"report_id": "r1"},
+            "arguments_hash": action_confirmations.arguments_hash({"report_id": "r1"}),
             "ui_arguments": {"report_id": "r1"},
             "status": status,
             "created_at": _NOW,
@@ -391,6 +392,10 @@ async def test_approved_mutating_builtin_executes_handler(mocker):
         "reporting.services.mcp_runtime.report_store.find_action_confirmation_grant",
         return_value=_confirmation("approved"),
     )
+    claim_confirmation = mocker.patch(
+        "reporting.services.mcp_runtime.report_store.claim_action_confirmation_for_execution",
+        return_value=_confirmation("executed"),
+    )
     create_confirmation = mocker.patch("reporting.services.mcp_runtime.report_store.create_action_confirmation")
     current = _user(frozenset({Permission.REPORTS_DELETE.value}))
 
@@ -404,6 +409,7 @@ async def test_approved_mutating_builtin_executes_handler(mocker):
 
     assert json.loads(result[0].text) == {"report_id": "r1"}
     delete_report.assert_awaited_once_with("r1", user_id="user-1")
+    claim_confirmation.assert_awaited_once_with("confirm-1", "user-1")
     create_confirmation.assert_not_called()
 
 

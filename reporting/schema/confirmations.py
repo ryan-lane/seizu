@@ -27,6 +27,7 @@ class ActionConfirmation(BaseModel):
     resource_type: str
     resource_id: str
     arguments: dict[str, Any] = Field(default_factory=dict)
+    arguments_hash: str = ""
     ui_arguments: dict[str, Any] = Field(default_factory=dict)
     status: ConfirmationStatus
     batch_id: str | None = None
@@ -36,8 +37,31 @@ class ActionConfirmation(BaseModel):
     decided_by: str | None = None
 
 
+class ActionConfirmationPublic(BaseModel):
+    """Redacted confirmation record safe to send to browser clients."""
+
+    confirmation_id: str
+    source: ConfirmationSource
+    tool_name: str
+    action: str
+    resource_type: str
+    resource_id: str
+    ui_arguments: dict[str, Any] = Field(default_factory=dict)
+    status: ConfirmationStatus
+    batch_id: str | None = None
+    created_at: str
+    expires_at: str
+    decided_at: str | None = None
+
+    @classmethod
+    def from_confirmation(cls, confirmation: ActionConfirmation) -> "ActionConfirmationPublic":
+        return cls.model_validate(
+            confirmation.model_dump(exclude={"user_id", "session_key", "arguments", "arguments_hash", "decided_by"})
+        )
+
+
 class ConfirmationListResponse(BaseModel):
-    confirmations: list[ActionConfirmation]
+    confirmations: list[ActionConfirmationPublic]
 
 
 class ConfirmationDecisionRequest(BaseModel):
@@ -47,4 +71,4 @@ class ConfirmationDecisionRequest(BaseModel):
 
 
 class ConfirmationResponse(BaseModel):
-    confirmation: ActionConfirmation
+    confirmation: ActionConfirmationPublic

@@ -451,6 +451,13 @@ async def _resume_confirmed_tool_turn(
     errors: list[str] = []
 
     async def _run_one(c: ActionConfirmation) -> None:
+        claimed = await report_store.claim_action_confirmation_for_execution(
+            c.confirmation_id,
+            authed_user.user.user_id,
+        )
+        if claimed is None:
+            errors.append(f"`{c.tool_name}`: action was already executed or is no longer approved")
+            return
         outcome = await mcp_runtime.call_tool_for_chat(
             authed_user,
             c.tool_name,
@@ -459,14 +466,11 @@ async def _resume_confirmed_tool_turn(
             chat_safe_only=False,
             result_max_rows=settings.CHAT_TOOL_RESULT_MAX_ROWS,
             result_max_bytes=settings.CHAT_TOOL_RESULT_MAX_BYTES,
-            confirmation_source="chat",
-            confirmation_session_key=session_key,
         )
         if outcome.blocked is not None:
             errors.append(f"`{c.tool_name}`: {_blocked_tool_call_body(outcome.text)}")
         else:
             outcomes.append((c.tool_name, outcome.text))
-            await report_store.mark_confirmation_executed(c.confirmation_id, authed_user.user.user_id)
 
     await asyncio.gather(*(_run_one(c) for c in to_run))
 

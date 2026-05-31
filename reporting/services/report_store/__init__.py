@@ -680,6 +680,10 @@ async def list_action_confirmations(
     )
 
 
+async def list_batch_action_confirmations(user_id: str, batch_id: str) -> list[ActionConfirmation]:
+    return await get_store().list_batch_action_confirmations(user_id=user_id, batch_id=batch_id)
+
+
 async def decide_action_confirmation(
     confirmation_id: str,
     user_id: str,
@@ -692,6 +696,16 @@ async def decide_action_confirmation(
     )
 
 
+async def claim_action_confirmation_for_execution(
+    confirmation_id: str,
+    user_id: str,
+) -> ActionConfirmation | None:
+    return await get_store().claim_action_confirmation_for_execution(
+        confirmation_id=confirmation_id,
+        user_id=user_id,
+    )
+
+
 async def find_action_confirmation_grant(
     user_id: str,
     source: ConfirmationSource,
@@ -700,6 +714,7 @@ async def find_action_confirmation_grant(
     action: str,
     resource_type: str,
     resource_id: str,
+    arguments_hash: str,
 ) -> ActionConfirmation | None:
     return await get_store().find_action_confirmation_grant(
         user_id=user_id,
@@ -709,6 +724,7 @@ async def find_action_confirmation_grant(
         action=action,
         resource_type=resource_type,
         resource_id=resource_id,
+        arguments_hash=arguments_hash,
     )
 
 

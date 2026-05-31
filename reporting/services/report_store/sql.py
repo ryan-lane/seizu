@@ -284,9 +284,10 @@ class ActionConfirmationRecord(SQLModel, table=True):  # type: ignore
     resource_type: str
     resource_id: str
     arguments: dict[str, Any] = Field(default={}, sa_column=Column(JSON, nullable=False))
+    arguments_hash: str = Field(default="", index=True)
     ui_arguments: dict[str, Any] = Field(default={}, sa_column=Column(JSON, nullable=False))
     status: str = Field(index=True)
-    batch_id: str | None = None
+    batch_id: str | None = Field(default=None, index=True)
     created_at: str
     expires_at: str = Field(index=True)
     decided_at: str | None = None
@@ -383,8 +384,10 @@ def _action_confirmation_from_record(record: ActionConfirmationRecord) -> Action
             "resource_type": record.resource_type,
             "resource_id": record.resource_id,
             "arguments": record.arguments,
+            "arguments_hash": record.arguments_hash,
             "ui_arguments": record.ui_arguments,
             "status": record.status,
+            "batch_id": record.batch_id,
             "created_at": record.created_at,
             "expires_at": record.expires_at,
             "decided_at": record.decided_at,
@@ -447,6 +450,12 @@ class SQLModelReportStore(ReportStore):
                     await conn.execute(
                         text("ALTER TABLE action_confirmations ADD COLUMN IF NOT EXISTS batch_id VARCHAR")
                     )
+                    await conn.execute(
+                        text(
+                            "ALTER TABLE action_confirmations "
+                            "ADD COLUMN IF NOT EXISTS arguments_hash VARCHAR DEFAULT ''"
+                        )
+                    )
                 elif conn.dialect.name == "sqlite":
                     # SQLite cannot drop NOT NULL in-place. Existing SQLite
                     # dev DBs created before nullable email still require email;
@@ -459,6 +468,10 @@ class SQLModelReportStore(ReportStore):
                     ac_column_names = {row[1] for row in ac_columns}
                     if "batch_id" not in ac_column_names:
                         await conn.execute(text("ALTER TABLE action_confirmations ADD COLUMN batch_id VARCHAR"))
+                    if "arguments_hash" not in ac_column_names:
+                        await conn.execute(
+                            text("ALTER TABLE action_confirmations ADD COLUMN arguments_hash VARCHAR DEFAULT ''")
+                        )
             logger.info("SQL report store tables initialised")
         except IntegrityError:
             logger.info("SQL report store tables already exist")
@@ -2489,6 +2502,20 @@ class SQLModelReportStore(ReportStore):
             result = await session.execute(stmt)
             return [_action_confirmation_from_record(row) for row in result.scalars().all()]
 
+    async def list_batch_action_confirmations(self, user_id: str, batch_id: str) -> list[ActionConfirmation]:
+        async with AsyncSession(_get_engine()) as session:
+            stmt = (
+                select(ActionConfirmationRecord)
+                .where(
+                    col(ActionConfirmationRecord.user_id) == user_id,
+                    col(ActionConfirmationRecord.batch_id) == batch_id,
+                )
+                .order_by(col(ActionConfirmationRecord.created_at).asc())
+                .limit(500)
+            )
+            result = await session.execute(stmt)
+            return [_action_confirmation_from_record(row) for row in result.scalars().all()]
+
     async def decide_action_confirmation(
         self,
         confirmation_id: str,
@@ -2502,8 +2529,30 @@ class SQLModelReportStore(ReportStore):
                 .where(
                     col(ActionConfirmationRecord.confirmation_id) == confirmation_id,
                     col(ActionConfirmationRecord.user_id) == user_id,
+                    col(ActionConfirmationRecord.status) == "pending",
                 )
                 .values(status=decision, decided_at=now, decided_by=user_id)
+                .returning(ActionConfirmationRecord)
+            )
+            result = await session.execute(stmt)
+            row = result.scalar_one_or_none()
+            await session.commit()
+            return _action_confirmation_from_record(row) if row else None
+
+    async def claim_action_confirmation_for_execution(
+        self,
+        confirmation_id: str,
+        user_id: str,
+    ) -> ActionConfirmation | None:
+        async with AsyncSession(_get_engine()) as session:
+            stmt = (
+                update(ActionConfirmationRecord)
+                .where(
+                    col(ActionConfirmationRecord.confirmation_id) == confirmation_id,
+                    col(ActionConfirmationRecord.user_id) == user_id,
+                    col(ActionConfirmationRecord.status) == "approved",
+                )
+                .values(status="executed")
                 .returning(ActionConfirmationRecord)
             )
             result = await session.execute(stmt)
@@ -2533,6 +2582,7 @@ class SQLModelReportStore(ReportStore):
         action: str,
         resource_type: str,
         resource_id: str,
+        arguments_hash: str,
     ) -> ActionConfirmation | None:
         now = datetime.now(tz=UTC).isoformat()
         async with AsyncSession(_get_engine()) as session:
@@ -2546,6 +2596,7 @@ class SQLModelReportStore(ReportStore):
                     col(ActionConfirmationRecord.action) == action,
                     col(ActionConfirmationRecord.resource_type) == resource_type,
                     col(ActionConfirmationRecord.resource_id) == resource_id,
+                    col(ActionConfirmationRecord.arguments_hash) == arguments_hash,
                     col(ActionConfirmationRecord.status).in_(["approved", "denied"]),
                     col(ActionConfirmationRecord.expires_at) > now,
                 )

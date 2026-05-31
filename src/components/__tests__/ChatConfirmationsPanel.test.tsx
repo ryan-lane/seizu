@@ -8,9 +8,7 @@ const theme = createTheme();
 function confirmation(id: string): ActionConfirmation {
   return {
     confirmation_id: id,
-    user_id: 'user-1',
     source: 'chat',
-    session_key: 'thread-1',
     tool_name: 'reports__delete',
     action: 'delete',
     resource_type: 'report',

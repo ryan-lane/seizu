@@ -72,10 +72,6 @@ _PARAM_TYPE_MAP: dict[str, str] = {
 _CHAT_SAFE_PERMISSIONS: frozenset[str] = frozenset(
     {
         Permission.REPORTS_READ.value,
-        # reports__create and reports__clone are safe without confirmation:
-        # the store always initialises new reports as private; there is no way
-        # to set a public scope at creation time.
-        Permission.REPORTS_WRITE.value,
         Permission.QUERY_EXECUTE.value,
         Permission.QUERY_VALIDATE.value,
         Permission.QUERY_HISTORY_READ.value,
@@ -132,6 +128,8 @@ def _is_chat_safe_builtin(builtin: BuiltinTool) -> bool:
     # Read-only builtins pass through directly. Mutating builtins with a
     # confirmation callback are also safe — the confirmation IS the safety gate.
     if builtin.confirmation is not None:
+        return True
+    if builtin.chat_safe_without_confirmation:
         return True
     return bool(builtin.required_permissions) and set(builtin.required_permissions) <= _CHAT_SAFE_PERMISSIONS
 

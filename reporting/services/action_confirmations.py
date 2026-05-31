@@ -1,4 +1,5 @@
 import hashlib
+import json
 import uuid
 from datetime import UTC, datetime, timedelta
 from typing import Any
@@ -18,6 +19,11 @@ SENSITIVE_KEY_PARTS = ("password", "secret", "token", "key", "credential", "webh
 
 def bearer_session_key(token: str) -> str:
     return hashlib.sha256(token.encode("utf-8")).hexdigest()
+
+
+def arguments_hash(arguments: dict[str, Any]) -> str:
+    canonical = json.dumps(arguments, sort_keys=True, separators=(",", ":"), default=str)
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
 
 def public_confirmation_url(confirmation_id: str) -> str:
@@ -43,6 +49,7 @@ async def ensure_confirmation(
     batch_id: str | None = None,
 ) -> ActionConfirmation | None:
     """Return None when execution is allowed, else a pending/denied confirmation."""
+    fingerprint = arguments_hash(arguments)
     grant = await report_store.find_action_confirmation_grant(
         user_id=user_id,
         source=source,
@@ -51,9 +58,16 @@ async def ensure_confirmation(
         action=target.action,
         resource_type=target.resource_type,
         resource_id=target.resource_id,
+        arguments_hash=fingerprint,
     )
     if grant is not None:
-        return None if grant.status == "approved" else grant
+        if grant.status == "approved":
+            claimed = await report_store.claim_action_confirmation_for_execution(
+                grant.confirmation_id,
+                user_id,
+            )
+            return None if claimed is not None else grant.model_copy(update={"status": "executed"})
+        return grant
 
     pending = await _find_pending_confirmation(
         user_id=user_id,
@@ -61,6 +75,7 @@ async def ensure_confirmation(
         session_key=session_key,
         tool_name=tool_name,
         target=target,
+        arguments_hash=fingerprint,
     )
     if pending is not None:
         return pending
@@ -76,6 +91,7 @@ async def ensure_confirmation(
         resource_type=target.resource_type,
         resource_id=target.resource_id,
         arguments=arguments,
+        arguments_hash=fingerprint,
         ui_arguments=redact_arguments(arguments),
         status="pending",
         batch_id=batch_id,
@@ -96,11 +112,16 @@ async def decide_confirmation(
         return None
     if is_expired(confirmation):
         return confirmation.model_copy(update={"status": "expired"})
-    return await report_store.decide_action_confirmation(
+    if confirmation.status != "pending":
+        return confirmation
+    decided = await report_store.decide_action_confirmation(
         confirmation_id=confirmation_id,
         user_id=user_id,
         decision=decision,
     )
+    if decided is not None:
+        return decided
+    return await report_store.get_action_confirmation(confirmation_id, user_id=user_id)
 
 
 def confirmation_required_payload(confirmation: ActionConfirmation) -> dict[str, Any]:
@@ -144,6 +165,7 @@ async def _find_pending_confirmation(
     session_key: str,
     tool_name: str,
     target: ActionConfirmationTarget,
+    arguments_hash: str,
 ) -> ActionConfirmation | None:
     confirmations = await report_store.list_action_confirmations(
         user_id=user_id,
@@ -157,6 +179,7 @@ async def _find_pending_confirmation(
             and item.action == target.action
             and item.resource_type == target.resource_type
             and item.resource_id == target.resource_id
+            and item.arguments_hash == arguments_hash
             and not is_expired(item)
         ):
             return item

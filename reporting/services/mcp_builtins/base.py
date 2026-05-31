@@ -41,6 +41,7 @@ class BuiltinTool:
     # created_by/updated_by).  Handlers that need a user raise if it's None.
     requires_user: bool = False
     confirmation: ConfirmationResolver | None = None
+    chat_safe_without_confirmation: bool = False
 
 
 def model_input_schema(

@@ -3,6 +3,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from reporting.authnz import CurrentUser, get_current_user
 from reporting.schema.chat import CHAT_THREAD_ID_PATTERN
 from reporting.schema.confirmations import (
+    ActionConfirmationPublic,
     ConfirmationDecisionRequest,
     ConfirmationListResponse,
     ConfirmationResponse,
@@ -25,7 +26,9 @@ async def list_confirmations(
     )
     return ConfirmationListResponse(
         confirmations=[
-            confirmation for confirmation in confirmations if not action_confirmations.is_expired(confirmation)
+            ActionConfirmationPublic.from_confirmation(confirmation)
+            for confirmation in confirmations
+            if not action_confirmations.is_expired(confirmation)
         ]
     )
 
@@ -35,11 +38,11 @@ async def list_batch_confirmations(
     batch_id: str,
     current: CurrentUser = Depends(get_current_user),
 ) -> ConfirmationListResponse:
-    all_confirmations = await report_store.list_action_confirmations(
+    batch = await report_store.list_batch_action_confirmations(
         user_id=current.user.user_id,
+        batch_id=batch_id,
     )
-    batch = [c for c in all_confirmations if c.batch_id == batch_id]
-    return ConfirmationListResponse(confirmations=batch)
+    return ConfirmationListResponse(confirmations=[ActionConfirmationPublic.from_confirmation(c) for c in batch])
 
 
 @router.get("/api/v1/confirmations/{confirmation_id}", response_model=ConfirmationResponse)
@@ -50,7 +53,7 @@ async def get_confirmation(
     confirmation = await report_store.get_action_confirmation(confirmation_id, user_id=current.user.user_id)
     if confirmation is None:
         raise HTTPException(status_code=404, detail="Confirmation not found")
-    return ConfirmationResponse(confirmation=confirmation)
+    return ConfirmationResponse(confirmation=ActionConfirmationPublic.from_confirmation(confirmation))
 
 
 @router.post("/api/v1/confirmations/{confirmation_id}/decision", response_model=ConfirmationResponse)
@@ -66,4 +69,4 @@ async def decide_confirmation(
     )
     if confirmation is None:
         raise HTTPException(status_code=404, detail="Confirmation not found")
-    return ConfirmationResponse(confirmation=confirmation)
+    return ConfirmationResponse(confirmation=ActionConfirmationPublic.from_confirmation(confirmation))

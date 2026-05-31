@@ -598,6 +598,10 @@ class ReportStore(ABC):
         """List confirmations for the user, optionally narrowed by source/session/status."""
 
     @abstractmethod
+    async def list_batch_action_confirmations(self, user_id: str, batch_id: str) -> list[ActionConfirmation]:
+        """List confirmations for a user's batch."""
+
+    @abstractmethod
     async def decide_action_confirmation(
         self,
         confirmation_id: str,
@@ -605,6 +609,14 @@ class ReportStore(ABC):
         decision: ConfirmationDecision,
     ) -> ActionConfirmation | None:
         """Approve or deny a pending confirmation."""
+
+    @abstractmethod
+    async def claim_action_confirmation_for_execution(
+        self,
+        confirmation_id: str,
+        user_id: str,
+    ) -> ActionConfirmation | None:
+        """Atomically consume an approved confirmation before executing it."""
 
     @abstractmethod
     async def mark_confirmation_executed(self, confirmation_id: str, user_id: str) -> None:
@@ -620,5 +632,6 @@ class ReportStore(ABC):
         action: str,
         resource_type: str,
         resource_id: str,
+        arguments_hash: str,
     ) -> ActionConfirmation | None:
         """Return the newest unexpired approved/denied decision for this action scope."""

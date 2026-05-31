@@ -172,12 +172,8 @@ async def _update_visibility(args: dict[str, Any], current_user: CurrentUser | N
 async def _confirm_report_version(
     args: dict[str, Any], current_user: CurrentUser | None
 ) -> ActionConfirmationTarget | None:
-    user = _require_user(current_user)
     report_id = str(args["report_id"])
-    meta = await report_store.get_report_metadata(report_id, user_id=user.user.user_id)
-    if meta and (meta.access.scope == "public" or meta.created_by != user.user.user_id):
-        return ActionConfirmationTarget(action="update", resource_type="report", resource_id=report_id)
-    return None
+    return ActionConfirmationTarget(action="update", resource_type="report", resource_id=report_id)
 
 
 async def _confirm_report_visibility(
@@ -255,6 +251,7 @@ GROUP_DEF = BuiltinGroup(
             required_permissions=[Permission.REPORTS_WRITE.value],
             handler=_create,
             requires_user=True,
+            chat_safe_without_confirmation=True,
         ),
         BuiltinTool(
             name="reports__create_version",
@@ -365,6 +362,7 @@ GROUP_DEF = BuiltinGroup(
             required_permissions=[Permission.REPORTS_WRITE.value],
             handler=_clone,
             requires_user=True,
+            chat_safe_without_confirmation=True,
         ),
     ],
 )
