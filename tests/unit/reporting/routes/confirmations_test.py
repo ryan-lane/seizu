@@ -16,10 +16,14 @@ _USER = User(
 )
 
 
+_CONFIRMATION_ID = "a" * 32
+_BATCH_ID = "b" * 32
+
+
 def _confirmation() -> ActionConfirmation:
     return ActionConfirmation.model_validate(
         {
-            "confirmation_id": "confirm-1",
+            "confirmation_id": _CONFIRMATION_ID,
             "user_id": "user-1",
             "source": "chat",
             "session_key": "123",
@@ -31,7 +35,7 @@ def _confirmation() -> ActionConfirmation:
             "arguments_hash": "hash-1",
             "ui_arguments": {"token": "[redacted]", "name": "Lookup"},
             "status": "pending",
-            "batch_id": "batch-1",
+            "batch_id": _BATCH_ID,
             "created_at": "2024-01-01T00:00:00+00:00",
             "expires_at": "2099-01-01T00:30:00+00:00",
         }
@@ -53,7 +57,7 @@ async def test_get_confirmation_returns_public_redacted_shape(mocker):
     app = _make_app()
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
-        response = await client.get("/api/v1/confirmations/confirm-1")
+        response = await client.get(f"/api/v1/confirmations/{_CONFIRMATION_ID}")
 
     assert response.status_code == 200
     body = response.json()["confirmation"]
@@ -73,9 +77,9 @@ async def test_batch_confirmation_lookup_uses_batch_store_method(mocker):
     app = _make_app()
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
-        response = await client.get("/api/v1/confirmations/batch/batch-1")
+        response = await client.get(f"/api/v1/confirmations/batch/{_BATCH_ID}")
 
     assert response.status_code == 200
     assert len(response.json()["confirmations"]) == 1
-    list_batch.assert_awaited_once_with(user_id="user-1", batch_id="batch-1")
+    list_batch.assert_awaited_once_with(user_id="user-1", batch_id=_BATCH_ID)
     list_all.assert_not_called()

@@ -84,6 +84,8 @@ export function useConfirmationsApi(threadId?: string | null): {
     }
   }, [authHeaders, checkAuthReady, threadId]);
 
+  const hasPending = confirmations.length > 0;
+
   useEffect(() => {
     if (!threadId) {
       setConfirmations((prev) => (prev.length === 0 ? prev : []));
@@ -92,11 +94,12 @@ export function useConfirmationsApi(threadId?: string | null): {
     }
     setLoading(true);
     void fetchConfirmations();
-    const timer = window.setInterval(() => {
-      void fetchConfirmations();
-    }, 5000);
+    const timer = window.setInterval(
+      () => void fetchConfirmations(),
+      hasPending ? 5000 : 30000,
+    );
     return () => window.clearInterval(timer);
-  }, [fetchConfirmations, threadId]);
+  }, [fetchConfirmations, hasPending, threadId]);
 
   const getConfirmation = useCallback(
     async (confirmationId: string): Promise<ActionConfirmation> => {

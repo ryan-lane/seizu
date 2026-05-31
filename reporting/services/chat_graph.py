@@ -463,7 +463,7 @@ async def _resume_confirmed_tool_turn(
             c.tool_name,
             c.arguments,
             gate_permission=Permission.CHAT_TOOLS_CALL,
-            chat_safe_only=False,
+            chat_safe_only=True,
             result_max_rows=settings.CHAT_TOOL_RESULT_MAX_ROWS,
             result_max_bytes=settings.CHAT_TOOL_RESULT_MAX_BYTES,
         )
@@ -888,7 +888,7 @@ async def _list_chat_tools(current_user: CurrentUser | None) -> list[Tool]:
     return await mcp_runtime.list_tools_for_user(
         current_user,
         gate_permission=Permission.CHAT_TOOLS_CALL,
-        chat_safe_only=False,
+        chat_safe_only=True,
     )
 
 
@@ -1018,7 +1018,7 @@ async def _run_tool_call(
         request.name,
         request.arguments,
         gate_permission=Permission.CHAT_TOOLS_CALL,
-        chat_safe_only=False,
+        chat_safe_only=True,
         result_max_rows=settings.CHAT_TOOL_RESULT_MAX_ROWS,
         result_max_bytes=settings.CHAT_TOOL_RESULT_MAX_BYTES,
         confirmation_source="chat",

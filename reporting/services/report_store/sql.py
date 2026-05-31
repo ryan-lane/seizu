@@ -2530,6 +2530,7 @@ class SQLModelReportStore(ReportStore):
                     col(ActionConfirmationRecord.confirmation_id) == confirmation_id,
                     col(ActionConfirmationRecord.user_id) == user_id,
                     col(ActionConfirmationRecord.status) == "pending",
+                    col(ActionConfirmationRecord.expires_at) > now,
                 )
                 .values(status=decision, decided_at=now, decided_by=user_id)
                 .returning(ActionConfirmationRecord)
@@ -2567,6 +2568,7 @@ class SQLModelReportStore(ReportStore):
                 .where(
                     col(ActionConfirmationRecord.confirmation_id) == confirmation_id,
                     col(ActionConfirmationRecord.user_id) == user_id,
+                    col(ActionConfirmationRecord.status) == "approved",
                 )
                 .values(status="executed")
             )

@@ -3073,7 +3073,12 @@ class DynamoDBReportStore(ReportStore):
             table = _get_table()
             existing_resp = table.get_item(Key={"PK": _action_confirmation_pk(confirmation_id), "SK": _SK_METADATA})
             existing = existing_resp.get("Item")
-            if not existing or existing.get("user_id") != user_id or existing.get("status") != "pending":
+            if (
+                not existing
+                or existing.get("user_id") != user_id
+                or existing.get("status") != "pending"
+                or existing.get("expires_at", "") <= now
+            ):
                 return None
             data = _action_confirmation_data(existing)
             updated = {
@@ -3088,7 +3093,7 @@ class DynamoDBReportStore(ReportStore):
                         "TableName": settings.DYNAMODB_TABLE_NAME,
                         "Key": {"PK": _action_confirmation_pk(confirmation_id), "SK": _SK_METADATA},
                         "UpdateExpression": "SET #s = :decision, decided_at = :now, decided_by = :user",
-                        "ConditionExpression": "#s = :pending AND user_id = :user",
+                        "ConditionExpression": "#s = :pending AND user_id = :user AND expires_at > :now",
                         "ExpressionAttributeNames": {"#s": "status"},
                         "ExpressionAttributeValues": {
                             ":decision": decision,
@@ -3223,19 +3228,24 @@ class DynamoDBReportStore(ReportStore):
             table = _get_table()
             existing_resp = table.get_item(Key={"PK": _action_confirmation_pk(confirmation_id), "SK": _SK_METADATA})
             existing = existing_resp.get("Item")
-            if not existing or existing.get("user_id") != user_id:
+            if not existing or existing.get("user_id") != user_id or existing.get("status") != "approved":
                 return
             data = _action_confirmation_data(existing)
             updated = {**data, "status": "executed"}
-            old_status = str(data.get("status", "approved"))
+            old_status = "approved"
             transact_items: list[dict[str, Any]] = [
                 {
                     "Update": {
                         "TableName": settings.DYNAMODB_TABLE_NAME,
                         "Key": {"PK": _action_confirmation_pk(confirmation_id), "SK": _SK_METADATA},
                         "UpdateExpression": "SET #s = :executed",
+                        "ConditionExpression": "#s = :approved AND user_id = :user",
                         "ExpressionAttributeNames": {"#s": "status"},
-                        "ExpressionAttributeValues": {":executed": "executed"},
+                        "ExpressionAttributeValues": {
+                            ":executed": "executed",
+                            ":approved": "approved",
+                            ":user": user_id,
+                        },
                     }
                 },
                 {
@@ -3283,7 +3293,12 @@ class DynamoDBReportStore(ReportStore):
                         },
                     }
                 )
-            table.meta.client.transact_write_items(TransactItems=transact_items)
+            try:
+                table.meta.client.transact_write_items(TransactItems=transact_items)
+            except botocore.exceptions.ClientError as exc:
+                if _transaction_cancelled(exc):
+                    return
+                raise
 
         await asyncio.to_thread(_op)
 
@@ -3298,7 +3313,7 @@ class DynamoDBReportStore(ReportStore):
         resource_id: str,
         arguments_hash: str,
     ) -> ActionConfirmation | None:
-        now = datetime.now(tz=UTC).isoformat()
+        now = datetime.now(tz=UTC)
         confirmations = await self.list_action_confirmations(user_id, source=source, session_key=session_key)
         for item in confirmations:
             if (
@@ -3308,7 +3323,7 @@ class DynamoDBReportStore(ReportStore):
                 and item.resource_id == resource_id
                 and item.arguments_hash == arguments_hash
                 and item.status in ("approved", "denied")
-                and item.expires_at > now
+                and datetime.fromisoformat(item.expires_at) > now
             ):
                 return item
         return None

@@ -27,15 +27,11 @@ def arguments_hash(arguments: dict[str, Any]) -> str:
 
 
 def public_confirmation_url(confirmation_id: str) -> str:
-    base_url = _public_ui_origin()
-    path = f"/app/confirmations/{confirmation_id}"
-    return f"{base_url.rstrip('/')}{path}" if base_url else path
+    return _public_url(f"/app/confirmations/{confirmation_id}")
 
 
 def public_batch_confirmation_url(batch_id: str) -> str:
-    base_url = _public_ui_origin()
-    path = f"/app/confirmations/batch/{batch_id}"
-    return f"{base_url.rstrip('/')}{path}" if base_url else path
+    return _public_url(f"/app/confirmations/batch/{batch_id}")
 
 
 async def ensure_confirmation(
@@ -155,7 +151,7 @@ def redact_arguments(value: Any) -> Any:
 
 
 def is_expired(confirmation: ActionConfirmation) -> bool:
-    return confirmation.expires_at <= datetime.now(tz=UTC).isoformat()
+    return datetime.fromisoformat(confirmation.expires_at) <= datetime.now(tz=UTC)
 
 
 async def _find_pending_confirmation(
@@ -189,6 +185,11 @@ async def _find_pending_confirmation(
 def _is_sensitive_key(key: str) -> bool:
     lowered = key.lower()
     return any(part in lowered for part in SENSITIVE_KEY_PARTS)
+
+
+def _public_url(path: str) -> str:
+    base_url = _public_ui_origin()
+    return f"{base_url.rstrip('/')}{path}" if base_url else path
 
 
 def _public_ui_origin() -> str:
