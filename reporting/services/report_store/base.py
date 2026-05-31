@@ -3,6 +3,11 @@ from datetime import datetime
 from typing import Any
 
 from reporting.schema.chat import ChatSessionItem
+from reporting.schema.confirmations import (
+    ActionConfirmation,
+    ConfirmationDecision,
+    ConfirmationSource,
+)
 from reporting.schema.mcp_config import (
     SkillItem,
     SkillsetListItem,
@@ -567,3 +572,53 @@ class ReportStore(ABC):
     @abstractmethod
     async def delete_chat_session(self, user_id: str, thread_id: str) -> bool:
         """Delete a session. Returns False if not found."""
+
+    # ------------------------------------------------------------------
+    # Action confirmations
+    # ------------------------------------------------------------------
+
+    @abstractmethod
+    async def create_action_confirmation(self, confirmation: ActionConfirmation) -> ActionConfirmation:
+        """Persist a pending action confirmation."""
+
+    @abstractmethod
+    async def get_action_confirmation(
+        self, confirmation_id: str, user_id: str | None = None
+    ) -> ActionConfirmation | None:
+        """Return a confirmation by ID, optionally scoped to a user."""
+
+    @abstractmethod
+    async def list_action_confirmations(
+        self,
+        user_id: str,
+        source: ConfirmationSource | None = None,
+        session_key: str | None = None,
+        status: str | None = None,
+    ) -> list[ActionConfirmation]:
+        """List confirmations for the user, optionally narrowed by source/session/status."""
+
+    @abstractmethod
+    async def decide_action_confirmation(
+        self,
+        confirmation_id: str,
+        user_id: str,
+        decision: ConfirmationDecision,
+    ) -> ActionConfirmation | None:
+        """Approve or deny a pending confirmation."""
+
+    @abstractmethod
+    async def mark_confirmation_executed(self, confirmation_id: str, user_id: str) -> None:
+        """Mark an approved confirmation as executed so it is not re-run."""
+
+    @abstractmethod
+    async def find_action_confirmation_grant(
+        self,
+        user_id: str,
+        source: ConfirmationSource,
+        session_key: str,
+        tool_name: str,
+        action: str,
+        resource_type: str,
+        resource_id: str,
+    ) -> ActionConfirmation | None:
+        """Return the newest unexpired approved/denied decision for this action scope."""

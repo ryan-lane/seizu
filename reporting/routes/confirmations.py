@@ -1,0 +1,69 @@
+from fastapi import APIRouter, Depends, HTTPException, Query
+
+from reporting.authnz import CurrentUser, get_current_user
+from reporting.schema.chat import CHAT_THREAD_ID_PATTERN
+from reporting.schema.confirmations import (
+    ConfirmationDecisionRequest,
+    ConfirmationListResponse,
+    ConfirmationResponse,
+)
+from reporting.services import action_confirmations, report_store
+
+router = APIRouter()
+
+
+@router.get("/api/v1/confirmations", response_model=ConfirmationListResponse)
+async def list_confirmations(
+    thread_id: str | None = Query(default=None, min_length=1, max_length=32, pattern=CHAT_THREAD_ID_PATTERN),
+    current: CurrentUser = Depends(get_current_user),
+) -> ConfirmationListResponse:
+    confirmations = await report_store.list_action_confirmations(
+        user_id=current.user.user_id,
+        source="chat" if thread_id is not None else None,
+        session_key=thread_id,
+        status="pending",
+    )
+    return ConfirmationListResponse(
+        confirmations=[
+            confirmation for confirmation in confirmations if not action_confirmations.is_expired(confirmation)
+        ]
+    )
+
+
+@router.get("/api/v1/confirmations/batch/{batch_id}", response_model=ConfirmationListResponse)
+async def list_batch_confirmations(
+    batch_id: str,
+    current: CurrentUser = Depends(get_current_user),
+) -> ConfirmationListResponse:
+    all_confirmations = await report_store.list_action_confirmations(
+        user_id=current.user.user_id,
+    )
+    batch = [c for c in all_confirmations if c.batch_id == batch_id]
+    return ConfirmationListResponse(confirmations=batch)
+
+
+@router.get("/api/v1/confirmations/{confirmation_id}", response_model=ConfirmationResponse)
+async def get_confirmation(
+    confirmation_id: str,
+    current: CurrentUser = Depends(get_current_user),
+) -> ConfirmationResponse:
+    confirmation = await report_store.get_action_confirmation(confirmation_id, user_id=current.user.user_id)
+    if confirmation is None:
+        raise HTTPException(status_code=404, detail="Confirmation not found")
+    return ConfirmationResponse(confirmation=confirmation)
+
+
+@router.post("/api/v1/confirmations/{confirmation_id}/decision", response_model=ConfirmationResponse)
+async def decide_confirmation(
+    confirmation_id: str,
+    body: ConfirmationDecisionRequest,
+    current: CurrentUser = Depends(get_current_user),
+) -> ConfirmationResponse:
+    confirmation = await action_confirmations.decide_confirmation(
+        confirmation_id=confirmation_id,
+        user_id=current.user.user_id,
+        decision=body.decision,
+    )
+    if confirmation is None:
+        raise HTTPException(status_code=404, detail="Confirmation not found")
+    return ConfirmationResponse(confirmation=confirmation)

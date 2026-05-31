@@ -13,6 +13,7 @@ from snowflake import SnowflakeGenerator
 
 from reporting import settings
 from reporting.schema.chat import ChatSessionItem
+from reporting.schema.confirmations import ActionConfirmation, ConfirmationDecision, ConfirmationSource
 from reporting.schema.mcp_config import (
     SkillItem,
     SkillsetListItem,
@@ -66,6 +67,8 @@ _PK_ROLE_LIST = "ROLE_LIST"
 # by user and sorted by updated_at for the sidebar.
 _PK_CHAT_SESSION_METADATA_PREFIX = "CHAT_SESSION#"
 _PK_CHAT_SESSION_LIST_PREFIX = "CHAT_SESSION_LIST#"
+_PK_ACTION_CONFIRMATION_PREFIX = "ACTION_CONFIRMATION#"
+_PK_ACTION_CONFIRMATION_LIST_PREFIX = "ACTION_CONFIRMATION_LIST#"
 # Group mappings — list index PK for listing all group-to-role mappings.
 # Query history — per-user SK prefix; items sorted newest-first by snowflake ID.
 _SK_QUERY_HISTORY_PREFIX = "HISTORY#"
@@ -73,6 +76,7 @@ _SK_QUERY_HISTORY_PREFIX = "HISTORY#"
 _QUERY_HISTORY_MAX = 500
 _CHAT_SESSION_LIST_MAX = 500
 _CHAT_SESSION_TRANSACTION_RETRIES = 3
+_ACTION_CONFIRMATION_LIST_MAX = 500
 _T = TypeVar("_T")
 
 
@@ -154,6 +158,22 @@ def _chat_session_from_item(item: dict[str, Any]) -> ChatSessionItem:
         created_at=item["created_at"],
         updated_at=item["updated_at"],
     )
+
+
+def _action_confirmation_pk(confirmation_id: str) -> str:
+    return f"{_PK_ACTION_CONFIRMATION_PREFIX}{confirmation_id}"
+
+
+def _action_confirmation_list_pk(user_id: str) -> str:
+    return f"{_PK_ACTION_CONFIRMATION_LIST_PREFIX}{user_id}"
+
+
+def _action_confirmation_list_sk(created_at: str, confirmation_id: str) -> str:
+    return f"CREATED#{created_at}#CONFIRMATION#{confirmation_id}"
+
+
+def _action_confirmation_from_item(item: dict[str, Any]) -> ActionConfirmation:
+    return ActionConfirmation.model_validate(item)
 
 
 def _chat_session_update_transactions(
@@ -2857,3 +2877,198 @@ class DynamoDBReportStore(ReportStore):
             return _retry_chat_session_delete(table, metadata_pk, list_pk, thread_id)
 
         return await asyncio.to_thread(_op)
+
+    # ------------------------------------------------------------------
+    # Action confirmations
+    # ------------------------------------------------------------------
+
+    async def create_action_confirmation(self, confirmation: ActionConfirmation) -> ActionConfirmation:
+        data = _floats_to_decimal(confirmation.model_dump())
+        metadata_item = {
+            **data,
+            "PK": _action_confirmation_pk(confirmation.confirmation_id),
+            "SK": _SK_METADATA,
+        }
+        list_item = {
+            **data,
+            "PK": _action_confirmation_list_pk(confirmation.user_id),
+            "SK": _action_confirmation_list_sk(confirmation.created_at, confirmation.confirmation_id),
+        }
+
+        def _op() -> ActionConfirmation:
+            table = _get_table()
+            table.meta.client.transact_write_items(
+                TransactItems=[
+                    {
+                        "Put": {
+                            "TableName": settings.DYNAMODB_TABLE_NAME,
+                            "Item": metadata_item,
+                            "ConditionExpression": "attribute_not_exists(PK)",
+                        },
+                    },
+                    {
+                        "Put": {
+                            "TableName": settings.DYNAMODB_TABLE_NAME,
+                            "Item": list_item,
+                        },
+                    },
+                ]
+            )
+            return confirmation
+
+        return await asyncio.to_thread(_op)
+
+    async def get_action_confirmation(
+        self,
+        confirmation_id: str,
+        user_id: str | None = None,
+    ) -> ActionConfirmation | None:
+        def _op() -> ActionConfirmation | None:
+            table = _get_table()
+            resp = table.get_item(Key={"PK": _action_confirmation_pk(confirmation_id), "SK": _SK_METADATA})
+            item = resp.get("Item")
+            if not item or (user_id is not None and item.get("user_id") != user_id):
+                return None
+            return _action_confirmation_from_item(item)
+
+        return await asyncio.to_thread(_op)
+
+    async def list_action_confirmations(
+        self,
+        user_id: str,
+        source: ConfirmationSource | None = None,
+        session_key: str | None = None,
+        status: str | None = None,
+    ) -> list[ActionConfirmation]:
+        def _op() -> list[ActionConfirmation]:
+            table = _get_table()
+            resp = table.query(
+                KeyConditionExpression="PK = :pk",
+                ExpressionAttributeValues={":pk": _action_confirmation_list_pk(user_id)},
+                ScanIndexForward=False,
+                Limit=_ACTION_CONFIRMATION_LIST_MAX,
+            )
+            confirmations = [_action_confirmation_from_item(item) for item in resp.get("Items", [])]
+            return [
+                item
+                for item in confirmations
+                if (source is None or item.source == source)
+                and (session_key is None or item.session_key == session_key)
+                and (status is None or item.status == status)
+            ]
+
+        return await asyncio.to_thread(_op)
+
+    async def decide_action_confirmation(
+        self,
+        confirmation_id: str,
+        user_id: str,
+        decision: ConfirmationDecision,
+    ) -> ActionConfirmation | None:
+        now = datetime.now(tz=UTC).isoformat()
+
+        def _op() -> ActionConfirmation | None:
+            table = _get_table()
+            existing_resp = table.get_item(Key={"PK": _action_confirmation_pk(confirmation_id), "SK": _SK_METADATA})
+            existing = existing_resp.get("Item")
+            if not existing or existing.get("user_id") != user_id:
+                return None
+            updated = {
+                **existing,
+                "status": decision,
+                "decided_at": now,
+                "decided_by": user_id,
+            }
+            updated.pop("PK", None)
+            updated.pop("SK", None)
+            list_key = {
+                "PK": _action_confirmation_list_pk(user_id),
+                "SK": _action_confirmation_list_sk(existing["created_at"], confirmation_id),
+            }
+            table.meta.client.transact_write_items(
+                TransactItems=[
+                    {
+                        "Put": {
+                            "TableName": settings.DYNAMODB_TABLE_NAME,
+                            "Item": {
+                                **_floats_to_decimal(updated),
+                                "PK": _action_confirmation_pk(confirmation_id),
+                                "SK": _SK_METADATA,
+                            },
+                        },
+                    },
+                    {
+                        "Put": {
+                            "TableName": settings.DYNAMODB_TABLE_NAME,
+                            "Item": {
+                                **_floats_to_decimal(updated),
+                                **list_key,
+                            },
+                        },
+                    },
+                ]
+            )
+            return _action_confirmation_from_item(updated)
+
+        return await asyncio.to_thread(_op)
+
+    async def mark_confirmation_executed(self, confirmation_id: str, user_id: str) -> None:
+        def _op() -> None:
+            table = _get_table()
+            existing_resp = table.get_item(Key={"PK": _action_confirmation_pk(confirmation_id), "SK": _SK_METADATA})
+            existing = existing_resp.get("Item")
+            if not existing or existing.get("user_id") != user_id:
+                return
+            updated = {**existing, "status": "executed"}
+            updated.pop("PK", None)
+            updated.pop("SK", None)
+            list_key = {
+                "PK": _action_confirmation_list_pk(user_id),
+                "SK": _action_confirmation_list_sk(existing["created_at"], confirmation_id),
+            }
+            table.meta.client.transact_write_items(
+                TransactItems=[
+                    {
+                        "Put": {
+                            "TableName": settings.DYNAMODB_TABLE_NAME,
+                            "Item": {
+                                **_floats_to_decimal(updated),
+                                "PK": _action_confirmation_pk(confirmation_id),
+                                "SK": _SK_METADATA,
+                            },
+                        },
+                    },
+                    {
+                        "Put": {
+                            "TableName": settings.DYNAMODB_TABLE_NAME,
+                            "Item": {**_floats_to_decimal(updated), **list_key},
+                        },
+                    },
+                ]
+            )
+
+        await asyncio.to_thread(_op)
+
+    async def find_action_confirmation_grant(
+        self,
+        user_id: str,
+        source: ConfirmationSource,
+        session_key: str,
+        tool_name: str,
+        action: str,
+        resource_type: str,
+        resource_id: str,
+    ) -> ActionConfirmation | None:
+        now = datetime.now(tz=UTC).isoformat()
+        confirmations = await self.list_action_confirmations(user_id, source=source, session_key=session_key)
+        for item in confirmations:
+            if (
+                item.tool_name == tool_name
+                and item.action == action
+                and item.resource_type == resource_type
+                and item.resource_id == resource_id
+                and item.status in ("approved", "denied")
+                and item.expires_at > now
+            ):
+                return item
+        return None

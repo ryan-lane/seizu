@@ -1,4 +1,5 @@
 import asyncio
+import json
 
 from langchain_core.messages import AIMessage, AIMessageChunk, HumanMessage, SystemMessage, ToolMessage
 from langchain_core.messages.modifier import RemoveMessage
@@ -147,6 +148,54 @@ async def test_chat_graph_streams_final_no_tool_text_deltas_as_they_arrive(mocke
     assert deltas == ["alpha ", "beta ", "gamma"]
 
 
+async def test_chat_graph_marks_output_limit_cutoff(mocker):
+    from langgraph.checkpoint.memory import MemorySaver
+
+    class _LimitModel:
+        async def astream(self, input, config=None, **kwargs):
+            yield AIMessageChunk(
+                content="partial answer",
+                response_metadata={"finish_reason": "length"},
+            )
+
+    mocker.patch("reporting.settings.CHAT_LLM_PROVIDER", "openai")
+    mocker.patch("reporting.services.chat_graph.get_chat_model", return_value=_LimitModel())
+    mocker.patch("reporting.services.chat_graph.mcp_runtime.list_prompts_for_user", return_value=[])
+    mocker.patch("reporting.services.chat_graph.mcp_runtime.list_tools_for_user", return_value=[])
+    graph = chat_graph.build_chat_graph(MemorySaver())
+
+    chunks = [
+        chunk
+        async for chunk in graph.astream(
+            {"messages": [HumanMessage(content="write a long answer")]},
+            {"configurable": {"thread_id": "thread-output-limit", "current_user": _user()}},
+            stream_mode="custom",
+        )
+    ]
+
+    streamed = "".join(chunk["content"] for chunk in chunks if chunk["kind"] == "token")
+    assert "partial answer" in streamed
+    assert "hit its output limit" in streamed
+    assert {"kind": "finish_reason", "finish_reason": "length"} in chunks
+
+    state = await graph.aget_state({"configurable": {"thread_id": "thread-output-limit"}})
+    persisted = state.values["messages"][-1]
+    assert "hit its output limit" in persisted.content
+
+
+async def test_output_limit_notice_keeps_completed_action_summary():
+    response, hit_limit = chat_graph._append_output_limit_notice(
+        "partial synthesis",
+        "length",
+        ["Seizu ran tool `toolsets__create_tool`.\n\nResult:\ncreated"],
+    )
+
+    assert hit_limit is True
+    assert "hit its output limit" in response
+    assert "Completed before the cutoff" in response
+    assert "toolsets__create_tool" in response
+
+
 async def test_chat_graph_buffers_tool_enabled_text_until_final_response(mocker):
     from langgraph.checkpoint.memory import MemorySaver
 
@@ -207,7 +256,7 @@ async def test_run_llm_tool_turn_streams_until_tool_call_chunk_arrives():
     def writer(item: dict) -> None:
         streamed_deltas.append(item["content"])
 
-    ai_message, streamed = await chat_graph._run_llm_tool_turn(
+    result = await chat_graph._run_llm_tool_turn(
         _PeekModel(),
         "system",
         [HumanMessage(content="hi")],
@@ -217,10 +266,10 @@ async def test_run_llm_tool_turn_streams_until_tool_call_chunk_arrives():
     )
 
     assert streamed_deltas == ["Let me check "]
-    assert streamed == "Let me check "
+    assert result.streamed == "Let me check "
     # The buffered merged message still reflects the full LLM response
     # (so the loop can read the tool call and any post-signal text).
-    assert "— actually wait" in message_text_of(ai_message)
+    assert "— actually wait" in message_text_of(result.message)
 
 
 def test_provider_tool_name_mapping_keeps_seizu_execution_name():
@@ -713,6 +762,93 @@ async def test_chat_graph_empty_response_fallback_preserves_last_action_result(m
     assert fake_model.calls == 3
 
 
+async def test_chat_tool_create_already_exists_is_idempotent_success(mocker):
+    request = chat_graph.ToolCallRequest(
+        id="call_1",
+        name="skillsets__create_skill",
+        arguments={"skillset_id": "github", "skill_id": "overview"},
+        spec=chat_graph.ChatToolSpec(
+            name="skillsets__create_skill",
+            kind="tool",
+            description="Create a skill",
+            input_schema={"type": "object"},
+        ),
+    )
+    mocker.patch(
+        "reporting.services.chat_graph.mcp_runtime.call_tool_for_chat",
+        return_value=ChatActionOutcome(text='{"error":"Skill already exists"}'),
+    )
+
+    result = await chat_graph._run_tool_call(request, _user(), session_key="1001")
+
+    data = json.loads(result.content)
+    assert result.blocked is None
+    assert data["ok"] is True
+    assert data["idempotent"] is True
+    assert "already completed" in data["message"]
+
+
+async def test_pending_confirmation_response_includes_url():
+    request = chat_graph.ToolCallRequest(
+        id="call_1",
+        name="reports__delete",
+        arguments={"report_id": "r1"},
+        spec=chat_graph.ChatToolSpec(
+            name="reports__delete",
+            kind="tool",
+            description="Delete report",
+            input_schema={"type": "object"},
+        ),
+    )
+    result = chat_graph.ToolCallResult(
+        request=request,
+        blocked=ChatBlockReason.CONFIRMATION_REQUIRED,
+        content=json.dumps(
+            {
+                "confirmation_required": True,
+                "status": "pending",
+                "confirmation_url": "https://seizu.example.com/app/confirmations/abc123",
+            }
+        ),
+    )
+
+    response = chat_graph._blocked_tool_call_response([result])
+
+    assert "Approval needed" in response
+    assert "https://seizu.example.com/app/confirmations/abc123" in response
+    assert "panel" not in response.lower()
+
+
+async def test_decided_confirmation_response_does_not_include_url():
+    request = chat_graph.ToolCallRequest(
+        id="call_1",
+        name="reports__delete",
+        arguments={"report_id": "r1"},
+        spec=chat_graph.ChatToolSpec(
+            name="reports__delete",
+            kind="tool",
+            description="Delete report",
+            input_schema={"type": "object"},
+        ),
+    )
+    result = chat_graph.ToolCallResult(
+        request=request,
+        blocked=ChatBlockReason.CONFIRMATION_REQUIRED,
+        content=json.dumps(
+            {
+                "confirmation_required": True,
+                "status": "denied",
+                "error": "Action was denied for this confirmation window",
+            }
+        ),
+    )
+
+    response = chat_graph._blocked_tool_call_response([result])
+
+    assert "already been decided or has expired" in response
+    assert "Confirmations" not in response
+
+
 async def test_chat_graph_reports_unavailable_tool_call_and_persists_notice(mocker):
     from langgraph.checkpoint.memory import MemorySaver
 
@@ -849,6 +985,9 @@ def test_build_system_prompt_is_seizu_specific():
     assert "Cypher" in prompt
     assert "include every required parameter" in prompt
     assert "native structured tool calling" in prompt
+    assert "You are the Seizu agent" in prompt
+    assert "never tell the user to ask another Seizu agent" in prompt
+    assert "call the matching skill" in prompt
 
 
 def test_llm_context_messages_applies_message_and_character_limits(mocker):
@@ -963,6 +1102,8 @@ def test_build_capability_context_progressive_disclosure_lists_only_skills():
     assert "Available skills:" in context
     assert "investigation__triage" in context
     assert "structured skill tools" in context
+    assert "trigger phrases" in context
+    assert "call that skill now" in context
     assert "Available tools:" not in context
 
 
@@ -989,6 +1130,7 @@ def test_build_capability_context_full_disclosure_lists_skills_and_tools():
     assert "graph__query" in context
     assert "cypher (required)" in context
     assert "structured tool calls" in context
+    assert "trigger phrases" in context
 
 
 async def test_chat_agent_lists_skills_and_tools_once_per_turn(mocker):

@@ -10,6 +10,7 @@ from sqlmodel import Field, SQLModel, col, select
 
 from reporting import settings
 from reporting.schema.chat import ChatSessionItem
+from reporting.schema.confirmations import ActionConfirmation, ConfirmationDecision, ConfirmationSource
 from reporting.schema.mcp_config import (
     SkillItem,
     SkillsetListItem,
@@ -272,6 +273,26 @@ class ChatSessionRecord(SQLModel, table=True):  # type: ignore
     updated_at: str
 
 
+class ActionConfirmationRecord(SQLModel, table=True):  # type: ignore
+    __tablename__ = "action_confirmations"
+    confirmation_id: str = Field(primary_key=True)
+    user_id: str = Field(index=True)
+    source: str = Field(index=True)
+    session_key: str = Field(index=True)
+    tool_name: str
+    action: str
+    resource_type: str
+    resource_id: str
+    arguments: dict[str, Any] = Field(default={}, sa_column=Column(JSON, nullable=False))
+    ui_arguments: dict[str, Any] = Field(default={}, sa_column=Column(JSON, nullable=False))
+    status: str = Field(index=True)
+    batch_id: str | None = None
+    created_at: str
+    expires_at: str = Field(index=True)
+    decided_at: str | None = None
+    decided_by: str | None = None
+
+
 class RoleRecord(SQLModel, table=True):  # type: ignore
     __tablename__ = "roles"
     role_id: str = Field(primary_key=True)
@@ -350,6 +371,28 @@ def _report_version_from_records(report: ReportRecord, version: ReportVersionRec
     )
 
 
+def _action_confirmation_from_record(record: ActionConfirmationRecord) -> ActionConfirmation:
+    return ActionConfirmation.model_validate(
+        {
+            "confirmation_id": record.confirmation_id,
+            "user_id": record.user_id,
+            "source": record.source,
+            "session_key": record.session_key,
+            "tool_name": record.tool_name,
+            "action": record.action,
+            "resource_type": record.resource_type,
+            "resource_id": record.resource_id,
+            "arguments": record.arguments,
+            "ui_arguments": record.ui_arguments,
+            "status": record.status,
+            "created_at": record.created_at,
+            "expires_at": record.expires_at,
+            "decided_at": record.decided_at,
+            "decided_by": record.decided_by,
+        }
+    )
+
+
 def _user_from_record(record: UserRecord) -> User:
     return User(
         user_id=record.user_id,
@@ -401,6 +444,9 @@ class SQLModelReportStore(ReportStore):
                 if conn.dialect.name == "postgresql":
                     await conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS preferred_username VARCHAR"))
                     await conn.execute(text("ALTER TABLE users ALTER COLUMN email DROP NOT NULL"))
+                    await conn.execute(
+                        text("ALTER TABLE action_confirmations ADD COLUMN IF NOT EXISTS batch_id VARCHAR")
+                    )
                 elif conn.dialect.name == "sqlite":
                     # SQLite cannot drop NOT NULL in-place. Existing SQLite
                     # dev DBs created before nullable email still require email;
@@ -409,6 +455,10 @@ class SQLModelReportStore(ReportStore):
                     column_names = {row[1] for row in columns}
                     if "preferred_username" not in column_names:
                         await conn.execute(text("ALTER TABLE users ADD COLUMN preferred_username VARCHAR"))
+                    ac_columns = await conn.execute(text("PRAGMA table_info(action_confirmations)"))
+                    ac_column_names = {row[1] for row in ac_columns}
+                    if "batch_id" not in ac_column_names:
+                        await conn.execute(text("ALTER TABLE action_confirmations ADD COLUMN batch_id VARCHAR"))
             logger.info("SQL report store tables initialised")
         except IntegrityError:
             logger.info("SQL report store tables already exist")
@@ -2393,3 +2443,115 @@ class SQLModelReportStore(ReportStore):
             result = await session.execute(stmt)
             await session.commit()
             return result.rowcount > 0
+
+    # ------------------------------------------------------------------
+    # Action confirmations
+    # ------------------------------------------------------------------
+
+    async def create_action_confirmation(self, confirmation: ActionConfirmation) -> ActionConfirmation:
+        async with AsyncSession(_get_engine()) as session:
+            record = ActionConfirmationRecord(**confirmation.model_dump())
+            session.add(record)
+            await session.commit()
+            return confirmation
+
+    async def get_action_confirmation(
+        self,
+        confirmation_id: str,
+        user_id: str | None = None,
+    ) -> ActionConfirmation | None:
+        async with AsyncSession(_get_engine()) as session:
+            stmt = select(ActionConfirmationRecord).where(
+                col(ActionConfirmationRecord.confirmation_id) == confirmation_id
+            )
+            if user_id is not None:
+                stmt = stmt.where(col(ActionConfirmationRecord.user_id) == user_id)
+            result = await session.execute(stmt)
+            row = result.scalar_one_or_none()
+            return _action_confirmation_from_record(row) if row else None
+
+    async def list_action_confirmations(
+        self,
+        user_id: str,
+        source: ConfirmationSource | None = None,
+        session_key: str | None = None,
+        status: str | None = None,
+    ) -> list[ActionConfirmation]:
+        async with AsyncSession(_get_engine()) as session:
+            stmt = select(ActionConfirmationRecord).where(col(ActionConfirmationRecord.user_id) == user_id)
+            if source is not None:
+                stmt = stmt.where(col(ActionConfirmationRecord.source) == source)
+            if session_key is not None:
+                stmt = stmt.where(col(ActionConfirmationRecord.session_key) == session_key)
+            if status is not None:
+                stmt = stmt.where(col(ActionConfirmationRecord.status) == status)
+            stmt = stmt.order_by(col(ActionConfirmationRecord.created_at).desc()).limit(500)
+            result = await session.execute(stmt)
+            return [_action_confirmation_from_record(row) for row in result.scalars().all()]
+
+    async def decide_action_confirmation(
+        self,
+        confirmation_id: str,
+        user_id: str,
+        decision: ConfirmationDecision,
+    ) -> ActionConfirmation | None:
+        now = datetime.now(tz=UTC).isoformat()
+        async with AsyncSession(_get_engine()) as session:
+            stmt = (
+                update(ActionConfirmationRecord)
+                .where(
+                    col(ActionConfirmationRecord.confirmation_id) == confirmation_id,
+                    col(ActionConfirmationRecord.user_id) == user_id,
+                )
+                .values(status=decision, decided_at=now, decided_by=user_id)
+                .returning(ActionConfirmationRecord)
+            )
+            result = await session.execute(stmt)
+            row = result.scalar_one_or_none()
+            await session.commit()
+            return _action_confirmation_from_record(row) if row else None
+
+    async def mark_confirmation_executed(self, confirmation_id: str, user_id: str) -> None:
+        async with AsyncSession(_get_engine()) as session:
+            stmt = (
+                update(ActionConfirmationRecord)
+                .where(
+                    col(ActionConfirmationRecord.confirmation_id) == confirmation_id,
+                    col(ActionConfirmationRecord.user_id) == user_id,
+                )
+                .values(status="executed")
+            )
+            await session.execute(stmt)
+            await session.commit()
+
+    async def find_action_confirmation_grant(
+        self,
+        user_id: str,
+        source: ConfirmationSource,
+        session_key: str,
+        tool_name: str,
+        action: str,
+        resource_type: str,
+        resource_id: str,
+    ) -> ActionConfirmation | None:
+        now = datetime.now(tz=UTC).isoformat()
+        async with AsyncSession(_get_engine()) as session:
+            stmt = (
+                select(ActionConfirmationRecord)
+                .where(
+                    col(ActionConfirmationRecord.user_id) == user_id,
+                    col(ActionConfirmationRecord.source) == source,
+                    col(ActionConfirmationRecord.session_key) == session_key,
+                    col(ActionConfirmationRecord.tool_name) == tool_name,
+                    col(ActionConfirmationRecord.action) == action,
+                    col(ActionConfirmationRecord.resource_type) == resource_type,
+                    col(ActionConfirmationRecord.resource_id) == resource_id,
+                    col(ActionConfirmationRecord.status).in_(["approved", "denied"]),
+                    col(ActionConfirmationRecord.expires_at) > now,
+                )
+                .order_by(col(ActionConfirmationRecord.decided_at).desc())
+                .limit(1)
+            )
+            result = await session.execute(stmt)
+            row = result.scalar_one_or_none()
+            return _action_confirmation_from_record(row) if row else None
