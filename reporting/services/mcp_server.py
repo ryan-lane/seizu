@@ -228,7 +228,11 @@ class _MCPAuthMiddleware:
         if mcp_session_id_bytes:
             session_key = bearer_session_key(mcp_session_id_bytes.decode("latin-1"))
         else:
-            session_key = bearer_session_key(bearer_token)
+            # Use the stable user identity so pending confirmations survive
+            # token rotation.  A client that wants finer-grained session
+            # isolation (e.g. two concurrent connections from the same user)
+            # should send a per-connection mcp-session-id header.
+            session_key = bearer_session_key(current_user.user.user_id)
         session_token = _mcp_session_key.set(session_key)
         try:
             await self._app(scope, receive, send)

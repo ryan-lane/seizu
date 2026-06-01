@@ -3046,7 +3046,10 @@ class DynamoDBReportStore(ReportStore):
         result = await asyncio.to_thread(_op)
         if result is not None:
             return result
-        # Re-fetch the pending confirmation that beat us to the create.
+        # Transaction cancelled — a concurrent caller won the dedup race.
+        # Search across all statuses so we return the correct record even if
+        # the winning confirmation was decided (approved/denied/executed) in
+        # the window between our transaction failure and this re-fetch.
         existing = await self.find_action_confirmation_grant(
             user_id=confirmation.user_id,
             source=confirmation.source,
@@ -3056,7 +3059,7 @@ class DynamoDBReportStore(ReportStore):
             resource_type=confirmation.resource_type,
             resource_id=confirmation.resource_id,
             arguments_hash=confirmation.arguments_hash,
-            statuses=("pending",),
+            statuses=("pending", "approved", "denied", "executed"),
         )
         return existing or confirmation
 
@@ -3405,7 +3408,16 @@ class DynamoDBReportStore(ReportStore):
                         kwargs["ExclusiveStartKey"] = last_key
                     resp = table.query(**kwargs)
                     for raw_item in resp.get("Items", []):
-                        item = _action_confirmation_from_item(raw_item)
+                        # Session-list items are pointer-only ({PK, SK, confirmation_id}).
+                        # Hydrate the full record from the metadata item before comparing.
+                        cid = raw_item.get("confirmation_id")
+                        if not isinstance(cid, str) or not cid:
+                            continue
+                        meta_resp = table.get_item(Key={"PK": _action_confirmation_pk(cid), "SK": _SK_METADATA})
+                        meta_item = meta_resp.get("Item")
+                        if not meta_item:
+                            continue
+                        item = _action_confirmation_from_item(meta_item)
                         if (
                             item.tool_name == tool_name
                             and item.action == action

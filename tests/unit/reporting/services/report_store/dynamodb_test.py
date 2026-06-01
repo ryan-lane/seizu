@@ -2006,3 +2006,61 @@ async def test_decide_action_confirmation_moves_status_indexes(patch_table, stor
     # Dedup sentinel is deleted when a confirmation is decided.
     dedup_sk = _action_confirmation_dedup_sk(confirmation.model_dump())
     assert ("ACTION_CONFIRMATION_SESSION_LIST#user-1#SOURCE#mcp#SESSION#session-1", dedup_sk) in delete_keys
+
+
+async def test_find_action_confirmation_grant_hydrates_from_metadata(patch_table, store):
+    """find_action_confirmation_grant must fetch the full metadata item for each
+    session-list pointer record rather than parsing the pointer directly, which
+    only contains {PK, SK, confirmation_id}."""
+    pointer_item = {
+        "PK": "ACTION_CONFIRMATION_SESSION_LIST#user-1#SOURCE#mcp#SESSION#session-1",
+        "SK": "STATUS#approved#CREATED#2024-01-01T00:00:00+00:00#CONFIRMATION#confirm-1",
+        "confirmation_id": "confirm-1",
+    }
+    metadata_item = _action_confirmation_item(status="approved")
+
+    patch_table.query.return_value = {"Items": [pointer_item]}
+    patch_table.get_item.return_value = {"Item": metadata_item}
+
+    result = await store.find_action_confirmation_grant(
+        user_id="user-1",
+        source="mcp",
+        session_key="session-1",
+        tool_name="reports__delete",
+        action="delete",
+        resource_type="report",
+        resource_id="report-1",
+        arguments_hash="hash-1",
+        statuses=("approved",),
+    )
+
+    assert result is not None
+    assert result.confirmation_id == "confirm-1"
+    assert result.status == "approved"
+    # get_item must have been called to fetch the full metadata record.
+    patch_table.get_item.assert_called_once_with(Key={"PK": "ACTION_CONFIRMATION#confirm-1", "SK": "#METADATA"})
+
+
+async def test_find_action_confirmation_grant_skips_missing_metadata(patch_table, store):
+    """If the metadata item is gone (e.g. TTL-deleted), the pointer is skipped."""
+    pointer_item = {
+        "PK": "ACTION_CONFIRMATION_SESSION_LIST#user-1#SOURCE#mcp#SESSION#session-1",
+        "SK": "STATUS#approved#CREATED#2024-01-01T00:00:00+00:00#CONFIRMATION#confirm-1",
+        "confirmation_id": "confirm-1",
+    }
+    patch_table.query.return_value = {"Items": [pointer_item]}
+    patch_table.get_item.return_value = {}  # no Item key — metadata gone
+
+    result = await store.find_action_confirmation_grant(
+        user_id="user-1",
+        source="mcp",
+        session_key="session-1",
+        tool_name="reports__delete",
+        action="delete",
+        resource_type="report",
+        resource_id="report-1",
+        arguments_hash="hash-1",
+        statuses=("approved",),
+    )
+
+    assert result is None

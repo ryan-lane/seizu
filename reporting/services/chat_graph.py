@@ -412,7 +412,7 @@ async def _resume_confirmed_tool_turn(
         response = "That action confirmation does not belong to this chat thread, so Seizu did not run it."
         writer({"kind": "token", "content": response})
         return _chat_state_with_ai_response(state, response)
-    if action_confirmations.is_expired(confirmation):
+    if action_confirmations.is_expired(confirmation) and confirmation.status != "executed":
         response = "That action confirmation has expired, so Seizu did not run it."
         writer({"kind": "token", "content": response})
         return _chat_state_with_ai_response(state, response)
@@ -441,7 +441,9 @@ async def _resume_confirmed_tool_turn(
             writer({"kind": "token", "content": response})
             return _chat_state_with_ai_response(state, response)
         denied = [c for c in batch if c.status == "denied"]
-        expired = [c for c in batch if action_confirmations.is_expired(c)]
+        # Only count a confirmation as blocking-expired when it still needed a
+        # decision — executed items have already run and must not abort the batch.
+        expired = [c for c in batch if c.status in ("pending", "approved") and action_confirmations.is_expired(c)]
         if denied or expired:
             reason = "denied" if denied else "expired"
             response = f"One or more actions in this approval batch were {reason}, so Seizu did not run the batch."

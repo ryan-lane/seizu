@@ -1095,6 +1095,74 @@ async def test_resume_batch_confirmation_does_not_run_after_denial(mocker):
     claim.assert_not_called()
 
 
+async def test_resume_batch_confirmation_does_not_abort_already_executed_batch_after_ttl(mocker):
+    """Executed batch items whose TTL has passed must not be treated as expired."""
+    from langgraph.checkpoint.memory import MemorySaver
+
+    # expires_at is in the past so is_expired() returns True for both items.
+    executed1 = ActionConfirmation.model_validate(
+        {
+            "confirmation_id": "confirm-exec-1",
+            "user_id": "user-1",
+            "source": "chat",
+            "session_key": "thread-exec-batch",
+            "tool_name": "reports__delete",
+            "action": "delete",
+            "resource_type": "report",
+            "resource_id": "report-1",
+            "arguments": {"report_id": "report-1"},
+            "arguments_hash": "hash-1",
+            "status": "executed",
+            "batch_id": "batch-exec",
+            "created_at": "2020-01-01T00:00:00+00:00",
+            "expires_at": "2020-01-01T00:30:00+00:00",
+        }
+    )
+    executed2 = executed1.model_copy(
+        update={
+            "confirmation_id": "confirm-exec-2",
+            "tool_name": "reports__pin",
+            "action": "pin",
+            "resource_id": "report-2",
+            "arguments": {"report_id": "report-2", "pinned": True},
+        }
+    )
+    mocker.patch("reporting.services.chat_graph.report_store.get_action_confirmation", return_value=executed1)
+    mocker.patch(
+        "reporting.services.chat_graph.report_store.list_batch_action_confirmations",
+        return_value=[executed1, executed2],
+    )
+    claim = mocker.patch("reporting.services.chat_graph.report_store.claim_action_confirmation_for_execution")
+    graph = chat_graph.build_chat_graph(MemorySaver())
+    config = {
+        "configurable": {
+            "thread_id": "thread-exec-batch",
+            "client_thread_id": "thread-exec-batch",
+            "current_user": _user(),
+        }
+    }
+
+    chunks = [
+        chunk
+        async for chunk in graph.astream(
+            {
+                "messages": [
+                    HumanMessage(
+                        content="Resume approved confirmation confirm-exec-1",
+                        additional_kwargs={"resume_confirmation_id": "confirm-exec-1"},
+                    )
+                ]
+            },
+            config,
+            stream_mode="custom",
+        )
+    ]
+
+    streamed = "".join(chunk["content"] for chunk in chunks if chunk.get("kind") == "token")
+    assert "already been executed" in streamed
+    claim.assert_not_called()
+
+
 async def test_chat_graph_reports_unavailable_tool_call_and_persists_notice(mocker):
     from langgraph.checkpoint.memory import MemorySaver
 
