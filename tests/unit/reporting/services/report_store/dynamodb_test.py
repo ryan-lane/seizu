@@ -3,6 +3,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from reporting.schema.confirmations import ActionConfirmation
 from reporting.schema.mcp_config import SkillItem, SkillsetListItem, SkillsetVersion, SkillVersion
 from reporting.schema.report_config import ReportListItem, ReportVersion
 from reporting.services.report_store import dynamodb as dynamodb_module
@@ -181,6 +182,29 @@ def _skill_version_item(skill_id="sk1", skillset_id="ss1", version=1):
         "created_at": "2024-01-01T00:00:00+00:00",
         "created_by": "u1",
         "comment": None,
+    }
+
+
+def _action_confirmation_item(
+    confirmation_id: str = "confirm-1",
+    status: str = "pending",
+    created_at: str = "2024-01-01T00:00:00+00:00",
+) -> dict[str, object]:
+    return {
+        "confirmation_id": confirmation_id,
+        "user_id": "user-1",
+        "source": "mcp",
+        "session_key": "session-1",
+        "tool_name": "reports__delete",
+        "action": "delete",
+        "resource_type": "report",
+        "resource_id": "report-1",
+        "arguments": {"report_id": "report-1"},
+        "arguments_hash": "hash-1",
+        "ui_arguments": {"report_id": "report-1"},
+        "status": status,
+        "created_at": created_at,
+        "expires_at": "2099-01-01T00:30:00+00:00",
     }
 
 
@@ -1923,3 +1947,53 @@ async def test_get_role_version_not_found(patch_table, store):
     patch_table.get_item.return_value = {}
     result = await store.get_role_version("r1", 99)
     assert result is None
+
+
+async def test_create_action_confirmation_writes_all_confirmation_indexes(patch_table, store):
+    confirmation = ActionConfirmation.model_validate(_action_confirmation_item())
+
+    await store.create_action_confirmation(confirmation)
+
+    transact_items = patch_table.meta.client.transact_write_items.call_args.kwargs["TransactItems"]
+    put_keys = {(item["Put"]["Item"]["PK"], item["Put"]["Item"]["SK"]) for item in transact_items}
+    assert ("ACTION_CONFIRMATION#confirm-1", "#METADATA") in put_keys
+    assert ("ACTION_CONFIRMATION_LIST#user-1", "CREATED#2024-01-01T00:00:00+00:00#CONFIRMATION#confirm-1") in put_keys
+    assert (
+        "ACTION_CONFIRMATION_STATUS_LIST#user-1#STATUS#pending",
+        "CREATED#2024-01-01T00:00:00+00:00#CONFIRMATION#confirm-1",
+    ) in put_keys
+    assert (
+        "ACTION_CONFIRMATION_SESSION_LIST#user-1#SOURCE#mcp#SESSION#session-1",
+        "STATUS#pending#CREATED#2024-01-01T00:00:00+00:00#CONFIRMATION#confirm-1",
+    ) in put_keys
+
+
+async def test_list_action_confirmations_uses_user_status_index_for_status_only(patch_table, store):
+    patch_table.query.return_value = {"Items": [_action_confirmation_item()]}
+
+    result = await store.list_action_confirmations(user_id="user-1", status="pending")
+
+    assert len(result) == 1
+    assert patch_table.query.call_args.kwargs["ExpressionAttributeValues"] == {
+        ":pk": "ACTION_CONFIRMATION_STATUS_LIST#user-1#STATUS#pending"
+    }
+
+
+async def test_decide_action_confirmation_moves_status_indexes(patch_table, store):
+    patch_table.get_item.return_value = {"Item": _action_confirmation_item()}
+
+    await store.decide_action_confirmation("confirm-1", "user-1", "approved")
+
+    transact_items = patch_table.meta.client.transact_write_items.call_args.kwargs["TransactItems"]
+    delete_keys = {
+        (item["Delete"]["Key"]["PK"], item["Delete"]["Key"]["SK"]) for item in transact_items if "Delete" in item
+    }
+    put_keys = {(item["Put"]["Item"]["PK"], item["Put"]["Item"]["SK"]) for item in transact_items if "Put" in item}
+    assert (
+        "ACTION_CONFIRMATION_STATUS_LIST#user-1#STATUS#pending",
+        "CREATED#2024-01-01T00:00:00+00:00#CONFIRMATION#confirm-1",
+    ) in delete_keys
+    assert (
+        "ACTION_CONFIRMATION_STATUS_LIST#user-1#STATUS#approved",
+        "CREATED#2024-01-01T00:00:00+00:00#CONFIRMATION#confirm-1",
+    ) in put_keys

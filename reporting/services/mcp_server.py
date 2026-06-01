@@ -225,7 +225,10 @@ class _MCPAuthMiddleware:
         perm_token = _mcp_permissions.set(current_user.permissions)
         user_token = _mcp_current_user.set(current_user)
         mcp_session_id_bytes: bytes | None = headers.get(b"mcp-session-id")
-        session_key = mcp_session_id_bytes.decode() if mcp_session_id_bytes else bearer_session_key(bearer_token)
+        if mcp_session_id_bytes:
+            session_key = bearer_session_key(mcp_session_id_bytes.decode("latin-1"))
+        else:
+            session_key = bearer_session_key(bearer_token)
         session_token = _mcp_session_key.set(session_key)
         try:
             await self._app(scope, receive, send)

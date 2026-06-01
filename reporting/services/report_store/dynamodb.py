@@ -172,6 +172,14 @@ def _action_confirmation_list_sk(created_at: str, confirmation_id: str) -> str:
     return f"CREATED#{created_at}#CONFIRMATION#{confirmation_id}"
 
 
+def _action_confirmation_status_list_pk(user_id: str, status: str) -> str:
+    return f"ACTION_CONFIRMATION_STATUS_LIST#{user_id}#STATUS#{status}"
+
+
+def _action_confirmation_status_list_sk(created_at: str, confirmation_id: str) -> str:
+    return f"CREATED#{created_at}#CONFIRMATION#{confirmation_id}"
+
+
 def _action_confirmation_session_list_pk(user_id: str, source: str, session_key: str) -> str:
     return f"ACTION_CONFIRMATION_SESSION_LIST#{user_id}#SOURCE#{source}#SESSION#{session_key}"
 
@@ -212,6 +220,14 @@ def _action_confirmation_user_list_item(data: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _action_confirmation_status_list_item(data: dict[str, Any]) -> dict[str, Any]:
+    return {
+        **_floats_to_decimal(data),
+        "PK": _action_confirmation_status_list_pk(str(data["user_id"]), str(data["status"])),
+        "SK": _action_confirmation_status_list_sk(str(data["created_at"]), str(data["confirmation_id"])),
+    }
+
+
 def _action_confirmation_session_list_item(data: dict[str, Any]) -> dict[str, Any]:
     return {
         **_floats_to_decimal(data),
@@ -243,6 +259,7 @@ def _action_confirmation_put_items(data: dict[str, Any]) -> list[dict[str, Any]]
     items = [
         _action_confirmation_metadata_item(data),
         _action_confirmation_user_list_item(data),
+        _action_confirmation_status_list_item(data),
         _action_confirmation_session_list_item(data),
     ]
     batch_item = _action_confirmation_batch_list_item(data)
@@ -3026,6 +3043,15 @@ class DynamoDBReportStore(ReportStore):
                     ScanIndexForward=False,
                     Limit=_ACTION_CONFIRMATION_LIST_MAX,
                 )
+            elif status is not None:
+                resp = table.query(
+                    KeyConditionExpression="PK = :pk",
+                    ExpressionAttributeValues={
+                        ":pk": _action_confirmation_status_list_pk(user_id, status),
+                    },
+                    ScanIndexForward=False,
+                    Limit=_ACTION_CONFIRMATION_LIST_MAX,
+                )
             else:
                 resp = table.query(
                     KeyConditionExpression="PK = :pk",
@@ -3109,6 +3135,21 @@ class DynamoDBReportStore(ReportStore):
                     "Delete": {
                         "TableName": settings.DYNAMODB_TABLE_NAME,
                         "Key": {
+                            "PK": _action_confirmation_status_list_pk(user_id, "pending"),
+                            "SK": _action_confirmation_status_list_sk(str(data["created_at"]), confirmation_id),
+                        },
+                    },
+                },
+                {
+                    "Put": {
+                        "TableName": settings.DYNAMODB_TABLE_NAME,
+                        "Item": _action_confirmation_status_list_item(updated),
+                    },
+                },
+                {
+                    "Delete": {
+                        "TableName": settings.DYNAMODB_TABLE_NAME,
+                        "Key": {
                             "PK": _action_confirmation_session_list_pk(
                                 user_id, str(data["source"]), str(data["session_key"])
                             ),
@@ -3184,6 +3225,21 @@ class DynamoDBReportStore(ReportStore):
                     "Put": {
                         "TableName": settings.DYNAMODB_TABLE_NAME,
                         "Item": _action_confirmation_user_list_item(updated),
+                    },
+                },
+                {
+                    "Delete": {
+                        "TableName": settings.DYNAMODB_TABLE_NAME,
+                        "Key": {
+                            "PK": _action_confirmation_status_list_pk(user_id, "approved"),
+                            "SK": _action_confirmation_status_list_sk(str(data["created_at"]), confirmation_id),
+                        },
+                    },
+                },
+                {
+                    "Put": {
+                        "TableName": settings.DYNAMODB_TABLE_NAME,
+                        "Item": _action_confirmation_status_list_item(updated),
                     },
                 },
                 {

@@ -407,6 +407,11 @@ async def _resume_confirmed_tool_turn(
         response = "Seizu could not find that action confirmation."
         writer({"kind": "token", "content": response})
         return _chat_state_with_ai_response(state, response)
+    client_thread_id = _client_thread_id_from_config(config)
+    if confirmation.source != "chat" or confirmation.session_key != client_thread_id:
+        response = "That action confirmation does not belong to this chat thread, so Seizu did not run it."
+        writer({"kind": "token", "content": response})
+        return _chat_state_with_ai_response(state, response)
     if action_confirmations.is_expired(confirmation):
         response = "That action confirmation has expired, so Seizu did not run it."
         writer({"kind": "token", "content": response})
@@ -424,6 +429,7 @@ async def _resume_confirmed_tool_turn(
             user_id=authed_user.user.user_id,
             batch_id=batch_id,
         )
+        batch = [c for c in batch if c.source == "chat" and c.session_key == client_thread_id]
         pending = [c for c in batch if c.status == "pending" and not action_confirmations.is_expired(c)]
         if pending:
             n = len(pending)
@@ -432,6 +438,13 @@ async def _resume_confirmed_tool_turn(
                 f"Waiting for {n} more {noun} before proceeding. "
                 "Use the confirmation panel or URLs to approve the remaining actions."
             )
+            writer({"kind": "token", "content": response})
+            return _chat_state_with_ai_response(state, response)
+        denied = [c for c in batch if c.status == "denied"]
+        expired = [c for c in batch if c.status == "expired" or action_confirmations.is_expired(c)]
+        if denied or expired:
+            reason = "denied" if denied else "expired"
+            response = f"One or more actions in this approval batch were {reason}, so Seizu did not run the batch."
             writer({"kind": "token", "content": response})
             return _chat_state_with_ai_response(state, response)
         to_run = [c for c in batch if c.status == "approved"]

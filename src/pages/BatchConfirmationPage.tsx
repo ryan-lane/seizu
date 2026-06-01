@@ -167,9 +167,13 @@ export default function BatchConfirmationPage() {
         const remainingPending = nextConfirmations.filter(
           (c) => c.status === 'pending',
         ).length;
+        const hasBlockedDecision = nextConfirmations.some(
+          (c) => c.status === 'denied' || c.status === 'expired',
+        );
         if (
           decision === 'approved' &&
           remainingPending === 0 &&
+          !hasBlockedDecision &&
           updated.thread_id
         ) {
           const params = new URLSearchParams({

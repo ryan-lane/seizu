@@ -905,6 +905,61 @@ async def test_resume_expired_approved_confirmation_does_not_execute(mocker):
     call_tool.assert_not_called()
 
 
+async def test_resume_confirmation_must_belong_to_active_chat_thread(mocker):
+    from langgraph.checkpoint.memory import MemorySaver
+
+    confirmation = ActionConfirmation.model_validate(
+        {
+            "confirmation_id": "confirm-mcp",
+            "user_id": "user-1",
+            "source": "mcp",
+            "session_key": "hashed-mcp-session",
+            "tool_name": "reports__delete",
+            "action": "delete",
+            "resource_type": "report",
+            "resource_id": "report-1",
+            "arguments": {"report_id": "report-1"},
+            "arguments_hash": "hash",
+            "ui_arguments": {"report_id": "report-1"},
+            "status": "approved",
+            "created_at": "2024-01-01T00:00:00+00:00",
+            "expires_at": "2099-01-01T00:30:00+00:00",
+        }
+    )
+    mocker.patch("reporting.services.chat_graph.report_store.get_action_confirmation", return_value=confirmation)
+    claim = mocker.patch("reporting.services.chat_graph.report_store.claim_action_confirmation_for_execution")
+    call_tool = mocker.patch("reporting.services.chat_graph.mcp_runtime.call_tool_for_chat")
+    graph = chat_graph.build_chat_graph(MemorySaver())
+    config = {
+        "configurable": {
+            "thread_id": "thread-active",
+            "client_thread_id": "thread-active",
+            "current_user": _user(),
+        }
+    }
+
+    chunks = [
+        chunk
+        async for chunk in graph.astream(
+            {
+                "messages": [
+                    HumanMessage(
+                        content="Resume approved confirmation confirm-mcp",
+                        additional_kwargs={"resume_confirmation_id": "confirm-mcp"},
+                    )
+                ]
+            },
+            config,
+            stream_mode="custom",
+        )
+    ]
+
+    streamed = "".join(chunk["content"] for chunk in chunks if chunk.get("kind") == "token")
+    assert "does not belong to this chat thread" in streamed
+    claim.assert_not_called()
+    call_tool.assert_not_called()
+
+
 async def test_resume_batch_confirmation_uses_batch_lookup(mocker):
     from langgraph.checkpoint.memory import MemorySaver
 
@@ -973,6 +1028,74 @@ async def test_resume_batch_confirmation_uses_batch_lookup(mocker):
     assert "Waiting for 1 more approval" in streamed
     list_batch.assert_awaited_once_with(user_id="user-1", batch_id="batch-1")
     list_session.assert_not_called()
+    claim.assert_not_called()
+
+
+async def test_resume_batch_confirmation_does_not_run_after_denial(mocker):
+    from langgraph.checkpoint.memory import MemorySaver
+
+    approved = ActionConfirmation.model_validate(
+        {
+            "confirmation_id": "confirm-approved",
+            "user_id": "user-1",
+            "source": "chat",
+            "session_key": "thread-batch-denied",
+            "tool_name": "reports__delete",
+            "action": "delete",
+            "resource_type": "report",
+            "resource_id": "report-1",
+            "arguments": {"report_id": "report-1"},
+            "arguments_hash": "hash-1",
+            "ui_arguments": {"report_id": "report-1"},
+            "status": "approved",
+            "batch_id": "batch-denied",
+            "created_at": "2024-01-01T00:00:00+00:00",
+            "expires_at": "2099-01-01T00:30:00+00:00",
+        }
+    )
+    denied = approved.model_copy(
+        update={
+            "confirmation_id": "confirm-denied",
+            "tool_name": "reports__pin",
+            "action": "pin",
+            "resource_id": "report-2",
+            "arguments": {"report_id": "report-2", "pinned": True},
+            "status": "denied",
+        }
+    )
+    mocker.patch("reporting.services.chat_graph.report_store.get_action_confirmation", return_value=approved)
+    mocker.patch(
+        "reporting.services.chat_graph.report_store.list_batch_action_confirmations",
+        return_value=[approved, denied],
+    )
+    claim = mocker.patch("reporting.services.chat_graph.report_store.claim_action_confirmation_for_execution")
+    graph = chat_graph.build_chat_graph(MemorySaver())
+    config = {
+        "configurable": {
+            "thread_id": "thread-batch-denied",
+            "client_thread_id": "thread-batch-denied",
+            "current_user": _user(),
+        }
+    }
+
+    chunks = [
+        chunk
+        async for chunk in graph.astream(
+            {
+                "messages": [
+                    HumanMessage(
+                        content="Resume approved confirmation confirm-approved",
+                        additional_kwargs={"resume_confirmation_id": "confirm-approved"},
+                    )
+                ]
+            },
+            config,
+            stream_mode="custom",
+        )
+    ]
+
+    streamed = "".join(chunk["content"] for chunk in chunks if chunk.get("kind") == "token")
+    assert "were denied" in streamed
     claim.assert_not_called()
 
 

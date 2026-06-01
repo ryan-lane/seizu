@@ -282,8 +282,20 @@ class ActionConfirmationRecord(SQLModel, table=True):  # type: ignore
             "user_id",
             "source",
             "session_key",
+            "tool_name",
+            "action",
+            "resource_type",
+            "resource_id",
             "arguments_hash",
             "status",
+        ),
+        # Covers user-wide pending/approved confirmation lists without
+        # filtering a newest-N history page in application code.
+        Index(
+            "ix_action_conf_user_status_list",
+            "user_id",
+            "status",
+            "created_at",
         ),
         # Covers list_action_confirmations (session + status filter).
         Index(
@@ -475,6 +487,12 @@ class SQLModelReportStore(ReportStore):
                             "ADD COLUMN IF NOT EXISTS arguments_hash VARCHAR DEFAULT ''"
                         )
                     )
+                    await conn.execute(
+                        text(
+                            "CREATE INDEX IF NOT EXISTS ix_action_conf_user_status_list "
+                            "ON action_confirmations (user_id, status, created_at)"
+                        )
+                    )
                 elif conn.dialect.name == "sqlite":
                     # SQLite cannot drop NOT NULL in-place. Existing SQLite
                     # dev DBs created before nullable email still require email;
@@ -491,6 +509,12 @@ class SQLModelReportStore(ReportStore):
                         await conn.execute(
                             text("ALTER TABLE action_confirmations ADD COLUMN arguments_hash VARCHAR DEFAULT ''")
                         )
+                    await conn.execute(
+                        text(
+                            "CREATE INDEX IF NOT EXISTS ix_action_conf_user_status_list "
+                            "ON action_confirmations (user_id, status, created_at)"
+                        )
+                    )
             logger.info("SQL report store tables initialised")
         except IntegrityError:
             logger.info("SQL report store tables already exist")

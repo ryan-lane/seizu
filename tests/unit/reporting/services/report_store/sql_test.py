@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import create_async_engine
 from sqlalchemy.pool import StaticPool
 from sqlmodel import SQLModel
 
+from reporting.schema.confirmations import ActionConfirmation
 from reporting.schema.mcp_config import SkillItem, SkillsetListItem, SkillsetVersion, SkillVersion
 from reporting.schema.report_config import ReportAccess, ReportListItem, ReportVersion, User
 from reporting.services.report_store import sql as sql_module
@@ -108,8 +109,57 @@ def test_get_engine_uses_command_timeout_for_postgres(mocker):
 # ---------------------------------------------------------------------------
 
 
+def _action_confirmation(
+    confirmation_id: str,
+    status: str,
+    created_at: str,
+    *,
+    session_key: str = "session-1",
+) -> ActionConfirmation:
+    return ActionConfirmation.model_validate(
+        {
+            "confirmation_id": confirmation_id,
+            "user_id": "user-1",
+            "source": "mcp",
+            "session_key": session_key,
+            "tool_name": "reports__delete",
+            "action": "delete",
+            "resource_type": "report",
+            "resource_id": "report-1",
+            "arguments": {"report_id": "report-1"},
+            "arguments_hash": "hash-1",
+            "ui_arguments": {"report_id": "report-1"},
+            "status": status,
+            "created_at": created_at,
+            "expires_at": "2099-01-01T00:30:00+00:00",
+        }
+    )
+
+
 async def test_list_reports_empty(store):
     assert await store.list_reports() == []
+
+
+async def test_action_confirmation_status_list_returns_pending_beyond_newest_history(store):
+    for index in range(520):
+        await store.create_action_confirmation(
+            _action_confirmation(
+                confirmation_id=f"denied-{index}",
+                status="denied",
+                created_at=f"2024-01-01T00:{index // 60:02d}:{index % 60:02d}+00:00",
+            )
+        )
+    await store.create_action_confirmation(
+        _action_confirmation(
+            confirmation_id="pending-old",
+            status="pending",
+            created_at="2023-12-31T23:59:00+00:00",
+        )
+    )
+
+    result = await store.list_action_confirmations(user_id="user-1", status="pending")
+
+    assert [item.confirmation_id for item in result] == ["pending-old"]
 
 
 async def test_list_reports_returns_created_reports(store, mocker):
