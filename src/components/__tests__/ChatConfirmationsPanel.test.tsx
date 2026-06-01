@@ -13,7 +13,7 @@ function confirmation(id: string): ActionConfirmation {
     action: 'delete',
     resource_type: 'report',
     resource_id: `report-${id}`,
-    ui_arguments: { report_id: `report-${id}` },
+    arguments: { report_id: `report-${id}` },
     status: 'pending',
     created_at: '2024-01-01T00:00:00+00:00',
     expires_at: '2099-01-01T00:00:00+00:00',
@@ -82,7 +82,7 @@ describe('ChatConfirmationsPanel', () => {
 
     expect(screen.getByText('Confirmations')).toBeInTheDocument();
     expect(screen.getByText('delete report')).toBeInTheDocument();
-    // resource_id and the ui_arguments value both contain 'report-1'
+    // resource_id and the arguments value both contain 'report-1'
     expect(screen.getAllByText('report-1').length).toBeGreaterThanOrEqual(1);
     expect(screen.getByText('Request details')).toBeInTheDocument();
     expect(screen.getByText('report_id')).toBeInTheDocument();

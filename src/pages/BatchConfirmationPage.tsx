@@ -66,7 +66,7 @@ function ConfirmationCard({
       <Typography sx={{ wordBreak: 'break-word' }} variant="body2">
         {confirmation.tool_name}
       </Typography>
-      {Object.keys(confirmation.ui_arguments).length > 0 ? (
+      {Object.keys(confirmation.arguments).length > 0 ? (
         <>
           <Typography sx={{ mt: 2 }} variant="subtitle2">
             Arguments
@@ -85,7 +85,7 @@ function ConfirmationCard({
               wordBreak: 'break-word',
             }}
           >
-            {JSON.stringify(confirmation.ui_arguments, null, 2)}
+            {JSON.stringify(confirmation.arguments, null, 2)}
           </Typography>
         </>
       ) : null}

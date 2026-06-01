@@ -369,6 +369,35 @@ describe('ChatInterface', () => {
     expect(touchSession).toHaveBeenCalledWith('thread-1');
   });
 
+  it('shows an error when resuming an approved confirmation fails', async () => {
+    const sendMessage = jest.fn().mockRejectedValue(new Error('resume failed'));
+    mockUseChat.mockReturnValue({
+      id: 'chat-id',
+      messages: [],
+      sendMessage,
+      regenerate: jest.fn(),
+      stop: jest.fn(),
+      resumeStream: jest.fn(),
+      addToolResult: jest.fn(),
+      addToolOutput: jest.fn(),
+      addToolApprovalResponse: jest.fn(),
+      status: 'ready',
+      error: undefined,
+      setMessages: jest.fn(),
+      clearError: jest.fn(),
+    });
+
+    renderChat({
+      initialPath: '/app/chat/thread-1?resume_confirmation_id=confirm-1',
+    });
+
+    await waitFor(() => {
+      expect(
+        screen.getByText('Failed to resume the approved confirmation.'),
+      ).toBeInTheDocument();
+    });
+  });
+
   it('refreshes confirmations once when an approval-required response finishes', async () => {
     const originalFetch = globalThis.fetch;
     const fetchMock = jest.fn().mockResolvedValue({

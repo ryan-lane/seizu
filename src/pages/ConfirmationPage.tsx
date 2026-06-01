@@ -132,7 +132,7 @@ export default function ConfirmationPage() {
               wordBreak: 'break-word',
             }}
           >
-            {JSON.stringify(confirmation.ui_arguments, null, 2)}
+            {JSON.stringify(confirmation.arguments, null, 2)}
           </Typography>
           <Typography color="text.secondary" sx={{ mt: 1 }} variant="body2">
             Status: {confirmation.status}

@@ -20,7 +20,6 @@ def _confirmation(status: str = "pending", arguments: dict[str, object] | None =
             "resource_id": "r1",
             "arguments": args,
             "arguments_hash": action_confirmations.arguments_hash(args),
-            "ui_arguments": args,
             "status": status,
             "created_at": _NOW,
             "expires_at": _LATER,
@@ -53,8 +52,8 @@ async def test_pending_confirmation_is_bound_to_arguments_hash(mocker):
     create_confirmation.assert_awaited_once()
 
 
-async def test_ui_arguments_mirrors_model_provided_arguments(mocker):
-    """ui_arguments shows user-provided model args as-is — no redaction applied."""
+async def test_public_arguments_mirror_model_provided_arguments(mocker):
+    """Public arguments show user-provided model args as-is when they are already safe."""
     mocker.patch(
         "reporting.services.action_confirmations.report_store.create_action_confirmation",
         side_effect=lambda confirmation: confirmation,
@@ -74,7 +73,7 @@ async def test_ui_arguments_mirrors_model_provided_arguments(mocker):
     )
 
     assert result is not None
-    assert result.ui_arguments == result.arguments
+    assert result.arguments == {"keyword": "search-term", "token_count": 42, "cache_key": "abc", "name": "my-thing"}
 
 
 async def test_approved_confirmation_is_claimed_before_execution(mocker):

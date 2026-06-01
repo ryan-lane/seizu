@@ -1,7 +1,7 @@
 import asyncio
 import hashlib
 import logging
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from decimal import Decimal
@@ -221,23 +221,22 @@ def _action_confirmation_metadata_item(data: dict[str, Any]) -> dict[str, Any]:
 
 def _action_confirmation_user_list_item(data: dict[str, Any]) -> dict[str, Any]:
     return {
-        **_floats_to_decimal(data),
         "PK": _action_confirmation_list_pk(str(data["user_id"])),
         "SK": _action_confirmation_list_sk(str(data["created_at"]), str(data["confirmation_id"])),
+        "confirmation_id": str(data["confirmation_id"]),
     }
 
 
 def _action_confirmation_status_list_item(data: dict[str, Any]) -> dict[str, Any]:
     return {
-        **_floats_to_decimal(data),
         "PK": _action_confirmation_status_list_pk(str(data["user_id"]), str(data["status"])),
         "SK": _action_confirmation_list_sk(str(data["created_at"]), str(data["confirmation_id"])),
+        "confirmation_id": str(data["confirmation_id"]),
     }
 
 
 def _action_confirmation_session_list_item(data: dict[str, Any]) -> dict[str, Any]:
     return {
-        **_floats_to_decimal(data),
         "PK": _action_confirmation_session_list_pk(
             str(data["user_id"]),
             str(data["source"]),
@@ -248,6 +247,7 @@ def _action_confirmation_session_list_item(data: dict[str, Any]) -> dict[str, An
             str(data["created_at"]),
             str(data["confirmation_id"]),
         ),
+        "confirmation_id": str(data["confirmation_id"]),
     }
 
 
@@ -256,9 +256,9 @@ def _action_confirmation_batch_list_item(data: dict[str, Any]) -> dict[str, Any]
     if not batch_id:
         return None
     return {
-        **_floats_to_decimal(data),
         "PK": _action_confirmation_batch_pk(str(data["user_id"]), str(batch_id)),
         "SK": _action_confirmation_list_sk(str(data["created_at"]), str(data["confirmation_id"])),
+        "confirmation_id": str(data["confirmation_id"]),
     }
 
 
@@ -281,6 +281,14 @@ def _action_confirmation_put_items(data: dict[str, Any]) -> list[dict[str, Any]]
     if batch_item is not None:
         items.append(batch_item)
     return items
+
+
+async def _hydrate_action_confirmations(
+    confirmation_ids: list[str],
+    get_confirmation: Callable[[str], Awaitable[ActionConfirmation | None]],
+) -> list[ActionConfirmation]:
+    confirmations = await asyncio.gather(*(get_confirmation(confirmation_id) for confirmation_id in confirmation_ids))
+    return [confirmation for confirmation in confirmations if confirmation is not None]
 
 
 def _transaction_cancelled(exc: botocore.exceptions.ClientError) -> bool:
@@ -3074,7 +3082,7 @@ class DynamoDBReportStore(ReportStore):
         session_key: str | None = None,
         status: str | None = None,
     ) -> list[ActionConfirmation]:
-        def _op() -> list[ActionConfirmation]:
+        def _op() -> list[str]:
             table = _get_table()
             if source is not None and session_key is not None:
                 values = {":pk": _action_confirmation_session_list_pk(user_id, source, session_key)}
@@ -3104,19 +3112,20 @@ class DynamoDBReportStore(ReportStore):
                     ScanIndexForward=False,
                     Limit=_ACTION_CONFIRMATION_LIST_MAX,
                 )
-            confirmations = [_action_confirmation_from_item(item) for item in resp.get("Items", [])]
             return [
-                item
-                for item in confirmations
-                if (source is None or item.source == source)
-                and (session_key is None or item.session_key == session_key)
-                and (status is None or item.status == status)
+                str(item["confirmation_id"])
+                for item in resp.get("Items", [])
+                if isinstance(item.get("confirmation_id"), str)
             ]
 
-        return await asyncio.to_thread(_op)
+        confirmation_ids = await asyncio.to_thread(_op)
+        return await _hydrate_action_confirmations(
+            confirmation_ids,
+            lambda confirmation_id: self.get_action_confirmation(confirmation_id, user_id=user_id),
+        )
 
     async def list_batch_action_confirmations(self, user_id: str, batch_id: str) -> list[ActionConfirmation]:
-        def _op() -> list[ActionConfirmation]:
+        def _op() -> list[str]:
             table = _get_table()
             resp = table.query(
                 KeyConditionExpression="PK = :pk",
@@ -3124,9 +3133,17 @@ class DynamoDBReportStore(ReportStore):
                 ScanIndexForward=True,
                 Limit=_ACTION_CONFIRMATION_LIST_MAX,
             )
-            return [_action_confirmation_from_item(item) for item in resp.get("Items", [])]
+            return [
+                str(item["confirmation_id"])
+                for item in resp.get("Items", [])
+                if isinstance(item.get("confirmation_id"), str)
+            ]
 
-        return await asyncio.to_thread(_op)
+        confirmation_ids = await asyncio.to_thread(_op)
+        return await _hydrate_action_confirmations(
+            confirmation_ids,
+            lambda confirmation_id: self.get_action_confirmation(confirmation_id, user_id=user_id),
+        )
 
     async def decide_action_confirmation(
         self,

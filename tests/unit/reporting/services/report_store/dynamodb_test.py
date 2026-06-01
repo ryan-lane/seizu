@@ -201,7 +201,6 @@ def _action_confirmation_item(
         "resource_id": "report-1",
         "arguments": {"report_id": "report-1"},
         "arguments_hash": "hash-1",
-        "ui_arguments": {"report_id": "report-1"},
         "status": status,
         "created_at": created_at,
         "expires_at": "2099-01-01T00:30:00+00:00",
@@ -1973,7 +1972,8 @@ async def test_create_action_confirmation_writes_all_confirmation_indexes(patch_
 
 
 async def test_list_action_confirmations_uses_user_status_index_for_status_only(patch_table, store):
-    patch_table.query.return_value = {"Items": [_action_confirmation_item()]}
+    patch_table.query.return_value = {"Items": [{"confirmation_id": "confirm-1"}]}
+    patch_table.get_item.return_value = {"Item": _action_confirmation_item()}
 
     result = await store.list_action_confirmations(user_id="user-1", status="pending")
 

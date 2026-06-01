@@ -128,7 +128,6 @@ def _action_confirmation(
             "resource_id": "report-1",
             "arguments": {"report_id": "report-1"},
             "arguments_hash": "hash-1",
-            "ui_arguments": {"report_id": "report-1"},
             "status": status,
             "created_at": created_at,
             "expires_at": "2099-01-01T00:30:00+00:00",

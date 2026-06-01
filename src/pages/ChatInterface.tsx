@@ -105,6 +105,9 @@ export default function ChatInterface() {
   const [decidingConfirmationId, setDecidingConfirmationId] = useState<
     string | null
   >(null);
+  const [confirmationError, setConfirmationError] = useState<string | null>(
+    null,
+  );
 
   const creatingInitialSessionRef = useRef(false);
   const autoTitleAttemptRef = useRef<string | null>(null);
@@ -410,16 +413,21 @@ export default function ChatInterface() {
       ).length;
       const wasLastPending = pendingCount === 1;
       setDecidingConfirmationId(confirmation.confirmation_id);
+      setConfirmationError(null);
       try {
         await decideConfirmation(confirmation.confirmation_id, decision);
         await fetchConfirmations();
         if (decision === 'approved' && activeThreadId && wasLastPending) {
           resumeConfirmationIdRef.current = confirmation.confirmation_id;
           touchSession(activeThreadId);
-          void sendMessage(undefined, {
-            body: { resume_confirmation_id: confirmation.confirmation_id },
-          });
+          await Promise.resolve(
+            sendMessage(undefined, {
+              body: { resume_confirmation_id: confirmation.confirmation_id },
+            }),
+          );
         }
+      } catch {
+        setConfirmationError('Failed to approve or resume this confirmation.');
       } finally {
         setDecidingConfirmationId(null);
       }
@@ -442,9 +450,17 @@ export default function ChatInterface() {
     consumedResumeParamRef.current = resumeConfirmationId;
     resumeConfirmationIdRef.current = resumeConfirmationId;
     touchSession(activeThreadId);
-    void sendMessage(undefined, {
-      body: { resume_confirmation_id: resumeConfirmationId },
-    });
+    try {
+      void Promise.resolve(
+        sendMessage(undefined, {
+          body: { resume_confirmation_id: resumeConfirmationId },
+        }),
+      ).catch(() => {
+        setConfirmationError('Failed to resume the approved confirmation.');
+      });
+    } catch {
+      setConfirmationError('Failed to resume the approved confirmation.');
+    }
     const next = new URLSearchParams(searchParams);
     next.delete('resume_confirmation_id');
     setSearchParams(next, { replace: true });
@@ -829,6 +845,16 @@ export default function ChatInterface() {
             sx={{ flexShrink: 0, my: 0.5 }}
           >
             {autoTitleError}
+          </Alert>
+        ) : null}
+
+        {confirmationError ? (
+          <Alert
+            severity="error"
+            onClose={() => setConfirmationError(null)}
+            sx={{ flexShrink: 0, my: 0.5 }}
+          >
+            {confirmationError}
           </Alert>
         ) : null}
 

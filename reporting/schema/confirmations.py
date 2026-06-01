@@ -28,7 +28,6 @@ class ActionConfirmation(BaseModel):
     resource_id: str
     arguments: dict[str, Any] = Field(default_factory=dict)
     arguments_hash: str = ""
-    ui_arguments: dict[str, Any] = Field(default_factory=dict)
     status: ConfirmationStatus
     batch_id: str | None = None
     created_at: str
@@ -46,7 +45,10 @@ class ActionConfirmationPublic(BaseModel):
     action: str
     resource_type: str
     resource_id: str
-    ui_arguments: dict[str, Any] = Field(default_factory=dict)
+    arguments: dict[str, Any] = Field(
+        default_factory=dict,
+        description="Arguments shown to the user. These must not contain secrets or highly sensitive data.",
+    )
     status: ConfirmationStatus
     batch_id: str | None = None
     thread_id: str | None = None
@@ -56,7 +58,7 @@ class ActionConfirmationPublic(BaseModel):
 
     @classmethod
     def from_confirmation(cls, confirmation: ActionConfirmation) -> "ActionConfirmationPublic":
-        data = confirmation.model_dump(exclude={"user_id", "session_key", "arguments", "arguments_hash", "decided_by"})
+        data = confirmation.model_dump(exclude={"user_id", "session_key", "arguments_hash", "decided_by"})
         if confirmation.source == "chat":
             data["thread_id"] = confirmation.session_key
         return cls.model_validate(data)

@@ -92,7 +92,6 @@ def _confirmation(status: str = "pending") -> ActionConfirmation:
             "resource_id": "r1",
             "arguments": {"report_id": "r1"},
             "arguments_hash": action_confirmations.arguments_hash({"report_id": "r1"}),
-            "ui_arguments": {"report_id": "r1"},
             "status": status,
             "created_at": _NOW,
             "expires_at": _LATER,

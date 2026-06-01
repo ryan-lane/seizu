@@ -8,7 +8,7 @@ export interface ActionConfirmation {
   action: string;
   resource_type: string;
   resource_id: string;
-  ui_arguments: Record<string, unknown>;
+  arguments: Record<string, unknown>;
   status: 'pending' | 'approved' | 'denied' | 'expired' | 'executed';
   batch_id?: string | null;
   thread_id?: string | null;

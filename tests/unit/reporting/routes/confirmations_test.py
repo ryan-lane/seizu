@@ -33,7 +33,6 @@ def _confirmation(expires_at: str = "2099-01-01T00:30:00+00:00") -> ActionConfir
             "resource_id": "tool-1",
             "arguments": {"name": "Lookup", "cypher": "MATCH (n) RETURN n"},
             "arguments_hash": "hash-1",
-            "ui_arguments": {"name": "Lookup", "cypher": "MATCH (n) RETURN n"},
             "status": "pending",
             "batch_id": _BATCH_ID,
             "created_at": "2024-01-01T00:00:00+00:00",
@@ -61,9 +60,8 @@ async def test_get_confirmation_returns_public_shape(mocker):
 
     assert response.status_code == 200
     body = response.json()["confirmation"]
-    assert body["ui_arguments"] == {"name": "Lookup", "cypher": "MATCH (n) RETURN n"}
+    assert body["arguments"] == {"name": "Lookup", "cypher": "MATCH (n) RETURN n"}
     assert body["thread_id"] == "123"
-    assert "arguments" not in body
     assert "arguments_hash" not in body
     assert "session_key" not in body
     assert "user_id" not in body

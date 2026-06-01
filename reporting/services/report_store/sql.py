@@ -332,7 +332,6 @@ class ActionConfirmationRecord(SQLModel, table=True):  # type: ignore
     resource_id: str
     arguments: dict[str, Any] = Field(default={}, sa_column=Column(JSON, nullable=False))
     arguments_hash: str = Field(default="", index=True)
-    ui_arguments: dict[str, Any] = Field(default={}, sa_column=Column(JSON, nullable=False))
     status: str = Field(index=True)
     batch_id: str | None = Field(default=None, index=True)
     created_at: str
@@ -432,7 +431,6 @@ def _action_confirmation_from_record(record: ActionConfirmationRecord) -> Action
             "resource_id": record.resource_id,
             "arguments": record.arguments,
             "arguments_hash": record.arguments_hash,
-            "ui_arguments": record.ui_arguments,
             "status": record.status,
             "batch_id": record.batch_id,
             "created_at": record.created_at,

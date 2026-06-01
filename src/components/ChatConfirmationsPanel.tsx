@@ -118,7 +118,7 @@ export default function ChatConfirmationsPanel({
               >
                 {confirmation.resource_id}
               </Typography>
-              {Object.keys(confirmation.ui_arguments).length > 0 && (
+              {Object.keys(confirmation.arguments).length > 0 && (
                 <Box
                   component="details"
                   open
@@ -145,7 +145,7 @@ export default function ChatConfirmationsPanel({
                     Request details
                   </Box>
                   <Box sx={{ borderTop: 1, borderColor: 'divider', p: 1 }}>
-                    {Object.entries(confirmation.ui_arguments).map(
+                    {Object.entries(confirmation.arguments).map(
                       ([key, value]) => (
                         <Box
                           key={key}
