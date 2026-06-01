@@ -159,10 +159,13 @@ export default function BatchConfirmationPage() {
       setDeciding(confirmationId);
       try {
         const updated = await decideConfirmation(confirmationId, decision);
-        const nextConfirmations = confirmations.map((c) =>
-          c.confirmation_id === confirmationId ? updated : c,
-        );
-        setConfirmations(nextConfirmations);
+        let nextConfirmations: ActionConfirmation[] = [];
+        setConfirmations((prev) => {
+          nextConfirmations = prev.map((c) =>
+            c.confirmation_id === confirmationId ? updated : c,
+          );
+          return nextConfirmations;
+        });
         setError(null);
         const remainingPending = nextConfirmations.filter(
           (c) => c.status === 'pending',
@@ -185,7 +188,7 @@ export default function BatchConfirmationPage() {
         setDeciding(null);
       }
     },
-    [confirmations, decideConfirmation, navigate],
+    [decideConfirmation, navigate],
   );
 
   const pendingCount = confirmations.filter(

@@ -726,7 +726,3 @@ async def find_action_confirmation_grant(
         resource_id=resource_id,
         arguments_hash=arguments_hash,
     )
-
-
-async def mark_confirmation_executed(confirmation_id: str, user_id: str) -> None:
-    await get_store().mark_confirmation_executed(confirmation_id, user_id)

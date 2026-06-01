@@ -295,11 +295,13 @@ async def _call_tool_core(
         missing_args = _missing_required_arguments(builtin.input_schema, args)
         if missing_args:
             return text_response({"error": f"Missing required argument(s): {', '.join(missing_args)}"}), None
-        if (
-            builtin.confirmation is not None
-            and confirmation_source is not None
-            and confirmation_session_key is not None
-        ):
+        if builtin.confirmation is not None and confirmation_source is not None:
+            # Fail-closed: a mutating tool was reached via a source that requires
+            # confirmation but no session key is available to scope the record.
+            if confirmation_session_key is None:
+                return text_response(
+                    {"error": f"Tool '{name}' requires a session key for confirmation"}
+                ), ChatBlockReason.PERMISSION_DENIED
             if current_user is None:
                 return text_response(
                     {"error": "Confirmation requires an authenticated user"}
@@ -316,6 +318,12 @@ async def _call_tool_core(
                     batch_id=confirmation_batch_id,
                 )
                 if confirmation is not None:
+                    if confirmation.status == "executed":
+                        # A concurrent caller already claimed this approval; treat as
+                        # completed so the LLM does not retry and create a duplicate.
+                        return text_response(
+                            {"notice": f"Tool '{name}' was already executed by a concurrent request."}
+                        ), None
                     payload = action_confirmations.confirmation_required_payload(confirmation)
                     if confirmation.status == "denied":
                         payload["error"] = "Action was denied for this confirmation window"

@@ -3,7 +3,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 from snowflake import SnowflakeGenerator
-from sqlalchemy import JSON, Column, UniqueConstraint, and_, delete, null, text, update
+from sqlalchemy import JSON, Column, Index, UniqueConstraint, and_, delete, null, nullslast, text, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, create_async_engine
 from sqlmodel import Field, SQLModel, col, select
@@ -275,6 +275,25 @@ class ChatSessionRecord(SQLModel, table=True):  # type: ignore
 
 class ActionConfirmationRecord(SQLModel, table=True):  # type: ignore
     __tablename__ = "action_confirmations"
+    __table_args__ = (
+        # Covers find_action_confirmation_grant (all 5 matching fields + status filter).
+        Index(
+            "ix_action_conf_grant_lookup",
+            "user_id",
+            "source",
+            "session_key",
+            "arguments_hash",
+            "status",
+        ),
+        # Covers list_action_confirmations (session + status filter).
+        Index(
+            "ix_action_conf_session_list",
+            "user_id",
+            "source",
+            "session_key",
+            "status",
+        ),
+    )
     confirmation_id: str = Field(primary_key=True)
     user_id: str = Field(index=True)
     source: str = Field(index=True)
@@ -2562,21 +2581,6 @@ class SQLModelReportStore(ReportStore):
             await session.commit()
             return _action_confirmation_from_record(row) if row else None
 
-    async def mark_confirmation_executed(self, confirmation_id: str, user_id: str) -> None:
-        async with AsyncSession(_get_engine()) as session:
-            stmt = (
-                update(ActionConfirmationRecord)
-                .where(
-                    col(ActionConfirmationRecord.confirmation_id) == confirmation_id,
-                    col(ActionConfirmationRecord.user_id) == user_id,
-                    col(ActionConfirmationRecord.status) == "approved",
-                    col(ActionConfirmationRecord.expires_at) > datetime.now(tz=UTC).isoformat(),
-                )
-                .values(status="executed")
-            )
-            await session.execute(stmt)
-            await session.commit()
-
     async def find_action_confirmation_grant(
         self,
         user_id: str,
@@ -2604,7 +2608,7 @@ class SQLModelReportStore(ReportStore):
                     col(ActionConfirmationRecord.status).in_(["approved", "denied"]),
                     col(ActionConfirmationRecord.expires_at) > now,
                 )
-                .order_by(col(ActionConfirmationRecord.decided_at).desc())
+                .order_by(nullslast(col(ActionConfirmationRecord.decided_at).desc()))
                 .limit(1)
             )
             result = await session.execute(stmt)

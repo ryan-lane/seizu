@@ -413,6 +413,55 @@ async def test_approved_mutating_builtin_executes_handler(mocker):
     create_confirmation.assert_not_called()
 
 
+async def test_concurrent_claim_race_returns_notice_not_confirmation_required(mocker):
+    """When another caller already claimed the approval, the response is a notice (not
+    CONFIRMATION_REQUIRED) so the LLM does not retry and trigger a second execution."""
+    delete_report = mocker.patch("reporting.services.mcp_builtins.reports.report_store.delete_report")
+    mocker.patch(
+        "reporting.services.mcp_runtime.report_store.find_action_confirmation_grant",
+        return_value=_confirmation("approved"),
+    )
+    mocker.patch(
+        "reporting.services.mcp_runtime.report_store.claim_action_confirmation_for_execution",
+        return_value=None,
+    )
+    current = _user(frozenset({Permission.REPORTS_DELETE.value}))
+
+    result = await mcp_runtime.call_tool_for_chat(
+        current,
+        "reports__delete",
+        {"report_id": "r1"},
+        confirmation_source="mcp",
+        confirmation_session_key="session-1",
+    )
+
+    assert result.blocked is None
+    data = json.loads(result.text)
+    assert "notice" in data
+    assert "confirmation_required" not in data
+    delete_report.assert_not_called()
+
+
+async def test_missing_session_key_fails_closed_for_mutating_builtin(mocker):
+    """Omitting confirmation_session_key while providing confirmation_source must block,
+    not silently bypass the confirmation gate."""
+    delete_report = mocker.patch("reporting.services.mcp_builtins.reports.report_store.delete_report")
+    create_confirmation = mocker.patch("reporting.services.mcp_runtime.report_store.create_action_confirmation")
+    current = _user(frozenset({Permission.REPORTS_DELETE.value}))
+
+    result = await mcp_runtime.call_tool_for_chat(
+        current,
+        "reports__delete",
+        {"report_id": "r1"},
+        confirmation_source="mcp",
+        confirmation_session_key=None,
+    )
+
+    assert result.blocked == mcp_runtime.ChatBlockReason.PERMISSION_DENIED
+    delete_report.assert_not_called()
+    create_confirmation.assert_not_called()
+
+
 async def test_denied_mutating_builtin_blocks_handler(mocker):
     delete_report = mocker.patch("reporting.services.mcp_builtins.reports.report_store.delete_report")
     mocker.patch(

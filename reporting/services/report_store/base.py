@@ -619,10 +619,6 @@ class ReportStore(ABC):
         """Atomically consume an approved confirmation before executing it."""
 
     @abstractmethod
-    async def mark_confirmation_executed(self, confirmation_id: str, user_id: str) -> None:
-        """Mark an approved confirmation as executed so it is not re-run."""
-
-    @abstractmethod
     async def find_action_confirmation_grant(
         self,
         user_id: str,

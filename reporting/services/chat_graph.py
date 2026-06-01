@@ -423,6 +423,7 @@ async def _resume_confirmed_tool_turn(
     if batch_id:
         all_session = await report_store.list_action_confirmations(
             authed_user.user.user_id,
+            source="chat",
             session_key=session_key,
         )
         batch = [c for c in all_session if c.batch_id == batch_id]
