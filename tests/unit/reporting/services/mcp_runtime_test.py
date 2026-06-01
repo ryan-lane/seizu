@@ -143,6 +143,19 @@ async def test_tool_call_still_requires_underlying_mcp_permission(mocker):
     get_enabled_tool.assert_not_called()
 
 
+async def test_user_defined_tool_listing_requires_tools_call_permission(mocker):
+    list_enabled_tools = mocker.patch(
+        "reporting.services.mcp_runtime.report_store.list_enabled_tools",
+        return_value=[_tool()],
+    )
+    current = _user(frozenset({Permission.TOOLSETS_READ.value}))
+
+    tools = await mcp_runtime.list_tools_for_user(current)
+
+    assert "security__lookup" not in {tool.name for tool in tools}
+    list_enabled_tools.assert_not_called()
+
+
 async def test_chat_tool_call_uses_mcp_acl_and_executes_user_defined_tool(mocker):
     mocker.patch("reporting.services.mcp_runtime.report_store.get_enabled_tool", return_value=_tool())
     run_query = mocker.patch(

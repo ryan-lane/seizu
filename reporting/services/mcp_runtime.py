@@ -175,18 +175,19 @@ async def list_tools_for_user(
             )
         )
 
-    try:
-        enabled_tools = await report_store.list_enabled_tools()
-        for tool in enabled_tools:
-            tools.append(
-                Tool(
-                    name=f"{tool.toolset_id}__{tool.tool_id}",
-                    description=tool.description or f"{tool.name} tool",
-                    inputSchema=build_input_schema(tool.parameters),
+    if Permission.TOOLS_CALL.value in perms:
+        try:
+            enabled_tools = await report_store.list_enabled_tools()
+            for tool in enabled_tools:
+                tools.append(
+                    Tool(
+                        name=f"{tool.toolset_id}__{tool.tool_id}",
+                        description=tool.description or f"{tool.name} tool",
+                        inputSchema=build_input_schema(tool.parameters),
+                    )
                 )
-            )
-    except Exception:
-        logger.exception("Failed to load tools from store for MCP listing")
+        except Exception:
+            logger.exception("Failed to load tools from store for MCP listing")
 
     return tools
 

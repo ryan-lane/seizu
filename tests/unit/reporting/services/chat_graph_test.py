@@ -905,6 +905,77 @@ async def test_resume_expired_approved_confirmation_does_not_execute(mocker):
     call_tool.assert_not_called()
 
 
+async def test_resume_batch_confirmation_uses_batch_lookup(mocker):
+    from langgraph.checkpoint.memory import MemorySaver
+
+    approved = ActionConfirmation.model_validate(
+        {
+            "confirmation_id": "confirm-approved",
+            "user_id": "user-1",
+            "source": "chat",
+            "session_key": "thread-batch-confirmation",
+            "tool_name": "reports__delete",
+            "action": "delete",
+            "resource_type": "report",
+            "resource_id": "report-1",
+            "arguments": {"report_id": "report-1"},
+            "arguments_hash": "hash-1",
+            "ui_arguments": {"report_id": "report-1"},
+            "status": "approved",
+            "batch_id": "batch-1",
+            "created_at": "2024-01-01T00:00:00+00:00",
+            "expires_at": "2099-01-01T00:30:00+00:00",
+        }
+    )
+    pending = approved.model_copy(
+        update={
+            "confirmation_id": "confirm-pending",
+            "tool_name": "reports__pin",
+            "action": "pin",
+            "resource_id": "report-2",
+            "arguments": {"report_id": "report-2", "pinned": True},
+            "status": "pending",
+        }
+    )
+    mocker.patch("reporting.services.chat_graph.report_store.get_action_confirmation", return_value=approved)
+    list_batch = mocker.patch(
+        "reporting.services.chat_graph.report_store.list_batch_action_confirmations",
+        return_value=[approved, pending],
+    )
+    list_session = mocker.patch("reporting.services.chat_graph.report_store.list_action_confirmations")
+    claim = mocker.patch("reporting.services.chat_graph.report_store.claim_action_confirmation_for_execution")
+    graph = chat_graph.build_chat_graph(MemorySaver())
+    config = {
+        "configurable": {
+            "thread_id": "thread-batch-confirmation",
+            "client_thread_id": "thread-batch-confirmation",
+            "current_user": _user(),
+        }
+    }
+
+    chunks = [
+        chunk
+        async for chunk in graph.astream(
+            {
+                "messages": [
+                    HumanMessage(
+                        content="Resume approved confirmation confirm-approved",
+                        additional_kwargs={"resume_confirmation_id": "confirm-approved"},
+                    )
+                ]
+            },
+            config,
+            stream_mode="custom",
+        )
+    ]
+
+    streamed = "".join(chunk["content"] for chunk in chunks if chunk.get("kind") == "token")
+    assert "Waiting for 1 more approval" in streamed
+    list_batch.assert_awaited_once_with(user_id="user-1", batch_id="batch-1")
+    list_session.assert_not_called()
+    claim.assert_not_called()
+
+
 async def test_chat_graph_reports_unavailable_tool_call_and_persists_notice(mocker):
     from langgraph.checkpoint.memory import MemorySaver
 

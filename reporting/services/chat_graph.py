@@ -419,14 +419,11 @@ async def _resume_confirmed_tool_turn(
     # Collect the full batch — all confirmations that share the same batch_id.
     # If this is a legacy confirmation with no batch_id, run only it.
     batch_id = confirmation.batch_id
-    session_key = _client_thread_id_from_config(config)
     if batch_id:
-        all_session = await report_store.list_action_confirmations(
-            authed_user.user.user_id,
-            source="chat",
-            session_key=session_key,
+        batch = await report_store.list_batch_action_confirmations(
+            user_id=authed_user.user.user_id,
+            batch_id=batch_id,
         )
-        batch = [c for c in all_session if c.batch_id == batch_id]
         pending = [c for c in batch if c.status == "pending"]
         if pending:
             n = len(pending)
