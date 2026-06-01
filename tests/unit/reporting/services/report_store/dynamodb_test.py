@@ -7,7 +7,7 @@ from reporting.schema.confirmations import ActionConfirmation
 from reporting.schema.mcp_config import SkillItem, SkillsetListItem, SkillsetVersion, SkillVersion
 from reporting.schema.report_config import ReportListItem, ReportVersion
 from reporting.services.report_store import dynamodb as dynamodb_module
-from reporting.services.report_store.dynamodb import DynamoDBReportStore
+from reporting.services.report_store.dynamodb import DynamoDBReportStore, _action_confirmation_dedup_sk
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -1950,12 +1950,13 @@ async def test_get_role_version_not_found(patch_table, store):
 
 
 async def test_create_action_confirmation_writes_all_confirmation_indexes(patch_table, store):
-    confirmation = ActionConfirmation.model_validate(_action_confirmation_item())
+    item = _action_confirmation_item()
+    confirmation = ActionConfirmation.model_validate(item)
 
     await store.create_action_confirmation(confirmation)
 
     transact_items = patch_table.meta.client.transact_write_items.call_args.kwargs["TransactItems"]
-    put_keys = {(item["Put"]["Item"]["PK"], item["Put"]["Item"]["SK"]) for item in transact_items}
+    put_keys = {(item["Put"]["Item"]["PK"], item["Put"]["Item"]["SK"]) for item in transact_items if "Put" in item}
     assert ("ACTION_CONFIRMATION#confirm-1", "#METADATA") in put_keys
     assert ("ACTION_CONFIRMATION_LIST#user-1", "CREATED#2024-01-01T00:00:00+00:00#CONFIRMATION#confirm-1") in put_keys
     assert (
@@ -1966,6 +1967,9 @@ async def test_create_action_confirmation_writes_all_confirmation_indexes(patch_
         "ACTION_CONFIRMATION_SESSION_LIST#user-1#SOURCE#mcp#SESSION#session-1",
         "STATUS#pending#CREATED#2024-01-01T00:00:00+00:00#CONFIRMATION#confirm-1",
     ) in put_keys
+    # Dedup sentinel prevents concurrent creates with identical arguments.
+    dedup_sk = _action_confirmation_dedup_sk(confirmation.model_dump())
+    assert ("ACTION_CONFIRMATION_SESSION_LIST#user-1#SOURCE#mcp#SESSION#session-1", dedup_sk) in put_keys
 
 
 async def test_list_action_confirmations_uses_user_status_index_for_status_only(patch_table, store):
@@ -1980,7 +1984,9 @@ async def test_list_action_confirmations_uses_user_status_index_for_status_only(
 
 
 async def test_decide_action_confirmation_moves_status_indexes(patch_table, store):
-    patch_table.get_item.return_value = {"Item": _action_confirmation_item()}
+    item = _action_confirmation_item()
+    patch_table.get_item.return_value = {"Item": item}
+    confirmation = ActionConfirmation.model_validate(item)
 
     await store.decide_action_confirmation("confirm-1", "user-1", "approved")
 
@@ -1997,3 +2003,6 @@ async def test_decide_action_confirmation_moves_status_indexes(patch_table, stor
         "ACTION_CONFIRMATION_STATUS_LIST#user-1#STATUS#approved",
         "CREATED#2024-01-01T00:00:00+00:00#CONFIRMATION#confirm-1",
     ) in put_keys
+    # Dedup sentinel is deleted when a confirmation is decided.
+    dedup_sk = _action_confirmation_dedup_sk(confirmation.model_dump())
+    assert ("ACTION_CONFIRMATION_SESSION_LIST#user-1#SOURCE#mcp#SESSION#session-1", dedup_sk) in delete_keys

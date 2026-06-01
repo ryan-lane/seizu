@@ -441,7 +441,7 @@ async def _resume_confirmed_tool_turn(
             writer({"kind": "token", "content": response})
             return _chat_state_with_ai_response(state, response)
         denied = [c for c in batch if c.status == "denied"]
-        expired = [c for c in batch if c.status == "expired" or action_confirmations.is_expired(c)]
+        expired = [c for c in batch if action_confirmations.is_expired(c)]
         if denied or expired:
             reason = "denied" if denied else "expired"
             response = f"One or more actions in this approval batch were {reason}, so Seizu did not run the batch."

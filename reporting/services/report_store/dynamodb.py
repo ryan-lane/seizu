@@ -1,4 +1,5 @@
 import asyncio
+import hashlib
 import logging
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -176,10 +177,6 @@ def _action_confirmation_status_list_pk(user_id: str, status: str) -> str:
     return f"ACTION_CONFIRMATION_STATUS_LIST#{user_id}#STATUS#{status}"
 
 
-def _action_confirmation_status_list_sk(created_at: str, confirmation_id: str) -> str:
-    return f"CREATED#{created_at}#CONFIRMATION#{confirmation_id}"
-
-
 def _action_confirmation_session_list_pk(user_id: str, source: str, session_key: str) -> str:
     return f"ACTION_CONFIRMATION_SESSION_LIST#{user_id}#SOURCE#{source}#SESSION#{session_key}"
 
@@ -192,8 +189,18 @@ def _action_confirmation_batch_pk(user_id: str, batch_id: str) -> str:
     return f"ACTION_CONFIRMATION_BATCH#{user_id}#BATCH#{batch_id}"
 
 
-def _action_confirmation_batch_sk(created_at: str, confirmation_id: str) -> str:
-    return f"CREATED#{created_at}#CONFIRMATION#{confirmation_id}"
+def _action_confirmation_dedup_sk(data: dict[str, Any]) -> str:
+    """Deterministic SK for the pending dedup sentinel; encodes the full action scope."""
+    key = "|".join(
+        [
+            str(data["tool_name"]),
+            str(data["action"]),
+            str(data["resource_type"]),
+            str(data["resource_id"]),
+            str(data["arguments_hash"]),
+        ]
+    )
+    return f"PENDING_DEDUP#{hashlib.sha256(key.encode()).hexdigest()}"
 
 
 def _action_confirmation_from_item(item: dict[str, Any]) -> ActionConfirmation:
@@ -224,7 +231,7 @@ def _action_confirmation_status_list_item(data: dict[str, Any]) -> dict[str, Any
     return {
         **_floats_to_decimal(data),
         "PK": _action_confirmation_status_list_pk(str(data["user_id"]), str(data["status"])),
-        "SK": _action_confirmation_status_list_sk(str(data["created_at"]), str(data["confirmation_id"])),
+        "SK": _action_confirmation_list_sk(str(data["created_at"]), str(data["confirmation_id"])),
     }
 
 
@@ -251,7 +258,15 @@ def _action_confirmation_batch_list_item(data: dict[str, Any]) -> dict[str, Any]
     return {
         **_floats_to_decimal(data),
         "PK": _action_confirmation_batch_pk(str(data["user_id"]), str(batch_id)),
-        "SK": _action_confirmation_batch_sk(str(data["created_at"]), str(data["confirmation_id"])),
+        "SK": _action_confirmation_list_sk(str(data["created_at"]), str(data["confirmation_id"])),
+    }
+
+
+def _action_confirmation_dedup_sentinel_item(data: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "PK": _action_confirmation_session_list_pk(str(data["user_id"]), str(data["source"]), str(data["session_key"])),
+        "SK": _action_confirmation_dedup_sk(data),
+        "confirmation_id": str(data["confirmation_id"]),
     }
 
 
@@ -2980,32 +2995,62 @@ class DynamoDBReportStore(ReportStore):
 
     async def create_action_confirmation(self, confirmation: ActionConfirmation) -> ActionConfirmation:
         data = confirmation.model_dump()
+        dedup_item = _action_confirmation_dedup_sentinel_item(data)
 
-        def _op() -> ActionConfirmation:
+        def _op() -> ActionConfirmation | None:
             table = _get_table()
-            table.meta.client.transact_write_items(
-                TransactItems=[
-                    {
-                        "Put": {
-                            "TableName": settings.DYNAMODB_TABLE_NAME,
-                            "Item": _action_confirmation_metadata_item(data),
-                            "ConditionExpression": "attribute_not_exists(PK)",
-                        },
-                    },
-                    *[
+            try:
+                table.meta.client.transact_write_items(
+                    TransactItems=[
                         {
                             "Put": {
                                 "TableName": settings.DYNAMODB_TABLE_NAME,
-                                "Item": item,
+                                "Item": _action_confirmation_metadata_item(data),
+                                "ConditionExpression": "attribute_not_exists(PK)",
                             },
-                        }
-                        for item in _action_confirmation_put_items(data)[1:]
-                    ],
-                ]
-            )
-            return confirmation
+                        },
+                        *[
+                            {
+                                "Put": {
+                                    "TableName": settings.DYNAMODB_TABLE_NAME,
+                                    "Item": item,
+                                },
+                            }
+                            for item in _action_confirmation_put_items(data)[1:]
+                        ],
+                        {
+                            "Put": {
+                                "TableName": settings.DYNAMODB_TABLE_NAME,
+                                "Item": dedup_item,
+                                "ConditionExpression": "attribute_not_exists(PK)",
+                            },
+                        },
+                    ]
+                )
+                return confirmation
+            except botocore.exceptions.ClientError as exc:
+                if _transaction_cancelled(exc):
+                    # Either duplicate confirmation_id (effectively impossible) or the
+                    # dedup sentinel already exists — a concurrent call won the race.
+                    return None
+                raise
 
-        return await asyncio.to_thread(_op)
+        result = await asyncio.to_thread(_op)
+        if result is not None:
+            return result
+        # Re-fetch the pending confirmation that beat us to the create.
+        existing = await self.find_action_confirmation_grant(
+            user_id=confirmation.user_id,
+            source=confirmation.source,
+            session_key=confirmation.session_key,
+            tool_name=confirmation.tool_name,
+            action=confirmation.action,
+            resource_type=confirmation.resource_type,
+            resource_id=confirmation.resource_id,
+            arguments_hash=confirmation.arguments_hash,
+            statuses=("pending",),
+        )
+        return existing or confirmation
 
     async def get_action_confirmation(
         self,
@@ -3136,7 +3181,7 @@ class DynamoDBReportStore(ReportStore):
                         "TableName": settings.DYNAMODB_TABLE_NAME,
                         "Key": {
                             "PK": _action_confirmation_status_list_pk(user_id, "pending"),
-                            "SK": _action_confirmation_status_list_sk(str(data["created_at"]), confirmation_id),
+                            "SK": _action_confirmation_list_sk(str(data["created_at"]), confirmation_id),
                         },
                     },
                 },
@@ -3163,6 +3208,17 @@ class DynamoDBReportStore(ReportStore):
                     "Put": {
                         "TableName": settings.DYNAMODB_TABLE_NAME,
                         "Item": _action_confirmation_session_list_item(updated),
+                    },
+                },
+                {
+                    "Delete": {
+                        "TableName": settings.DYNAMODB_TABLE_NAME,
+                        "Key": {
+                            "PK": _action_confirmation_session_list_pk(
+                                user_id, str(data["source"]), str(data["session_key"])
+                            ),
+                            "SK": _action_confirmation_dedup_sk(data),
+                        },
                     },
                 },
             ]
@@ -3232,7 +3288,7 @@ class DynamoDBReportStore(ReportStore):
                         "TableName": settings.DYNAMODB_TABLE_NAME,
                         "Key": {
                             "PK": _action_confirmation_status_list_pk(user_id, "approved"),
-                            "SK": _action_confirmation_status_list_sk(str(data["created_at"]), confirmation_id),
+                            "SK": _action_confirmation_list_sk(str(data["created_at"]), confirmation_id),
                         },
                     },
                 },
@@ -3262,6 +3318,22 @@ class DynamoDBReportStore(ReportStore):
                     },
                 },
             ]
+            # The dedup sentinel is deleted unconditionally; if the confirmation
+            # was created before this code deployed the sentinel won't exist and
+            # the delete is a no-op.
+            transact_items.append(
+                {
+                    "Delete": {
+                        "TableName": settings.DYNAMODB_TABLE_NAME,
+                        "Key": {
+                            "PK": _action_confirmation_session_list_pk(
+                                user_id, str(data["source"]), str(data["session_key"])
+                            ),
+                            "SK": _action_confirmation_dedup_sk(data),
+                        },
+                    },
+                }
+            )
             batch_item = _action_confirmation_batch_list_item(updated)
             if batch_item is not None:
                 transact_items.append(

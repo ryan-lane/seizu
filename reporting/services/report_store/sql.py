@@ -305,6 +305,22 @@ class ActionConfirmationRecord(SQLModel, table=True):  # type: ignore
             "session_key",
             "status",
         ),
+        # Prevents duplicate pending confirmations from concurrent ensure_confirmation
+        # calls with identical arguments (the dedup sentinel for SQL backends).
+        Index(
+            "ix_action_conf_pending_dedup",
+            "user_id",
+            "source",
+            "session_key",
+            "tool_name",
+            "action",
+            "resource_type",
+            "resource_id",
+            "arguments_hash",
+            unique=True,
+            postgresql_where=text("status = 'pending'"),
+            sqlite_where=text("status = 'pending'"),
+        ),
     )
     confirmation_id: str = Field(primary_key=True)
     user_id: str = Field(index=True)
@@ -487,12 +503,6 @@ class SQLModelReportStore(ReportStore):
                             "ADD COLUMN IF NOT EXISTS arguments_hash VARCHAR DEFAULT ''"
                         )
                     )
-                    await conn.execute(
-                        text(
-                            "CREATE INDEX IF NOT EXISTS ix_action_conf_user_status_list "
-                            "ON action_confirmations (user_id, status, created_at)"
-                        )
-                    )
                 elif conn.dialect.name == "sqlite":
                     # SQLite cannot drop NOT NULL in-place. Existing SQLite
                     # dev DBs created before nullable email still require email;
@@ -509,12 +519,21 @@ class SQLModelReportStore(ReportStore):
                         await conn.execute(
                             text("ALTER TABLE action_confirmations ADD COLUMN arguments_hash VARCHAR DEFAULT ''")
                         )
-                    await conn.execute(
-                        text(
-                            "CREATE INDEX IF NOT EXISTS ix_action_conf_user_status_list "
-                            "ON action_confirmations (user_id, status, created_at)"
-                        )
+                # Runs for both dialects — IF NOT EXISTS makes it idempotent.
+                await conn.execute(
+                    text(
+                        "CREATE INDEX IF NOT EXISTS ix_action_conf_user_status_list "
+                        "ON action_confirmations (user_id, status, created_at)"
                     )
+                )
+                await conn.execute(
+                    text(
+                        "CREATE UNIQUE INDEX IF NOT EXISTS ix_action_conf_pending_dedup "
+                        "ON action_confirmations "
+                        "(user_id, source, session_key, tool_name, action, resource_type, resource_id, arguments_hash) "
+                        "WHERE status = 'pending'"
+                    )
+                )
             logger.info("SQL report store tables initialised")
         except IntegrityError:
             logger.info("SQL report store tables already exist")
@@ -2508,8 +2527,25 @@ class SQLModelReportStore(ReportStore):
         async with AsyncSession(_get_engine()) as session:
             record = ActionConfirmationRecord(**confirmation.model_dump())
             session.add(record)
-            await session.commit()
-            return confirmation
+            try:
+                await session.commit()
+                return confirmation
+            except IntegrityError:
+                await session.rollback()
+        # Concurrent create race: the dedup index rejected our insert.
+        # Re-fetch the existing pending confirmation that beat us to it.
+        existing = await self.find_action_confirmation_grant(
+            user_id=confirmation.user_id,
+            source=confirmation.source,
+            session_key=confirmation.session_key,
+            tool_name=confirmation.tool_name,
+            action=confirmation.action,
+            resource_type=confirmation.resource_type,
+            resource_id=confirmation.resource_id,
+            arguments_hash=confirmation.arguments_hash,
+            statuses=("pending",),
+        )
+        return existing or confirmation
 
     async def get_action_confirmation(
         self,

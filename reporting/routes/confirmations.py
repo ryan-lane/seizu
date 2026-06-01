@@ -46,7 +46,9 @@ async def list_batch_confirmations(
     )
     return ConfirmationListResponse(
         confirmations=[
-            ActionConfirmationPublic.from_confirmation(c) for c in batch if not action_confirmations.is_expired(c)
+            ActionConfirmationPublic.from_confirmation(c)
+            for c in batch
+            if c.status != "pending" or not action_confirmations.is_expired(c)
         ]
     )
 

@@ -86,12 +86,20 @@ async def test_batch_confirmation_lookup_uses_batch_store_method(mocker):
     list_all.assert_not_called()
 
 
-async def test_batch_confirmation_filters_expired(mocker):
+async def test_batch_confirmation_filters_expired_pending_only(mocker):
+    """Expired items are only filtered when status=pending; executed items are always shown."""
     mocker.patch(
         "reporting.routes.confirmations.report_store.list_batch_action_confirmations",
         return_value=[
-            _confirmation(expires_at="2099-01-01T00:30:00+00:00"),
-            _confirmation(expires_at="2000-01-01T00:00:00+00:00"),  # expired
+            _confirmation(expires_at="2099-01-01T00:30:00+00:00"),  # pending, not expired — kept
+            _confirmation(expires_at="2000-01-01T00:00:00+00:00"),  # pending, expired — filtered
+            ActionConfirmation.model_validate(
+                {
+                    **_confirmation().model_dump(),
+                    "status": "executed",
+                    "expires_at": "2000-01-01T00:00:00+00:00",
+                }
+            ),  # executed, expired — kept (audit trail)
         ],
     )
     app = _make_app()
@@ -100,4 +108,4 @@ async def test_batch_confirmation_filters_expired(mocker):
         response = await client.get(f"/api/v1/confirmations/batch/{_BATCH_ID}")
 
     assert response.status_code == 200
-    assert len(response.json()["confirmations"]) == 1
+    assert len(response.json()["confirmations"]) == 2
