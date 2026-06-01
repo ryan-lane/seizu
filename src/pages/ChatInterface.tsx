@@ -6,7 +6,7 @@ import {
   useRef,
   useState,
 } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useChat } from '@ai-sdk/react';
 import {
   DefaultChatTransport,
@@ -67,6 +67,7 @@ function latestUserText(messages: UIMessage[]): string {
 export default function ChatInterface() {
   const navigate = useNavigate();
   const { threadId: routeThreadId } = useParams<{ threadId?: string }>();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { accessToken } = useContext(AuthContext);
   const { auth_required } = useContext(AuthConfigContext);
   const { hasPermission, loading: permissionsLoading } = usePermissionState();
@@ -115,6 +116,7 @@ export default function ChatInterface() {
   const accessTokenRef = useRef(accessToken);
   const chatIdRef = useRef('__pending__');
   const resumeConfirmationIdRef = useRef<string | null>(null);
+  const consumedResumeParamRef = useRef<string | null>(null);
 
   // Keep the selected session in sync with the URL.
   useEffect(() => {
@@ -431,6 +433,29 @@ export default function ChatInterface() {
       touchSession,
     ],
   );
+
+  useEffect(() => {
+    if (!activeThreadId || busy) return;
+    const resumeConfirmationId = searchParams.get('resume_confirmation_id');
+    if (!resumeConfirmationId) return;
+    if (consumedResumeParamRef.current === resumeConfirmationId) return;
+    consumedResumeParamRef.current = resumeConfirmationId;
+    resumeConfirmationIdRef.current = resumeConfirmationId;
+    touchSession(activeThreadId);
+    void sendMessage(undefined, {
+      body: { resume_confirmation_id: resumeConfirmationId },
+    });
+    const next = new URLSearchParams(searchParams);
+    next.delete('resume_confirmation_id');
+    setSearchParams(next, { replace: true });
+  }, [
+    activeThreadId,
+    busy,
+    searchParams,
+    sendMessage,
+    setSearchParams,
+    touchSession,
+  ]);
 
   const handleCopyAssistantResponse = async (message: UIMessage) => {
     const text = messageText(message);

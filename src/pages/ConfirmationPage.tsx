@@ -1,5 +1,5 @@
 import { useCallback, useContext, useEffect, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import {
   Alert,
   Box,
@@ -19,6 +19,7 @@ import {
 import { pageContentSx } from 'src/theme/layout';
 
 export default function ConfirmationPage() {
+  const navigate = useNavigate();
   const { confirmationId } = useParams<{ confirmationId: string }>();
   const { auth_required } = useContext(AuthConfigContext);
   const { accessToken } = useContext(AuthContext);
@@ -61,13 +62,21 @@ export default function ConfirmationPage() {
         const updated = await decideConfirmation(confirmationId, decision);
         setConfirmation(updated);
         setError(null);
+        if (decision === 'approved' && updated.thread_id) {
+          const params = new URLSearchParams({
+            resume_confirmation_id: updated.confirmation_id,
+          });
+          navigate(
+            `/app/chat/${encodeURIComponent(updated.thread_id)}?${params.toString()}`,
+          );
+        }
       } catch {
         setError('Failed to update confirmation.');
       } finally {
         setDeciding(null);
       }
     },
-    [confirmationId, decideConfirmation],
+    [confirmationId, decideConfirmation, navigate],
   );
 
   if (waitingForToken || loading) {

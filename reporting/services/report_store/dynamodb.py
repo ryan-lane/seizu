@@ -3158,7 +3158,13 @@ class DynamoDBReportStore(ReportStore):
             table = _get_table()
             existing_resp = table.get_item(Key={"PK": _action_confirmation_pk(confirmation_id), "SK": _SK_METADATA})
             existing = existing_resp.get("Item")
-            if not existing or existing.get("user_id") != user_id or existing.get("status") != "approved":
+            now = datetime.now(tz=UTC).isoformat()
+            if (
+                not existing
+                or existing.get("user_id") != user_id
+                or existing.get("status") != "approved"
+                or existing.get("expires_at", "") <= now
+            ):
                 return None
             data = _action_confirmation_data(existing)
             updated = {**data, "status": "executed"}
@@ -3168,12 +3174,13 @@ class DynamoDBReportStore(ReportStore):
                         "TableName": settings.DYNAMODB_TABLE_NAME,
                         "Key": {"PK": _action_confirmation_pk(confirmation_id), "SK": _SK_METADATA},
                         "UpdateExpression": "SET #s = :executed",
-                        "ConditionExpression": "#s = :approved AND user_id = :user",
+                        "ConditionExpression": "#s = :approved AND user_id = :user AND expires_at > :now",
                         "ExpressionAttributeNames": {"#s": "status"},
                         "ExpressionAttributeValues": {
                             ":executed": "executed",
                             ":approved": "approved",
                             ":user": user_id,
+                            ":now": now,
                         },
                     }
                 },
@@ -3228,7 +3235,13 @@ class DynamoDBReportStore(ReportStore):
             table = _get_table()
             existing_resp = table.get_item(Key={"PK": _action_confirmation_pk(confirmation_id), "SK": _SK_METADATA})
             existing = existing_resp.get("Item")
-            if not existing or existing.get("user_id") != user_id or existing.get("status") != "approved":
+            now = datetime.now(tz=UTC).isoformat()
+            if (
+                not existing
+                or existing.get("user_id") != user_id
+                or existing.get("status") != "approved"
+                or existing.get("expires_at", "") <= now
+            ):
                 return
             data = _action_confirmation_data(existing)
             updated = {**data, "status": "executed"}
@@ -3239,12 +3252,13 @@ class DynamoDBReportStore(ReportStore):
                         "TableName": settings.DYNAMODB_TABLE_NAME,
                         "Key": {"PK": _action_confirmation_pk(confirmation_id), "SK": _SK_METADATA},
                         "UpdateExpression": "SET #s = :executed",
-                        "ConditionExpression": "#s = :approved AND user_id = :user",
+                        "ConditionExpression": "#s = :approved AND user_id = :user AND expires_at > :now",
                         "ExpressionAttributeNames": {"#s": "status"},
                         "ExpressionAttributeValues": {
                             ":executed": "executed",
                             ":approved": "approved",
                             ":user": user_id,
+                            ":now": now,
                         },
                     }
                 },
@@ -3314,16 +3328,43 @@ class DynamoDBReportStore(ReportStore):
         arguments_hash: str,
     ) -> ActionConfirmation | None:
         now = datetime.now(tz=UTC)
-        confirmations = await self.list_action_confirmations(user_id, source=source, session_key=session_key)
-        for item in confirmations:
-            if (
-                item.tool_name == tool_name
-                and item.action == action
-                and item.resource_type == resource_type
-                and item.resource_id == resource_id
-                and item.arguments_hash == arguments_hash
-                and item.status in ("approved", "denied")
-                and datetime.fromisoformat(item.expires_at) > now
-            ):
-                return item
-        return None
+        pk = _action_confirmation_session_list_pk(user_id, source, session_key)
+
+        def _op() -> ActionConfirmation | None:
+            table = _get_table()
+            newest: ActionConfirmation | None = None
+            for status in ("approved", "denied"):
+                last_key: dict[str, Any] | None = None
+                while True:
+                    kwargs: dict[str, Any] = {
+                        "KeyConditionExpression": "PK = :pk AND begins_with(SK, :status_prefix)",
+                        "ExpressionAttributeValues": {
+                            ":pk": pk,
+                            ":status_prefix": f"STATUS#{status}#",
+                        },
+                        "ScanIndexForward": False,
+                        "Limit": _ACTION_CONFIRMATION_LIST_MAX,
+                    }
+                    if last_key is not None:
+                        kwargs["ExclusiveStartKey"] = last_key
+                    resp = table.query(**kwargs)
+                    for raw_item in resp.get("Items", []):
+                        item = _action_confirmation_from_item(raw_item)
+                        if (
+                            item.tool_name == tool_name
+                            and item.action == action
+                            and item.resource_type == resource_type
+                            and item.resource_id == resource_id
+                            and item.arguments_hash == arguments_hash
+                            and datetime.fromisoformat(item.expires_at) > now
+                        ):
+                            if newest is None or (item.decided_at or item.created_at) > (
+                                newest.decided_at or newest.created_at
+                            ):
+                                newest = item
+                    last_key = resp.get("LastEvaluatedKey")
+                    if not last_key:
+                        break
+            return newest
+
+        return await asyncio.to_thread(_op)

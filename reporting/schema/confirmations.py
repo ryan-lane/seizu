@@ -49,15 +49,17 @@ class ActionConfirmationPublic(BaseModel):
     ui_arguments: dict[str, Any] = Field(default_factory=dict)
     status: ConfirmationStatus
     batch_id: str | None = None
+    thread_id: str | None = None
     created_at: str
     expires_at: str
     decided_at: str | None = None
 
     @classmethod
     def from_confirmation(cls, confirmation: ActionConfirmation) -> "ActionConfirmationPublic":
-        return cls.model_validate(
-            confirmation.model_dump(exclude={"user_id", "session_key", "arguments", "arguments_hash", "decided_by"})
-        )
+        data = confirmation.model_dump(exclude={"user_id", "session_key", "arguments", "arguments_hash", "decided_by"})
+        if confirmation.source == "chat":
+            data["thread_id"] = confirmation.session_key
+        return cls.model_validate(data)
 
 
 class ConfirmationListResponse(BaseModel):

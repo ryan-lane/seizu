@@ -7,6 +7,7 @@ from mcp.types import Prompt, PromptArgument, Tool
 
 from reporting.authnz import CurrentUser
 from reporting.authnz.permissions import Permission
+from reporting.schema.confirmations import ActionConfirmation
 from reporting.schema.report_config import User
 from reporting.services import chat_graph
 from reporting.services.chat_messages import MessageTag, has_tag
@@ -847,6 +848,61 @@ async def test_decided_confirmation_response_does_not_include_url():
 
     assert "already been decided or has expired" in response
     assert "Confirmations" not in response
+
+
+async def test_resume_expired_approved_confirmation_does_not_execute(mocker):
+    from langgraph.checkpoint.memory import MemorySaver
+
+    confirmation = ActionConfirmation.model_validate(
+        {
+            "confirmation_id": "confirm-expired",
+            "user_id": "user-1",
+            "source": "chat",
+            "session_key": "thread-expired-confirmation",
+            "tool_name": "reports__delete",
+            "action": "delete",
+            "resource_type": "report",
+            "resource_id": "report-1",
+            "arguments": {"report_id": "report-1"},
+            "arguments_hash": "hash",
+            "ui_arguments": {"report_id": "report-1"},
+            "status": "approved",
+            "created_at": "2024-01-01T00:00:00+00:00",
+            "expires_at": "2024-01-01T00:30:00+00:00",
+        }
+    )
+    mocker.patch("reporting.services.chat_graph.report_store.get_action_confirmation", return_value=confirmation)
+    claim = mocker.patch("reporting.services.chat_graph.report_store.claim_action_confirmation_for_execution")
+    call_tool = mocker.patch("reporting.services.chat_graph.mcp_runtime.call_tool_for_chat")
+    graph = chat_graph.build_chat_graph(MemorySaver())
+    config = {
+        "configurable": {
+            "thread_id": "thread-expired-confirmation",
+            "client_thread_id": "thread-expired-confirmation",
+            "current_user": _user(),
+        }
+    }
+
+    chunks = [
+        chunk
+        async for chunk in graph.astream(
+            {
+                "messages": [
+                    HumanMessage(
+                        content="Resume approved confirmation confirm-expired",
+                        additional_kwargs={"resume_confirmation_id": "confirm-expired"},
+                    )
+                ]
+            },
+            config,
+            stream_mode="custom",
+        )
+    ]
+
+    streamed = "".join(chunk["content"] for chunk in chunks if chunk.get("kind") == "token")
+    assert "has expired" in streamed
+    claim.assert_not_called()
+    call_tool.assert_not_called()
 
 
 async def test_chat_graph_reports_unavailable_tool_call_and_persists_notice(mocker):

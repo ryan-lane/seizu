@@ -62,6 +62,7 @@ async def test_get_confirmation_returns_public_redacted_shape(mocker):
     assert response.status_code == 200
     body = response.json()["confirmation"]
     assert body["ui_arguments"] == {"token": "[redacted]", "name": "Lookup"}
+    assert body["thread_id"] == "123"
     assert "arguments" not in body
     assert "arguments_hash" not in body
     assert "session_key" not in body

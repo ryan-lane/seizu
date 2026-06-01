@@ -251,6 +251,8 @@ GROUP_DEF = BuiltinGroup(
             required_permissions=[Permission.REPORTS_WRITE.value],
             handler=_create,
             requires_user=True,
+            # Confirmation exception: creates a new private report and does not
+            # mutate existing resources.
             chat_safe_without_confirmation=True,
         ),
         BuiltinTool(
@@ -362,6 +364,8 @@ GROUP_DEF = BuiltinGroup(
             required_permissions=[Permission.REPORTS_WRITE.value],
             handler=_clone,
             requires_user=True,
+            # Confirmation exception: clones into a new private report and does
+            # not mutate the source report.
             chat_safe_without_confirmation=True,
         ),
     ],

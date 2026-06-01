@@ -2552,6 +2552,7 @@ class SQLModelReportStore(ReportStore):
                     col(ActionConfirmationRecord.confirmation_id) == confirmation_id,
                     col(ActionConfirmationRecord.user_id) == user_id,
                     col(ActionConfirmationRecord.status) == "approved",
+                    col(ActionConfirmationRecord.expires_at) > datetime.now(tz=UTC).isoformat(),
                 )
                 .values(status="executed")
                 .returning(ActionConfirmationRecord)
@@ -2569,6 +2570,7 @@ class SQLModelReportStore(ReportStore):
                     col(ActionConfirmationRecord.confirmation_id) == confirmation_id,
                     col(ActionConfirmationRecord.user_id) == user_id,
                     col(ActionConfirmationRecord.status) == "approved",
+                    col(ActionConfirmationRecord.expires_at) > datetime.now(tz=UTC).isoformat(),
                 )
                 .values(status="executed")
             )

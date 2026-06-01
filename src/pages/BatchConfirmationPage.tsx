@@ -1,5 +1,5 @@
 import { useCallback, useContext, useEffect, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import {
   Alert,
   Box,
@@ -121,6 +121,7 @@ function ConfirmationCard({
 }
 
 export default function BatchConfirmationPage() {
+  const navigate = useNavigate();
   const { batchId } = useParams<{ batchId: string }>();
   const { auth_required } = useContext(AuthConfigContext);
   const { accessToken } = useContext(AuthContext);
@@ -158,17 +159,33 @@ export default function BatchConfirmationPage() {
       setDeciding(confirmationId);
       try {
         const updated = await decideConfirmation(confirmationId, decision);
-        setConfirmations((prev) =>
-          prev.map((c) => (c.confirmation_id === confirmationId ? updated : c)),
+        const nextConfirmations = confirmations.map((c) =>
+          c.confirmation_id === confirmationId ? updated : c,
         );
+        setConfirmations(nextConfirmations);
         setError(null);
+        const remainingPending = nextConfirmations.filter(
+          (c) => c.status === 'pending',
+        ).length;
+        if (
+          decision === 'approved' &&
+          remainingPending === 0 &&
+          updated.thread_id
+        ) {
+          const params = new URLSearchParams({
+            resume_confirmation_id: updated.confirmation_id,
+          });
+          navigate(
+            `/app/chat/${encodeURIComponent(updated.thread_id)}?${params.toString()}`,
+          );
+        }
       } catch {
         setError('Failed to update confirmation.');
       } finally {
         setDeciding(null);
       }
     },
-    [decideConfirmation],
+    [confirmations, decideConfirmation, navigate],
   );
 
   const pendingCount = confirmations.filter(

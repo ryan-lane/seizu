@@ -31,7 +31,7 @@ from reporting import settings
 from reporting.authnz import CurrentUser
 from reporting.authnz.permissions import Permission
 from reporting.schema.confirmations import ActionConfirmation
-from reporting.services import mcp_runtime, report_store
+from reporting.services import action_confirmations, mcp_runtime, report_store
 from reporting.services.chat_messages import MessageTag, drop_tagged, has_tag, message_text, tag_message
 from reporting.services.mcp_runtime import ChatBlockReason
 
@@ -405,6 +405,10 @@ async def _resume_confirmed_tool_turn(
     confirmation = await report_store.get_action_confirmation(confirmation_id, user_id=authed_user.user.user_id)
     if confirmation is None:
         response = "Seizu could not find that action confirmation."
+        writer({"kind": "token", "content": response})
+        return _chat_state_with_ai_response(state, response)
+    if action_confirmations.is_expired(confirmation):
+        response = "That action confirmation has expired, so Seizu did not run it."
         writer({"kind": "token", "content": response})
         return _chat_state_with_ai_response(state, response)
     if confirmation.status not in ("approved", "executed"):

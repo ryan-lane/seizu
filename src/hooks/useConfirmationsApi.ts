@@ -11,6 +11,7 @@ export interface ActionConfirmation {
   ui_arguments: Record<string, unknown>;
   status: 'pending' | 'approved' | 'denied' | 'expired' | 'executed';
   batch_id?: string | null;
+  thread_id?: string | null;
   created_at: string;
   expires_at: string;
   decided_at?: string | null;

@@ -129,6 +129,9 @@ def _is_chat_safe_builtin(builtin: BuiltinTool) -> bool:
     # confirmation callback are also safe — the confirmation IS the safety gate.
     if builtin.confirmation is not None:
         return True
+    # Explicit exceptions are rare and must be documented on the tool
+    # registration. Today this is limited to reports__create/reports__clone:
+    # new reports are private by default and do not modify existing resources.
     if builtin.chat_safe_without_confirmation:
         return True
     return bool(builtin.required_permissions) and set(builtin.required_permissions) <= _CHAT_SAFE_PERMISSIONS
