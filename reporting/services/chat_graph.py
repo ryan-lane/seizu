@@ -424,7 +424,7 @@ async def _resume_confirmed_tool_turn(
             user_id=authed_user.user.user_id,
             batch_id=batch_id,
         )
-        pending = [c for c in batch if c.status == "pending"]
+        pending = [c for c in batch if c.status == "pending" and not action_confirmations.is_expired(c)]
         if pending:
             n = len(pending)
             noun = "approval" if n == 1 else "approvals"

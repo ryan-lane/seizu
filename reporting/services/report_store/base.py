@@ -629,5 +629,6 @@ class ReportStore(ABC):
         resource_type: str,
         resource_id: str,
         arguments_hash: str,
+        statuses: tuple[str, ...] = ("approved", "denied"),
     ) -> ActionConfirmation | None:
-        """Return the newest unexpired approved/denied decision for this action scope."""
+        """Return the newest unexpired match in *statuses* for this action scope."""

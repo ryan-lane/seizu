@@ -15,7 +15,6 @@ export interface ActionConfirmation {
   created_at: string;
   expires_at: string;
   decided_at?: string | null;
-  decided_by?: string | null;
 }
 
 interface ConfirmationResponse {

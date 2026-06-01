@@ -14,8 +14,6 @@ from reporting.schema.confirmations import (
 )
 from reporting.services import report_store
 
-SENSITIVE_KEY_PARTS = ("password", "secret", "token", "key", "credential", "webhook")
-
 
 def bearer_session_key(token: str) -> str:
     return hashlib.sha256(token.encode("utf-8")).hexdigest()
@@ -44,7 +42,7 @@ async def ensure_confirmation(
     arguments: dict[str, Any],
     batch_id: str | None = None,
 ) -> ActionConfirmation | None:
-    """Return None when execution is allowed, else a pending/denied confirmation."""
+    """Return None when execution is allowed, else a pending/denied/expired confirmation."""
     fingerprint = arguments_hash(arguments)
     grant = await report_store.find_action_confirmation_grant(
         user_id=user_id,
@@ -62,19 +60,34 @@ async def ensure_confirmation(
                 grant.confirmation_id,
                 user_id,
             )
-            return None if claimed is not None else grant.model_copy(update={"status": "executed"})
+            if claimed is not None:
+                return None
+            # Claim failed — re-fetch to distinguish expiry from a concurrent race.
+            # If the record is now "executed", a concurrent caller won and the tool
+            # ran; the LLM should treat this as success. Otherwise the grant expired
+            # between find and claim, so surface "expired" instead of the misleading
+            # "already executed" sentinel.
+            fresh = await report_store.get_action_confirmation(grant.confirmation_id, user_id)
+            if fresh is not None and fresh.status == "executed":
+                return fresh
+            return (fresh or grant).model_copy(update={"status": "expired"})
         return grant
 
-    pending = await _find_pending_confirmation(
+    # Deduplicate: if an identical pending confirmation already exists for this
+    # session, return it instead of creating a duplicate.
+    existing_pending = await report_store.find_action_confirmation_grant(
         user_id=user_id,
         source=source,
         session_key=session_key,
         tool_name=tool_name,
-        target=target,
+        action=target.action,
+        resource_type=target.resource_type,
+        resource_id=target.resource_id,
         arguments_hash=fingerprint,
+        statuses=("pending",),
     )
-    if pending is not None:
-        return pending
+    if existing_pending is not None:
+        return existing_pending
 
     now = datetime.now(tz=UTC)
     confirmation = ActionConfirmation(
@@ -88,7 +101,7 @@ async def ensure_confirmation(
         resource_id=target.resource_id,
         arguments=arguments,
         arguments_hash=fingerprint,
-        ui_arguments=redact_arguments(arguments),
+        ui_arguments=arguments,
         status="pending",
         batch_id=batch_id,
         created_at=now.isoformat(),
@@ -117,7 +130,13 @@ async def decide_confirmation(
     )
     if decided is not None:
         return decided
-    return await report_store.get_action_confirmation(confirmation_id, user_id=user_id)
+    # DB write failed — re-fetch to check if it was lost to expiry or a concurrent decide.
+    fresh = await report_store.get_action_confirmation(confirmation_id, user_id=user_id)
+    if fresh is None:
+        return None
+    if is_expired(fresh):
+        return fresh.model_copy(update={"status": "expired"})
+    return fresh
 
 
 def confirmation_required_payload(confirmation: ActionConfirmation) -> dict[str, Any]:
@@ -140,51 +159,8 @@ def confirmation_required_payload(confirmation: ActionConfirmation) -> dict[str,
     return payload
 
 
-def redact_arguments(value: Any) -> Any:
-    if isinstance(value, dict):
-        return {
-            key: "[redacted]" if _is_sensitive_key(key) else redact_arguments(nested) for key, nested in value.items()
-        }
-    if isinstance(value, list):
-        return [redact_arguments(item) for item in value]
-    return value
-
-
 def is_expired(confirmation: ActionConfirmation) -> bool:
     return datetime.fromisoformat(confirmation.expires_at) <= datetime.now(tz=UTC)
-
-
-async def _find_pending_confirmation(
-    *,
-    user_id: str,
-    source: ConfirmationSource,
-    session_key: str,
-    tool_name: str,
-    target: ActionConfirmationTarget,
-    arguments_hash: str,
-) -> ActionConfirmation | None:
-    confirmations = await report_store.list_action_confirmations(
-        user_id=user_id,
-        source=source,
-        session_key=session_key,
-        status="pending",
-    )
-    for item in confirmations:
-        if (
-            item.tool_name == tool_name
-            and item.action == target.action
-            and item.resource_type == target.resource_type
-            and item.resource_id == target.resource_id
-            and item.arguments_hash == arguments_hash
-            and not is_expired(item)
-        ):
-            return item
-    return None
-
-
-def _is_sensitive_key(key: str) -> bool:
-    lowered = key.lower()
-    return any(part in lowered for part in SENSITIVE_KEY_PARTS)
 
 
 def _public_url(path: str) -> str:

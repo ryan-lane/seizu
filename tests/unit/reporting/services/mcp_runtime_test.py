@@ -373,10 +373,10 @@ async def test_unapproved_mutating_builtin_returns_confirmation_without_handler(
 
 async def test_repeated_pending_mutating_builtin_reuses_confirmation_without_handler(mocker):
     delete_report = mocker.patch("reporting.services.mcp_builtins.reports.report_store.delete_report")
-    mocker.patch("reporting.services.mcp_runtime.report_store.find_action_confirmation_grant", return_value=None)
+    # First call: no approved/denied grant. Second call (pending dedup): existing pending found.
     mocker.patch(
-        "reporting.services.mcp_runtime.report_store.list_action_confirmations",
-        return_value=[_confirmation()],
+        "reporting.services.mcp_runtime.report_store.find_action_confirmation_grant",
+        side_effect=[None, _confirmation()],
     )
     create_confirmation = mocker.patch("reporting.services.mcp_runtime.report_store.create_action_confirmation")
     current = _user(frozenset({Permission.REPORTS_DELETE.value}))
@@ -437,6 +437,11 @@ async def test_concurrent_claim_race_returns_notice_not_confirmation_required(mo
     mocker.patch(
         "reporting.services.mcp_runtime.report_store.claim_action_confirmation_for_execution",
         return_value=None,
+    )
+    # Re-fetch shows "executed" — the concurrent caller won and ran the tool.
+    mocker.patch(
+        "reporting.services.mcp_runtime.report_store.get_action_confirmation",
+        return_value=_confirmation("executed"),
     )
     current = _user(frozenset({Permission.REPORTS_DELETE.value}))
 

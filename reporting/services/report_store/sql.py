@@ -2591,6 +2591,7 @@ class SQLModelReportStore(ReportStore):
         resource_type: str,
         resource_id: str,
         arguments_hash: str,
+        statuses: tuple[str, ...] = ("approved", "denied"),
     ) -> ActionConfirmation | None:
         now = datetime.now(tz=UTC).isoformat()
         async with AsyncSession(_get_engine()) as session:
@@ -2605,7 +2606,7 @@ class SQLModelReportStore(ReportStore):
                     col(ActionConfirmationRecord.resource_type) == resource_type,
                     col(ActionConfirmationRecord.resource_id) == resource_id,
                     col(ActionConfirmationRecord.arguments_hash) == arguments_hash,
-                    col(ActionConfirmationRecord.status).in_(["approved", "denied"]),
+                    col(ActionConfirmationRecord.status).in_(list(statuses)),
                     col(ActionConfirmationRecord.expires_at) > now,
                 )
                 .order_by(nullslast(col(ActionConfirmationRecord.decided_at).desc()))

@@ -3236,6 +3236,7 @@ class DynamoDBReportStore(ReportStore):
         resource_type: str,
         resource_id: str,
         arguments_hash: str,
+        statuses: tuple[str, ...] = ("approved", "denied"),
     ) -> ActionConfirmation | None:
         now = datetime.now(tz=UTC)
         pk = _action_confirmation_session_list_pk(user_id, source, session_key)
@@ -3243,7 +3244,7 @@ class DynamoDBReportStore(ReportStore):
         def _op() -> ActionConfirmation | None:
             table = _get_table()
             newest: ActionConfirmation | None = None
-            for status in ("approved", "denied"):
+            for status in statuses:
                 last_key: dict[str, Any] | None = None
                 while True:
                     kwargs: dict[str, Any] = {

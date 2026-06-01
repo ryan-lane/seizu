@@ -715,6 +715,7 @@ async def find_action_confirmation_grant(
     resource_type: str,
     resource_id: str,
     arguments_hash: str,
+    statuses: tuple[str, ...] = ("approved", "denied"),
 ) -> ActionConfirmation | None:
     return await get_store().find_action_confirmation_grant(
         user_id=user_id,
@@ -725,4 +726,5 @@ async def find_action_confirmation_grant(
         resource_type=resource_type,
         resource_id=resource_id,
         arguments_hash=arguments_hash,
+        statuses=statuses,
     )

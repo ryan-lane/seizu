@@ -44,7 +44,11 @@ async def list_batch_confirmations(
         user_id=current.user.user_id,
         batch_id=batch_id,
     )
-    return ConfirmationListResponse(confirmations=[ActionConfirmationPublic.from_confirmation(c) for c in batch])
+    return ConfirmationListResponse(
+        confirmations=[
+            ActionConfirmationPublic.from_confirmation(c) for c in batch if not action_confirmations.is_expired(c)
+        ]
+    )
 
 
 @router.get("/api/v1/confirmations/{confirmation_id}", response_model=ConfirmationResponse)
