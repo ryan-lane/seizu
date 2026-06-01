@@ -116,6 +116,20 @@ def test_deepseek_reasoning_content_is_round_tripped_in_tool_call_payload():
     assert payload["messages"][1]["reasoning_content"] == "reasoned before tool"
 
 
+def test_deepseek_endpoint_detection_matches_exact_host_or_subdomain(mocker):
+    mocker.patch("reporting.settings.CHAT_LLM_BASE_URL", "https://api.deepseek.com/v1")
+    assert chat_graph._uses_deepseek_compatible_endpoint("gateway-model") is True
+
+    mocker.patch("reporting.settings.CHAT_LLM_BASE_URL", "https://deepseek.com/v1")
+    assert chat_graph._uses_deepseek_compatible_endpoint("gateway-model") is True
+
+    mocker.patch("reporting.settings.CHAT_LLM_BASE_URL", "https://notdeepseek.com/v1")
+    assert chat_graph._uses_deepseek_compatible_endpoint("gateway-model") is False
+
+    mocker.patch("reporting.settings.CHAT_LLM_BASE_URL", "")
+    assert chat_graph._uses_deepseek_compatible_endpoint("deepseek-chat") is True
+
+
 async def test_chat_graph_streams_final_no_tool_text_deltas_as_they_arrive(mocker):
     """Final no-tool LLM text deltas hit the writer as they arrive.
 

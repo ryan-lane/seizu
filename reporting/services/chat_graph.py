@@ -871,7 +871,7 @@ def _add_reasoning_content_to_payload(payload: dict[str, Any], messages: list[Ba
 
 def _uses_deepseek_compatible_endpoint(model_name: str) -> bool:
     base_url_host = _hostname(settings.CHAT_LLM_BASE_URL).lower()
-    if base_url_host.endswith("deepseek.com") or base_url_host.endswith(".deepseek.com"):
+    if base_url_host == "deepseek.com" or base_url_host.endswith(".deepseek.com"):
         return True
     return model_name.lower().startswith("deepseek-")
 
