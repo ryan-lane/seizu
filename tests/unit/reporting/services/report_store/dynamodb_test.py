@@ -1,6 +1,7 @@
 from decimal import Decimal
 from unittest.mock import MagicMock, patch
 
+import botocore.exceptions
 import pytest
 
 from reporting.schema.confirmations import ActionConfirmation
@@ -189,6 +190,7 @@ def _action_confirmation_item(
     confirmation_id: str = "confirm-1",
     status: str = "pending",
     created_at: str = "2024-01-01T00:00:00+00:00",
+    expires_at: str = "2099-01-01T00:30:00+00:00",
 ) -> dict[str, object]:
     return {
         "confirmation_id": confirmation_id,
@@ -203,7 +205,7 @@ def _action_confirmation_item(
         "arguments_hash": "hash-1",
         "status": status,
         "created_at": created_at,
-        "expires_at": "2099-01-01T00:30:00+00:00",
+        "expires_at": expires_at,
     }
 
 
@@ -1969,6 +1971,46 @@ async def test_create_action_confirmation_writes_all_confirmation_indexes(patch_
     # Dedup sentinel prevents concurrent creates with identical arguments.
     dedup_sk = _action_confirmation_dedup_sk(confirmation.model_dump())
     assert ("ACTION_CONFIRMATION_SESSION_LIST#user-1#SOURCE#mcp#SESSION#session-1", dedup_sk) in put_keys
+
+
+async def test_create_action_confirmation_expires_stale_pending_dedup_before_retry(patch_table, store, mocker):
+    stale_item = _action_confirmation_item(
+        confirmation_id="stale-confirm",
+        created_at="2020-01-01T00:00:00+00:00",
+        expires_at="2020-01-01T00:30:00+00:00",
+    )
+    replacement = ActionConfirmation.model_validate(_action_confirmation_item(confirmation_id="replacement-confirm"))
+    cancelled = botocore.exceptions.ClientError(
+        {"Error": {"Code": "TransactionCanceledException", "Message": "cancelled"}},
+        "TransactWriteItems",
+    )
+    patch_table.meta.client.transact_write_items.side_effect = [
+        cancelled,  # initial create rejected by stale dedup sentinel
+        None,  # stale pending confirmation is marked expired and dedup is removed
+        None,  # replacement create succeeds
+    ]
+    patch_table.query.return_value = {
+        "Items": [
+            {
+                "PK": "ACTION_CONFIRMATION_SESSION_LIST#user-1#SOURCE#mcp#SESSION#session-1",
+                "SK": "STATUS#pending#CREATED#2020-01-01T00:00:00+00:00#CONFIRMATION#stale-confirm",
+                "confirmation_id": "stale-confirm",
+            }
+        ]
+    }
+    patch_table.get_item.return_value = {"Item": stale_item}
+    mocker.patch.object(store, "find_action_confirmation_grant", return_value=None)
+
+    result = await store.create_action_confirmation(replacement)
+
+    assert result.confirmation_id == "replacement-confirm"
+    assert patch_table.meta.client.transact_write_items.call_count == 3
+    expire_transact_items = patch_table.meta.client.transact_write_items.call_args_list[1].kwargs["TransactItems"]
+    delete_keys = {
+        (item["Delete"]["Key"]["PK"], item["Delete"]["Key"]["SK"]) for item in expire_transact_items if "Delete" in item
+    }
+    stale_dedup_sk = _action_confirmation_dedup_sk(stale_item)
+    assert ("ACTION_CONFIRMATION_SESSION_LIST#user-1#SOURCE#mcp#SESSION#session-1", stale_dedup_sk) in delete_keys
 
 
 async def test_list_action_confirmations_uses_user_status_index_for_status_only(patch_table, store):

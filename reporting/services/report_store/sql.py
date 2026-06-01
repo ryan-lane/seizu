@@ -2522,28 +2522,58 @@ class SQLModelReportStore(ReportStore):
     # ------------------------------------------------------------------
 
     async def create_action_confirmation(self, confirmation: ActionConfirmation) -> ActionConfirmation:
+        for attempt in range(2):
+            async with AsyncSession(_get_engine()) as session:
+                record = ActionConfirmationRecord(**confirmation.model_dump())
+                session.add(record)
+                try:
+                    await session.commit()
+                    return confirmation
+                except IntegrityError:
+                    await session.rollback()
+            # Concurrent create race: the dedup index rejected our insert.
+            # Re-fetch the existing pending confirmation that beat us to it.
+            existing = await self.find_action_confirmation_grant(
+                user_id=confirmation.user_id,
+                source=confirmation.source,
+                session_key=confirmation.session_key,
+                tool_name=confirmation.tool_name,
+                action=confirmation.action,
+                resource_type=confirmation.resource_type,
+                resource_id=confirmation.resource_id,
+                arguments_hash=confirmation.arguments_hash,
+                statuses=("pending",),
+            )
+            if existing is not None:
+                return existing
+            if attempt == 0:
+                await self._expire_matching_pending_action_confirmation(confirmation)
+                continue
+            break
+        return confirmation
+
+    async def _expire_matching_pending_action_confirmation(self, confirmation: ActionConfirmation) -> bool:
+        now = datetime.now(tz=UTC).isoformat()
         async with AsyncSession(_get_engine()) as session:
-            record = ActionConfirmationRecord(**confirmation.model_dump())
-            session.add(record)
-            try:
-                await session.commit()
-                return confirmation
-            except IntegrityError:
-                await session.rollback()
-        # Concurrent create race: the dedup index rejected our insert.
-        # Re-fetch the existing pending confirmation that beat us to it.
-        existing = await self.find_action_confirmation_grant(
-            user_id=confirmation.user_id,
-            source=confirmation.source,
-            session_key=confirmation.session_key,
-            tool_name=confirmation.tool_name,
-            action=confirmation.action,
-            resource_type=confirmation.resource_type,
-            resource_id=confirmation.resource_id,
-            arguments_hash=confirmation.arguments_hash,
-            statuses=("pending",),
-        )
-        return existing or confirmation
+            stmt = (
+                update(ActionConfirmationRecord)
+                .where(
+                    col(ActionConfirmationRecord.user_id) == confirmation.user_id,
+                    col(ActionConfirmationRecord.source) == confirmation.source,
+                    col(ActionConfirmationRecord.session_key) == confirmation.session_key,
+                    col(ActionConfirmationRecord.tool_name) == confirmation.tool_name,
+                    col(ActionConfirmationRecord.action) == confirmation.action,
+                    col(ActionConfirmationRecord.resource_type) == confirmation.resource_type,
+                    col(ActionConfirmationRecord.resource_id) == confirmation.resource_id,
+                    col(ActionConfirmationRecord.arguments_hash) == confirmation.arguments_hash,
+                    col(ActionConfirmationRecord.status) == "pending",
+                    col(ActionConfirmationRecord.expires_at) <= now,
+                )
+                .values(status="expired", decided_at=now)
+            )
+            result = await session.execute(stmt)
+            await session.commit()
+            return result.rowcount > 0
 
     async def get_action_confirmation(
         self,

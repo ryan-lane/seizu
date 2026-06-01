@@ -1163,6 +1163,104 @@ async def test_resume_batch_confirmation_does_not_abort_already_executed_batch_a
     claim.assert_not_called()
 
 
+async def test_resume_batch_confirmation_respects_parallel_tool_limit(mocker):
+    from langgraph.checkpoint.memory import MemorySaver
+
+    base = ActionConfirmation.model_validate(
+        {
+            "confirmation_id": "confirm-approved-1",
+            "user_id": "user-1",
+            "source": "chat",
+            "session_key": "thread-limited-batch",
+            "tool_name": "reports__delete",
+            "action": "delete",
+            "resource_type": "report",
+            "resource_id": "report-1",
+            "arguments": {"report_id": "report-1"},
+            "arguments_hash": "hash-1",
+            "status": "approved",
+            "batch_id": "batch-limited",
+            "created_at": "2024-01-01T00:00:00+00:00",
+            "expires_at": "2099-01-01T00:30:00+00:00",
+        }
+    )
+    batch = [
+        base,
+        base.model_copy(
+            update={
+                "confirmation_id": "confirm-approved-2",
+                "tool_name": "reports__pin",
+                "action": "pin",
+                "resource_id": "report-2",
+                "arguments": {"report_id": "report-2", "pinned": True},
+            }
+        ),
+        base.model_copy(
+            update={
+                "confirmation_id": "confirm-approved-3",
+                "tool_name": "reports__set_dashboard",
+                "action": "set_dashboard",
+                "resource_id": "report-3",
+                "arguments": {"report_id": "report-3"},
+            }
+        ),
+    ]
+    by_id = {item.confirmation_id: item for item in batch}
+    active = 0
+    max_seen = 0
+
+    async def _claim(confirmation_id: str, user_id: str):
+        return by_id[confirmation_id]
+
+    async def _call_tool(*args, **kwargs):
+        nonlocal active, max_seen
+        active += 1
+        max_seen = max(max_seen, active)
+        await asyncio.sleep(0.01)
+        active -= 1
+        return ChatActionOutcome(text='{"ok": true}')
+
+    mocker.patch("reporting.settings.CHAT_LLM_PROVIDER", "mock")
+    mocker.patch("reporting.settings.CHAT_LLM_MAX_PARALLEL_TOOL_CALLS", 1)
+    mocker.patch("reporting.services.chat_graph.report_store.get_action_confirmation", return_value=base)
+    mocker.patch("reporting.services.chat_graph.report_store.list_batch_action_confirmations", return_value=batch)
+    claim = mocker.patch(
+        "reporting.services.chat_graph.report_store.claim_action_confirmation_for_execution",
+        side_effect=_claim,
+    )
+    call_tool = mocker.patch("reporting.services.chat_graph.mcp_runtime.call_tool_for_chat", side_effect=_call_tool)
+    graph = chat_graph.build_chat_graph(MemorySaver())
+    config = {
+        "configurable": {
+            "thread_id": "thread-limited-batch",
+            "client_thread_id": "thread-limited-batch",
+            "current_user": _user(),
+        }
+    }
+
+    chunks = [
+        chunk
+        async for chunk in graph.astream(
+            {
+                "messages": [
+                    HumanMessage(
+                        content="Resume approved confirmation confirm-approved-1",
+                        additional_kwargs={"resume_confirmation_id": "confirm-approved-1"},
+                    )
+                ]
+            },
+            config,
+            stream_mode="custom",
+        )
+    ]
+
+    streamed = "".join(chunk["content"] for chunk in chunks if chunk.get("kind") == "token")
+    assert "Running 3 approved tools" in streamed
+    assert claim.await_count == 3
+    assert call_tool.await_count == 3
+    assert max_seen == 1
+
+
 async def test_chat_graph_reports_unavailable_tool_call_and_persists_notice(mocker):
     from langgraph.checkpoint.memory import MemorySaver
 

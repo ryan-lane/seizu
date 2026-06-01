@@ -489,7 +489,17 @@ async def _resume_confirmed_tool_turn(
         else:
             outcomes.append((c.tool_name, outcome.text))
 
-    await asyncio.gather(*(_run_one(c) for c in to_run))
+    max_parallel = settings.CHAT_LLM_MAX_PARALLEL_TOOL_CALLS
+    semaphore = asyncio.Semaphore(max_parallel) if max_parallel > 0 else None
+
+    async def _run_one_limited(c: ActionConfirmation) -> None:
+        if semaphore is None:
+            await _run_one(c)
+            return
+        async with semaphore:
+            await _run_one(c)
+
+    await asyncio.gather(*(_run_one_limited(c) for c in to_run))
 
     if errors and not outcomes:
         response = "The approved action(s) could not be executed:\n" + "\n".join(f"- {e}" for e in errors)
